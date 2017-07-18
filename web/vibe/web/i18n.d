@@ -224,74 +224,74 @@ template tr(CTX, string LANG)
 
 /// Determines a language code from the value of a header string.
 /// Returns: The best match from the Accept-Language header for a language. `null` if there is no supported language.
-public string determineLanguageByHeader(T)(string acceptLanguage, T allowedLanguages) @safe pure @nogc
+public string determineLanguageByHeader(T)(string accept_language, T allowed_languages) @safe pure @nogc
 	if (isForwardRange!T)
 {
 	import std.algorithm : splitter, countUntil;
 	import std.string : indexOf;
 
-	// TODO: verify that allowedLanguages doesn't contain a mix of languages with and without extra specifier for the same lanaguage (but only if one without specifier comes before those with specifier)
+	// TODO: verify that allowed_languages doesn't contain a mix of languages with and without extra specifier for the same lanaguage (but only if one without specifier comes before those with specifier)
 	// Implementing that feature should try to give a compile time warning and not change the behaviour of this function.
 
-	if (!acceptLanguage.length)
+	if (!accept_language.length)
 		return null;
 
-	string okayMatch = null;
-	foreach (accept; acceptLanguage.splitter(",")) {
+	string fallback = null;
+	foreach (accept; accept_language.splitter(",")) {
 		auto sidx = accept.indexOf(';');
 		if (sidx >= 0)
 			accept = accept[0 .. sidx];
 
-		string acceptLang, acceptExtra;
-		auto acceptSeparator = accept.countUntil!(a => a == '_' || a == '-');
-		if (acceptSeparator < 0)
-			acceptLang = accept;
+		string alang, aextra;
+		auto asep = accept.countUntil!(a => a == '_' || a == '-');
+		if (asep < 0)
+			alang = accept;
 		else {
-			acceptLang = accept[0 .. acceptSeparator];
-			acceptExtra = accept[acceptSeparator + 1 .. $];
+			alang = accept[0 .. asep];
+			aextra = accept[asep + 1 .. $];
 		}
 
-		foreach (lang; allowedLanguages) {
-			string langCode, langExtra;
-			auto separatorIndex = lang.countUntil!(a => a == '_' || a == '-');
-			if (separatorIndex < 0)
-				langCode = lang;
+		foreach (lang; allowed_languages) {
+			string lcode, lextra;
+			sidx = lang.countUntil!(a => a == '_' || a == '-');
+			if (sidx < 0)
+				lcode = lang;
 			else {
-				langCode = lang[0 .. separatorIndex];
-				langExtra = lang[separatorIndex + 1 .. $];
+				lcode = lang[0 .. sidx];
+				lextra = lang[sidx + 1 .. $];
 			}
 			// request en_US == serve en_US
-			if (langCode == acceptLang && langExtra == acceptExtra)
+			if (lcode == alang && lextra == aextra)
 				return lang;
 			// request en_* == serve en
-			if (langCode == acceptLang && !langExtra.length)
+			if (lcode == alang && !lextra.length)
 				return lang;
 			// request en* == serve en_* && be first occurence
-			if (langCode == acceptLang && langExtra.length && !okayMatch.length)
-				okayMatch = lang;
+			if (lcode == alang && lextra.length && !fallback.length)
+				fallback = lang;
 		}
 	}
 
-	return okayMatch;
+	return fallback;
 }
 
 /// ditto
-public string determineLanguageByHeader(Tuple...)(string acceptLanguage, Tuple allowedLanguages) @safe pure
+public string determineLanguageByHeader(Tuple...)(string accept_language, Tuple allowed_languages) @safe pure
 {
-	return determineLanguageByHeader(acceptLanguage, [allowedLanguages]);
+	return determineLanguageByHeader(accept_language, [allowed_languages]);
 }
 
 /// ditto
-public string determineLanguageByHeader(T)(HTTPServerRequest req, T allowedLanguages) @safe pure
+public string determineLanguageByHeader(T)(HTTPServerRequest req, T allowed_languages) @safe pure
 	if (isForwardRange!T)
 {
-	return determineLanguageByHeader(req.headers.get("Accept-Language", null), allowedLanguages);
+	return determineLanguageByHeader(req.headers.get("Accept-Language", null), allowed_languages);
 }
 
 /// ditto
-public string determineLanguageByHeader(Tuple...)(HTTPServerRequest req, Tuple allowedLanguages) @safe pure
+public string determineLanguageByHeader(Tuple...)(HTTPServerRequest req, Tuple allowed_languages) @safe pure
 {
-	return determineLanguageByHeader(req.headers.get("Accept-Language", null), [allowedLanguages]);
+	return determineLanguageByHeader(req.headers.get("Accept-Language", null), [allowed_languages]);
 }
 
 @safe unittest {
