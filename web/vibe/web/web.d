@@ -911,6 +911,10 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			else static if (is(PT == InputStream)) params[i] = req.bodyReader;
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
+			else static if (is(PT == Json)) {
+				enforceBadRequest(req.json.type != Json.Type.undefined, "Invalid Json passed.");
+				params[i] = req.json;
+			}
 			else static if (is(PT == WebSocket)) {} // handled below
 			else static if (param_names[i].startsWith("_")) {
 				if (auto pv = param_names[i][1 .. $] in req.params) {
