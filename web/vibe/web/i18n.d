@@ -10,7 +10,7 @@ module vibe.web.i18n;
 import vibe.http.server : HTTPServerRequest;
 
 import std.algorithm : canFind, min, startsWith;
-
+import std.range.primitives : isForwardRange;
 
 /**
 	Annotates an interface method or class with translation information.
@@ -62,6 +62,7 @@ unittest {
 
 	struct TranslationContext {
 		import std.typetuple;
+		// A language can be in the form en_US, en-US or en. Put the languages you want to prioritize first.
 		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
 		//mixin translationModule!"app";
 		//mixin translationModule!"somelib";
@@ -70,7 +71,7 @@ unittest {
 		// "Accept-Language" header
 		static string determineLanguage(scope HTTPServerRequest req)
 		{
-			if (!req.session) return null; // use default language
+			if (!req.session) return req.determineLanguageByHeader(languages); // default behaviour using "Accept-Language" header
 			return req.session.get("language", "");
 		}
 	}
@@ -221,11 +222,93 @@ template tr(CTX, string LANG)
 	}
 }
 
+/// Determines a language code from the value of a header string.
+/// Returns: The best match from the Accept-Language header for a language. `null` if there is no supported language.
+public string determineLanguageByHeader(T)(string acceptLanguage, T allowedLanguages) @safe pure @nogc
+	if (isForwardRange!T)
+{
+	import std.algorithm : splitter, countUntil;
+	import std.string : indexOf;
+
+	// TODO: verify that allowedLanguages doesn't contain a mix of languages with and without extra specifier for the same lanaguage (but only if one without specifier comes before those with specifier)
+	// Implementing that feature should try to give a compile time warning and not change the behaviour of this function.
+
+	if (!acceptLanguage.length)
+		return null;
+
+	string okayMatch = null;
+	foreach (accept; acceptLanguage.splitter(",")) {
+		auto sidx = accept.indexOf(';');
+		if (sidx >= 0)
+			accept = accept[0 .. sidx];
+
+		string acceptLang, acceptExtra;
+		auto acceptSeparator = accept.countUntil!(a => a == '_' || a == '-');
+		if (acceptSeparator < 0)
+			acceptLang = accept;
+		else {
+			acceptLang = accept[0 .. acceptSeparator];
+			acceptExtra = accept[acceptSeparator + 1 .. $];
+		}
+
+		foreach (lang; allowedLanguages) {
+			string langCode, langExtra;
+			auto separatorIndex = lang.countUntil!(a => a == '_' || a == '-');
+			if (separatorIndex < 0)
+				langCode = lang;
+			else {
+				langCode = lang[0 .. separatorIndex];
+				langExtra = lang[separatorIndex + 1 .. $];
+			}
+			// request en_US == serve en_US
+			if (langCode == acceptLang && langExtra == acceptExtra)
+				return lang;
+			// request en_* == serve en
+			if (langCode == acceptLang && !langExtra.length)
+				return lang;
+			// request en* == serve en_* && be first occurence
+			if (langCode == acceptLang && langExtra.length && !okayMatch.length)
+				okayMatch = lang;
+		}
+	}
+
+	return okayMatch;
+}
+
+/// ditto
+public string determineLanguageByHeader(Tuple...)(string acceptLanguage, Tuple allowedLanguages) @safe pure
+{
+	return determineLanguageByHeader(acceptLanguage, [allowedLanguages]);
+}
+
+/// ditto
+public string determineLanguageByHeader(T)(HTTPServerRequest req, T allowedLanguages) @safe pure
+	if (isForwardRange!T)
+{
+	return determineLanguageByHeader(req.headers.get("Accept-Language", null), allowedLanguages);
+}
+
+/// ditto
+public string determineLanguageByHeader(Tuple...)(HTTPServerRequest req, Tuple allowedLanguages) @safe pure
+{
+	return determineLanguageByHeader(req.headers.get("Accept-Language", null), [allowedLanguages]);
+}
+
+@safe unittest {
+	assert(determineLanguageByHeader("de,de-DE;q=0.8,en;q=0.6,en-US;q=0.4", ["en-US", "de_DE", "de_CH"]) == "de_DE");
+	assert(determineLanguageByHeader("de,de-CH;q=0.8,en;q=0.6,en-US;q=0.4", ["en_US", "de_DE", "de-CH"]) == "de-CH");
+	assert(determineLanguageByHeader("en_CA,en_US", ["ja_JP", "en"]) == "en");
+	assert(determineLanguageByHeader("en", ["ja_JP", "en"]) == "en");
+	assert(determineLanguageByHeader("en", ["ja_JP", "en_US"]) == "en_US");
+	assert(determineLanguageByHeader("en_US", ["ja-JP", "en"]) == "en");
+	assert(determineLanguageByHeader("de,de-DE;q=0.8,en;q=0.6,en-US;q=0.4", ["ja_JP"]) is null);
+	assert(determineLanguageByHeader("de, de-DE ;q=0.8 , en ;q=0.6 , en-US;q=0.4", ["de-DE"]) == "de-DE");
+	assert(determineLanguageByHeader("en_GB", ["en_US"]) == "en_US");
+	assert(determineLanguageByHeader("de_DE", ["en_US"]) is null);
+}
+
 package string determineLanguage(alias METHOD)(scope HTTPServerRequest req)
 {
-	import std.string : indexOf;
-	import std.array;
-
 	alias CTX = GetTranslationContext!METHOD;
 
 	static if (!is(CTX == void)) {
@@ -234,27 +317,7 @@ package string determineLanguage(alias METHOD)(scope HTTPServerRequest req)
 				"determineLanguage in a translation context must return a language string.");
 			return CTX.determineLanguage(req);
 		} else {
-			auto accept_lang = req.headers.get("Accept-Language", null);
-
-			size_t csidx = 0;
-			while (accept_lang.length) {
-				auto cidx = accept_lang[csidx .. $].indexOf(',');
-				if (cidx < 0) cidx = accept_lang.length;
-				auto entry = accept_lang[csidx .. csidx + cidx];
-				auto sidx = entry.indexOf(';');
-				if (sidx < 0) sidx = entry.length;
-				auto entrylang = entry[0 .. sidx];
-
-				foreach (lang; CTX.languages) {
-					if (entrylang == replace(lang, "_", "-")) return lang;
-					if (entrylang == split(lang, "_")[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
-				}
-
-				if (cidx >= accept_lang.length) break;
-				accept_lang = accept_lang[cidx+1 .. $];
-			}
-
-			return null;
+			return determineLanguageByHeader(req, CTX.languages);
 		}
 	} else return null;
 }
