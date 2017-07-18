@@ -11,6 +11,7 @@ import vibe.http.server : HTTPServerRequest;
 
 import std.algorithm : canFind, min, startsWith;
 import std.range.primitives : isForwardRange;
+import std.range : only;
 
 /**
 	Annotates an interface method or class with translation information.
@@ -276,9 +277,9 @@ public string determineLanguageByHeader(T)(string accept_language, T allowed_lan
 }
 
 /// ditto
-public string determineLanguageByHeader(Tuple...)(string accept_language, Tuple allowed_languages) @safe pure
+public string determineLanguageByHeader(Tuple...)(string accept_language, Tuple allowed_languages) @safe pure @nogc
 {
-	return determineLanguageByHeader(accept_language, [allowed_languages]);
+	return determineLanguageByHeader(accept_language, only(allowed_languages));
 }
 
 /// ditto
@@ -291,7 +292,7 @@ public string determineLanguageByHeader(T)(HTTPServerRequest req, T allowed_lang
 /// ditto
 public string determineLanguageByHeader(Tuple...)(HTTPServerRequest req, Tuple allowed_languages) @safe pure
 {
-	return determineLanguageByHeader(req.headers.get("Accept-Language", null), [allowed_languages]);
+	return determineLanguageByHeader(req.headers.get("Accept-Language", null), only(allowed_languages));
 }
 
 @safe unittest {
@@ -305,6 +306,11 @@ public string determineLanguageByHeader(Tuple...)(HTTPServerRequest req, Tuple a
 	assert(determineLanguageByHeader("de, de-DE ;q=0.8 , en ;q=0.6 , en-US;q=0.4", ["de-DE"]) == "de-DE");
 	assert(determineLanguageByHeader("en_GB", ["en_US"]) == "en_US");
 	assert(determineLanguageByHeader("de_DE", ["en_US"]) is null);
+	assert(determineLanguageByHeader("en_US,enCA", ["en_GB"]) == "en_GB");
+	assert(determineLanguageByHeader("en_US,enCA", ["en_GB", "en"]) == "en");
+	assert(determineLanguageByHeader("en_US,enCA", ["en", "en_GB"]) == "en");
+	// TODO from above (should be invalid input having a more generic language first in the list!)
+	//assert(determineLanguageByHeader("en_US,enCA", ["en", "en_US"]) == "en_US");
 }
 
 package string determineLanguage(alias METHOD)(scope HTTPServerRequest req)
