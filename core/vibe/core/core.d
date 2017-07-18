@@ -1314,14 +1314,10 @@ private class CoreTask : TaskFiber {
 
 				s_availableFibers.put(this);
 			}
-		} catch(UncaughtException th) {
+		} catch (UncaughtException th) {
 			logCritical("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
 			logDiagnostic("Full error: %s", th.toString().sanitize());
 			s_fiberCount--;
-		} catch (Throwable th) {
-			logCritical("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
-			logDiagnostic("Full error: %s", th.toString().sanitize());
-			exit(-1);
 		}
 	}
 
@@ -1617,7 +1613,7 @@ private {
 private static @property VibeDriverCore driverCore() @trusted nothrow { return s_core; }
 
 private bool getExitFlag()
-@trusted {
+@trusted nothrow {
 	return s_exitEventLoop || atomicLoad(st_term);
 }
 
@@ -1818,19 +1814,14 @@ nothrow {
 		if (!getExitFlag()) runEventLoop();
 		logDebug("Worker thread exit.");
 	} catch (Exception e) {
-		scope (failure) exit(-1);
+		scope (failure) abort();
 		logFatal("Worker thread terminated due to uncaught exception: %s", e.msg);
 		logDebug("Full error: %s", e.toString().sanitize());
-	} catch (InvalidMemoryOperationError e) {
-		import std.stdio;
-		scope(failure) assert(false);
-		writeln("Error message: ", e.msg);
-		writeln("Full error: ", e.toString().sanitize());
-		exit(-1);
 	} catch (Throwable th) {
-		logFatal("Worker thread terminated due to uncaught error: %s", th.msg);
+		scope (exit) abort();
+		logFatal("Worker thread terminated due to uncaught error: %s (%s)", th.msg);
+		logFatal("Error type: %s", th.classinfo.name);
 		logDebug("Full error: %s", th.toString().sanitize());
-		exit(-1);
 	}
 }
 
