@@ -923,8 +923,18 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			} else static if (is(PT == bool)) {
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
 			} else {
+				import std.algorithm.comparison : among;
+
 				enum has_default = !is(default_values[i] == void);
-				ParamResult pres = readFormParamRec(req, params[i], param_names[i], !has_default, nested_style, err);
+				ParamResult pres = void;
+				// For POST/PUT requests, parameters are usually sent via JSON
+				if (req.method.among(HTTPMethod.POST, HTTPMethod.PUT) && req.json.type != Json.Type.undefined && i == 0) {
+					params[i].setVoid(req.json.deserializeJson!PT);
+					pres = ParamResult.ok;
+				} else {
+				// otherwise try to read the parameters from a query forms
+					pres = readFormParamRec(req, params[i], param_names[i], !has_default, nested_style, err);
+				}
 				static if (has_default) {
 					if (pres == ParamResult.skipped)
 						params[i].setVoid(default_values[i]);
@@ -1021,7 +1031,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 					res.writeBody(ret);
 				}
 			} else {
-				static assert(is(RET == void), M~": Only InputStream, Json and void are supported as return types for route methods.");
+				// Serialize to Json by default
+				static if (!is(RET : void))
+					res.writeJsonBody(ret);
 			}
 		}
 	} catch (Exception ex) {
