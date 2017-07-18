@@ -187,13 +187,16 @@ class HTTPRequest {
 		/// The HTTP _method of the request
 		HTTPMethod method = HTTPMethod.GET;
 
-		/** The request URL
+		/** The request URI
 
-			Note that the request URL usually does not include the global
+			Note that the request URI usually does not include the global
 			'http://server' part, but only the local path and a query string.
 			A possible exception is a proxy server, which will get full URLs.
 		*/
-		string requestURL = "/";
+		string requestURI = "/";
+
+		/// Compatibility alias - scheduled for deprecation
+		alias requestURL = requestURI;
 
 		/// All request _headers
 		InetHeaderMap headers;

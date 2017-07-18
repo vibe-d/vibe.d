@@ -389,7 +389,7 @@ HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHe
 	ret.queryString = url.queryString;
 	ret.username = url.username;
 	ret.password = url.password;
-	ret.requestURL = url.localURI;
+	ret.requestURI = url.localURI;
 	ret.method = method;
 	ret.tls = tls;
 	ret.headers = headers;
@@ -2109,7 +2109,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		}
 
         // eagerly parse the URL as its lightweight and defacto @nogc
-		auto url = URL.parse(req.requestURL);
+		auto url = URL.parse(req.requestURI);
 		req.queryString = url.queryString;
 		req.username = url.username;
 		req.password = url.password;
@@ -2150,15 +2150,15 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		// if no one has written anything, return 404
 		if (!res.headerWritten) {
 			string dbg_msg;
-			logDiagnostic("No response written for %s", req.requestURL);
+			logDiagnostic("No response written for %s", req.requestURI);
 			if (settings.options & HTTPServerOption.errorStackTraces)
-				dbg_msg = format("No routes match path '%s'", req.requestURL);
+				dbg_msg = format("No routes match path '%s'", req.requestURI);
 			errorOut(HTTPStatus.notFound, httpStatusText(HTTPStatus.notFound), dbg_msg, null);
 		}
 	} catch (HTTPStatusException err) {
 		if (!res.headerWritten) errorOut(err.status, err.msg, err.debugMessage, err);
 		else logDiagnostic("HTTPSterrorOutatusException while writing the response: %s", err.msg);
-		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, () @trusted { return err.toString().sanitize; } ());
+		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURI, () @trusted { return err.toString().sanitize; } ());
 		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
 			keep_alive = false;
 	} catch (UncaughtException e) {
@@ -2167,7 +2167,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		if (settings.options & HTTPServerOption.errorStackTraces) dbg_msg = () @trusted { return e.toString().sanitize; } ();
 		if (!res.headerWritten && tcp_connection.connected) errorOut(status, httpStatusText(status), dbg_msg, e);
 		else logDiagnostic("Error while writing the response: %s", e.msg);
-		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, () @trusted { return e.toString().sanitize(); } ());
+		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURI, () @trusted { return e.toString().sanitize(); } ());
 		if (!parsed || res.headerWritten || !cast(Exception)e) keep_alive = false;
 	}
 
@@ -2223,7 +2223,7 @@ private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream 
 	pos = reqln.indexOf(' ');
 	enforceBadRequest(pos >= 0, "invalid request path");
 
-	req.requestURL = reqln[0 .. pos];
+	req.requestURI = reqln[0 .. pos];
 	reqln = reqln[pos+1 .. $];
 
 	req.httpVersion = parseHTTPVersion(reqln);
