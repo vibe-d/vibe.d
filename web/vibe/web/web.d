@@ -486,6 +486,17 @@ unittest {
 }
 
 /**
+	Returns the agreed upon language.
+
+	Note that this may only be called from a function/method
+	registered using registerWebInterface.
+*/
+string language() @property
+{
+	return s_requestContext.language;
+}
+
+/**
 	Terminates the currently active session (if any).
 
 	Note that this may only be called from a function/method
