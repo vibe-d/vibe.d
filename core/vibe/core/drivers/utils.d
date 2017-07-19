@@ -44,6 +44,7 @@ version (Windows) {
 } else alias SystemSocketException = ErrnoException;
 
 version (linux) {
+	import core.sys.posix.sys.socket;
 	static if (!is(typeof(SO_REUSEPORT))) {
 		enum { SO_REUSEPORT = 15 }
 	}
