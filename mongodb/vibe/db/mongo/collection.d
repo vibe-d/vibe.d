@@ -167,7 +167,7 @@ struct MongoCollection {
 	 */
 	void remove(T)(T selector, DeleteFlags flags = DeleteFlags.None)
 	{
-		assert(m_client !is null, "Removnig from uninitialized MongoCollection.");
+		assert(m_client !is null, "Removing from uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
 		ubyte[256] selector_buf = void;
 		conn.delete_(m_fullPath, flags, serializeToBson(selector, selector_buf));
