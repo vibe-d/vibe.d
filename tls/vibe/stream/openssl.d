@@ -63,7 +63,6 @@ final class OpenSSLStream : TLSStream {
 		SSLState m_tls;
 		BIO* m_bio;
 		ubyte[64] m_peekBuffer;
-		Exception[] m_exceptions;
 		TLSCertificateInformation m_peerCertificate;
 	}
 
@@ -151,8 +150,6 @@ final class OpenSSLStream : TLSStream {
 				enforce(result == X509_V_OK, "Peer failed the certificate validation: "~to!string(result));
 			} //else enforce(ctx.verifyMode < requireCert);
 		}
-
-		checkExceptions();
 	}
 
 	/** Read certificate info into the clientInformation field */
@@ -185,8 +182,7 @@ final class OpenSSLStream : TLSStream {
 
 	@property ulong leastSize()
 	{
-		() @trusted { SSL_peek(m_tls, m_peekBuffer.ptr, 1); } ();
-		checkExceptions();
+		checkSSLRet(() @trusted { return SSL_peek(m_tls, m_peekBuffer.ptr, 1); } (), "Reading from TLS stream");
 		return () @trusted { return SSL_pending(m_tls); } ();
 	}
 
@@ -197,8 +193,7 @@ final class OpenSSLStream : TLSStream {
 
 	const(ubyte)[] peek()
 	{
-		auto ret = () @trusted { return SSL_peek(m_tls, m_peekBuffer.ptr, m_peekBuffer.length); } ();
-		checkExceptions();
+		auto ret = checkSSLRet(() @trusted { return SSL_peek(m_tls, m_peekBuffer.ptr, m_peekBuffer.length); } (), "Peeking TLS stream");
 		return ret > 0 ? m_peekBuffer[0 .. ret] : null;
 	}
 
@@ -260,13 +255,10 @@ final class OpenSSLStream : TLSStream {
 		} ();
 
 		m_tls = null;
-
-		checkExceptions();
 	}
 
 	private int checkSSLRet(int ret, string what)
 	@safe {
-		checkExceptions();
 		if (ret > 0) return ret;
 
 		string desc;
@@ -292,7 +284,7 @@ final class OpenSSLStream : TLSStream {
 		char[120] ebuf;
 		while( (eret = () @trusted { return ERR_get_error_line_data(&file, &line, &data, &flags); } ()) != 0 ){
 			() @trusted { ERR_error_string(eret, ebuf.ptr); } ();
-			logDiagnostic("%s error at %s:%d: %s (%s)", what,
+			logDebug("%s error at %s:%d: %s (%s)", what,
 				() @trusted { return to!string(file); } (), line,
 				() @trusted { return to!string(ebuf.ptr); } (),
 				flags & ERR_TXT_STRING ? () @trusted { return to!string(data); } () : "-");
@@ -318,22 +310,13 @@ final class OpenSSLStream : TLSStream {
 			() @trusted { ERR_error_string_n(eret, ebuf.ptr, ebuf.length); } ();
 			estr = () @trusted { return ebuf.ptr.to!string; } ();
 			// throw the last error code as an exception
-			if (!() @trusted { return ERR_peek_error(); } ()) break;
-			logDiagnostic("OpenSSL error at %s:%d: %s (%s)",
+			logDebug("OpenSSL error at %s:%d: %s (%s)",
 				() @trusted { return file.to!string; } (), line, estr,
 				flags & ERR_TXT_STRING ? () @trusted { return to!string(data); } () : "-");
+			if (!() @trusted { return ERR_peek_error(); } ()) break;
 		}
 
 		throw new Exception(format("%s: %s (%s)", message, estr, eret));
-	}
-
-	private void checkExceptions()
-	@safe {
-		if( m_exceptions.length > 0 ){
-			foreach( e; m_exceptions )
-				logDiagnostic("Exception occured on SSL source stream: %s", () @trusted { return e.toString(); } ());
-			throw m_exceptions[0];
-		}
 	}
 
 	@property TLSCertificateInformation peerCertificate()
@@ -1083,8 +1066,8 @@ private nothrow @safe extern(C)
 		try {
 			outlen = min(outlen, stream.m_stream.leastSize);
 			stream.m_stream.read(() @trusted { return cast(ubyte[])outb[0 .. outlen]; } ());
-		} catch(Exception e){
-			stream.m_exceptions ~= e;
+		} catch (Exception e) {
+			setSSLError("Error reading from underlying stream", e.msg);
 			return -1;
 		}
 		return outlen;
@@ -1095,8 +1078,8 @@ private nothrow @safe extern(C)
 		auto stream = () @trusted { return cast(OpenSSLStream)b.ptr; } ();
 		try {
 			stream.m_stream.write(() @trusted { return inb[0 .. inlen]; } ());
-		} catch(Exception e){
-			stream.m_exceptions ~= e;
+		} catch (Exception e) {
+			setSSLError("Error writing to underlying stream", e.msg);
 			return -1;
 		}
 		return inlen;
@@ -1115,10 +1098,10 @@ private nothrow @safe extern(C)
 				break;
 			case BIO_CTRL_PENDING:
 				try {
-					auto sz = stream.m_stream.leastSize;
+					auto sz = stream.m_stream.leastSize; // FIXME: .peek.length should be sufficient here
 					return sz <= c_long.max ? cast(c_long)sz : c_long.max;
 				} catch( Exception e ){
-					stream.m_exceptions ~= e;
+					setSSLError("Error reading from underlying stream", e.msg);
 					return -1;
 				}
 			case BIO_CTRL_WPENDING: return 0;
@@ -1137,6 +1120,13 @@ private nothrow @safe extern(C)
 	{
 		return onBioWrite(b, s, cast(int)() @trusted { return strlen(s); } ());
 	}
+}
+
+private void setSSLError(string msg, string submsg, int line = __LINE__, string file = __FILE__)
+@trusted nothrow {
+	import std.string : toStringz;
+	ERR_put_error(ERR_LIB_USER, 0, 1, file.toStringz, line);
+	ERR_add_error_data(3, msg.toStringz, ": ".ptr, submsg.toStringz);
 }
 
 private BIO_METHOD s_bio_methods = {
