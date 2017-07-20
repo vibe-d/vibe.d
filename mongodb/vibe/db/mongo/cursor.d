@@ -315,7 +315,7 @@ private class MongoCursorData(Q, R, S) {
 	{
 		// FIXME: use MongoDB exceptions
 		enforce(!(flags & ReplyFlags.CursorNotFound), "Invalid cursor handle.");
-		enforce(!(flags & ReplyFlags.QueryFailure), "Query failed.");
+		enforce(!(flags & ReplyFlags.QueryFailure), "Query failed. Does the database exist?");
 
 		m_cursor = cursor;
 		m_offset = first_doc;
