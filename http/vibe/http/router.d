@@ -133,6 +133,12 @@ final class URLRouter : HTTPServerRequestHandler {
 		return this;
 	}
 
+	/// ditto
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate handler)
+	{
+		return match!HTTPServerRequestDelegate(method, path, handler);
+	}
+
 	/// Adds a new route for GET requests matching the specified pattern.
 	URLRouter get(Handler)(string url_match, Handler handler) if (isValidHandler!Handler) { return match(HTTPMethod.GET, url_match, handler); }
 	/// ditto
@@ -408,6 +414,17 @@ final class URLRouter : HTTPServerRequestHandler {
 	r.delete_("/", (req, res) {});
 	r.patch("/", (req, res) {});
 	r.any("/", (req, res) {});
+}
+
+@safe unittest { // issue #1866
+	auto r = new URLRouter;
+	r.match(HTTPMethod.HEAD, "/foo", (scope req, scope res) { res.writeVoidBody; });
+	r.match(HTTPMethod.HEAD, "/foo", (req, res) { res.writeVoidBody; });
+	r.match(HTTPMethod.HEAD, "/foo", (scope HTTPServerRequest req, scope HTTPServerResponse res) { res.writeVoidBody; });
+	r.match(HTTPMethod.HEAD, "/foo", (HTTPServerRequest req, HTTPServerResponse res) { res.writeVoidBody; });
+
+	auto r2 = new URLRouter;
+	r.match(HTTPMethod.HEAD, "/foo", r2);
 }
 
 @safe unittest {
