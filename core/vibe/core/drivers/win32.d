@@ -1033,7 +1033,12 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		assert(false);
 	}
 
-	void addMembership(ref NetworkAddress multiaddr)
+	override void setDSCP(uint codePoint)
+	{
+		assert(false, "TODO!");
+	}
+
+	override void addMembership(ref NetworkAddress multiaddr)
 	{
 		assert(false, "TODO!");
 	}

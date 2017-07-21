@@ -1706,7 +1706,12 @@ final class LibasyncUDPConnection : UDPConnection {
 		}
 	}
 
-	void addMembership(ref NetworkAddress multiaddr)
+	override void setDSCP(uint codePoint)
+	{
+		assert(false, "TODO!");
+	}
+
+	override void addMembership(ref NetworkAddress multiaddr)
 	{
 		assert(false, "TODO!");
 	}

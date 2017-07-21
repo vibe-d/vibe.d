@@ -62,12 +62,18 @@ version(Windows)
 version(OSX)
 {
 	import std.c.osx.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+	static const IP_TOS = 3;
+} else version(Linux)
+{
+    import std.c.linux.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+	static const IP_TOS = 1;
 } else version(Posix)
 {
     import std.c.linux.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+	static const IP_TOS = 3;
 } else version(Windows)
 {
-	// IP_ADD_MEMBERSHIP and IP_MULTICAST_LOOP are included in winsock(2) import above
+	// IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP and IP_TOS are included in winsock(2) import above
 }
 
 final class Libevent2Driver : EventDriver {
@@ -1091,6 +1097,13 @@ final class Libevent2UDPConnection : UDPConnection {
 			}
 			m_ctx.core.yieldForEvent();
 		}
+	}
+
+	override void setDSCP(uint codePoint)
+	{
+		enforce(codePoint < 64, "Differentiated Services Code Point is 6 only bit");
+		enforce(() @trusted { return setsockopt(m_ctx.socketfd, IPPROTO_IP, IP_TOS, &codePoint, codePoint.sizeof); } () == 0,
+				"Failed to set Differentiated Services Code Point");
 	}
 
 	override void addMembership(ref NetworkAddress multiaddr)
