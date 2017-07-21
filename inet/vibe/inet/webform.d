@@ -38,8 +38,9 @@ import std.string;
 		body_reader = A valid $(D InputSteram) data stream consumed by the parser.
 		max_line_length = The byte-sized maximum length of lines used as boundary delimitors in Multi-Part forms.
 */
-bool parseFormData(ref FormFields fields, ref FilePartFormFields files, string content_type, InputStream body_reader, size_t max_line_length)
-@safe {
+bool parseFormData(InputStream)(ref FormFields fields, ref FilePartFormFields files, string content_type, InputStream body_reader, size_t max_line_length) @safe
+	if (isInputStream!InputStream)
+{
 	auto ct_entries = content_type.split(";");
 	if (!ct_entries.length) return false;
 

@@ -2135,10 +2135,13 @@ private bool handleRequest(Stream)(Stream http_stream, TCPConnection tcp_connect
 		if (settings.maxRequestTime > dur!"seconds"(0) && settings.maxRequestTime != Duration.max) {
 			timeout_http_input_stream = FreeListRef!TimeoutHTTPInputStream(reqReader, settings.maxRequestTime, reqtime);
 			reqReader = timeout_http_input_stream;
+			// basic request parsing
+			parseRequestHeader(req, timeout_http_input_stream, request_allocator, settings.maxRequestHeaderSize);
+		} else {
+			// basic request parsing
+			parseRequestHeader(req, http_stream, request_allocator, settings.maxRequestHeaderSize);
 		}
 
-		// basic request parsing
-		parseRequestHeader(req, reqReader, request_allocator, settings.maxRequestHeaderSize);
 		logTrace("Got request header.");
 
 		// find the matching virtual host
@@ -2301,7 +2304,7 @@ private bool handleRequest(Stream)(Stream http_stream, TCPConnection tcp_connect
 private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size)
 	if (isInputStream!InputStream)
 {
-	scope stream = new LimitedHTTPInputStream(http_stream, max_header_size);
+	scope stream = new LimitedHTTPInputStream(InterfaceProxy!(.InputStream)(http_stream), max_header_size);
 
 	logTrace("HTTP server reading status line");
 	auto reqln = () @trusted { return cast(string)stream.readLine(MaxHTTPHeaderLineLength, "\r\n", alloc); }();
