@@ -776,11 +776,22 @@ final class HTTPServerRequest : HTTPRequest {
 		SysTime m_timeCreated;
 		HTTPServerSettings m_settings;
 		ushort m_port;
+		string m_peer;
 	}
 
 	public {
 		/// The IP address of the client
-		string peer;
+		@property string peer()
+		@safe nothrow {
+			if (!m_peer) {
+				// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
+				auto peer_address_string = this.clientAddress.toString();
+				if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(':') < 0)
+					m_peer = peer_address_string[7 .. $];
+				else m_peer = peer_address_string;
+			}
+			return m_peer;
+		}
 		/// ditto
 		NetworkAddress clientAddress;
 
@@ -1945,11 +1956,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	FreeListRef!LimitedHTTPInputStream limited_http_input_stream;
 	FreeListRef!ChunkedInputStream chunked_input_stream;
 
-	// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
-	auto peer_address_string = tcp_connection.peerAddress;
-	if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(":") < 0)
-		req.peer = peer_address_string[7 .. $];
-	else req.peer = peer_address_string;
+	// store the IP address
 	req.clientAddress = tcp_connection.remoteAddress;
 
 	// Default to the first virtual host for this listener
