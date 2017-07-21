@@ -2056,8 +2056,9 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 private alias TLSStreamType = ReturnType!(createTLSStreamFL!(InterfaceProxy!Stream));
 
 
-private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_connection, HTTPServerContext listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope IAllocator request_allocator)
-@safe {
+private bool handleRequest(Stream)(Stream http_stream, TCPConnection tcp_connection, HTTPServerContext listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope IAllocator request_allocator) @safe
+	if (isStream!Stream)
+{
 	import std.algorithm.searching : canFind;
 
 	SysTime reqtime = Clock.currTime(UTC());
@@ -2087,15 +2088,14 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 
 	// Create the response object
 	InterfaceProxy!ConnectionStream cproxy = tcp_connection;
-	auto res = FreeListRef!HTTPServerResponse(http_stream, cproxy, settings, request_allocator/*.Scoped_payload*/);
+	InterfaceProxy!(.Stream) hproxy = http_stream;
+	auto res = FreeListRef!HTTPServerResponse(hproxy, cproxy, settings, request_allocator/*.Scoped_payload*/);
 	req.tls = res.m_tls = listen_info.tlsContext !is null;
 	if (req.tls) {
 		version (HaveNoTLS) assert(false);
 		else {
-			static if (is(InterfaceProxy!ConnectionStream == ConnectionStream))
-				req.clientCertificate = (cast(TLSStream)http_stream).peerCertificate;
-			else
-				req.clientCertificate = http_stream.extract!TLSStreamType.peerCertificate;
+			static if (is(typeof(http_stream.peerCertificate)))
+				req.clientCertificate = http_stream.peerCertificate;
 		}
 	}
 
@@ -2301,7 +2301,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size)
 	if (isInputStream!InputStream)
 {
-	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
+	scope stream = new LimitedHTTPInputStream(http_stream, max_header_size);
 
 	logTrace("HTTP server reading status line");
 	auto reqln = () @trusted { return cast(string)stream.readLine(MaxHTTPHeaderLineLength, "\r\n", alloc); }();
