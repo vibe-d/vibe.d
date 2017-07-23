@@ -3,8 +3,8 @@ project('Vibe.d', 'd')
 source_root = meson.source_root()
 build_root = meson.build_root()
 
-project_version      = '0.8.1-alpha.2'
-project_version_name = '0.8.1-alpha.2'
+project_version      = '0.8.1-alpha.4'
+project_version_name = '0.8.1-alpha.4'
 project_soversion    = '0'
 
 pkgc = import('pkgconfig')
