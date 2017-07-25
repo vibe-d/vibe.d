@@ -697,11 +697,11 @@ private string hostName()
 		hostName = ih.name;
 
 		if (!hostName.length) {
-			char[256] name;
-			if (gethostname(name.ptr, cast(int) name.length) == 0) {
+			char[256] buf;
+			if (gethostname(buf.ptr, cast(int) buf.length) == 0) {
 				ubyte len;
-				for (; len < name.length && name[len] != 0; len++) {}
-				hostName = name[0 .. len].idup;
+				for (; len < buf.length && buf[len] != 0; len++) {}
+				hostName = buf[0 .. len].idup;
 			}
 		}
 	} else version (Windows) {
