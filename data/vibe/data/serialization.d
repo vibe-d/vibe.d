@@ -1432,7 +1432,8 @@ unittest { // basic serialization behavior
 	test(12.0f, "V(f)(12)");
 	assert(serialize!TestSerializer(null) ==  "null");
 	test(["hello", "world"], "A(AAya)[2][AE(Aya,0)(V(Aya)(hello))AE(Aya,0)AE(Aya,1)(V(Aya)(world))AE(Aya,1)]A(AAya)");
-	test(["hello": "world"], "D(HAyaAya){DE(Aya,hello)(V(Aya)(world))DE(Aya,hello)}D(HAyaAya)");
+	string mangleOfAA = (string[string]).mangleof;
+	test(["hello": "world"], "D(" ~ mangleOfAA ~ "){DE(Aya,hello)(V(Aya)(world))DE(Aya,hello)}D(" ~ mangleOfAA ~ ")");
 	test(cast(int*)null, "null");
 	int i = 42;
 	test(&i, "V(i)(42)");
