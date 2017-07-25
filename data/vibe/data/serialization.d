@@ -655,10 +655,13 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			alias STraits = SubTraits!(Traits, TV);
 			//auto ret = appender!T();
 			T ret; // Cannot use appender because of DMD BUG 10690/10859/11357
-			ser.readArray!Traits((sz) { ret.reserve(sz); }, () {
+			ser.readArray!Traits((sz) @safe { ret.reserve(sz); }, () @safe {
 				size_t i = ret.length;
 				ser.beginReadArrayEntry!STraits(i);
-				ret ~= ser.deserializeValue!(TV, ATTRIBUTES);
+				static if (__traits(compiles, () @safe { ser.deserializeValue!(TV, ATTRIBUTES); }))
+					ret ~= ser.deserializeValue!(TV, ATTRIBUTES);
+				else // recursive array https://issues.dlang.org/show_bug.cgi?id=16528
+					ret ~= (() @trusted => ser.deserializeValue!(TV, ATTRIBUTES))();
 				ser.endReadArrayEntry!STraits(i);
 			});
 			return ret;//cast(T)ret.data;
