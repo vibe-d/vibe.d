@@ -157,20 +157,17 @@ mixin template translationModule(string FILENAME)
 	mixin(file_mixins);
 }
 
-private bool findLanguage(T)(string language, T languages) @safe pure @nogc
-	if (isForwardRange!T)
-{
-	foreach (lang; languages)
-		if (lang == language)
-			return true;
-	return false;
-}
-
 private bool findLanguage(Tuple...)(string language, Tuple languages) @safe pure @nogc
 {
-	foreach (lang; languages)
-		if (lang == language)
-			return true;
+	static if (Tuple.length == 1 && isForwardRange!(Tuple[0]) && !is(Tuple[0] == string)) {
+		foreach (lang; languages[0])
+			if (lang == language)
+				return true;
+	} else {
+		foreach (lang; languages)
+			if (lang == language)
+				return true;
+	}
 	return false;
 }
 
