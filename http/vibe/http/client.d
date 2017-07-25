@@ -820,7 +820,7 @@ final class HTTPClientRequest : HTTPRequest {
 			MultiPart part = new MultiPart;
 			part.parts ~= MultiPartBodyPart.formData("name", "bob");
 			part.parts ~= MultiPartBodyPart.singleFile("picture", "picture.png", "image/png", openFile("res/profilepicture.png"));
-			part.parts ~= MultiPartBodyPart.singleFile("upload", "file.zip"); // auto read & mime detection from filename
+			part.parts ~= MultiPartBodyPart.singleFile("upload", Path("file.zip")); // auto read & mime detection from filename
 			req.writePart(part);
 		}
 	}

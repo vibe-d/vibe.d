@@ -387,7 +387,7 @@ final class MultiPartBodyPart
 		ret.headers["Content-Type"] = type;
 		if (!type.startsWith("text/"))
 			ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = openFile(file, FileMode.read);
+		ret.content = cast(InputStream) openFile(file, FileMode.read);
 		return ret;
 	}
 
@@ -432,7 +432,7 @@ final class MultiPartBodyPart
 		ret.headers["Content-Type"] = type;
 		if (!type.startsWith("text/"))
 			ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = openFile(file, FileMode.read);
+		ret.content = cast(InputStream) openFile(file, FileMode.read);
 		return ret;
 	}
 
@@ -515,7 +515,8 @@ final class MultiPart
 		return length;
 	}
 
-	void write(string boundary, OutputStream output)
+	void write(T)(string boundary, T output)
+		if (isOutputStream!T)
 	{
 		import vibe.core.stream : pipe;
 
