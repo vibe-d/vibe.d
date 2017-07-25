@@ -11,6 +11,7 @@ public import vibe.http.status;
 
 import vibe.core.log;
 import vibe.core.net;
+import vibe.core.path;
 import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
@@ -337,13 +338,221 @@ class HTTPStatusException : Exception {
 	string debugMessage;
 }
 
+final class MultiPartBodyPart
+{
+	import vibe.stream.memory : createMemoryStream;
 
-final class MultiPart {
-	string contentType;
+	InetHeaderMap headers;
+	InputStream content;
 
-	InputStream stream;
-	//JsonValue json;
-	string[string] form;
+	@safe:
+
+	static MultiPartBodyPart formData(string field_name, InputStream stream, string content_type = "text/plain; charset=\"utf-8\"", bool binary = false)
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
+		ret.headers["Content-Type"] = content_type;
+		if (binary)
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.content = stream;
+		return ret;
+	}
+
+	static MultiPartBodyPart formData(string field_name, string value, string content_type = "text/plain; charset=\"utf-8\"")
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
+		ret.headers["Content-Type"] = content_type;
+		ret.content = createMemoryStream((() @trusted => cast(ubyte[]) value)(), false);
+		return ret;
+	}
+
+	static MultiPartBodyPart formData(string field_name, ubyte[] content, string content_type = "application/octet-stream")
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
+		ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.content = createMemoryStream(content, false);
+		return ret;
+	}
+
+	static MultiPartBodyPart singleFile(string field_name, Path file)
+	{
+		import vibe.inet.mimetypes : getMimeTypeForFile;
+		import vibe.core.file : openFile, FileMode;
+
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ file.head.name ~ "\"";
+		string type = getMimeTypeForFile(file.toString);
+		ret.headers["Content-Type"] = type;
+		if (!type.startsWith("text/"))
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.content = openFile(file, FileMode.read);
+		return ret;
+	}
+
+	static MultiPartBodyPart singleFile(string field_name, string filename, string content_type, InputStream stream, bool binary = true)
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
+		ret.headers["Content-Type"] = content_type;
+		if (binary)
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.content = stream;
+		return ret;
+	}
+
+	static MultiPartBodyPart singleFile(string field_name, string filename, string content_type, string content)
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
+		ret.headers["Content-Type"] = content_type;
+		ret.content = createMemoryStream((() @trusted => cast(ubyte[]) content)(), false);
+		return ret;
+	}
+
+	static MultiPartBodyPart singleFile(string field_name, string filename, string content_type, ubyte[] content)
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
+		ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.headers["Content-Type"] = content_type;
+		ret.content = createMemoryStream(content, false);
+		return ret;
+	}
+
+	static MultiPartBodyPart multipleFilesPart(Path file)
+	{
+		import vibe.inet.mimetypes : getMimeTypeForFile;
+		import vibe.core.file : openFile, FileMode;
+
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "file; filename=\"" ~ file.head.name ~ "\"";
+		string type = getMimeTypeForFile(file.toString);
+		ret.headers["Content-Type"] = type;
+		if (!type.startsWith("text/"))
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.content = openFile(file, FileMode.read);
+		return ret;
+	}
+
+	static MultiPartBodyPart multipleFilesPart(string filename, string content_type, InputStream stream)
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "file; filename=\"" ~ filename ~ "\"";
+		ret.headers["Content-Type"] = content_type;
+		ret.content = stream;
+		return ret;
+	}
+
+	static MultiPartBodyPart multipleFilesPart(string filename, string content_type, string content)
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "file; filename=\"" ~ filename ~ "\"";
+		ret.headers["Content-Type"] = content_type;
+		ret.content = createMemoryStream((() @trusted => cast(ubyte[]) content)(), false);
+		return ret;
+	}
+
+	static MultiPartBodyPart multipleFilesPart(string filename, string content_type, ubyte[] content)
+	{
+		auto ret = new MultiPartBodyPart();
+		ret.headers["Content-Disposition"] = "file; filename=\"" ~ filename ~ "\"";
+		ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.headers["Content-Type"] = content_type;
+		ret.content = createMemoryStream(content, false);
+		return ret;
+	}
+
+	static MultiPartBodyPart multipleFiles(string name, MultiPart multipart)
+	{
+		import vibe.stream.memory : createMemoryOutputStream;
+
+		auto ret = new MultiPartBodyPart();
+		string boundary = randomMultipartBoundary;
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ name ~ "\"";
+		ret.headers["Content-Type"] = "multipart/mixed; boundary=\"" ~ boundary ~ "\"";
+		auto stream = createMemoryOutputStream();
+		multipart.write(boundary, stream);
+		ret.content = createMemoryStream(stream.data, false);
+		return ret;
+	}
+}
+
+final class MultiPart
+{
+	// https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html
+
+	string contentType = "multipart/form-data";
+	string preamble, epilogue;
+
+	MultiPartBodyPart[] parts;
+
+	@safe:
+
+	size_t length(string boundary) const
+	{
+		if (!parts.length)
+			return 0;
+
+		size_t length;
+		if (preamble.length)
+			length += preamble.length + 2;
+		length += boundary.length + 2; // --boundary
+		foreach (part; parts) {
+			length += 8 + boundary.length; // \r\n * 3 + boundary (+2)
+			foreach (k, v; part.headers)
+				length += 4 + k.length + v.length; // ": \r\n"
+			auto randomStream = cast(const(RandomAccessStream)) part.content;
+			if (randomStream)
+				length += randomStream.size;
+			else
+				return 0; // undetectable
+		}
+		length += 4;
+		if (epilogue.length)
+			length += epilogue.length + 2;
+		return length;
+	}
+
+	void write(string boundary, OutputStream output)
+	{
+		import vibe.core.stream : pipe;
+
+		if (!parts.length)
+			return;
+
+		boundary = "--" ~ boundary;
+		if (preamble.length)
+			output.write(preamble ~ "\r\n");
+		output.write(boundary);
+		foreach (part; parts) {
+			output.write("\r\n");
+			foreach (k, v; part.headers)
+				output.write(k ~ ": " ~ v ~ "\r\n");
+			output.write("\r\n");
+			pipe(part.content, output);
+			output.write("\r\n");
+			output.write(boundary);
+		}
+		output.write("--\r\n");
+		if (epilogue.length)
+			output.write(epilogue ~ "\r\n");
+	}
+}
+
+string randomMultipartBoundary()
+@trusted {
+	import std.random : uniform;
+	import std.ascii : digits, letters;
+
+	static immutable string boundaryChars = digits ~ letters ~ "_-"; // ~ "'()+_,-./:=?";
+
+	char[64] ret; // can be up to 70 according to spec, but taking poor implementations into account
+	ret[0 .. 20] = '-'; // some padding before random
+	for (int i = 20; i < ret.length; i++)
+		ret[i] = boundaryChars[uniform(0, $)];
+	return ret[].idup;
 }
 
 string getHTTPVersionString(HTTPVersion ver)

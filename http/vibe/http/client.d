@@ -803,7 +803,26 @@ final class HTTPClientRequest : HTTPRequest {
 
 	void writePart(MultiPart part)
 	{
-		assert(false, "TODO");
+		auto boundary = randomMultipartBoundary;
+		auto length = part.length(boundary);
+		headers["Content-Type"] = part.contentType ~ "; boundary=\"" ~ boundary ~ "\"";
+		if (length != 0)
+			headers["Content-Length"] = length.to!string;
+		else
+			headers["Transfer-Encoding"] = "identity";
+		part.write(boundary, bodyWriter);
+		finalize();
+	}
+
+	///
+	unittest {
+		void test(HTTPClientRequest req) {
+			MultiPart part = new MultiPart;
+			part.parts ~= MultiPartBodyPart.formData("name", "bob");
+			part.parts ~= MultiPartBodyPart.singleFile("picture", "picture.png", "image/png", openFile("res/profilepicture.png"));
+			part.parts ~= MultiPartBodyPart.singleFile("upload", "file.zip"); // auto read & mime detection from filename
+			req.writePart(part);
+		}
 	}
 
 	/**

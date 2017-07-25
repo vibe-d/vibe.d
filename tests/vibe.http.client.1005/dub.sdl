@@ -1,0 +1,4 @@
+name "tests"
+description "Tests multipart encoding"
+dependency "vibe-d:http" path="../.."
+versions "VibeDefaultMain"
