@@ -1,4 +1,5 @@
 import vibe.core.core;
+import vibe.core.file;
 import vibe.core.log;
 import vibe.core.net;
 import vibe.http.client;
@@ -9,11 +10,16 @@ import vibe.stream.memory;
 shared static this()
 {
 	listenHTTP("127.0.0.1:11005", (scope req, scope res) {
-		foreach (k, v; req.form)
-			logInfo("%s: %s", k, v);
-		foreach (k, v; req.files)
-			logInfo("%s: %s", k, v.filename);
-		res.writeBody("Hello world.");
+		assert(req.form.length == 1);
+		assert(req.files.length == 1);
+		assert(req.form["name"] == "bob");
+		assert(req.files["picture"].filename == "picture.png");
+		auto f = openFile(req.files["picture"].tempPath, FileMode.read);
+		auto data = f.readAllUTF8;
+		f.close();
+		assert(data == "Totally\0a\0PNG\0file.");
+		removeFile(req.files["picture"].tempPath);
+		res.writeBody("ok");
 	});
 
 	runTask({
