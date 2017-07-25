@@ -1099,10 +1099,11 @@ final class Libevent2UDPConnection : UDPConnection {
 		}
 	}
 
-	override void setDSCP(uint codePoint)
+	override void setDSCP(ubyte codePoint)
 	{
-		enforce(codePoint < 64, "Differentiated Services Code Point is 6 only bit");
-		enforce(() @trusted { return setsockopt(m_ctx.socketfd, IPPROTO_IP, IP_TOS, &codePoint, codePoint.sizeof); } () == 0,
+		int tmp_cp = codePoint;
+		enforce(codePoint < 64, "Differentiated Services Code Point is only 6 bits");
+		enforce(() @trusted { return setsockopt(m_ctx.socketfd, IPPROTO_IP, IP_TOS, &tmp_cp, tmp_cp.sizeof); } () == 0,
 				"Failed to set Differentiated Services Code Point");
 	}
 

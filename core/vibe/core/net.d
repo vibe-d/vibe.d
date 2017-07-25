@@ -437,7 +437,7 @@ interface UDPConnection {
 		Used for Quality of Service. 6bit number, higher is more priority.
 		see https://www.iana.org/assignments/dscp-registry/dscp-registry.xhtml
 	*/
-	void setDSCP(uint codePoint);
+	void setDSCP(ubyte codePoint);
 
 	/** Become member of IP multicast group 
 
