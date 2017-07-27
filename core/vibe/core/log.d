@@ -686,6 +686,7 @@ private string hostName()
 
 	version (Posix) {
 		import core.sys.posix.sys.utsname;
+		import core.sys.posix.unistd : gethostname;
 		utsname name;
 		if (uname(&name)) return hostName;
 		hostName = name.nodename.to!string();
@@ -694,8 +695,33 @@ private string hostName()
 		auto ih = new InternetHost;
 		if (!ih.getHostByName(hostName)) return hostName;
 		hostName = ih.name;
+
+		if (!hostName.length) {
+			char[256] buf;
+			if (gethostname(buf.ptr, cast(int) buf.length) == 0) {
+				ubyte len;
+				for (; len < buf.length && buf[len] != 0; len++) {}
+				hostName = buf[0 .. len].idup;
+			}
+		}
+	} else version (Windows) {
+		import core.sys.windows.winbase;
+		import core.sys.windows.winsock2 : gethostname;
+		wchar[512] buf;
+		uint size = cast(uint) buf.length;
+		if (GetComputerNameExW(COMPUTER_NAME_FORMAT.ComputerNamePhysicalDnsFullyQualified, buf.ptr, &size)) {
+			hostName = buf[0 .. size].to!string();
+		}
+
+		if (!hostName.length) {
+			char[256] name;
+			if (gethostname(name.ptr, cast(int) name.length) == 0) {
+				ubyte len;
+				for (; len < name.length && name[len] != 0; len++) {}
+				hostName = name[0 .. len].idup;
+			}
+		}
 	}
-	// TODO: determine proper host name on windows
 
 	return hostName;
 }
