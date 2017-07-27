@@ -923,7 +923,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 		private void parseFormAndFiles() @safe {
 			_form = FormFields.init;
-			parseFormData(_form, _files, contentType, bodyReader, MaxHTTPHeaderLineLength);
+			parseFormData(_form, _files, headers["Content-Type"], bodyReader, MaxHTTPHeaderLineLength);
 		}
 
 		/** Contains information about any uploaded file for a HTML _form request.
