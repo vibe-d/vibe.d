@@ -2453,3 +2453,12 @@ private auto trustedRange(R)(R range)
 	assert(Json("</script>some/path").toString() == `"<\/script>some/path"`);
 	assert(serializeToJsonString("</script>some/path") == `"<\/script>some/path"`);
 }
+
+@system unittest { // Recursive structures
+	static struct Bar { Bar[] foos; int i; }
+	auto b = deserializeJson!Bar(`{"i":1,"foos":[{"foos":[],"i":2}]}`);
+	assert(b.i == 1);
+	assert(b.foos.length == 1);
+	assert(b.foos[0].i == 2);
+	assert(b.foos[0].foos.length == 0);
+}

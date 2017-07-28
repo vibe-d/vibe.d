@@ -655,10 +655,13 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			alias STraits = SubTraits!(Traits, TV);
 			//auto ret = appender!T();
 			T ret; // Cannot use appender because of DMD BUG 10690/10859/11357
-			ser.readArray!Traits((sz) { ret.reserve(sz); }, () {
+			ser.readArray!Traits((sz) @safe { ret.reserve(sz); }, () @safe {
 				size_t i = ret.length;
 				ser.beginReadArrayEntry!STraits(i);
-				ret ~= ser.deserializeValue!(TV, ATTRIBUTES);
+				static if (__traits(compiles, () @safe { ser.deserializeValue!(TV, ATTRIBUTES); }))
+					ret ~= ser.deserializeValue!(TV, ATTRIBUTES);
+				else // recursive array https://issues.dlang.org/show_bug.cgi?id=16528
+					ret ~= (() @trusted => ser.deserializeValue!(TV, ATTRIBUTES))();
 				ser.endReadArrayEntry!STraits(i);
 			});
 			return ret;//cast(T)ret.data;
@@ -1429,7 +1432,8 @@ unittest { // basic serialization behavior
 	test(12.0f, "V(f)(12)");
 	assert(serialize!TestSerializer(null) ==  "null");
 	test(["hello", "world"], "A(AAya)[2][AE(Aya,0)(V(Aya)(hello))AE(Aya,0)AE(Aya,1)(V(Aya)(world))AE(Aya,1)]A(AAya)");
-	test(["hello": "world"], "D(HAyaAya){DE(Aya,hello)(V(Aya)(world))DE(Aya,hello)}D(HAyaAya)");
+	string mangleOfAA = (string[string]).mangleof;
+	test(["hello": "world"], "D(" ~ mangleOfAA ~ "){DE(Aya,hello)(V(Aya)(world))DE(Aya,hello)}D(" ~ mangleOfAA ~ ")");
 	test(cast(int*)null, "null");
 	int i = 42;
 	test(&i, "V(i)(42)");
