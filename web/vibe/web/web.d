@@ -318,24 +318,19 @@ template render(string diet_file, ALIASES...) {
 			}
 		}
 
-		static if (is(TranslateContext) && TranslateContext.languages.length) {
-			static if (TranslateContext.languages.length > 1) {
-				switch (s_requestContext.language) {
-					default: {
-						TranslateCTX!(TranslateContext.languages[0]) renderctx;
-						renderctx.render();
-						return;
-						}
-					foreach (lang; TranslateContext.languages[1 .. $])
-						case lang: {
-							TranslateCTX!lang renderctx;
+		static if (is(TranslateContext) && !isEmpty(TranslateContext.languages)) {
+			switch (s_requestContext.language) {
+				default:
+				mixin({
+					string ret;
+					foreach (lang; TranslateContext.languages)
+						ret ~= "case `" ~ lang ~ "`: {
+							TranslateCTX!`" ~ lang ~ "` renderctx;
 							renderctx.render();
 							return;
-							}
-				}
-			} else {
-				TranslateCTX!(TranslateContext.languages[0]) renderctx;
-				renderctx.render();
+							}";
+					return ret;
+				}());
 			}
 		} else {
 			vibe.http.server.render!(diet_file, req, ALIASES)(s_requestContext.res);
@@ -989,6 +984,17 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	}
 }
 
+private bool isEmpty(T)(T range)
+{
+	import std.range : empty;
+
+	return range.empty;
+}
+
+private bool isEmpty(Tuple...)(Tuple range)
+{
+	return Tuple.length == 0;
+}
 
 private RequestContext createRequestContext(alias handler)(HTTPServerRequest req, HTTPServerResponse res)
 {
@@ -1006,23 +1012,19 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 	static if (FUNCTRANS.found) alias TranslateContext = FUNCTRANS.value.Context;
 	else static if (PARENTTRANS.found) alias TranslateContext = PARENTTRANS.value.Context;
 
-	static if (is(TranslateContext) && TranslateContext.languages.length) {
-		static if (TranslateContext.languages.length > 1) {
-			switch (ret.language) {
-				default:
-					ret.tr = &tr!(TranslateContext, TranslateContext.languages[0]);
-					ret.tr_plural = &tr!(TranslateContext, TranslateContext.languages[0]);
-					break;
-				foreach (lang; TranslateContext.languages[1 .. $]) {
-					case lang:
-						ret.tr = &tr!(TranslateContext, lang);
-						ret.tr_plural = &tr!(TranslateContext, lang);
-						break;
+	static if (is(TranslateContext) && !isEmpty(TranslateContext.languages)) {
+		switch (ret.language) {
+			default:
+			mixin({
+				string ret;
+				foreach (lang; TranslateContext.languages) {
+					ret ~= "case `" ~ lang ~ "`:
+						ret.tr = &tr!(TranslateContext, `" ~ lang ~ "`);
+						ret.tr_plural = &tr!(TranslateContext, `" ~ lang ~ "`);
+						break;";
 				}
-			}
-		} else {
-			ret.tr = &tr!(TranslateContext, TranslateContext.languages[0]);
-			ret.tr_plural = &tr!(TranslateContext, TranslateContext.languages[0]);
+				return ret;
+			}());
 		}
 	} else {
 		ret.tr = (t,c) => t;
