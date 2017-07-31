@@ -63,7 +63,7 @@ version(OSX)
 {
 	import std.c.osx.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
 	static const IP_TOS = 3;
-} else version(Linux)
+} else version(linux)
 {
     import std.c.linux.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
 	static const IP_TOS = 1;
