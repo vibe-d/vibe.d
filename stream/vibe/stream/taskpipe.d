@@ -133,6 +133,8 @@ private final class TaskPipeImpl {
 	{
 		size_t ret = 0;
 
+		enforce(!m_closed, "Writing to closed task pipe.");
+
 		while (data.length > 0){
 			bool need_signal;
 			synchronized (m_mutex) {
