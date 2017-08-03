@@ -78,6 +78,40 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		return ret;
 	}
 
+	/** Generates an associative-array equivalent string representation of the dictionary.
+	*/
+	void toString(scope void delegate(const(char)[] str) @safe sink)
+	const {
+		import std.format : formattedWrite;
+		sink("[");
+		bool first = true;
+		foreach (k, v; this.byKeyValue) {
+			if (!first) sink(", ");
+			else first = false;
+			string[] ka;
+			VALUE[] va;
+			() @trusted {
+				ka = (&k)[0 .. 1];
+				va = (&v)[0 .. 1];
+				sink.formattedWrite("%(%s%): %(%s%)", [k], [v]);
+			} ();
+		}
+		sink("]");
+	}
+	/// ditto
+	void toString(scope void delegate(const(char)[] str) @system sink)
+	const {
+		toString(cast(void delegate(const(char)[]) @safe)sink);
+	}
+	/// ditto
+	string toString()
+	const {
+		import std.array : appender;
+		auto ret = appender!string();
+		toString((s) { ret.put(s); });
+		return ret.data;
+	}
+
 	/** Removes the first field that matches the given key.
 	*/
 	void remove(string key)
@@ -362,4 +396,13 @@ unittest {
 	c.addField("d", 9);
 	c.addField("d", "bar");
 	assert(c.getAll("d") == [ cast(Variant) 9, cast(Variant) "bar" ]);
+}
+
+@safe unittest {
+	import std.conv : text;
+	DictionaryList!int l;
+	l["foo"] = 42;
+	l["bar"] = 43;
+	assert(text(l) == `["foo": 42, "bar": 43]`, text(l));
+	assert(l.toString() == `["foo": 42, "bar": 43]`, l.toString());
 }
