@@ -987,7 +987,7 @@ void setTaskEventCallback(TaskEventCb func)
 /**
 	A version string representing the current vibe.d version
 */
-enum vibeVersionString = "0.8.1-alpha.4";
+enum vibeVersionString = "0.8.1-beta.2";
 
 
 /**
