@@ -85,19 +85,15 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		sink("[");
 		bool first = true;
 
-		// work around a linker error in DMD 2.070.2
-		static void dummy(string k, ref ValueType v, scope void delegate(const(char)[] str) @safe sink)
-		@trusted {
-			import std.format : formattedWrite;
-			string[] ka = (&k)[0 .. 1];
-			ValueType[] va = (&v)[0 .. 1];
-			sink.formattedWrite("%(%s%): %(%s%)", ka, ka);
-		}
-
 		foreach (k, v; this.byKeyValue) {
 			if (!first) sink(", ");
 			else first = false;
-			dummy(k, v, sink);
+			() @trusted {
+				import std.format : formattedWrite;
+				string[] ka = (&k)[0 .. 1];
+				ValueType[] va = (&v)[0 .. 1];
+				sink.formattedWrite("%(%s%): %(%s%)", ka, va);
+			} ();
 		}
 		sink("]");
 	}
@@ -279,42 +275,13 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 
 	/** Iterates over all fields, including duplicates.
 	*/
+	auto byKeyValue() {return Rng!false(&this, 0); }
+	/// ditto
+	auto byKeyValue() const { return Rng!true(&this, 0); }
+	/// ditto
 	auto byKey() inout { import std.algorithm.iteration : map; return byKeyValue().map!(p => p[0]); }
+	/// ditto
 	auto byValue() inout { import std.algorithm.iteration : map; return byKeyValue().map!(p => p[1]); }
-
-	auto byKeyValue()
-	{
-		static struct Rng {
-			DictionaryList* list;
-			size_t idx;
-
-			@property bool empty() const { return idx >= list.length; }
-			@property ref KeyValue front() {
-				if (idx < list.m_fieldCount)
-					return list.m_fields[idx].tuple;
-				return list.m_extendedFields[idx - list.m_fieldCount].tuple;
-			}
-			void popFront() { idx++; }
-		}
-		return Rng(&this, 0);
-	}
-
-	auto byKeyValue()
-	const {
-		static struct Rng {
-			const(DictionaryList)* list;
-			size_t idx;
-
-			@property bool empty() const { return idx >= list.length; }
-			@property ref const(KeyValue) front() {
-				if (idx < list.m_fieldCount)
-					return list.m_fields[idx].tuple;
-				return list.m_extendedFields[idx - list.m_fieldCount].tuple;
-			}
-			void popFront() { idx++; }
-		}
-		return Rng(&this, 0);
-	}
 
 	// Enables foreach iteration over a `DictionaryList` with two loop variables.
 	alias byKeyValue this;
@@ -359,6 +326,26 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 			csum = (csum << 1) | (csum >> 31);
 		}
 		return csum;
+	}
+
+	private static struct Rng(bool CONST) {
+	@safe nothrow @nogc:
+		static if (CONST) {
+			alias KVT = const(KeyValue);
+			const(DictionaryList)* list;
+		} else {
+			alias KVT = KeyValue;
+			DictionaryList* list;
+		}
+		size_t idx;
+
+		@property bool empty() const { return idx >= list.length; }
+		@property ref KVT front() {
+			if (idx < list.m_fieldCount)
+				return list.m_fields[idx].tuple;
+			return list.m_extendedFields[idx - list.m_fieldCount].tuple;
+		}
+		void popFront() { idx++; }
 	}
 }
 
