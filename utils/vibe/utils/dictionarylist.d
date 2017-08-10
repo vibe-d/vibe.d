@@ -82,19 +82,22 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	*/
 	void toString(scope void delegate(const(char)[] str) @safe sink)
 	const {
-		import std.format : formattedWrite;
 		sink("[");
 		bool first = true;
+
+		// work around a linker error in DMD 2.070.2
+		static void dummy(string k, ref ValueType v, scope void delegate(const(char)[] str) @safe sink)
+		@trusted {
+			import std.format : formattedWrite;
+			string[] ka = (&k)[0 .. 1];
+			ValueType[] va = (&v)[0 .. 1];
+			sink.formattedWrite("%(%s%): %(%s%)", ka, ka);
+		}
+
 		foreach (k, v; this.byKeyValue) {
 			if (!first) sink(", ");
 			else first = false;
-			string[] ka;
-			VALUE[] va;
-			() @trusted {
-				ka = (&k)[0 .. 1];
-				va = (&v)[0 .. 1];
-				sink.formattedWrite("%(%s%): %(%s%)", [k], [v]);
-			} ();
+			dummy(k, v, sink);
 		}
 		sink("]");
 	}
