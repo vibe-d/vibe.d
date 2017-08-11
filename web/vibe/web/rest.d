@@ -1,9 +1,228 @@
-/**
-	Automatic REST interface and client code generation facilities.
+/** Automatic high-level RESTful client/server interface generation facilities.
 
-	Copyright: © 2012-2016 RejectedSoftware e.K.
+	This modules aims to provide a typesafe way to deal with RESTful APIs. D's
+	`interface`s are used to define the behavior of the API, so that they can
+	be used transparently within the application. This module assumes that
+	HTTP is used as the underlying transport for the REST API.
+
+	While convenient means are provided for generating both, the server and the
+	client side, of the API from a single interface definition, it is also
+	possible to use as a pure client side implementation to target existing
+	web APIs.
+
+	The following paragraphs will explain in detail how the interface definition
+	is mapped to the RESTful API, without going into specifics about the client
+	or server side. Take a look at `registerRestInterface` and
+	`RestInterfaceClient` for more information in those areas.
+
+	These are the main adantages of using this module to define RESTful APIs
+	over defining them manually by registering request handlers in a
+	`URLRouter`:
+
+	$(UL
+		$(LI Automatic client generation: once the interface is defined, it can
+			be used both by the client side and the server side, which means
+			that there is no way to have a protocol mismatch between the two.)
+		$(LI Automatic route generation for the server: one job of the REST
+			module is to generate the HTTP routes/endpoints for the API.)
+		$(LI Automatic serialization/deserialization: Instead of doing manual
+	  		serialization and deserialization, just normal statically typed
+	  		member functions are defined and the code generator takes care of
+	  		converting to/from wire format. Custom serialization can be achieved
+	  		by defining `JSON` or `string` parameters/return values together
+	  		with the appropriate `@bodyParam` annotations.)
+		$(LI Higher level representation integrated into D: Some concepts of the
+	  		interfaces, such as optional parameters or `in`/`out`/`ref`
+	  		parameters, as well as `Nullable!T`, are translated naturally to the
+	  		RESTful protocol.)
+	)
+
+	The most basic interface that can be defined is as follows:
+	----
+	@path("/api/")
+	interface APIRoot {
+	    string get();
+	}
+	----
+
+	This defines an API that has a single endpoint, 'GET /api/'. So if the
+	server is found at http://api.example.com, performing a GET request to
+	$(CODE http://api.example.com/api/) will call the `get()` method and send
+	its return value verbatim as the response body.
+
+	Endpoint_generation:
+		An endpoint is a combination of an HTTP method and a local URI. For each
+		public method of the interface, one endpoint is registered in the
+		`URLRouter`.
+
+		By default, the method and URI parts will be inferred from the method
+		name by looking for a known prefix. For example, a method called
+		`getFoo` will automatically be mapped to a 'GET /foo' request. The
+		recognized prefixes are as follows:
+
+		$(TABLE
+			$(TR $(TH Prefix) $(TH HTTP verb))
+			$(TR $(TD get)	  $(TD GET))
+			$(TR $(TD query)  $(TD GET))
+			$(TR $(TD set)    $(TD PUT))
+			$(TR $(TD put)    $(TD PUT))
+			$(TR $(TD update) $(TD PATCH))
+			$(TR $(TD patch)  $(TD PATCH))
+			$(TR $(TD add)    $(TD POST))
+			$(TR $(TD create) $(TD POST))
+			$(TR $(TD post)   $(TD POST))
+		)
+
+		Member functions that have no valid prefix default to 'POST'. Note that
+		any of the methods defined in `vibe.http.common.HTTPMethod` are
+		supported through manual endpoint specifications, as described in the
+		next section.
+
+		After determining the HTTP method, the rest of the method's name is
+		then treated as the local URI of the endpoint. It is expected to be in
+		standard D camel case style and will be transformed into the style that
+		is specified in the call to `registerRestInterface`, which defaults to
+		`MethodStyle.lowerUnderscored`.
+
+	Manual_endpoint_specification:
+		Endpoints can be controlled manually through the use of `@path` and
+		`@method` annotations:
+
+		----
+		@path("/api/")
+		interface APIRoot {
+		    // Here we use a POST method
+		    @method(HTTPMethod.POST)
+			// Our method will located at '/api/foo'
+			@path("/foo")
+			void doSomething();
+		}
+		----
+
+		Manual path annotations also allows defining custom path placeholders
+		that will be mapped to function parameters. Placeholders are path
+		segments that start with a colon:
+
+		----
+		@path("/users/")
+		interface UsersAPI {
+		    @path(":name")
+		    Json getUserByName(string _name);
+		}
+		----
+
+		This will cause a request "GET /users/peter" to be mapped to the
+		`getUserByName` method, with the `_name` parameter receiving the string
+		"peter". Note that the matching parameter must have an underscore
+		prefixed so that it can be distinguished from normal form/query
+		parameters.
+
+		It is possible to partially rely on the default behavior and to only
+		customize either the method or the path of the endpoint:
+
+		----
+		@method(HTTPMethod.POST)
+		void getFoo();
+		----
+
+		In the above case, as 'POST' is set explicitly, the route would be
+		'POST /foo'. On the other hand, if the declaration had been:
+
+		----
+		@path("/bar")
+		void getFoo();
+		----
+
+		The route generated would be 'GET /bar'.
+
+	Properties:
+		`@property` functions have a special mapping: property getters (no
+		parameters and a non-void return value) are mapped as GET functions,
+		and property setters (a single parameter) are mapped as PUT. No prefix
+		recognition or trimming will be done for properties.
+
+	Method_style:
+		Method names will be translated to the given 'MethodStyle'. The default
+		style is `MethodStyle.lowerUnderscored`, so that a function named
+		`getFooBar` will match the route 'GET /foo_bar'. See
+		`vibe.web.common.MethodStyle` for more information about the available
+		styles.
+
+	Parameter_passing:
+		By default, parameter are passed via different methods depending on the
+		type of request. For POST and PATCH requests, they are passed via the
+		body as a JSON object, while for GET and PUT they are passed via the
+		query string.
+
+		The default behavior can be overridden using one of the following annotations:
+
+		$(UL
+			$(LI `@headerParam("name", "field")`: Applied on a method, it will
+				source the parameter named `name` from the request headers named
+				"field". If the parameter is `ref`, it will also be set as a
+				response header. Parameters declared as `out` will $(I only) be
+				set as a response header.)
+			$(LI `@queryParam("name", "field")`: Applied on a method, it will
+				source the parameter `name` from a field named "field" of the
+				query string.)
+			$(LI `@bodyParam("name", "field")`: Applied on a method, it will
+				source the parameter `name` from a field named "feild" of the
+				request body in JSON format.)
+		)
+
+		----
+		@path("/api/")
+		interface APIRoot {
+			// GET /api/header with 'Authorization' set
+			@headerParam("param", "Authorization")
+			string getHeader(string param);
+
+			// GET /api/foo?param=...
+			@queryParam("param", "param")
+			string getFoo(int param);
+
+			// GET /api/body with body set to { "myFoo": {...} }
+			@bodyParam("myFoo", "parameter")
+			string getBody(FooType myFoo);
+		}
+		----
+
+	Default_values:
+		Parameters with default values behave as optional parameters. If one is
+		set in the interface declaration of a method, the client can omit a
+		value for the corresponding field in the request and the default value
+		is used instead.
+
+		Note that this can suffer from DMD bug #14369 (Vibe.d: #1043).
+
+	Aggregates:
+		When passing aggregates as parameters, those are serialized differently
+		depending on the way they are passed, which may be especially important
+		when interfacing with an existing RESTful API:
+
+		$(UL
+			$(LI If the parameter is passed via the headers or the query, either
+				implicitly or explicitly, the aggregate is serialized to JSON.
+				If the JSON representation is a single string, the string value
+				will be used verbatim. Otherwise the JSON representation will be
+				used)
+			$(LI If the parameter is passed via the body, the datastructure is
+				serialized to JSON and set as a field of the main JSON object
+				that is expected in the request body. Its field name equals the
+				parameter name, unless an explicit `@bodyParam` annotation is
+				used.)
+		)
+
+	See_Also:
+		To see how to implement the server side in detail, jump to
+		`registerRestInterface`.
+
+		To see how to implement the client side in detail, jump to
+		the `RestInterfaceClient` documentation.
+
+	Copyright: © 2012-2017 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Sönke Ludwig, Михаил Страшун
+	Authors: Sönke Ludwig, Михаил Страшун, Mathias 'Geod24' Lang
 */
 module vibe.web.rest;
 
@@ -28,46 +247,80 @@ import std.typecons : Nullable;
 import std.typetuple : anySatisfy, Filter;
 import std.traits;
 
-/**
-	Registers a REST interface and connects it the the given instance.
+/** Registers a server matching a certain REST interface.
 
-	Each method of the given class instance is mapped to the corresponing HTTP
-	verb. Property methods are mapped to GET/PUT and all other methods are
-	mapped according to their prefix verb. If the method has no known prefix,
-	POST is used. The rest of the name is mapped to the path of the route
-	according to the given `method_style`. Note that the prefix word must be
-	all-lowercase and is delimited by either an upper case character, a
-	non-alphabetic character, or the end of the string.
+	Servers are implementation of the D interface that defines the RESTful API.
+	The methods of this class are invoked by the code that is generated for
+	each endpoint of the API, with parameters and return values being translated
+	according to the rules documented in the `vibe.web.rest` module
+	documentation.
 
-	The following table lists the mappings from prefix verb to HTTP verb:
+	A basic 'hello world' API can be defined as follows:
+	----
+	@path("/api/")
+	interface APIRoot {
+	    string get();
+	}
 
-	$(TABLE
-		$(TR $(TH HTTP method) $(TH Recognized prefixes))
-		$(TR $(TD GET)	  $(TD get, query))
-		$(TR $(TD PUT)    $(TD set, put))
-		$(TR $(TD POST)   $(TD add, create, post))
-		$(TR $(TD DELETE) $(TD remove, erase, delete))
-		$(TR $(TD PATCH)  $(TD update, patch))
-	)
+	class API : APIRoot {
+	    override string get() { return "Hello, World"; }
+	}
 
-	If a method has its first parameter named 'id', it will be mapped to ':id/method' and
-	'id' is expected to be part of the URL instead of a JSON request. Parameters with default
-	values will be optional in the corresponding JSON request.
+	void main()
+	{
+	    // -- Where the magic happens --
+	    router.registerRestInterface(new API());
+	    // GET http://127.0.0.1:8080/api/ and 'Hello, World' will be replied
+	    listenHTTP("127.0.0.1:8080", router);
 
-	Any interface that you return from a getter will be made available with the
-	base url and its name appended.
+	    runApplication();
+	}
+	----
+
+	As can be seen here, the RESTful logic can be written inside the class
+	without any concern for the actual HTTP representation.
+
+	Return_value:
+		By default, all methods that return a value send a 200 (OK) status code,
+		or 204 if no value is being returned for the body.
+
+	Non-success:
+		In the cases where an error code should be signaled to the user, a
+		`HTTPStatusException` can be thrown from within the method. It will be
+		turned into a JSON object that has a `statusMessage` field with the
+		exception message. In case of other exception types being thrown, the
+		status code will be set to 500 (internal server error), the
+		`statusMessage` field will again contain the exception's message, and,
+		in debug mode, an additional `statusDebugMessage` field will be set to
+		the complete string representation of the exception
+		(`Exception.toString`), which usually contains a stack trace useful for
+		debugging.
+
+	Returning_data:
+		To return data, it is possible to either use the return value, which
+		will be sent as the response body, or individual `ref`/`out` parameters
+		can be used. The way they are represented in the response can be
+		customized by adding `@bodyParam`/`@headerParam` annotations in the
+		method declaration within the interface.
+
+		In case of errors, any `@headerParam` parameters are guaranteed to
+		be set in the response, so that applications such as HTTP basic
+		authentication can be implemented.
+
+	Template_Params:
+	    TImpl = Either an interface type, or a class that derives from an
+			      interface. If the class derives from multiple interfaces,
+	            the first one will be assumed to be the API description
+	            and a warning will be issued.
 
 	Params:
-		router = The HTTP router on which the interface will be registered
-		instance = Class instance to use for the REST mapping - Note that TImpl
-			must either be an interface type, or a class which derives from a
-			single interface
-		settings = Additional settings, such as the $(D MethodStyle), or the prefix.
-			See $(D RestInterfaceSettings) for more details.
+	    router   = The HTTP router on which the interface will be registered
+	    instance = Server instance to use
+	    settings = Additional settings, such as the `MethodStyle` or the prefix
 
 	See_Also:
-		$(D RestInterfaceClient) class for a seamless way to access such a generated API
-
+		`RestInterfaceClient` class for an automated way to generate the
+		matching client-side implementation.
 */
 URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
 {
