@@ -357,11 +357,10 @@ template render(string diet_file, ALIASES...) {
 	registered using registerWebInterface.
 */
 void redirect(string url)
-{
+@safe {
 	import std.algorithm : canFind, endsWith, startsWith;
 
-	assert(s_requestContext.req !is null, "redirect() used outside of a web interface request!");
-	alias ctx = s_requestContext;
+	auto ctx = getRequestContext();
 	URL fullurl;
 	if (url.startsWith("/")) {
 		fullurl = ctx.req.fullURL;
@@ -380,7 +379,7 @@ void redirect(string url)
 }
 
 ///
-unittest {
+@safe unittest {
 	import vibe.data.json : Json;
 
 	class WebService {
@@ -412,14 +411,12 @@ unittest {
 	registered using registerWebInterface.
 */
 void header(string name, string value)
-{
-	assert(s_requestContext.req !is null, "header() used outside of a web interface request!");
-	alias ctx = s_requestContext;
-	ctx.res.headers[name] = value;
+@safe {
+	getRequestContext().res.headers[name] = value;
 }
 
 ///
-unittest {
+@safe unittest {
 	import vibe.data.json : Json;
 
 	class WebService {
@@ -450,20 +447,18 @@ unittest {
 	Note that this may only be called from a function/method
 	registered using registerWebInterface.
 */
-void status(int statusCode)
+void status(int statusCode) @safe
 in
 {
 	assert(100 <= statusCode && statusCode < 600);
 }
 body
 {
-	assert(s_requestContext.req !is null, "status() used outside of a web interface request!");
-	alias ctx = s_requestContext;
-	ctx.res.statusCode = statusCode;
+	getRequestContext().res.statusCode = statusCode;
 }
 
 ///
-unittest {
+@safe unittest {
 	import vibe.data.json : Json;
 
 	class WebService {
@@ -491,9 +486,9 @@ unittest {
 	Note that this may only be called from a function/method
 	registered using registerWebInterface.
 */
-string language() @property
+@property string language() @safe
 {
-	return s_requestContext.language;
+	return getRequestContext().language;
 }
 
 /**
@@ -503,8 +498,8 @@ string language() @property
 	registered using registerWebInterface.
 */
 void terminateSession()
-{
-	alias ctx = s_requestContext;
+@safe {
+	auto ctx = getRequestContext();
 	if (ctx.req.session) {
 		ctx.res.terminateSession();
 		ctx.req.session = Session.init;
@@ -512,7 +507,7 @@ void terminateSession()
 }
 
 ///
-unittest {
+@safe unittest {
 	class WebService {
 		// automatically mapped to: POST /logout
 		void postLogout()
@@ -550,19 +545,18 @@ unittest {
 	See_also: $(D vibe.web.i18n.translationContext)
 */
 string trWeb(string text, string context = null)
-{
-	assert(s_requestContext.req !is null, "trWeb() used outside of a web interface request!");
-	return s_requestContext.tr(text, context);
+@safe {
+	return getRequestContext().tr(text, context);
 }
 
 /// ditto
-string trWeb(string text, string plural_text, int count, string context = null) {
-	assert(s_requestContext.req !is null, "trWeb() used outside of a web interface request!");
-	return s_requestContext.tr_plural(text, plural_text, count, context);
+string trWeb(string text, string plural_text, int count, string context = null)
+@safe {
+	return getRequestContext().tr_plural(text, plural_text, count, context);
 }
 
 ///
-unittest {
+@safe unittest {
 	struct TRC {
 		import std.typetuple;
 		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
@@ -696,7 +690,7 @@ class WebInterfaceSettings {
 	string urlPrefix = "/";
 	bool ignoreTrailingSlash = true;
 
-	@property WebInterfaceSettings dup() const {
+	@property WebInterfaceSettings dup() const @safe {
 		auto ret = new WebInterfaceSettings;
 		ret.urlPrefix = this.urlPrefix;
 		ret.ignoreTrailingSlash = this.ignoreTrailingSlash;
@@ -719,6 +713,8 @@ class WebInterfaceSettings {
 	underlying data.
 */
 struct SessionVar(T, string name) {
+@safe:
+
 	private {
 		T m_initValue;
 	}
@@ -744,8 +740,7 @@ struct SessionVar(T, string name) {
 	*/
 	@property const(T) value()
 	{
-		assert(s_requestContext.req !is null, "SessionVar used outside of a web interface request!");
-		alias ctx = s_requestContext;
+		auto ctx = getRequestContext();
 		if (!ctx.req.session) ctx.req.session = ctx.res.startSession();
 
 		if (ctx.req.session.isKeySet(name))
@@ -757,8 +752,7 @@ struct SessionVar(T, string name) {
 	/// ditto
 	@property void value(T new_value)
 	{
-		assert(s_requestContext.req !is null, "SessionVar used outside of a web interface request!");
-		alias ctx = s_requestContext;
+		auto ctx = getRequestContext();
 		if (!ctx.req.session) ctx.req.session = ctx.res.startSession();
 		ctx.req.session.set(name, new_value);
 	}
@@ -811,6 +805,12 @@ private struct RequestContext {
 	string language;
 	string function(string, string) @safe tr;
 	string function(string, string, int, string) @safe tr_plural;
+}
+
+private RequestContext getRequestContext()
+@trusted nothrow {
+	assert(s_requestContext.req !is null, "Request context used outside of a web interface request!");
+	return s_requestContext;
 }
 
 private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
