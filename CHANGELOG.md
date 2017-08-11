@@ -6,28 +6,38 @@ v0.8.1 - 2017-
 
 ### Features and improvements ###
 
-- The HTTP server now accepts a UTF-8 BOM for JSON requests (by Sebanstian Wilzbach) - [pull #1799][issue1799]
-- Added support deserialization support for unnamed `Tuple!(...)` (by Dentcho Bankov) - [pull #1693][issue1693]
-- Added serialization support for named `Tuple!(...)` (by Dentcho Bankov) - [pull #1662][issue1662]
-- Most parsing features activated by `HTTPServerOption` (for `HTTPServerRequest`) are now evaluated lazily instead - the corresponding options are now deprecated (by Sebastian Wilzbach):
-  - `.json` / `HTTPServerOption.parseJsonBody` - [pull #1677][issue1677]
-  - `.cookies` / `HTTPServerOption.parseCookies` - [pull #1801][issue1801]
-  - `.form` / `HTTPServerOption.parseFormBody` - [pull #1801][issue1801]
-  - `.files` / `HTTPServerOption.parseMultiPartBody` - [pull #1801][issue1801]
-  - `.query` / `HTTPServerOption.parseQueryString` - [pull #1821][issue1821]
-  - `.queryString`, `.username` and `.password` are now always filled, regardless of `HTTPServerOption.parseURL` - [pull #1821][issue1821]
-- Deprecated `HTTPServerOption.distribute` because of its non-thread-safe design
-- The `HTTPServerSettings` constructor now accepts a convenient string to set the bind address - [pull #1810][issue1810]
-- `listenHTTP` accepts the same convenience string as `HTTPServerSettings` (by Sebastian Wilzbach) - [pull #1816][issue1816]
-- Added `HTTPReverseProxySettings.destination` (`URL`) to made UDS destinations work (by Georgi Dimitrov) - [pull #1813][issue1813]
-- Added convenience functions `status` and `header` to `vibe.web.web` (by Sebastian Wilzbach) - [pull #1696][issue1696]
+- Compiles on DMD 2.071.2 up to DMD 2.075.0
+- Removed vibe-d:diet sub package (superceded by diet-ng) - [pull #1835][issue1835]
+- Web framework
+  - Added convenience functions `status` and `header` to `vibe.web.web` (by Sebastian Wilzbach) - [pull #1696][issue1696]
+  - Added `vibe.web.web.determineLanguageByHeader` and improved the default language determination (by Jan Jurzitza aka WebFreak) - [pull #1850][issue1850]
+  - Added `vibe.web.web.language` property to determine the detected language (by Jan Jurzitza aka WebFreak) - [pull #1860][issue1860]
+  - Marked the global API functions in `vibe.web.web` as `@safe` - [pull #1886][issue1886]
+- HTTP sub system
+  - The HTTP server now accepts a UTF-8 BOM for JSON requests (by Sebanstian Wilzbach) - [pull #1799][issue1799]
+  - Most parsing features activated by `HTTPServerOption` (for `HTTPServerRequest`) are now evaluated lazily instead - the corresponding options are now deprecated (by Sebastian Wilzbach):
+    - `.json` / `HTTPServerOption.parseJsonBody` - [pull #1677][issue1677]
+    - `.cookies` / `HTTPServerOption.parseCookies` - [pull #1801][issue1801]
+    - `.form` / `HTTPServerOption.parseFormBody` - [pull #1801][issue1801]
+    - `.files` / `HTTPServerOption.parseMultiPartBody` - [pull #1801][issue1801]
+    - `.query` / `HTTPServerOption.parseQueryString` - [pull #1821][issue1821]
+    - `.queryString`, `.username` and `.password` are now always filled, regardless of `HTTPServerOption.parseURL` - [pull #1821][issue1821]
+  - Deprecated `HTTPServerOption.distribute` because of its non-thread-safe design
+  - The `HTTPServerSettings` constructor now accepts a convenient string to set the bind address - [pull #1810][issue1810]
+  - `listenHTTP` accepts the same convenience string as `HTTPServerSettings` (by Sebastian Wilzbach) - [pull #1816][issue1816]
+  - Added `HTTPReverseProxySettings.destination` (`URL`) to made UDS destinations work (by Georgi Dimitrov) - [pull #1813][issue1813]
+  - Increased the network output chunk sizes from 256 to 1024 in the HTTP client/server
+  - WebSocket messages now produce only a single network packet of possible (header and payload sent at once) - [issue #1791][issue1791], [pull #1792][issue1792]
+  - WebSocket API improvements (by Mathias Lang aka Geod24) - [pull #1534][issue1534], [pull #1836][issue1836]
+  - Renamed `HTTPServerRequest.requestURL` to `requestURI`
+- Serialization
+  - Added deserialization support for unnamed `Tuple!(...)` (by Dentcho Bankov) - [pull #1693][issue1693]
+  - Added serialization support for named `Tuple!(...)` (by Dentcho Bankov) - [pull #1662][issue1662]
+- Added UDP multicast properties (implemented for libevent, by Sebastian Koppe) - [pull #1806][issue1806]
+- Markdown embedded URLs are now filtered by a whitelist to avoid URL based XSS exploits - [issue #1845][issue1845], [pull #1846][issue1846]
 - `lowerPrivileges` is now marked `@safe` (by Sebastian Wilzbach) - [pull #1807][issue1807]
 - Improved `urlDecode` to return a slice of its input if possible - [pull #1828][issue1828]
-- Added UDP multicast properties (implemented for libevent, by Sebastian Koppe) - [pull #1806][issue1806]
-- Increased the network output chunk sizes from 256 to 1024 in the HTTP client/server
-- WebSocket messages now produce only a single network packet of possible (header and payload sent at once) - [issue #1791][issue1791], [pull #1792][issue1792]
-- WebSocket API improvements (by Mathias Lang aka Geod24) - [pull #1534][issue1534], [pull #1836][issue1836]
-- Removed vibe-d:diet sub package (superceded by diet-ng) - [pull #1835][issue1835]
+- Added `DictionaryList.toString`
 
 ### Bug fixes ###
 
@@ -39,10 +49,19 @@ null value
 - Fixed sending of WebSocket messages with a payload length of 65536
 - Fixed an intermittent failure at shutdown when using libasync - [pull #1837][issue1837]
 - Fixed MongoDB SASL authentication when used within `shared static this` (by Sebastian Wilzbach) - [pull #1841][issue1841]
+- Fixed authentication with default settings on modern MongoDB versions by defaulting to SCRAM-SHA-1 (by Sebastian Wilzbach) - [issue #1785][issue1785], [issue #1843][issue1843]
+- Fixed the WebSocket ping logic - [issue #1471][issue1471], [pull #1848][issue1848]
+- Fixed a cause of "dwarfeh(224) fatal error" during fatal app exit and possible an infinite loop by using `abort()` instead of `exit()`
+- Fixed `URLRouter.match` to accept delegate literals (by Sebastian Wilzbach) - [pull #1866][issue1866]
+- Fixed a possible range error in the libasync driver
+- Fixed serialization of recursive data types to JSON (by Jan Jurzitza aka WebFreak) - [issue #1855][issue1855]
+- Fixed `MongoCursor.limit` and made the API `@safe` (by Jan Jurzitza aka WebFreak) - [issue #967][issue967], [pull #1871][issue1871]
+- Fixed determining the host name in `SyslogLogger` (by Jan Jurzitza aka WebFreak) - [pull #1874][issue1874]
 
-
+[issue967]: https://github.com/rejectedsoftware/vibe.d/issues/967
 [issue1124]: https://github.com/rejectedsoftware/vibe.d/issues/1124
 [issue1395]: https://github.com/rejectedsoftware/vibe.d/issues/1395
+[issue1471]: https://github.com/rejectedsoftware/vibe.d/issues/1471
 [issue1534]: https://github.com/rejectedsoftware/vibe.d/issues/1534
 [issue1662]: https://github.com/rejectedsoftware/vibe.d/issues/1662
 [issue1674]: https://github.com/rejectedsoftware/vibe.d/issues/1674
@@ -51,6 +70,7 @@ null value
 [issue1692]: https://github.com/rejectedsoftware/vibe.d/issues/1692
 [issue1693]: https://github.com/rejectedsoftware/vibe.d/issues/1693
 [issue1696]: https://github.com/rejectedsoftware/vibe.d/issues/1696
+[issue1785]: https://github.com/rejectedsoftware/vibe.d/issues/1785
 [issue1799]: https://github.com/rejectedsoftware/vibe.d/issues/1799
 [issue1801]: https://github.com/rejectedsoftware/vibe.d/issues/1801
 [issue1806]: https://github.com/rejectedsoftware/vibe.d/issues/1806
@@ -64,6 +84,17 @@ null value
 [issue1836]: https://github.com/rejectedsoftware/vibe.d/issues/1836
 [issue1837]: https://github.com/rejectedsoftware/vibe.d/issues/1837
 [issue1841]: https://github.com/rejectedsoftware/vibe.d/issues/1841
+[issue1843]: https://github.com/rejectedsoftware/vibe.d/issues/1843
+[issue1845]: https://github.com/rejectedsoftware/vibe.d/issues/1845
+[issue1846]: https://github.com/rejectedsoftware/vibe.d/issues/1846
+[issue1848]: https://github.com/rejectedsoftware/vibe.d/issues/1848
+[issue1850]: https://github.com/rejectedsoftware/vibe.d/issues/1850
+[issue1855]: https://github.com/rejectedsoftware/vibe.d/issues/1855
+[issue1860]: https://github.com/rejectedsoftware/vibe.d/issues/1860
+[issue1866]: https://github.com/rejectedsoftware/vibe.d/issues/1866
+[issue1871]: https://github.com/rejectedsoftware/vibe.d/issues/1871
+[issue1874]: https://github.com/rejectedsoftware/vibe.d/issues/1874
+[issue1886]: https://github.com/rejectedsoftware/vibe.d/issues/1886
 
 
 v0.8.0 - 2017-07-10
