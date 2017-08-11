@@ -2,25 +2,33 @@ platform: x64
 environment:
  matrix:
   - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.075.0
     arch: x64
     config: win32
   - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.075.0
     arch: x86
     config: win32
   - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.075.0
     arch: x86_mscoff
     config: win32
   - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.075.0
     arch: x86
     config: libevent
   - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.075.0
     arch: x86
     config: libasync
+  - DC: dmd
+    DVersion: 2.075.0
+    arch: x86_mscoff
+    config: win32
+  - DC: dmd
+    DVersion: 2.074.1
+    arch: x86_mscoff
+    config: win32
   - DC: dmd
     DVersion: 2.073.1
     arch: x86_mscoff
@@ -35,6 +43,14 @@ environment:
     config: win32
   - DC: dmd
     DVersion: 2.070.0
+    arch: x64
+    config: win32
+  - DC: ldc
+    DVersion: 1.3.0
+    arch: x64
+    config: win32
+  - DC: ldc
+    DVersion: 1.2.0
     arch: x64
     config: win32
   - DC: ldc
