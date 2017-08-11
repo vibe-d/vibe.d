@@ -7,7 +7,7 @@ v0.8.1 - 2017-
 ### Features and improvements ###
 
 - Compiles on DMD 2.071.2 up to DMD 2.075.0
-- Removed vibe-d:diet sub package (superceded by diet-ng) - [pull #1835][issue1835]
+- Removed vibe-d:diet sub package (superseded by diet-ng) - [pull #1835][issue1835]
 - Web framework
   - Added convenience functions `status` and `header` to `vibe.web.web` (by Sebastian Wilzbach) - [pull #1696][issue1696]
   - Added `vibe.web.web.determineLanguageByHeader` and improved the default language determination (by Jan Jurzitza aka WebFreak) - [pull #1850][issue1850]
@@ -71,6 +71,8 @@ null value
 [issue1693]: https://github.com/rejectedsoftware/vibe.d/issues/1693
 [issue1696]: https://github.com/rejectedsoftware/vibe.d/issues/1696
 [issue1785]: https://github.com/rejectedsoftware/vibe.d/issues/1785
+[issue1791]: https://github.com/rejectedsoftware/vibe.d/issues/1791
+[issue1792]: https://github.com/rejectedsoftware/vibe.d/issues/1792
 [issue1799]: https://github.com/rejectedsoftware/vibe.d/issues/1799
 [issue1801]: https://github.com/rejectedsoftware/vibe.d/issues/1801
 [issue1806]: https://github.com/rejectedsoftware/vibe.d/issues/1806
@@ -149,7 +151,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Added `StreamOutputRange.drop()`
 - Updated the Windows OpenSSL binaries to 1.0.2k
 - The session life time in `RedisSessionStore` is now refreshed on every access to the session (by Steven Schveighoffer) - [pull #1778][issue1778]
-- Reduced session storate overhead in `RedisSessionStore` (by Steven Schveighoffer) - [pull #1777][issue1777]
+- Reduced session storage overhead in `RedisSessionStore` (by Steven Schveighoffer) - [pull #1777][issue1777]
 - Enabled `HashMap`'s postblit constructor, supported by a reference counting + copy-on-write strategy
 
 ### Bug fixes ###
