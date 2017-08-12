@@ -638,30 +638,72 @@ final class Cookie {
 		none = raw
 	}
 
+	/// Cookie payload
 	@property void value(string value) { m_value = urlEncode(value); }
+	/// ditto
 	@property string value() const { return urlDecode(m_value); }
 
+	/// Undecoded cookie payload
 	@property void rawValue(string value) { m_value = value; }
+	/// ditto
 	@property string rawValue() const { return m_value; }
 
+	/// The domain for which the cookie is valid
 	@property void domain(string value) { m_domain = value; }
+	/// ditto
 	@property string domain() const { return m_domain; }
 
+	/// The path/local URI for which the cookie is valid
 	@property void path(string value) { m_path = value; }
+	/// ditto
 	@property string path() const { return m_path; }
 
+	/// Expiration date of the cookie
 	@property void expires(string value) { m_expires = value; }
+	/// ditto
+	@property void expires(SysTime value) { m_expires = value.toRFC822DateTimeString(); }
+	/// ditto
 	@property string expires() const { return m_expires; }
 
+	/** Maximum life time of the cookie
+
+		This is the modern variant of `expires`. For backwards compatibility it
+		is recommended to set both properties, or to use the `expire` method.
+	*/
 	@property void maxAge(long value) { m_maxAge = value; }
+	/// ditto
+	@property void maxAge(Duration value) { m_maxAge = value.total!"seconds"; }
+	/// ditto
 	@property long maxAge() const { return m_maxAge; }
 
+	/** Require a secure connection for transmission of this cookie
+	*/
 	@property void secure(bool value) { m_secure = value; }
+	/// ditto
 	@property bool secure() const { return m_secure; }
 
+	/** Prevents access to the cookie from scripts.
+	*/
 	@property void httpOnly(bool value) { m_httpOnly = value; }
+	/// ditto
 	@property bool httpOnly() const { return m_httpOnly; }
 
+	/** Sets the "expires" and "max-age" attributes to limit the life time of
+		the cookie.
+	*/
+	void expire(Duration max_age)
+	{
+		this.expires = Clock.currTime(UTC()) + max_age;
+		this.maxAge = max_age;
+	}
+	/// ditto
+	void expire(SysTime expire_time)
+	{
+		this.expires = expire_time;
+		this.maxAge = expire_time - Clock.currTime(UTC());
+	}
+
+	/// Sets the cookie value encoded with the specified encoding.
 	void setValue(string value, Encoding encoding)
 	{
 		final switch (encoding) {
@@ -670,6 +712,7 @@ final class Cookie {
 		}
 	}
 
+	/// Writes out the full cookie in HTTP compatible format.
 	void writeString(R)(R dst, string name)
 		if (isOutputRange!(R, char))
 	{
