@@ -22,6 +22,7 @@ v0.8.1 - 2017-
     - `.files` / `HTTPServerOption.parseMultiPartBody` - [pull #1801][issue1801]
     - `.query` / `HTTPServerOption.parseQueryString` - [pull #1821][issue1821]
     - `.queryString`, `.username` and `.password` are now always filled, regardless of `HTTPServerOption.parseURL` - [pull #1821][issue1821]
+  - `HTTPServerRequest.peer` is now computed lazily
   - Deprecated `HTTPServerOption.distribute` because of its non-thread-safe design
   - The `HTTPServerSettings` constructor now accepts a convenient string to set the bind address - [pull #1810][issue1810]
   - `listenHTTP` accepts the same convenience string as `HTTPServerSettings` (by Sebastian Wilzbach) - [pull #1816][issue1816]
@@ -38,6 +39,7 @@ v0.8.1 - 2017-
 - `lowerPrivileges` is now marked `@safe` (by Sebastian Wilzbach) - [pull #1807][issue1807]
 - Improved `urlDecode` to return a slice of its input if possible - [pull #1828][issue1828]
 - Added `DictionaryList.toString`
+- Added support for defining a compatibility version `VibeUseOpenSSL11` to build against OpenSSL 1.1.0 instead of 1.0.x (by Robert Schadek aka burner) - [issue #1651][issue1651], [issue #1748][issue1748], [issue #1758][issue1758], [pull #1759][issue1759]
 
 ### Bug fixes ###
 
@@ -63,6 +65,7 @@ null value
 [issue1395]: https://github.com/rejectedsoftware/vibe.d/issues/1395
 [issue1471]: https://github.com/rejectedsoftware/vibe.d/issues/1471
 [issue1534]: https://github.com/rejectedsoftware/vibe.d/issues/1534
+[issue1651]: https://github.com/rejectedsoftware/vibe.d/issues/1651
 [issue1662]: https://github.com/rejectedsoftware/vibe.d/issues/1662
 [issue1674]: https://github.com/rejectedsoftware/vibe.d/issues/1674
 [issue1677]: https://github.com/rejectedsoftware/vibe.d/issues/1677
@@ -70,6 +73,9 @@ null value
 [issue1692]: https://github.com/rejectedsoftware/vibe.d/issues/1692
 [issue1693]: https://github.com/rejectedsoftware/vibe.d/issues/1693
 [issue1696]: https://github.com/rejectedsoftware/vibe.d/issues/1696
+[issue1748]: https://github.com/rejectedsoftware/vibe.d/issues/1748
+[issue1758]: https://github.com/rejectedsoftware/vibe.d/issues/1758
+[issue1759]: https://github.com/rejectedsoftware/vibe.d/issues/1759
 [issue1785]: https://github.com/rejectedsoftware/vibe.d/issues/1785
 [issue1791]: https://github.com/rejectedsoftware/vibe.d/issues/1791
 [issue1792]: https://github.com/rejectedsoftware/vibe.d/issues/1792
