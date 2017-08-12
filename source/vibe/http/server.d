@@ -1701,6 +1701,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 
 private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo listen_info)
 {
+	import std.traits : ReturnType;
 	Stream http_stream = connection;
 
 	// Set NODELAY to true, to avoid delays caused by sending the response
@@ -1710,10 +1711,8 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	// based driver.
 	connection.tcpNoDelay = true;
 
-	static if (!is(ReturnType!createTLSStreamFL == void)) {
-		import std.traits : ReturnType;
+	static if (!is(ReturnType!createTLSStreamFL == void))
 		ReturnType!createTLSStreamFL tls_stream;
-	}
 
 	if (!connection.waitForData(10.seconds())) {
 		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
