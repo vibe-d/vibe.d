@@ -695,6 +695,7 @@ final class HTTPClientRequest : HTTPRequest {
 		FixedAppender!(string, 22) m_contentLengthBuffer;
 		TCPConnection m_rawConn;
 		TLSCertificateInformation m_peerCertificate;
+		bool m_writtenPart = false;
 	}
 
 
@@ -801,7 +802,10 @@ final class HTTPClientRequest : HTTPRequest {
 		}
 	}
 
-	void writePart(MultiPart part)
+	/**
+		Writes the body as multipart request that can upload files.
+	 */
+	void writePart(MultiPartBody part)
 	{
 		auto boundary = randomMultipartBoundary;
 		auto length = part.length(boundary);
@@ -814,13 +818,58 @@ final class HTTPClientRequest : HTTPRequest {
 		finalize();
 	}
 
+	/**
+		Partially writes the body with a multipart.
+		You need to supply a boundary which is a random string that should not occur in the content.
+		The boundary can be generated using `vibe.http.common.randomMultipartBoundary` and must always be the same in one request.
+	 */
+	void writePart(MultiPart part, string boundary)
+	{
+		if (boundary.length > 70) {
+			logTrace("Boundary '%s' is longer than 70 characters, truncating", boundary);
+			boundary.length = 70;
+		}
+
+		if (m_writtenPart)
+			bodyWriter.write(boundary);
+
+		if ("Content-Type" !in headers)
+			headers["Content-Type"] = "multipart/form-data; boundary=\"" ~ boundary ~ "\"";
+
+		boundary = "--" ~ boundary;
+		bodyWriter.write(boundary);
+		bodyWriter.write("\r\n");
+		foreach (k, v; part.headers)
+			bodyWriter.write(k ~ ": " ~ v ~ "\r\n");
+		bodyWriter.write("\r\n");
+		pipe(part.content, bodyWriter);
+		bodyWriter.write("\r\n");
+		m_writtenPart = true;
+	}
+
+	/**
+		Finishes writing a multipart response by sending the ending boundary and finalizing the request.
+	 */
+	void finalizePart(string boundary, string epilogue = null)
+	{
+		bodyWriter.write("--");
+		bodyWriter.write(boundary);
+		bodyWriter.write("--\r\n");
+		if (epilogue.length)
+		{
+			bodyWriter.write(epilogue);
+			bodyWriter.write("\r\n");
+		}
+		finalize();
+	}
+
 	///
 	unittest {
 		void test(HTTPClientRequest req) {
-			MultiPart part = new MultiPart;
-			part.parts ~= MultiPartBodyPart.formData("name", "bob");
-			part.parts ~= MultiPartBodyPart.singleFile("picture", "picture.png", "image/png", openFile("res/profilepicture.png"));
-			part.parts ~= MultiPartBodyPart.singleFile("upload", Path("file.zip")); // auto read & mime detection from filename
+			MultiPartBody part = new MultiPartBody;
+			part.parts ~= MultiPart.formData("name", "bob");
+			part.parts ~= MultiPart.singleFile("picture", "picture.png", "image/png", openFile("res/profilepicture.png"));
+			part.parts ~= MultiPart.singleFile("upload", Path("file.zip")); // auto read & mime detection from filename
 			req.writePart(part);
 		}
 	}

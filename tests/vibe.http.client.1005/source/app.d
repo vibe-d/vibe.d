@@ -25,10 +25,10 @@ shared static this()
 	runTask({
 		requestHTTP("http://127.0.0.1:11005",
 			(scope req) {
-				MultiPart part = new MultiPart;
-				part.parts ~= MultiPartBodyPart.formData("name", "bob");
+				MultiPartBody part = new MultiPartBody;
+				part.parts ~= MultiPart.formData("name", "bob");
 				auto memStream = createMemoryStream(cast(ubyte[]) "Totally\0a\0PNG\0file.", false);
-				part.parts ~= MultiPartBodyPart.singleFile("picture", "picture.png", "image/png", memStream, true);
+				part.parts ~= MultiPart.singleFile("picture", "picture.png", "image/png", memStream, true);
 				req.writePart(part);
 			},
 			(scope res) {}

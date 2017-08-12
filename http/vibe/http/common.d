@@ -338,18 +338,19 @@ class HTTPStatusException : Exception {
 	string debugMessage;
 }
 
-final class MultiPartBodyPart
+final class MultiPart
 {
 	import vibe.stream.memory : createMemoryStream;
 
 	InetHeaderMap headers;
-	InputStream content;
+	InterfaceProxy!InputStream content;
 
 	@safe:
 
-	static MultiPartBodyPart formData(string field_name, InputStream stream, string content_type = "text/plain; charset=\"utf-8\"", bool binary = false)
+	static MultiPart formData(InputStream)(string field_name, InputStream stream, string content_type = "text/plain; charset=\"utf-8\"", bool binary = false)
+		if (isInputStream!InputStream)
 	{
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
 		ret.headers["Content-Type"] = content_type;
 		if (binary)
@@ -358,42 +359,43 @@ final class MultiPartBodyPart
 		return ret;
 	}
 
-	static MultiPartBodyPart formData(string field_name, string value, string content_type = "text/plain; charset=\"utf-8\"")
+	static MultiPart formData(string field_name, string value, string content_type = "text/plain; charset=\"utf-8\"")
 	{
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
 		ret.headers["Content-Type"] = content_type;
 		ret.content = createMemoryStream((() @trusted => cast(ubyte[]) value)(), false);
 		return ret;
 	}
 
-	static MultiPartBodyPart formData(string field_name, ubyte[] content, string content_type = "application/octet-stream")
+	static MultiPart formData(string field_name, ubyte[] content, string content_type = "application/octet-stream")
 	{
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
 		ret.headers["Content-Transfer-Encoding"] = "binary";
 		ret.content = createMemoryStream(content, false);
 		return ret;
 	}
 
-	static MultiPartBodyPart singleFile(string field_name, Path file)
+	static MultiPart singleFile(string field_name, Path file)
 	{
 		import vibe.inet.mimetypes : getMimeTypeForFile;
 		import vibe.core.file : openFile, FileMode;
 
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ file.head.name ~ "\"";
 		string type = getMimeTypeForFile(file.toString);
 		ret.headers["Content-Type"] = type;
 		if (!type.startsWith("text/"))
 			ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = cast(InputStream) openFile(file, FileMode.read);
+		ret.content = cast(InterfaceProxy!InputStream) openFile(file, FileMode.read);
 		return ret;
 	}
 
-	static MultiPartBodyPart singleFile(string field_name, string filename, string content_type, InputStream stream, bool binary = true)
+	static MultiPart singleFile(InputStream)(string field_name, string filename, string content_type, InputStream stream, bool binary = true)
+		if (isInputStream!InputStream)
 	{
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
 		ret.headers["Content-Type"] = content_type;
 		if (binary)
@@ -402,18 +404,18 @@ final class MultiPartBodyPart
 		return ret;
 	}
 
-	static MultiPartBodyPart singleFile(string field_name, string filename, string content_type, string content)
+	static MultiPart singleFile(string field_name, string filename, string content_type, string content)
 	{
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
 		ret.headers["Content-Type"] = content_type;
 		ret.content = createMemoryStream((() @trusted => cast(ubyte[]) content)(), false);
 		return ret;
 	}
 
-	static MultiPartBodyPart singleFile(string field_name, string filename, string content_type, ubyte[] content)
+	static MultiPart singleFile(string field_name, string filename, string content_type, ubyte[] content)
 	{
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
 		ret.headers["Content-Transfer-Encoding"] = "binary";
 		ret.headers["Content-Type"] = content_type;
@@ -421,54 +423,48 @@ final class MultiPartBodyPart
 		return ret;
 	}
 
-	static MultiPartBodyPart multipleFilesPart(Path file)
+	static MultiPart multipleFilesPart(Path file)
 	{
 		import vibe.inet.mimetypes : getMimeTypeForFile;
 		import vibe.core.file : openFile, FileMode;
 
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "file; filename=\"" ~ file.head.name ~ "\"";
 		string type = getMimeTypeForFile(file.toString);
 		ret.headers["Content-Type"] = type;
 		if (!type.startsWith("text/"))
 			ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = cast(InputStream) openFile(file, FileMode.read);
+		ret.content = cast(InterfaceProxy!InputStream) openFile(file, FileMode.read);
 		return ret;
 	}
 
-	static MultiPartBodyPart multipleFilesPart(string filename, string content_type, InputStream stream)
+	static MultiPart multipleFilesPart(InputStream)(string filename, string content_type, InputStream stream, bool binary = false)
+		if (isInputStream!InputStream)
 	{
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "file; filename=\"" ~ filename ~ "\"";
 		ret.headers["Content-Type"] = content_type;
+			if (binary)
+		ret.headers["Content-Transfer-Encoding"] = "binary";
 		ret.content = stream;
 		return ret;
 	}
 
-	static MultiPartBodyPart multipleFilesPart(string filename, string content_type, string content)
+	static MultiPart multipleFilesPart(string filename, string content_type, string content)
 	{
-		auto ret = new MultiPartBodyPart();
-		ret.headers["Content-Disposition"] = "file; filename=\"" ~ filename ~ "\"";
-		ret.headers["Content-Type"] = content_type;
-		ret.content = createMemoryStream((() @trusted => cast(ubyte[]) content)(), false);
-		return ret;
+		return multipleFilesPart(filename, content_type, createMemoryStream((() @trusted => cast(ubyte[]) content)(), false), true);
 	}
 
-	static MultiPartBodyPart multipleFilesPart(string filename, string content_type, ubyte[] content)
+	static MultiPart multipleFilesPart(string filename, string content_type, ubyte[] content)
 	{
-		auto ret = new MultiPartBodyPart();
-		ret.headers["Content-Disposition"] = "file; filename=\"" ~ filename ~ "\"";
-		ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.headers["Content-Type"] = content_type;
-		ret.content = createMemoryStream(content, false);
-		return ret;
+		return multipleFilesPart(filename, content_type, createMemoryStream(content, false), true);
 	}
 
-	static MultiPartBodyPart multipleFiles(string name, MultiPart multipart)
+	static MultiPart multipleFiles(string name, MultiPartBody multipart)
 	{
 		import vibe.stream.memory : createMemoryOutputStream;
 
-		auto ret = new MultiPartBodyPart();
+		auto ret = new MultiPart();
 		string boundary = randomMultipartBoundary;
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ name ~ "\"";
 		ret.headers["Content-Type"] = "multipart/mixed; boundary=\"" ~ boundary ~ "\"";
@@ -479,14 +475,14 @@ final class MultiPartBodyPart
 	}
 }
 
-final class MultiPart
+final class MultiPartBody
 {
 	// https://www.w3.org/Protocols/rfc1341/7_2_Multipart.html
 
 	string contentType = "multipart/form-data";
 	string preamble, epilogue;
 
-	MultiPartBodyPart[] parts;
+	MultiPart[] parts;
 
 	@safe:
 
@@ -524,13 +520,19 @@ final class MultiPart
 			return;
 
 		boundary = "--" ~ boundary;
-		if (preamble.length)
-			output.write(preamble ~ "\r\n");
+		if (preamble.length) {
+			output.write(preamble);
+			output.write("\r\n");
+		}
 		output.write(boundary);
 		foreach (part; parts) {
 			output.write("\r\n");
-			foreach (k, v; part.headers)
-				output.write(k ~ ": " ~ v ~ "\r\n");
+			foreach (k, v; part.headers) {
+				output.write(k);
+				output.write(": ");
+				output.write(v);
+				output.write("\r\n");
+			}
 			output.write("\r\n");
 			pipe(part.content, output);
 			output.write("\r\n");
@@ -538,7 +540,10 @@ final class MultiPart
 		}
 		output.write("--\r\n");
 		if (epilogue.length)
-			output.write(epilogue ~ "\r\n");
+		{
+			output.write(epilogue);
+			output.write("\r\n");
+		}
 	}
 }
 
