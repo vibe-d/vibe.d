@@ -283,7 +283,8 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	/// ditto
 	auto byValue() inout { import std.algorithm.iteration : map; return byKeyValue().map!(p => p[1]); }
 
-	// Enables foreach iteration over a `DictionaryList` with two loop variables.
+	/// Deprecated in favor of `.byKeyValue` - enables foreach iteration over a `DictionaryList` with two loop variables.
+	deprecated("Iterate over .byKeyValue instead.")
 	alias byKeyValue this;
 
 	static if (is(typeof({ const(ValueType) v; ValueType w; w = v; }))) {
