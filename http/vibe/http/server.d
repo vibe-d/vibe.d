@@ -784,6 +784,7 @@ final class HTTPServerRequest : HTTPRequest {
 		@property string peer()
 		@safe nothrow {
 			if (!m_peer) {
+				version (Have_vibe_core) {} else scope (failure) assert(false);
 				// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
 				auto peer_address_string = this.clientAddress.toString();
 				if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(':') < 0)
