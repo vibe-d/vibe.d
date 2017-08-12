@@ -38,7 +38,7 @@ v0.8.1 - 2017-
 - Markdown embedded URLs are now filtered by a whitelist to avoid URL based XSS exploits - [issue #1845][issue1845], [pull #1846][issue1846]
 - `lowerPrivileges` is now marked `@safe` (by Sebastian Wilzbach) - [pull #1807][issue1807]
 - Improved `urlDecode` to return a slice of its input if possible - [pull #1828][issue1828]
-- Added `DictionaryList.toString`
+- Added `DictionaryList.toString` and deprecated `alias byKeyValue this` - [issue #1873][issue1873]
 - Added support for defining a compatibility version `VibeUseOpenSSL11` to build against OpenSSL 1.1.0 instead of 1.0.x (by Robert Schadek aka burner) - [issue #1651][issue1651], [issue #1748][issue1748], [issue #1758][issue1758], [pull #1759][issue1759]
 
 ### Bug fixes ###
@@ -101,6 +101,7 @@ null value
 [issue1860]: https://github.com/rejectedsoftware/vibe.d/issues/1860
 [issue1866]: https://github.com/rejectedsoftware/vibe.d/issues/1866
 [issue1871]: https://github.com/rejectedsoftware/vibe.d/issues/1871
+[issue1873]: https://github.com/rejectedsoftware/vibe.d/issues/1873
 [issue1874]: https://github.com/rejectedsoftware/vibe.d/issues/1874
 [issue1886]: https://github.com/rejectedsoftware/vibe.d/issues/1886
 
