@@ -49,16 +49,10 @@ enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 // openssl 1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
 version (VibeUseOpenSSL11) {
 	extern(C) const(SSL_METHOD)* TLS_client_method();
-
-	const(SSL_METHOD)* SSLv23_client_method() {
-		return TLS_client_method();
-	}
+	alias SSLv23_client_method = TLS_client_method;
 
 	extern(C) const(SSL_METHOD)* TLS_server_method();
-
-	const(SSL_METHOD)* SSLv23_server_method() {
-		return TLS_server_method();
-	}
+	alias SSLv23_server_method = TLS_server_method;
 
 	// this does nothing in > openssl 1.1.0
 	void SSL_load_error_strings() {}
@@ -79,7 +73,6 @@ version (VibeUseOpenSSL11) {
 	}
 
 	void CRYPTO_set_locking_callback(T)(T t) {
-
 	}
 
 	// #define SSL_get_ex_new_index(l, p, newf, dupf, freef) \
@@ -99,22 +92,15 @@ version (VibeUseOpenSSL11) {
 
 	extern(C) BIGNUM* BN_get_rfc3526_prime_2048(BIGNUM *bn);
 
-	BIGNUM* get_rfc3526_prime_2048(BIGNUM *bn) {
-		return BN_get_rfc3526_prime_2048(bn);
-	}
+	alias get_rfc3526_prime_2048 = BN_get_rfc3526_prime_2048;
 
 	// #  define sk_num OPENSSL_sk_num
 	extern(C) int OPENSSL_sk_num(const void *);
-	extern(C) int sk_num(const(_STACK)* a) {
-		return OPENSSL_sk_num(a);
-	}
+	alias sk_num = OPENSSL_sk_num;
 
 	// #  define sk_value OPENSSL_sk_value
 	extern(C) void *OPENSSL_sk_value(const void *, int);
-
-	extern(C) void* sk_value(const(_STACK)* s, int l) {
-		return OPENSSL_sk_value(s, l);
-	}
+	alias sk_value = OPENSSL_sk_value;
 }
 
 /**
