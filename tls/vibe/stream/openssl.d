@@ -63,7 +63,7 @@ version (VibeUseOpenSSL11) {
 	// this does nothing in > openssl 1.1.0
 	void SSL_load_error_strings() {}
 
-	extern(C)  int OPENSSL_init_ssl(ulong opts, const void* settings);
+	extern(C) int OPENSSL_init_ssl(ulong opts, const void* settings);
 
 	// # define SSL_library_init() OPENSSL_init_ssl(0, NULL)
 	int SSL_library_init() {
@@ -105,14 +105,14 @@ version (VibeUseOpenSSL11) {
 
 	// #  define sk_num OPENSSL_sk_num
 	extern(C) int OPENSSL_sk_num(const void *);
-	extern(C) int sk_num(const void *a) {
+	int sk_num(const void *a) {
 		return OPENSSL_sk_num(a);
 	}
 
 	// #  define sk_value OPENSSL_sk_value
 	extern(C) void *OPENSSL_sk_value(const void *, int);
 
-	extern(C) void *sk_value(const void *s, int l) {
+	void *sk_value(const void *s, int l) {
 		return OPENSSL_sk_value(s, l);
 	}
 }
