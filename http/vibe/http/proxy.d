@@ -75,7 +75,7 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 	void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	@safe {
 		auto url = settings.destination;
-		
+
 		if (settings.reverseProxyMode) {
 			url.localURI = req.requestURL;
 		}
@@ -224,6 +224,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPProxySettings settings)
 {
 	return proxyRequest(settings);
 }
+
 /// ditto
 HTTPServerRequestDelegateS reverseProxyRequest(string destination_host, ushort destination_port)
 {
