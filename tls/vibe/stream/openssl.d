@@ -102,19 +102,6 @@ version (VibeUseOpenSSL11) {
 	BIGNUM* get_rfc3526_prime_2048(BIGNUM *bn) {
 		return BN_get_rfc3526_prime_2048(bn);
 	}
-
-	// #  define sk_num OPENSSL_sk_num
-	extern(C) int OPENSSL_sk_num(const void *);
-	extern(C) int sk_num(const void *a) {
-		return OPENSSL_sk_num(a);
-	}
-
-	// #  define sk_value OPENSSL_sk_value
-	extern(C) void *OPENSSL_sk_value(const void *, int);
-
-	extern(C) void *sk_value(const void *s, int l) {
-		return OPENSSL_sk_value(s, l);
-	}
 }
 
 /**
