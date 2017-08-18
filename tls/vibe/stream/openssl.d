@@ -105,14 +105,14 @@ version (VibeUseOpenSSL11) {
 
 	// #  define sk_num OPENSSL_sk_num
 	extern(C) int OPENSSL_sk_num(const void *);
-	extern(C) int sk_num(const void *a) {
+	extern(C) int sk_num(const(_STACK)* a) {
 		return OPENSSL_sk_num(a);
 	}
 
 	// #  define sk_value OPENSSL_sk_value
 	extern(C) void *OPENSSL_sk_value(const void *, int);
 
-	extern(C) void *sk_value(const void *s, int l) {
+	extern(C) void* sk_value(const(_STACK)* s, int l) {
 		return OPENSSL_sk_value(s, l);
 	}
 }
