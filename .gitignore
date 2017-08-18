@@ -18,6 +18,9 @@ __dummy.html
 .dub
 dub.selections.json
 
+# Auto-downloaded 3rd-party
+lib/subprojects/
+
 # Mono-D files
 *.userprefs
 
