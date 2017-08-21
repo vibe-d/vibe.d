@@ -4,8 +4,7 @@ set -e -x -o pipefail
 
 DUB_ARGS=${DUB_ARGS:-}
 
-# FIXME
-#./scripts/test_version.sh
+./scripts/test_version.sh
 
 # Check for trailing whitespace"
 grep -nrI --include=*.d '\s$'  && (echo "Trailing whitespace found"; exit 1)
