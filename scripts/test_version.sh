@@ -5,13 +5,14 @@ set -xueo pipefail
 # test version strings
 ver_git=$(git describe --abbrev=0 --tags)
 ver_vibe=$(sed -n 's|.*vibeVersionString\s*= "\(.*\)";$|\1|p' core/vibe/core/core.d)
-ver_meson=$(sed -n 's|project_version\s*= '"'"'\(.*\)'"'"'$|\1|p' meson.build)
-ver_name_meson=$(sed -n 's|project_version_name\s*= '"'"'\(.*\)'"'"'$|\1|p' meson.build)
-if [ "${ver_git}" != v"$ver_vibe" -o "${ver_git}" != v"$ver_meson" -o "${ver_git}" != v"$ver_name_meson" ]; then
+ver_meson_base=$(sed -n 's|\s*version\s*: '"'"'\(.*\)'"'"'$|\1|p' meson.build)
+ver_meson_suffix=$(sed -n 's|project_version_suffix\s*= '"'"'~\([a-z]*\)\([0-9]*\)'"'"'$|-\1.\2|p' meson.build)
+
+if [ "${ver_git}" != v"$ver_vibe" -o "${ver_git}" != "v$ver_meson_base$ver_meson_suffix" ]; then
     echo "Mismatch between versions."
     echo "	git: '$ver_git'"
     echo "	vibeVersionString: '$ver_vibe'"
-    echo "	meson.build project_version: '$ver_meson'"
-    echo "	meson project_version_name: '$ver_name_meson'"
+    echo "	meson.build project_version: '$ver_meson_base'"
+    echo "	meson project_version_suffix: '$ver_meson_suffix'"
     exit 1
 fi
