@@ -48,7 +48,8 @@ vibe_web_lib = library('vibe-web',
         install: true,
         link_with: [web_link_with],
         dependencies: [crypto_dep,
-                       ssl_dep],
+                       ssl_dep,
+                       diet_dep],
         version: project_version,
         soversion: project_soversion
 )
@@ -56,6 +57,7 @@ pkgc.generate(name: 'vibe-web',
               libraries: [vibe_web_lib] + web_link_with,
               subdirs: 'd/vibe',
               version: project_version,
+              requires: 'diet',
               description: 'High level web and REST service framework'
 )
 
@@ -77,7 +79,8 @@ vibe_test_web_exe = executable('vibe-test_web',
     dependencies: [zlib_dep,
                    crypto_dep,
                    ssl_dep,
-                   libevent_dep],
+                   libevent_dep,
+                   diet_dep],
     link_with: [web_link_with],
     d_args: meson.get_compiler('d').unittest_args(),
     link_args: '-main'

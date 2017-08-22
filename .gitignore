@@ -19,7 +19,9 @@ __dummy.html
 dub.selections.json
 
 # Auto-downloaded 3rd-party
-lib/subprojects/
+lib/subprojects/diet/
+lib/subprojects/libevent/
+lib/subprojects/openssl/
 
 # Mono-D files
 *.userprefs
