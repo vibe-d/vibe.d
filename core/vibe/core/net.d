@@ -432,7 +432,14 @@ interface UDPConnection {
 	/// ditto
 	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null);
 
-	/** Become member of IP multicast group
+	/** Set Differentiated Services Code Point
+
+		Used for Quality of Service. 6bit number, higher is more priority.
+		see https://www.iana.org/assignments/dscp-registry/dscp-registry.xhtml
+	*/
+	void setDSCP(ubyte codePoint);
+
+	/** Become member of IP multicast group 
 
 		The multiaddr parameter should be in the range 239.0.0.0-239.255.255.255.
 		See https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xml#multicast-addresses-12
