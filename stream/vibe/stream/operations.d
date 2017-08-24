@@ -56,7 +56,7 @@ void readLine(R, InputStream)(InputStream stream, ref R dst, size_t max_bytes = 
 	readUntil(stream, dst, cast(const(ubyte)[])linesep, max_bytes);
 }
 
-unittest {
+@safe unittest {
 	import vibe.stream.memory : createMemoryOutputStream, createMemoryStream;
 
 	auto inp = createMemoryStream(cast(ubyte[])"Hello, World!\r\nThis is a test.\r\nNot a full line.".dup);
@@ -117,7 +117,7 @@ unittest {
 		string and m the length of the marker.
 */
 ubyte[] readUntil(InputStream)(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, IAllocator alloc = vibeThreadAllocator()) /*@ufcs*/
-@safe	if (isInputStream!InputStream)
+	if (isInputStream!InputStream)
 {
 	auto output = AllocAppender!(ubyte[])(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
@@ -134,7 +134,7 @@ void readUntil(InputStream, OutputStream)(InputStream stream, OutputStream dst, 
 }
 /// ditto
 void readUntil(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
-@safe	if (isOutputRange!(R, ubyte) && isInputStream!InputStream)
+	if (isOutputRange!(R, ubyte) && isInputStream!InputStream)
 {
 	assert(max_bytes > 0 && end_marker.length > 0);
 
@@ -144,23 +144,21 @@ void readUntil(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_mar
 		readUntilGeneric(stream, dst, end_marker, max_bytes);
 }
 
-
-
-unittest {
+@safe unittest {
 	import vibe.stream.memory;
 
-	auto text = "1231234123111223123334221111112221231333123123123123123213123111111111114";
+	auto text = "1231234123111223123334221111112221231333123123123123123213123111111111114".dup;
 	auto stream = createMemoryStream(cast(ubyte[])text);
-	void test(string s, size_t expected){
+	void test(string s, size_t expected) @safe {
 		stream.seek(0);
-		auto result = cast(string)readUntil(stream, cast(ubyte[])s);
+		auto result = cast(char[])readUntil(stream, cast(const(ubyte)[])s);
 		assert(result.length == expected, "Wrong result index");
 		assert(result == text[0 .. result.length], "Wrong result contents: "~result~" vs "~text[0 .. result.length]);
 		assert(stream.leastSize() == stream.size() - expected - s.length, "Wrong number of bytes left in stream");
 
 		stream.seek(0);
 		auto inp2 = new NoPeekProxy!InputStream(stream);
-		result = cast(string)readUntil(inp2, cast(const(ubyte)[])s);
+		result = cast(char[])readUntil(inp2, cast(const(ubyte)[])s);
 		assert(result.length == expected, "Wrong result index");
 		assert(result == text[0 .. result.length], "Wrong result contents: "~result~" vs "~text[0 .. result.length]);
 		assert(stream.leastSize() == stream.size() - expected - s.length, "Wrong number of bytes left in stream");
@@ -185,7 +183,7 @@ unittest {
 	// TODO: test
 }
 
-unittest {
+@safe unittest {
 	import vibe.stream.memory : createMemoryOutputStream, createMemoryStream, MemoryStream;
 	import vibe.stream.wrapper : ProxyStream;
 
@@ -219,7 +217,7 @@ unittest {
 		An exception is thrown if the stream contains more than max_bytes data.
 */
 ubyte[] readAll(InputStream)(InputStream stream, size_t max_bytes = size_t.max, size_t reserve_bytes = 0) /*@ufcs*/
-@safe	if (isInputStream!InputStream)
+	if (isInputStream!InputStream)
 {
 	import vibe.internal.freelistref;
 
@@ -261,7 +259,7 @@ ubyte[] readAll(InputStream)(InputStream stream, size_t max_bytes = size_t.max, 
 		a UTFException is thrown.
 */
 string readAllUTF8(InputStream)(InputStream stream, bool sanitize = false, size_t max_bytes = size_t.max)
-@safe 	if (isInputStream!InputStream)
+	if (isInputStream!InputStream)
 {
 	import std.utf;
 	import vibe.utils.string;
@@ -353,7 +351,7 @@ bool skipBytes(InputStream)(InputStream stream, const(ubyte)[] bytes)
 private struct Buffer { ubyte[64*1024-4] bytes = void; } // 64k - 4 bytes for reference count
 
 private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max)
-@safe	if (isInputStream!InputStream)
+	if (isInputStream!InputStream)
 {
 	assert(end_marker.length >= 1 && end_marker.length <= 2);
 
@@ -408,7 +406,7 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 	}
 }
 
-unittest { // issue #1741
+@safe unittest { // issue #1741
 	static class S : InputStream {
 		ubyte[] src;
 		ubyte[] buf;
@@ -441,7 +439,7 @@ unittest { // issue #1741
 }
 
 
-private @safe void readUntilGeneric(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+private void readUntilGeneric(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
 	if (isOutputRange!(R, ubyte) && isInputStream!InputStream)
 {
 	// allocate internal jump table to optimize the number of comparisons
