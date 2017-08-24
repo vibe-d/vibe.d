@@ -133,7 +133,8 @@ final class OpenSSLStream : TLSStream {
 		SSLState m_tls;
 		BIO* m_bio;
 		ubyte[64] m_peekBuffer;
-		TLSCertificateInformation m_peerCertificate;
+		TLSCertificateInformation m_peerCertificateInfo;
+		X509* m_peerCertificate;
 	}
 
 	this(InterfaceProxy!Stream underlying, OpenSSLContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init, string[] alpn = null)
@@ -185,13 +186,12 @@ final class OpenSSLStream : TLSStream {
 			// ensure that the SSL tunnel gets terminated when an error happens during verification
 			scope (failure) () @trusted { SSL_shutdown(m_tls); } ();
 
-			if (auto peer = () @trusted { return SSL_get_peer_certificate(m_tls); } ()) {
-				scope(exit) () @trusted { X509_free(peer); } ();
-
-				readPeerCertInfo(peer);
+			m_peerCertificate = () @trusted { return SSL_get_peer_certificate(m_tls); } ();
+			if (m_peerCertificate) {
+				readPeerCertInfo();
 				auto result = () @trusted { return SSL_get_verify_result(m_tls); } ();
 				if (result == X509_V_OK && (ctx.peerValidationMode & TLSPeerValidationMode.checkPeer)) {
-					if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
+					if (!verifyCertName(m_peerCertificate, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
 						version(Windows) import core.sys.windows.winsock2;
 						else import core.sys.posix.netinet.in_;
 
@@ -210,7 +210,7 @@ final class OpenSSLStream : TLSStream {
 								break;
 						}
 
-						if (!verifyCertName(peer, GENERAL_NAME.GEN_IPADD, () @trusted { return addr[0 .. addrlen]; } ())) {
+						if (!verifyCertName(m_peerCertificate, GENERAL_NAME.GEN_IPADD, () @trusted { return addr[0 .. addrlen]; } ())) {
 							logDiagnostic("Error validating TLS peer address");
 							result = X509_V_ERR_APPLICATION_VERIFICATION;
 						}
@@ -223,9 +223,9 @@ final class OpenSSLStream : TLSStream {
 	}
 
 	/** Read certificate info into the clientInformation field */
-	private void readPeerCertInfo(X509 *cert)
+	private void readPeerCertInfo()
 	{
-		X509_NAME* name = () @trusted { return X509_get_subject_name(cert); } ();
+		X509_NAME* name = () @trusted { return X509_get_subject_name(m_peerCertificate); } ();
 
 		int c = () @trusted { return X509_NAME_entry_count(name); } ();
 		foreach (i; 0 .. c) {
@@ -236,12 +236,14 @@ final class OpenSSLStream : TLSStream {
 			auto longName = () @trusted { return OBJ_nid2ln(OBJ_obj2nid(obj)).to!string; } ();
 			auto valStr = () @trusted { return cast(string)val.data[0 .. val.length]; } (); // FIXME: .idup?
 
-			m_peerCertificate.subjectName.addField(longName, valStr);
+			m_peerCertificateInfo.subjectName.addField(longName, valStr);
 		}
+		m_peerCertificateInfo._x509 = m_peerCertificate;
 	}
 
 	~this()
 	{
+		if (m_peerCertificate) () @trusted { X509_free(m_peerCertificate); } ();
 		if (m_tls) () @trusted { SSL_free(m_tls); } ();
 	}
 
@@ -390,6 +392,11 @@ final class OpenSSLStream : TLSStream {
 	}
 
 	@property TLSCertificateInformation peerCertificate()
+	{
+		return m_peerCertificateInfo;
+	}
+
+	@property X509* peerCertificateX509()
 	{
 		return m_peerCertificate;
 	}

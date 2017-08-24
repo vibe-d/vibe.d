@@ -425,6 +425,17 @@ struct TLSCertificateInformation {
 		certificate will be 'commonName', 'countryName', 'emailAddress', etc.
 	*/
 	DictionaryList!(string, false, 8) subjectName;
+
+	/** Vendor specific representation of the peer certificate.
+
+		This field is only set if the functionality is supported and if the
+		peer certificate is a X509 certificate.
+
+		For the OpenSSL driver, this will point to an `X509` struct. Note
+		that the life time of the object is limited to the life time of the
+		TLS stream.
+	*/
+	void* _x509;
 }
 
 struct TLSPeerValidationData {
