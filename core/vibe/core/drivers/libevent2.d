@@ -69,10 +69,31 @@ version(Windows)
 
 version(OSX)
 {
-	import std.c.osx.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
-} else version(Posix)
+	static if (__VERSION__ < 2077)
+	{
+		enum IP_ADD_MEMBERSHIP = 12;
+		enum IP_MULTICAST_LOOP = 11;
+	}
+	else
+		import core.sys.darwin.netinet.in_ : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+} else version(FreeBSD)
 {
-    import std.c.linux.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+	static if (__VERSION__ < 2077)
+	{
+		enum IP_ADD_MEMBERSHIP  = 12;
+		enum IP_MULTICAST_LOOP  = 11;
+	}
+	else
+		import core.sys.freebsd.netinet.in_ : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+} else version(linux)
+{
+	static if (__VERSION__ < 2077)
+	{
+		enum IP_ADD_MEMBERSHIP =  35;
+		enum IP_MULTICAST_LOOP =  34;
+	}
+	else
+		import core.sys.linux.netinet.in_ : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
 } else version(Windows)
 {
 	// IP_ADD_MEMBERSHIP and IP_MULTICAST_LOOP are included in winsock(2) import above
