@@ -302,6 +302,7 @@ final class HTTPClient {
 		bool m_useTLS;
 		TCPConnection m_conn;
 		InterfaceProxy!Stream m_stream;
+		TLSStream m_tlsStream;
 		TLSContext m_tls;
 		static __gshared m_userAgent = "vibe.d/"~vibeVersionString~" (HTTPClient, +http://vibed.org/)";
 		static __gshared void function(TLSContext) ms_tlsSetup;
@@ -617,16 +618,20 @@ final class HTTPClient {
 
 			m_stream = m_conn;
 			if (m_useTLS) {
-				try m_stream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
+				try m_tlsStream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
 				catch (Exception e) {
 					m_conn.close();
 					throw e;
 				}
+				m_stream = m_tlsStream;
 			}
 		}
 
 		return () @trusted { // scoped
 			auto req = scoped!HTTPClientRequest(m_stream, m_conn.localAddress);
+			if (m_useTLS)
+				req.m_peerCertificate = m_tlsStream.peerCertificate;
+
 			req.headers["User-Agent"] = m_userAgent;
 			if (m_settings.proxyURL.host !is null){
 				req.headers["Proxy-Connection"] = "keep-alive";
@@ -664,6 +669,7 @@ final class HTTPClientRequest : HTTPRequest {
 		bool m_headerWritten = false;
 		FixedAppender!(string, 22) m_contentLengthBuffer;
 		NetworkAddress m_localAddress;
+		TLSCertificateInformation m_peerCertificate;
 	}
 
 
@@ -675,6 +681,8 @@ final class HTTPClientRequest : HTTPRequest {
 	}
 
 	@property NetworkAddress localAddress() const { return m_localAddress; }
+
+	@property ref inout(TLSCertificateInformation) peerCertificate() inout { return m_peerCertificate; }
 
 	/**
 		Accesses the Content-Length header of the request.
