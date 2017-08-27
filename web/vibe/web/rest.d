@@ -1628,9 +1628,11 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		if (p.isParameter) {
 			switch (p.text) {
 				foreach (j, PT; PTT) {
-					case sroute.parameters[j].name:
-						url ~= urlEncode(toRestString(serializeToJson(ARGS[j])));
-						goto sbrk;
+					static if (sroute.parameters[j].name[0] == '_') {
+						case sroute.parameters[j].name:
+							url ~= urlEncode(toRestString(serializeToJson(ARGS[j])));
+							goto sbrk;
+					}
 				}
 				default: url ~= ":" ~ p.text; break;
 			}
