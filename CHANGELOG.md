@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.8.1 - 2017-
+v0.8.1 - 2017-08-28
 -------------------
 
 ### Features and improvements ###
@@ -13,6 +13,7 @@ v0.8.1 - 2017-
   - Added `vibe.web.web.determineLanguageByHeader` and improved the default language determination (by Jan Jurzitza aka WebFreak) - [pull #1850][issue1850]
   - Added `vibe.web.web.language` property to determine the detected language (by Jan Jurzitza aka WebFreak) - [pull #1860][issue1860]
   - Marked the global API functions in `vibe.web.web` as `@safe` - [pull #1886][issue1886]
+  - The REST interface generator avoids blindly instantiating serialization code for *all* parameters
 - HTTP sub system
   - The HTTP server now accepts a UTF-8 BOM for JSON requests (by Sebanstian Wilzbach) - [pull #1799][issue1799]
   - Most parsing features activated by `HTTPServerOption` (for `HTTPServerRequest`) are now evaluated lazily instead - the corresponding options are now deprecated (by Sebastian Wilzbach):
@@ -31,6 +32,7 @@ v0.8.1 - 2017-
   - WebSocket messages now produce only a single network packet of possible (header and payload sent at once) - [issue #1791][issue1791], [pull #1792][issue1792]
   - WebSocket API improvements (by Mathias Lang aka Geod24) - [pull #1534][issue1534], [pull #1836][issue1836]
   - Renamed `HTTPServerRequest.requestURL` to `requestURI`
+  - Added `HTTPClientRequest.peerCertificate` property
 - Serialization
   - Added deserialization support for unnamed `Tuple!(...)` (by Dentcho Bankov) - [pull #1693][issue1693]
   - Added serialization support for named `Tuple!(...)` (by Dentcho Bankov) - [pull #1662][issue1662]
@@ -40,6 +42,9 @@ v0.8.1 - 2017-
 - Improved `urlDecode` to return a slice of its input if possible - [pull #1828][issue1828]
 - Added `DictionaryList.toString` and deprecated `alias byKeyValue this` - [issue #1873][issue1873]
 - Added support for defining a compatibility version `VibeUseOpenSSL11` to build against OpenSSL 1.1.0 instead of 1.0.x (by Robert Schadek aka burner) - [issue #1651][issue1651], [issue #1748][issue1748], [issue #1758][issue1758], [pull #1759][issue1759]
+- Added a Meson project file analogous to the 0.7.x branch (by Matthias Klumpp aka ximion) - [pull #1894][issue1894]
+- The functions in `vibe.stream.operations` now compile with non-`@safe' streams and ranges - [pull #1902][issue1902]
+- Added `TLSCertificateInformation._x509` as an temporary means to access the raw certificate (`X509*` for OpenSSL)
 
 ### Bug fixes ###
 
@@ -104,6 +109,8 @@ null value
 [issue1873]: https://github.com/rejectedsoftware/vibe.d/issues/1873
 [issue1874]: https://github.com/rejectedsoftware/vibe.d/issues/1874
 [issue1886]: https://github.com/rejectedsoftware/vibe.d/issues/1886
+[issue1894]: https://github.com/rejectedsoftware/vibe.d/issues/1894
+[issue1902]: https://github.com/rejectedsoftware/vibe.d/issues/1902
 
 
 v0.8.0 - 2017-07-10
