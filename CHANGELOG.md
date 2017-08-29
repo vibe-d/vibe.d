@@ -4,39 +4,41 @@
 v0.8.1 - 2017-08-30
 -------------------
 
+Apart from removing the old `vibe-d:diet` package in favor of `diet-ng`, this release most notably contains a number of performance improvements in the HTTP server, as well as improvements and fixes in the WebSocket code. Furthermore, initial OpenSSL 1.1.x support has been added and a few `@safe` related issues introduced in 0.8.0 have been fixed.
+
 ### Features and improvements ###
 
-- Compiles on DMD 2.071.2 up to DMD 2.075.0
+- Compiles on DMD 2.071.2 up to DMD 2.076.0-rc1
 - Removed vibe-d:diet sub package (superseded by diet-ng) - [pull #1835][issue1835]
 - Web framework
-  - Added convenience functions `status` and `header` to `vibe.web.web` (by Sebastian Wilzbach) - [pull #1696][issue1696]
-  - Added `vibe.web.web.determineLanguageByHeader` and improved the default language determination (by Jan Jurzitza aka WebFreak) - [pull #1850][issue1850]
-  - Added `vibe.web.web.language` property to determine the detected language (by Jan Jurzitza aka WebFreak) - [pull #1860][issue1860]
-  - Marked the global API functions in `vibe.web.web` as `@safe` - [pull #1886][issue1886]
-  - The REST interface generator avoids blindly instantiating serialization code for *all* parameters
-  - No stack trace is shown on the generated error page anymore in case of bad (query/form) parameter formatting
+    - Added convenience functions `status` and `header` to `vibe.web.web` (by Sebastian Wilzbach) - [pull #1696][issue1696]
+    - Added `vibe.web.web.determineLanguageByHeader` and improved the default language determination (by Jan Jurzitza aka WebFreak) - [pull #1850][issue1850]
+    - Added `vibe.web.web.language` property to determine the detected language (by Jan Jurzitza aka WebFreak) - [pull #1860][issue1860]
+    - Marked the global API functions in `vibe.web.web` as `@safe` - [pull #1886][issue1886]
+    - The REST interface generator avoids blindly instantiating serialization code for *all* parameters
+    - No stack trace is shown on the generated error page anymore in case of bad (query/form) parameter formatting
 - HTTP sub system
-  - The HTTP server now accepts a UTF-8 BOM for JSON requests (by Sebanstian Wilzbach) - [pull #1799][issue1799]
-  - Most parsing features activated by `HTTPServerOption` (for `HTTPServerRequest`) are now evaluated lazily instead - the corresponding options are now deprecated (by Sebastian Wilzbach):
-    - `.json` / `HTTPServerOption.parseJsonBody` - [pull #1677][issue1677]
-    - `.cookies` / `HTTPServerOption.parseCookies` - [pull #1801][issue1801]
-    - `.form` / `HTTPServerOption.parseFormBody` - [pull #1801][issue1801]
-    - `.files` / `HTTPServerOption.parseMultiPartBody` - [pull #1801][issue1801]
-    - `.query` / `HTTPServerOption.parseQueryString` - [pull #1821][issue1821]
-    - `.queryString`, `.username` and `.password` are now always filled, regardless of `HTTPServerOption.parseURL` - [pull #1821][issue1821]
-  - `HTTPServerRequest.peer` is now computed lazily
-  - Deprecated `HTTPServerOption.distribute` because of its non-thread-safe design
-  - The `HTTPServerSettings` constructor now accepts a convenient string to set the bind address - [pull #1810][issue1810]
-  - `listenHTTP` accepts the same convenience string as `HTTPServerSettings` (by Sebastian Wilzbach) - [pull #1816][issue1816]
-  - Added `HTTPReverseProxySettings.destination` (`URL`) to made UDS destinations work (by Georgi Dimitrov) - [pull #1813][issue1813]
-  - Increased the network output chunk sizes from 256 to 1024 in the HTTP client/server
-  - WebSocket messages now produce only a single network packet of possible (header and payload sent at once) - [issue #1791][issue1791], [pull #1792][issue1792]
-  - WebSocket API improvements (by Mathias Lang aka Geod24) - [pull #1534][issue1534], [pull #1836][issue1836]
-  - Renamed `HTTPServerRequest.requestURL` to `requestURI`
-  - Added `HTTPClientRequest.peerCertificate` property
+    - The HTTP server now accepts a UTF-8 BOM for JSON requests (by Sebanstian Wilzbach) - [pull #1799][issue1799]
+    - Most parsing features activated by `HTTPServerOption` (for `HTTPServerRequest`) are now evaluated lazily instead - the corresponding options are now deprecated (by Sebastian Wilzbach):
+        - `.json` / `HTTPServerOption.parseJsonBody` - [pull #1677][issue1677]
+        - `.cookies` / `HTTPServerOption.parseCookies` - [pull #1801][issue1801]
+        - `.form` / `HTTPServerOption.parseFormBody` - [pull #1801][issue1801]
+        - `.files` / `HTTPServerOption.parseMultiPartBody` - [pull #1801][issue1801]
+        - `.query` / `HTTPServerOption.parseQueryString` - [pull #1821][issue1821]
+        - `.queryString`, `.username` and `.password` are now always filled, regardless of `HTTPServerOption.parseURL` - [pull #1821][issue1821]
+    - `HTTPServerRequest.peer` is now computed lazily
+    - Deprecated `HTTPServerOption.distribute` because of its non-thread-safe design
+    - The `HTTPServerSettings` constructor now accepts a convenient string to set the bind address - [pull #1810][issue1810]
+    - `listenHTTP` accepts the same convenience string as `HTTPServerSettings` (by Sebastian Wilzbach) - [pull #1816][issue1816]
+    - Added `HTTPReverseProxySettings.destination` (`URL`) to made UDS destinations work (by Georgi Dimitrov) - [pull #1813][issue1813]
+    - Increased the network output chunk sizes from 256 to 1024 in the HTTP client/server
+    - WebSocket messages now produce only a single network packet of possible (header and payload sent at once) - [issue #1791][issue1791], [pull #1792][issue1792]
+    - WebSocket API improvements (by Mathias Lang aka Geod24) - [pull #1534][issue1534], [pull #1836][issue1836]
+    - Renamed `HTTPServerRequest.requestURL` to `requestURI`
+    - Added `HTTPClientRequest.peerCertificate` property
 - Serialization
-  - Added deserialization support for unnamed `Tuple!(...)` (by Dentcho Bankov) - [pull #1693][issue1693]
-  - Added serialization support for named `Tuple!(...)` (by Dentcho Bankov) - [pull #1662][issue1662]
+    - Added deserialization support for unnamed `Tuple!(...)` (by Dentcho Bankov) - [pull #1693][issue1693]
+    - Added serialization support for named `Tuple!(...)` (by Dentcho Bankov) - [pull #1662][issue1662]
 - Added UDP multicast properties (implemented for libevent, by Sebastian Koppe) - [pull #1806][issue1806]
 - Markdown embedded URLs are now filtered by a whitelist to avoid URL based XSS exploits - [issue #1845][issue1845], [pull #1846][issue1846]
 - `lowerPrivileges` is now marked `@safe` (by Sebastian Wilzbach) - [pull #1807][issue1807]
@@ -123,35 +125,35 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 
 - Compiles on DMD 2.070.2 up to DMD 2.075.0-b1, this release also adds support for `-m32mscoff` builds ("x86_mscoff")
 - Global API changes
-  - Split up the library into fully separate sub packages/folders
-  - Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
-  - Added `@safe` and `nothrow` annotations in many places of the API - this is a breaking change in cases where callbacks were annotated - [pull #1618][issue1618], [issue 1595][issue1595]
-  - Reworked the buffered I/O stream API
-    - The `InputStream` based overload of `OutputStream.write` has been moved to a global function `pipe()`
-    - `read` and `write` now accept an optional `IOMode` parameter (only `IOMode.all` is supported for the original `vibe:core`, but `vibe-core` supports all modes)
-    - `InputStream.leastSize` and `.dataAvailableForRead` are scheduled for deprecation - `IOMode.immediate` and `IOMode.once` can be used in their place
-  - Added forward compatibility code to "vibe:core" so that dependent code can use either that or [vibe-core][vibe-core] as a drop-in replacement
+    - Split up the library into fully separate sub packages/folders
+    - Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
+    - Added `@safe` and `nothrow` annotations in many places of the API - this is a breaking change in cases where callbacks were annotated - [pull #1618][issue1618], [issue 1595][issue1595]
+    - Reworked the buffered I/O stream API
+        - The `InputStream` based overload of `OutputStream.write` has been moved to a global function `pipe()`
+        - `read` and `write` now accept an optional `IOMode` parameter (only `IOMode.all` is supported for the original `vibe:core`, but `vibe-core` supports all modes)
+        - `InputStream.leastSize` and `.dataAvailableForRead` are scheduled for deprecation - `IOMode.immediate` and `IOMode.once` can be used in their place
+    - Added forward compatibility code to "vibe:core" so that dependent code can use either that or [vibe-core][vibe-core] as a drop-in replacement
 - HTTP server
-  - Server contexts are now managed thread-locally, which means that multiple threads will attempt to listen on the same port if requested to do so - use `HTTPServerOption.reusePort` if necessary
-  - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
-  - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
-  - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
-  - Added `HTTPServerResponse.writePrettyJsonBody`
-  - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
-  - Added `Session.remove` to remove session keys (by Sebastian Wilzbach) - [pull #1670][issue1670]
-  - Added `WebSocket.closeCode` and `closeReason` properties (by Andrei Zbikowski aka b1naryth1ef) - [pull #1675][issue1675]
-  - Added a `Variant` dictionary as `HTTPServerRequest.context` for custom value storage by high level code - [issue1529][issue1529] [pull #1550][issue1550]
-    - Usability improvements by Harry T. Vennik aka thaven - [pull #1745][issue1745]
-  - Added `checkBasicAuth` as a non-enforcing counterpart of `performBasicAuth` - [issue #1449][issue1449], [pull #1687][issue1687]
-  - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`) - [issue #1616][issue1616]
-  - Added `HTTPClientRequest.writeFormBody`
-  - Disabled stack traces on the default error page for non-debug builds by default (`HTTPServerOption.defaults`)
+    - Server contexts are now managed thread-locally, which means that multiple threads will attempt to listen on the same port if requested to do so - use `HTTPServerOption.reusePort` if necessary
+    - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
+    - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
+    - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
+    - Added `HTTPServerResponse.writePrettyJsonBody`
+    - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
+    - Added `Session.remove` to remove session keys (by Sebastian Wilzbach) - [pull #1670][issue1670]
+    - Added `WebSocket.closeCode` and `closeReason` properties (by Andrei Zbikowski aka b1naryth1ef) - [pull #1675][issue1675]
+    - Added a `Variant` dictionary as `HTTPServerRequest.context` for custom value storage by high level code - [issue1529][issue1529] [pull #1550][issue1550]
+        - Usability improvements by Harry T. Vennik aka thaven - [pull #1745][issue1745]
+    - Added `checkBasicAuth` as a non-enforcing counterpart of `performBasicAuth` - [issue #1449][issue1449], [pull #1687][issue1687]
+    - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`) - [issue #1616][issue1616]
+    - Added `HTTPClientRequest.writeFormBody`
+    - Disabled stack traces on the default error page for non-debug builds by default (`HTTPServerOption.defaults`)
 - REST interface generator
-  - Added single-argument `@bodyParam` to let a single parameter represent the whole request body (by Sebastian Wilzbach) - [issue #1549][issue1549], [pull #1723][issue1723]
-  - Boolean parameters now accept "1" and case insensitive "true" as `true` - [pull #1712][issue1712]
-  - Server responses now output prettified JSON if built in debug mode
-  - Stack traces are only written in debug mode - [issue #1623][issue1623]
-  - Reduced the number of chunks written by `StreamOutputRange.put` for large input buffers (affects WebSockets and chunked HTTP responses)
+    - Added single-argument `@bodyParam` to let a single parameter represent the whole request body (by Sebastian Wilzbach) - [issue #1549][issue1549], [pull #1723][issue1723]
+    - Boolean parameters now accept "1" and case insensitive "true" as `true` - [pull #1712][issue1712]
+    - Server responses now output prettified JSON if built in debug mode
+    - Stack traces are only written in debug mode - [issue #1623][issue1623]
+    - Reduced the number of chunks written by `StreamOutputRange.put` for large input buffers (affects WebSockets and chunked HTTP responses)
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
 - The string sequence `</` is now encoded as `<\/` by the JSON module to avoid a common XSS attack vector
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
