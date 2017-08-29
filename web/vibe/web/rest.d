@@ -1628,7 +1628,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		if (p.isParameter) {
 			switch (p.text) {
 				foreach (j, PT; PTT) {
-					static if (sroute.parameters[j].name[0] == '_') {
+					static if (sroute.parameters[j].name[0] == '_' || sroute.parameters[j].name == "id") {
 						case sroute.parameters[j].name:
 							url ~= urlEncode(toRestString(serializeToJson(ARGS[j])));
 							goto sbrk;
