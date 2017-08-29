@@ -743,9 +743,10 @@ nothrow {
 			dst.setVoid(str.to!T());
 		}
 	} catch (Exception e) {
+		import vibe.core.log : logDebug;
 		import std.encoding : sanitize;
 		err.text = e.msg;
-		try err.debugText = e.toString().sanitize;
+		debug try logDebug("Error converting web field: %s", e.toString().sanitize);
 		catch (Exception) {}
 		return false;
 	}

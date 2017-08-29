@@ -892,9 +892,10 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		} catch (HTTPStatusException ex) {
 			throw ex;
 		} catch (Exception ex) {
+			import vibe.core.log : logDebug;
 			got_error = true;
 			err.text = ex.msg;
-			err.debugText = ex.toString().sanitize;
+			debug logDebug("Error handling field '%s': %s", ex.toString().sanitize);
 		}
 
 		if (got_error) {
@@ -903,7 +904,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, errnfo);
 				return;
 			} else {
-				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling field "~err.field~": "~err.text);
+				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling field '"~err.field~"': "~err.text);
 				hex.debugMessage = err.debugText;
 				throw hex;
 			}
