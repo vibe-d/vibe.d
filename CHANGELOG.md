@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.8.1 - 2017-08-28
+v0.8.1 - 2017-08-30
 -------------------
 
 ### Features and improvements ###
@@ -14,6 +14,7 @@ v0.8.1 - 2017-08-28
   - Added `vibe.web.web.language` property to determine the detected language (by Jan Jurzitza aka WebFreak) - [pull #1860][issue1860]
   - Marked the global API functions in `vibe.web.web` as `@safe` - [pull #1886][issue1886]
   - The REST interface generator avoids blindly instantiating serialization code for *all* parameters
+  - No stack trace is shown on the generated error page anymore in case of bad (query/form) parameter formatting
 - HTTP sub system
   - The HTTP server now accepts a UTF-8 BOM for JSON requests (by Sebanstian Wilzbach) - [pull #1799][issue1799]
   - Most parsing features activated by `HTTPServerOption` (for `HTTPServerRequest`) are now evaluated lazily instead - the corresponding options are now deprecated (by Sebastian Wilzbach):
