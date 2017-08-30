@@ -39,7 +39,7 @@ vibe_inet_lib = library('vibe-inet',
         version: project_version,
         soversion: project_soversion
 )
-pkgc.generate(name: 'vibe-textfilter',
+pkgc.generate(name: 'vibe-inet',
               libraries: [vibe_inet_lib] + inet_link_with,
               subdirs: 'd/vibe',
               version: project_version,
