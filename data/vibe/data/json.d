@@ -2268,10 +2268,22 @@ private string jsonUnescape(R)(ref R range)
 	return ret.data;
 }
 
+private auto skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow) @safe
+	if (isNarrowString!R)
+{
+	auto r = s.representation;
+	version (assert) auto rEnd = (() @trusted => r.ptr + r.length)();
+	auto res = skipNumber(r, is_float, is_long_overflow);
+	version (assert) assert(rEnd == (() @trusted => r.ptr + r.length)()); // check nothing taken off the end
+	s = s[$ - r.length .. $];
+	return res.assumeUTF();
+}
+
 /// private
 private auto skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow)
-	if (isForwardRange!R)
+	if (!isNarrowString!R && isForwardRange!R)
 {
+	pragma(msg, R);
 	auto sOrig = s.save;
 	size_t idx = 0;
 	is_float = false;
