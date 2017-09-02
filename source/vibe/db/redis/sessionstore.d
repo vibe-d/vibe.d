@@ -37,7 +37,7 @@ final class RedisSessionStore : SessionStore {
 	Session create()
 	{
 		auto s = createSessionInstance();
-		m_db.hmset(s.id, s.id, s.id); // set place holder to avoid create empty hash
+		m_db.hset(s.id, "__SESS", true); // set place holder to avoid create empty hash
 		assert(m_db.exists(s.id));
 		m_db.expire(s.id, m_expirationTime);
 		return s;
@@ -46,7 +46,12 @@ final class RedisSessionStore : SessionStore {
 	Session open(string id)
 	{
 		if (m_db.exists(id))
-			return createSessionInstance(id);
+		{
+			auto s = createSessionInstance(id);
+			if (m_expirationTime != Duration.max)
+				m_db.expire(s.id, m_expirationTime);
+			return s;
+		}
 		return Session.init;
 	}
 

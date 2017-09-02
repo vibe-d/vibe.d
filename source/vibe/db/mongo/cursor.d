@@ -149,6 +149,29 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 		return this;
 	}
 
+	@safe unittest {
+		import vibe.core.log;
+		import vibe.db.mongo.mongo;
+
+		void test()
+		@safe {
+			auto db = connectMongoDB("127.0.0.1").getDatabase("test");
+			auto coll = db["testcoll"];
+
+			try { coll.drop(); } catch (Exception) {}
+
+			for (int i = 0; i < 10000; i++)
+				coll.insert(["i": i]);
+
+			static struct Order { int i; }
+			auto data = coll.find().sort(Order(1)).skip(2000).limit(2000).array;
+
+			assert(data.length == 2000);
+			assert(data[0]["i"].get!int == 2000);
+			assert(data[$ - 1]["i"].get!int == 3999);
+		}
+	}
+
 	/**
 		Advances the cursor to the next document of the response.
 
@@ -238,7 +261,7 @@ private class MongoCursorData(Q, R, S) {
 	@property bool empty()
 	{
 		if (!m_iterationStarted) startIterating();
-		if (m_limit > 0 && m_currentDoc >= m_limit) {
+		if (m_limit > 0 && index >= m_limit) {
 			destroy();
 			return true;
 		}
@@ -270,7 +293,8 @@ private class MongoCursorData(Q, R, S) {
 		m_sort = order;
 	}
 
-	void limit(size_t count) {
+	void limit(size_t count)
+	@safe {
 		// A limit() value of 0 (e.g. “.limit(0)”) is equivalent to setting no limit.
 		if (count > 0) {
 			if (m_nret == 0 || m_nret > count)
@@ -281,7 +305,8 @@ private class MongoCursorData(Q, R, S) {
 		}
 	}
 
-	void skip(int count) {
+	void skip(int count)
+	@safe {
 		// A skip() value of 0 (e.g. “.skip(0)”) is equivalent to setting no skip.
 		m_nskip = max(m_nskip, count);
 	}

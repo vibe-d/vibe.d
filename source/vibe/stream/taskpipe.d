@@ -128,6 +128,8 @@ private final class TaskPipeImpl {
 	*/
 	void write(const(ubyte)[] data)
 	{
+		enforce(!m_closed, "Writing to closed task pipe.");
+
 		while (data.length > 0){
 			bool need_signal;
 			synchronized (m_mutex) {
@@ -136,7 +138,7 @@ private final class TaskPipeImpl {
 					while (new_sz - m_buffer.capacity < data.length) new_sz += 2;
 					m_buffer.capacity = new_sz;
 				} else while (m_buffer.full) m_condition.wait();
-				
+
 				need_signal = m_buffer.empty;
 				auto len = min(m_buffer.freeSpace, data.length);
 				m_buffer.put(data[0 .. len]);
