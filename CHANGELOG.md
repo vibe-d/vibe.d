@@ -52,6 +52,8 @@ Apart from removing the old `vibe-d:diet` package in favor of `diet-ng`, this re
 ### Bug fixes ###
 
 - Fixed "SSL_read was unsuccessful with ret 0" errors in the OpenSSL TLS implementation (by machindertech) - [issue #1124][issue1124], [pull #1395][issue1395]
+- Fixed the JSON generator to output valid JSON for `Json.undefined` values (by by Tomáš Chaloupka) - [pull #1737][issue1737], [issue #1735][issue1735]
+- Fixed using HTTP together with USDS sockets in the HTTP client (by Johannes Pfau aka jpf91) - [pull #1747][issue1747]
 - Fixed handling of `Nullable!T` in the web interface generator - invalid values are treated as an error now instead of as a 
 null value
 - Fixed a compilation error in the Botan based TLS implementation
@@ -81,6 +83,9 @@ null value
 [issue1692]: https://github.com/rejectedsoftware/vibe.d/issues/1692
 [issue1693]: https://github.com/rejectedsoftware/vibe.d/issues/1693
 [issue1696]: https://github.com/rejectedsoftware/vibe.d/issues/1696
+[issue1735]: https://github.com/rejectedsoftware/vibe.d/issues/1735
+[issue1737]: https://github.com/rejectedsoftware/vibe.d/issues/1737
+[issue1747]: https://github.com/rejectedsoftware/vibe.d/issues/1747
 [issue1748]: https://github.com/rejectedsoftware/vibe.d/issues/1748
 [issue1758]: https://github.com/rejectedsoftware/vibe.d/issues/1758
 [issue1759]: https://github.com/rejectedsoftware/vibe.d/issues/1759
