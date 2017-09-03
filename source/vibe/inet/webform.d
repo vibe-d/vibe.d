@@ -207,7 +207,7 @@ unittest { // use of unquoted strings in Content-Disposition
 
 	auto content_type = "multipart/form-data; boundary=\"AaB03x\"";
 
-	auto input = createMemoryStream(cast(ubyte[])(
+	auto input = new MemoryStream(cast(ubyte[])(
 			"--AaB03x\r\n" ~
 			"Content-Disposition: form-data; name=submitname\r\n" ~
 			"\r\n" ~
@@ -314,7 +314,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 		auto data = cast(string)stream.readUntil(boundary);
 		form.addField(name, data);
 	}
-	
+
 	ubyte[2] ub;
 	stream.read(ub);
 	if (ub == "--")

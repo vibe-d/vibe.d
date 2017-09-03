@@ -407,12 +407,11 @@ unittest { // issue #1741
 		@property ulong leastSize() { if (!buf.length && !nread) buf = src; return src.length - nread; }
 		@property bool dataAvailableForRead() { return buf.length > 0; }
 		const(ubyte)[] peek() { return buf; }
-		size_t read(scope ubyte[] dst, IOMode) {
+		void read(scope ubyte[] dst) {
 			if (!buf.length) buf = src;
 			dst[] = buf[0 .. dst.length];
 			nread += dst.length;
 			buf = buf[dst.length .. $];
-			return dst.length;
 		}
 		alias InputStream.read read;
 	}

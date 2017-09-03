@@ -149,12 +149,12 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 		return this;
 	}
 
-	@safe unittest {
+	unittest {
 		import vibe.core.log;
 		import vibe.db.mongo.mongo;
 
 		void test()
-		@safe {
+		{
 			auto db = connectMongoDB("127.0.0.1").getDatabase("test");
 			auto coll = db["testcoll"];
 
