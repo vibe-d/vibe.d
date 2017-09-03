@@ -56,7 +56,7 @@ import vibe.crypto.cryptorand;
 @safe:
 
 
-alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
+alias WebSocketHandshakeDelegate = void delegate(scope WebSocket) nothrow;
 
 
 /// Exception thrown by $(D vibe.http.websockets).
@@ -167,9 +167,25 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 	);
 }
 /// Scheduled for deprecation - use a `@safe` callback instead.
-void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
+void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system nothrow del, const(HTTPClientSettings) settings = defaultSettings)
 @system {
 	connectWebSocket(url, (scope ws) @trusted => del(ws), settings);
+}
+/// Scheduled for deprecation - use a `nothrow` callback instead.
+void connectWebSocket(URL url, scope void delegate(scope WebSocket) @safe del, const(HTTPClientSettings) settings = defaultSettings)
+@safe {
+	connectWebSocket(url, (scope ws) nothrow {
+		try del(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	}, settings);
+}
+/// ditto
+void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
+@system {
+	connectWebSocket(url, (scope ws) nothrow {
+		try del(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	}, settings);
 }
 
 
@@ -223,16 +239,32 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	socket.close();
 }
 /// Scheduled for deprecation - use a `@safe` callback instead.
-void handleWebSocket(scope void delegate(scope WebSocket) @system on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
+void handleWebSocket(scope void delegate(scope WebSocket) @system nothrow on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
 @system {
 	handleWebSocket((scope ws) @trusted => on_handshake(ws), req, res);
+}
+/// Scheduled for deprecation - use a `nothrow` callback instead.
+void handleWebSocket(scope void delegate(scope WebSocket) @safe on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
+{
+	handleWebSocket((scope ws) nothrow {
+		try on_handshake(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	}, req, res);
+}
+/// ditto
+void handleWebSocket(scope void delegate(scope WebSocket) @system on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
+@system {
+	handleWebSocket((scope ws) nothrow {
+		try on_handshake(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	}, req, res);
 }
 
 
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @safe on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @safe nothrow on_handshake)
 @safe {
 	return handleWebSockets(() @trusted { return toDelegate(on_handshake); } ());
 }
@@ -285,14 +317,46 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 	return &callback;
 }
 /// Scheduled for deprecation - use a `@safe` callback instead.
-HTTPServerRequestDelegateS handleWebSockets(void delegate(scope WebSocket) @system on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(void delegate(scope WebSocket) @system nothrow on_handshake)
 @system {
 	return handleWebSockets(delegate (scope ws) @trusted => on_handshake(ws));
 }
 /// Scheduled for deprecation - use a `@safe` callback instead.
-HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @system on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @system nothrow on_handshake)
 @system {
 	return handleWebSockets(delegate (scope ws) @trusted => on_handshake(ws));
+}
+/// Scheduled for deprecation - use a `nothrow` callback instead.
+HTTPServerRequestDelegateS handleWebSockets(void delegate(scope WebSocket) @safe on_handshake)
+{
+	return handleWebSockets(delegate (scope ws) nothrow {
+		try on_handshake(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	});
+}
+/// ditto
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @safe on_handshake)
+{
+	return handleWebSockets(delegate (scope ws) nothrow {
+		try on_handshake(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	});
+}
+/// ditto
+HTTPServerRequestDelegateS handleWebSockets(void delegate(scope WebSocket) @system on_handshake)
+@system {
+	return handleWebSockets(delegate (scope ws) nothrow {
+		try on_handshake(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	});
+}
+/// ditto
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @system on_handshake)
+@system {
+	return handleWebSockets(delegate (scope ws) nothrow {
+		try on_handshake(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	});
 }
 
 
