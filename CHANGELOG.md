@@ -31,6 +31,7 @@ Maintenance release for the 0.7 branch. This contains the fixes that went into 0
 [issue1395]: https://github.com/vibe-d/vibe.d/issues/1395
 [issue1562]: https://github.com/vibe-d/vibe.d/issues/1562
 [issue1725]: https://github.com/vibe-d/vibe.d/issues/1725
+[issue1732]: https://github.com/vibe-d/vibe.d/issues/1732
 [issue1733]: https://github.com/vibe-d/vibe.d/issues/1733
 [issue1735]: https://github.com/vibe-d/vibe.d/issues/1735
 [issue1737]: https://github.com/vibe-d/vibe.d/issues/1737
