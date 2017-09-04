@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.32 - 2017-09-
+v0.7.32 - 2017-09-04
 --------------------
 
 Maintenance release for the 0.7 branch. This contains the fixes that went into 0.8.0 and 0.8.1 backported to 0.7.0. In addition to the bug fixes, DMD 2.076.0 is now also supported and tested. This release may be the last one for the 0.7.x branch, it is highly recommended to start porting applications to 0.8.1.
