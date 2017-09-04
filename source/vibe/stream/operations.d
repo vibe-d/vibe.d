@@ -349,7 +349,7 @@ private void readUntilSmall(R)(InputStream stream, ref R dst, in ubyte[] end_mar
 		enforce(max_bytes > 0, "Reached maximum number of bytes while searching for end marker.");
 		auto max_peek = max(max_bytes, max_bytes+nmarker); // account for integer overflow
 		auto pm = stream.peek()[0 .. min($, max_bytes)];
-		if (!pm.length) { // no peek support - inefficient route
+		if (!pm.length || nmatched == 1) { // no peek support - inefficient route
 			ubyte[2] buf = void;
 			auto l = nmarker - nmatched;
 			stream.read(buf[0 .. l]);
@@ -367,6 +367,8 @@ private void readUntilSmall(R)(InputStream stream, ref R dst, in ubyte[] end_mar
 				if (nmatched == nmarker) return;
 			}
 		} else {
+			assert(nmatched == 0);
+
 			auto idx = pm.countUntil(end_marker[0]);
 			if (idx < 0) {
 				dst.put(pm);
@@ -374,18 +376,51 @@ private void readUntilSmall(R)(InputStream stream, ref R dst, in ubyte[] end_mar
 				stream.skip(pm.length);
 			} else {
 				dst.put(pm[0 .. idx]);
-				stream.skip(idx+1);
-				if (nmarker == 2) {
-					ubyte[1] next;
-					stream.read(next);
-					if (next[0] == end_marker[1])
-						return;
-					dst.put(end_marker[0]);
-					dst.put(next[0]);
-				} else return;
+				if (nmarker == 1) {
+					stream.skip(idx+1);
+					return;
+				} else if (idx+1 < pm.length && pm[idx+1] == end_marker[1]) {
+					assert(nmarker == 2);
+					stream.skip(idx+2);
+					return;
+				} else {
+					nmatched++;
+					stream.skip(idx+1);
+				}
 			}
 		}
 	}
+}
+
+unittest { // issue #1741
+	static class S : InputStream {
+		ubyte[] src;
+		ubyte[] buf;
+		size_t nread;
+
+		this(scope ubyte[] bytes...)
+		{
+			src = bytes.dup;
+		}
+
+		@property bool empty() { return nread >= src.length; }
+		@property ulong leastSize() { if (!buf.length && !nread) buf = src; return src.length - nread; }
+		@property bool dataAvailableForRead() { return buf.length > 0; }
+		const(ubyte)[] peek() { return buf; }
+		void read(scope ubyte[] dst) {
+			if (!buf.length) buf = src;
+			dst[] = buf[0 .. dst.length];
+			nread += dst.length;
+			buf = buf[dst.length .. $];
+		}
+		alias InputStream.read read;
+	}
+
+
+	auto s = new S('X', '\r', '\n');
+	auto dst = appender!(ubyte[]);
+	readUntilSmall(s, dst, ['\r', '\n']);
+	assert(dst.data == ['X']);
 }
 
 

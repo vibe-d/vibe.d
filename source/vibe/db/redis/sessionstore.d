@@ -46,7 +46,12 @@ final class RedisSessionStore : SessionStore {
 	Session open(string id)
 	{
 		if (m_db.exists(id))
-			return createSessionInstance(id);
+		{
+			auto s = createSessionInstance(id);
+			if (m_expirationTime != Duration.max)
+				m_db.expire(s.id, m_expirationTime);
+			return s;
+		}
 		return Session.init;
 	}
 

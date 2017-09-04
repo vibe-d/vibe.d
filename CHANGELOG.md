@@ -1,6 +1,46 @@
 ﻿Changelog
 =========
 
+v0.7.32 - 2017-09-
+--------------------
+
+Maintenance release for the 0.7 branch. This contains the fixes that went into 0.8.0 and 0.8.1 backported to 0.7.0. In addition to the bug fixes, DMD 2.076.0 is now also supported and tested. This release may be the last one for the 0.7.x branch, it is highly recommended to start porting applications to 0.8.1.
+
+### Security fixes ###
+
+- The string sequence `</` is now encoded as `<\/` by the JSON module to avoid a common XSS attack vector
+- Markdown embedded URLs are now filtered by a whitelist to avoid URL based XSS exploits - [issue #1845][issue1845], [pull #1846][issue1846]
+
+### Bug fixes ###
+
+- Fixed parsing of "tcp://" URLs - [issue #1732][issue1732], [pull #1733][issue1733]
+- Fixed using HTTP together with USDS sockets in the HTTP client (by Johannes Pfau aka jpf91) - [pull #1747][issue1747]
+- Fixed `readUntilSmall`/`readLine` to handle alternating availability of a peek buffer - [issue #1741][issue1741], [pull #1761][issue1761]
+- Fixed the JSON generator to output valid JSON for `Json.undefined` values (by by Tomáš Chaloupka) - [pull #1737][issue1737], [issue #1735][issue1735]
+- Fixed `parseMultiPartForm` to handle unquoted strings in the "Content-Disposition" header (by Tomáš Chaloupka) - [issue #1562][issue1562] [pull #1725][issue1725]
+- Fixed the session life time in `RedisSessionStore` to be refreshed on every access to the session (by Steven Schveighoffer) - [pull #1777][issue1777]
+- Fixed `HTTPServerRequest.fullURL` for IPv6 address based host strings
+- Fixed "SSL_read was unsuccessful with ret 0" errors in the OpenSSL TLS implementation (by machindertech) - [issue #1124][issue1124], [pull #1395][issue1395]
+- Fixed an intermittent failure at shutdown when using libasync - [pull #1837][issue1837]
+- Fixed a possible range error in the libasync driver
+- Fixed `TaskPipe.write` to throw an exception when the pipe is already closed
+- Fixed `MongoCursor.limit` (by Jan Jurzitza aka WebFreak) - [issue #967][issue967], [pull #1871][issue1871]
+
+[issue967]: https://github.com/rejectedsoftware/vibe.d/issues/967
+[issue1562]: https://github.com/rejectedsoftware/vibe.d/issues/1562
+[issue1733]: https://github.com/rejectedsoftware/vibe.d/issues/1733
+[issue1735]: https://github.com/rejectedsoftware/vibe.d/issues/1735
+[issue1737]: https://github.com/rejectedsoftware/vibe.d/issues/1737
+[issue1741]: https://github.com/rejectedsoftware/vibe.d/issues/1741
+[issue1747]: https://github.com/rejectedsoftware/vibe.d/issues/1747
+[issue1761]: https://github.com/rejectedsoftware/vibe.d/issues/1761
+[issue1762]: https://github.com/rejectedsoftware/vibe.d/issues/1762
+[issue1837]: https://github.com/rejectedsoftware/vibe.d/issues/1837
+[issue1845]: https://github.com/rejectedsoftware/vibe.d/issues/1845
+[issue1846]: https://github.com/rejectedsoftware/vibe.d/issues/1846
+[issue1871]: https://github.com/rejectedsoftware/vibe.d/issues/1871
+
+
 v0.7.31 - 2017-04-10
 --------------------
 

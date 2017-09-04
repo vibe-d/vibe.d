@@ -178,13 +178,14 @@ final class OpenSSLStream : TLSStream {
 
 	@property bool empty()
 	{
-		return leastSize() == 0 && m_stream.empty;
+		return leastSize() == 0;
 	}
 
 	@property ulong leastSize()
 	{
-		auto ret = SSL_pending(m_tls);
-		return ret > 0 ? ret : m_stream.empty ? 0 : 1;
+		SSL_peek(m_tls, m_peekBuffer.ptr, 1);
+		checkExceptions();
+		return SSL_pending(m_tls);
 	}
 
 	@property bool dataAvailableForRead()
