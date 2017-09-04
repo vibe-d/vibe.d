@@ -4,7 +4,7 @@
 v0.7.32 - 2017-09-04
 --------------------
 
-Maintenance release for the 0.7 branch. This contains the fixes that went into 0.8.0 and 0.8.1 backported to 0.7.0. In addition to the bug fixes, DMD 2.076.0 is now also supported and tested. This release may be the last one for the 0.7.x branch, it is highly recommended to start porting applications to 0.8.1.
+Maintenance release for the 0.7 branch. This contains the fixes that went into 0.8.0 and 0.8.1 backported to 0.7.31. In addition to the bug fixes, DMD 2.076.0 is now also supported and tested. This release may be the last one for the 0.7.x branch, it is highly recommended to start porting applications to 0.8.1.
 
 ### Security fixes ###
 
@@ -27,7 +27,10 @@ Maintenance release for the 0.7 branch. This contains the fixes that went into 0
 - Fixed `MongoCursor.limit` (by Jan Jurzitza aka WebFreak) - [issue #967][issue967], [pull #1871][issue1871]
 
 [issue967]: https://github.com/vibe-d/vibe.d/issues/967
+[issue1124]: https://github.com/vibe-d/vibe.d/issues/1124
+[issue1395]: https://github.com/vibe-d/vibe.d/issues/1395
 [issue1562]: https://github.com/vibe-d/vibe.d/issues/1562
+[issue1725]: https://github.com/vibe-d/vibe.d/issues/1725
 [issue1733]: https://github.com/vibe-d/vibe.d/issues/1733
 [issue1735]: https://github.com/vibe-d/vibe.d/issues/1735
 [issue1737]: https://github.com/vibe-d/vibe.d/issues/1737
@@ -35,6 +38,7 @@ Maintenance release for the 0.7 branch. This contains the fixes that went into 0
 [issue1747]: https://github.com/vibe-d/vibe.d/issues/1747
 [issue1761]: https://github.com/vibe-d/vibe.d/issues/1761
 [issue1762]: https://github.com/vibe-d/vibe.d/issues/1762
+[issue1777]: https://github.com/vibe-d/vibe.d/issues/1777
 [issue1837]: https://github.com/vibe-d/vibe.d/issues/1837
 [issue1845]: https://github.com/vibe-d/vibe.d/issues/1845
 [issue1846]: https://github.com/vibe-d/vibe.d/issues/1846
