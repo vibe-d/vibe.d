@@ -165,6 +165,29 @@ bool finalizeCommandLineOptions(string[]* args_out = null)
 	return true;
 }
 
+/**
+	This functions allows the usage of a custom command line argument parser
+	with vibe.d.
+	$(OL
+		$(LI build executable with version(VibeDisableCommandLineParsing))
+		$(LI parse main function arguments with a custom command line parser)
+		$(LI pass vibe.d arguments to `setCommandLineArgs`)
+		$(LI use vibe.d command line parsing utilities)
+	)
+
+	Params:
+		args = The arguments that should be handled by vibe.d
+*/
+void setCommandLineArgs(string[] args) {
+	g_args = args;
+}
+
+///
+unittest {
+	import std.format : format;
+	string[] args = ["--foo", "10"];
+	setCommandLineArgs(args);
+}
 
 private struct OptionInfo {
 	string[] names;
