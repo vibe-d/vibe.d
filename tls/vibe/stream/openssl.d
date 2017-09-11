@@ -860,8 +860,8 @@ final class OpenSSLContext : TLSContext {
 					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
 					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
 					case X509_V_ERR_CERT_UNTRUSTED:
-						assert(ctx.current_cert !is null);
-						X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, buf.length);
+						assert(err_cert !is null);
+						X509_NAME_oneline(X509_get_issuer_name(err_cert), buf.ptr, buf.length);
 						buf[$-1] = 0;
 						logDebug("SSL cert not trusted or unknown issuer: %s", buf.ptr.to!string);
 						if (!(vdata.validationMode & TLSPeerValidationMode.checkTrust)) {
