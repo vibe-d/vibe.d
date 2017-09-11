@@ -1,6 +1,8 @@
 /**
 	Central logging facility for vibe.
 
+	A stdout/stderr logger is registered by default, add `VibeDisableStdout` as version to disable it.
+
 	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
@@ -735,7 +737,9 @@ private shared(Logger)[] getLoggers() nothrow @trusted { return ss_loggers; }
 
 package void initializeLogModule()
 {
-	version (Windows) {
+	version (VibeDisableStdout) {
+		enum disable_stdout = true;
+	} else version (Windows) {
 		version (VibeWinrtDriver) enum disable_stdout = true;
 		else {
 			enum disable_stdout = false;
