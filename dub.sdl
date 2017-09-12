@@ -57,7 +57,9 @@ subPackage {
 	mainSourceFile "source/vibe/appmain.d"
 	sourceFiles "lib/win-i386/eay.lib" "lib/win-i386/ssl.lib" platform="windows-x86"
 	sourceFiles "lib/win-amd64/libeay32.lib" "lib/win-amd64/ssleay32.lib" platform="windows-x86_64"
+	sourceFiles "lib/win-i386-mscoff/libeay32.lib" "lib/win-i386-mscoff/ssleay32.lib" platform="windows-x86_mscoff"
 	sourcePaths "source/vibe/core" "source/vibe/crypto" "source/vibe/inet" "source/vibe/stream" "source/vibe/textfilter"
+
 	// LDC 1.0.0 doesn't include libz in libphobos
 	libs "z" platform="posix-ldc"
 	libs "z" platform="gdc"
