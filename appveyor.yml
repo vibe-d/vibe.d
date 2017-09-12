@@ -63,9 +63,6 @@ environment:
     config: win32
 
 skip_tags: false
-branches:
-  only:
-    - master
 
 install:
   - ps: function SetUpDCompiler
