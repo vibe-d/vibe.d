@@ -46,7 +46,7 @@ Apart from removing the old `vibe-d:diet` package in favor of `diet-ng`, this re
 - Added `DictionaryList.toString` and deprecated `alias byKeyValue this` - [issue #1873][issue1873]
 - Added support for defining a compatibility version `VibeUseOpenSSL11` to build against OpenSSL 1.1.0 instead of 1.0.x (by Robert Schadek aka burner) - [issue #1651][issue1651], [issue #1748][issue1748], [issue #1758][issue1758], [pull #1759][issue1759]
 - Added a Meson project file analogous to the 0.7.x branch (by Matthias Klumpp aka ximion) - [pull #1894][issue1894]
-- The functions in `vibe.stream.operations` now compile with non-`@safe' streams and ranges - [pull #1902][issue1902]
+- The functions in `vibe.stream.operations` now compile with non-`@safe` streams and ranges - [pull #1902][issue1902]
 - Added `TLSCertificateInformation._x509` as an temporary means to access the raw certificate (`X509*` for OpenSSL)
 
 ### Bug fixes ###
