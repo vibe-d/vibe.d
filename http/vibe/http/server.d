@@ -105,8 +105,6 @@ if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	if (settings.accessLogFile.length)
 		ctx.loggers ~= new HTTPFileLogger(settings, settings.accessLogFormat, settings.accessLogFile);
 
-	s_contexts ~= ctx;
-
 	// if a VibeDist host was specified on the command line, register there instead of listening
 	// directly.
 	if (s_distHost.length && !settings.disableDistHost) {
@@ -1651,26 +1649,20 @@ struct HTTPListener {
 	@safe {
 		import std.algorithm : countUntil;
 
-		auto idx = s_contexts.countUntil!(c => c.id == m_contextID);
-		if (idx < 0) return;
+		foreach (lidx, ref l; s_listeners) {
+			auto idx = l.contexts.countUntil!(c => c.id == m_contextID);
+			if (idx < 0) continue;
 
-		// remove context entry
-		auto ctx = s_contexts[idx];
-		s_contexts = s_contexts[0 .. idx] ~ s_contexts[idx+1 .. $];
+			auto ctx = l.contexts[idx];
+			l.contexts = l.contexts[0 .. idx] ~ l.contexts[idx+1 .. $];
 
-		// stop listening on all unused TCP ports
-		auto port = ctx.settings.port;
-		foreach (addr; ctx.settings.bindAddresses) {
-			// any other context still occupying the same addr/port?
-			if (s_contexts.canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
-				continue;
-
-			auto lidx = s_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
-			if (lidx >= 0) {
-				s_listeners[lidx].listener.stopListening();
-				logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
+			if (!l.contexts.length) {
+				l.listener.stopListening();
+				logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", l.bindAddress, l.bindPort);
 				s_listeners = s_listeners[0 .. lidx] ~ s_listeners[lidx+1 .. $];
 			}
+
+			break;
 		}
 	}
 }
@@ -1692,6 +1684,7 @@ private final class HTTPListenInfo {
 	string bindAddress;
 	ushort bindPort;
 	TLSContext tlsContext;
+	HTTPServerContext[] contexts;
 
 	this(string bind_address, ushort bind_port, TLSContext tls_context)
 	@safe {
@@ -1770,7 +1763,6 @@ private {
 	size_t s_contextIDCounter = 1;
 
 	HTTPListenInfo[] s_listeners;
-	HTTPServerContext[] s_contexts;
 }
 
 /**
@@ -1788,10 +1780,6 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerContext cont
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
-			if (dist) {
-				options |= TCPListenOptions.distribute;
-				() @trusted { runWorkerTaskDist((shared(HTTPServerContext) ctx) { s_contexts ~= cast(HTTPServerContext)ctx; }, cast(shared)context); } ();
-			} else options &= ~TCPListenOptions.distribute;
 			if(reusePort) options |= TCPListenOptions.reusePort; else options &= ~TCPListenOptions.reusePort;
 			auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) nothrow @safe {
 					try handleHTTPConnection(conn, listen_info);
@@ -1817,10 +1805,8 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerContext cont
 	@safe {
 		TLSContext onSNI(string servername)
 		@safe {
-			foreach (ctx; s_contexts)
-				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
-					&& ctx.settings.port == lst.bindPort
-					&& ctx.settings.hostName.icmp(servername) == 0)
+			foreach (ctx; lst.contexts)
+				if (ctx.settings.hostName.icmp(servername) == 0)
 				{
 					logDebug("Found context for SNI host '%s'.", servername);
 					return ctx.settings.tlsContext;
@@ -1835,9 +1821,7 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerContext cont
 			lst.tlsContext.sniCallback = &onSNI;
 		}
 
-		foreach (ctx; s_contexts) {
-			if (ctx.settings.port != settings.port) continue;
-			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
+		foreach (ctx; lst.contexts) {
 			/*enforce(ctx.settings.hostName != settings.hostName,
 				"A server with the host name '"~settings.hostName~"' is already "
 				"listening on "~addr~":"~to!string(settings.port)~".");*/
@@ -1852,6 +1836,7 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerContext cont
 		bool found_listener = false;
 		foreach (i, ref lst; s_listeners) {
 			if (lst.bindAddress == addr && lst.bindPort == settings.port) {
+				lst.contexts ~= context;
 				addVHost(lst);
 				assert(!settings.tlsContext || settings.tlsContext is lst.tlsContext
 					|| lst.tlsContext.kind == TLSContextKind.serverSNI,
@@ -1868,6 +1853,7 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerContext cont
 				linfo.listener = tcp_lst;
 				found_listener = true;
 				any_successful = true;
+				linfo.contexts ~= context;
 				s_listeners ~= linfo;
 			}
 		}
@@ -1960,27 +1946,16 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	// store the IP address
 	req.clientAddress = tcp_connection.remoteAddress;
 
-	// Default to the first virtual host for this listener
-	HTTPServerRequestDelegate request_task;
-	HTTPServerContext context;
-	foreach (ctx; s_contexts)
-		if (ctx.settings.port == listen_info.bindPort) {
-			bool found = false;
-			foreach (addr; ctx.settings.bindAddresses)
-				if (addr == listen_info.bindAddress)
-					found = true;
-			if (!found) continue;
-			context = ctx;
-			settings = ctx.settings;
-			request_task = ctx.requestHandler;
-			break;
-		}
-
-	if (!settings) {
+	if (!listen_info.contexts.length) {
 		logWarn("Didn't find a HTTP listening context for incoming connection. Dropping.");
 		keep_alive = false;
 		return false;
 	}
+
+	// Default to the first virtual host for this listener
+	HTTPServerContext context = listen_info.contexts[0];
+	HTTPServerRequestDelegate request_task = context.requestHandler;
+	settings = context.settings;
 
 	// temporarily set to the default settings, the virtual host specific settings will be set further down
 	req.m_settings = settings;
@@ -2062,16 +2037,10 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 			if (s.startsWith(':')) reqport = s[1 .. $].to!ushort;
 		}
 
-		foreach (ctx; s_contexts)
+		foreach (ctx; listen_info.contexts)
 			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
 				(!reqport || reqport == ctx.settings.port))
 			{
-				if (ctx.settings.port != listen_info.bindPort) continue;
-				bool found = false;
-				foreach (addr; ctx.settings.bindAddresses)
-					if (addr == listen_info.bindAddress)
-						found = true;
-				if (!found) continue;
 				context = ctx;
 				settings = ctx.settings;
 				request_task = ctx.requestHandler;
