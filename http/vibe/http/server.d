@@ -180,6 +180,81 @@ unittest
 	}
 }
 
+
+/** Treats an existing connection as an HTTP connection and processes incoming
+	requests.
+
+	After all requests have been processed, the connection will be closed and
+	the function returns to the caller.
+
+	Params:
+		connections = The stream to treat as an incoming HTTP client connection.
+		context = Information about the incoming listener and available
+			virtual hosts
+*/
+void handleHTTPConnection(TCPConnection connection, HTTPServerContext context)
+@safe {
+	InterfaceProxy!Stream http_stream;
+	http_stream = connection;
+
+	scope (exit) connection.close();
+
+	// Set NODELAY to true, to avoid delays caused by sending the response
+	// header and body in separate chunks. Note that to avoid other performance
+	// issues (caused by tiny packets), this requires using an output buffer in
+	// the event driver, which is the case at least for the default libevent
+	// based driver.
+	connection.tcpNoDelay = true;
+
+	version(HaveNoTLS) {} else {
+		TLSStreamType tls_stream;
+	}
+
+	if (!connection.waitForData(10.seconds())) {
+		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
+		return;
+	}
+
+	// If this is a HTTPS server, initiate TLS
+	if (context.tlsContext) {
+		version (HaveNoTLS) assert(false, "No TLS support compiled in.");
+		else {
+			logDebug("Accept TLS connection: %s", context.tlsContext.kind);
+			// TODO: reverse DNS lookup for peer_name of the incoming connection for TLS client certificate verification purposes
+			tls_stream = createTLSStreamFL(http_stream, context.tlsContext, TLSStreamState.accepting, null, connection.remoteAddress);
+			http_stream = tls_stream;
+		}
+	}
+
+	while (!connection.empty) {
+		HTTPServerSettings settings;
+		bool keep_alive;
+
+		() @trusted {
+			import vibe.internal.utilallocator: RegionListAllocator;
+
+			version (VibeManualMemoryManagement)
+				scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
+			else
+				scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
+
+			handleRequest(http_stream, connection, context, settings, keep_alive, request_allocator);
+		} ();
+		if (!keep_alive) { logTrace("No keep-alive - disconnecting client."); break; }
+
+		logTrace("Waiting for next request...");
+		// wait for another possible request on a keep-alive connection
+		if (!connection.waitForData(settings.keepAliveTimeout)) {
+			if (!connection.connected) logTrace("Client disconnected.");
+			else logDebug("Keep-alive connection timed out!");
+			break;
+		}
+	}
+
+	logTrace("Done handling connection.");
+}
+
+
 /**
 	Provides a HTTP request handler that responds with a static Diet template.
 */
@@ -1652,11 +1727,18 @@ struct HTTPListener {
 }
 
 
-/**************************************************************************************************/
-/* Private types                                                                                  */
-/**************************************************************************************************/
+/** Represents a single HTTP server port.
 
-private final class HTTPListenInfo {
+	This class defines the incoming interface, port, and TLS configuration of
+	the public server port. The public server port may differ from the local
+	one if a reverse proxy of some kind is facing the public internet and
+	forwards to this HTTP server.
+
+	Multiple virtual hosts can be configured to be served from the same port.
+	Their TLS settings must be compatible and each virtual host must have a
+	unique name.
+*/
+final class HTTPServerContext {
 	private struct VirtualHost {
 		HTTPServerRequestDelegate requestHandler;
 		HTTPServerSettings settings;
@@ -1675,11 +1757,10 @@ private final class HTTPListenInfo {
 
 	@safe:
 
-	this(string bind_address, ushort bind_port, TLSContext tls_context)
+	this(string bind_address, ushort bind_port)
 	{
 		m_bindAddress = bind_address;
 		m_bindPort = bind_port;
-		m_tlsContext = tls_context;
 	}
 
 	/** Returns the TLS context associated with the listener.
@@ -1753,6 +1834,11 @@ private final class HTTPListenInfo {
 
 	private void addSNIHost(HTTPServerSettings settings)
 	{
+		if (!m_virtualHosts.length) m_tlsContext = settings.tlsContext;
+
+		enforce((m_tlsContext !is null) == (settings.tlsContext !is null),
+			"Cannot mix HTTP and HTTPS virtual hosts within the same listener.");
+
 		if (settings.tlsContext !is m_tlsContext && m_tlsContext.kind != TLSContextKind.serverSNI) {
 			logDebug("Create SNI TLS context for %s, port %s", bindAddress, bindPort);
 			m_tlsContext = createTLSContext(TLSContextKind.serverSNI);
@@ -1769,8 +1855,7 @@ private final class HTTPListenInfo {
 	private TLSContext onSNI(string servername)
 	{
 		foreach (vhost; m_virtualHosts)
-			if (vhost.settings.hostName.icmp(servername) == 0)
-			{
+			if (vhost.settings.hostName.icmp(servername) == 0) {
 				logDebug("Found context for SNI host '%s'.", servername);
 				return vhost.settings.tlsContext;
 			}
@@ -1778,6 +1863,10 @@ private final class HTTPListenInfo {
 		return null;
 	}
 }
+
+/**************************************************************************************************/
+/* Private types                                                                                  */
+/**************************************************************************************************/
 
 private enum MaxHTTPHeaderLineLength = 4096;
 
@@ -1846,7 +1935,7 @@ private {
 	shared string s_distHost;
 	shared ushort s_distPort = 11000;
 
-	HTTPListenInfo[] s_listeners;
+	HTTPServerContext[] s_listeners;
 }
 
 /**
@@ -1860,7 +1949,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 	import vibe.core.core : runWorkerTaskDist;
 	import std.algorithm : canFind, find;
 
-	static TCPListener doListen(HTTPListenInfo listen_info, bool dist, bool reusePort)
+	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort)
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
@@ -1890,12 +1979,12 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 	// Check for every bind address/port, if a new listening socket needs to be created and
 	// check for conflicting servers
 	foreach (addr; settings.bindAddresses) {
-		HTTPListenInfo linfo;
+		HTTPServerContext linfo;
 
 		auto l = s_listeners.find!(l => l.bindAddress == addr && l.bindPort == settings.port);
 		if (!l.empty) linfo = l.front;
 		else {
-			auto li = new HTTPListenInfo(addr, settings.port, settings.tlsContext);
+			auto li = new HTTPServerContext(addr, settings.port);
 			if (auto tcp_lst = doListen(li, (settings.options & HTTPServerOption.distribute) != 0, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
 			{
 				li.m_listener = tcp_lst;
@@ -1915,71 +2004,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 private alias TLSStreamType = ReturnType!(createTLSStreamFL!(InterfaceProxy!Stream));
 
 
-
-/** Treats an existing connection as an HTTP connection and processes incoming requests.
-*/
-private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo listen_info)
-@safe {
-	InterfaceProxy!Stream http_stream;
-	http_stream = connection;
-
-	// Set NODELAY to true, to avoid delays caused by sending the response
-	// header and body in separate chunks. Note that to avoid other performance
-	// issues (caused by tiny packets), this requires using an output buffer in
-	// the event driver, which is the case at least for the default libevent
-	// based driver.
-	connection.tcpNoDelay = true;
-
-	version(HaveNoTLS) {} else {
-		TLSStreamType tls_stream;
-	}
-
-	if (!connection.waitForData(10.seconds())) {
-		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
-		return;
-	}
-
-	// If this is a HTTPS server, initiate TLS
-	if (listen_info.tlsContext) {
-		version (HaveNoTLS) assert(false, "No TLS support compiled in.");
-		else {
-			logDebug("Accept TLS connection: %s", listen_info.tlsContext.kind);
-			// TODO: reverse DNS lookup for peer_name of the incoming connection for TLS client certificate verification purposes
-			tls_stream = createTLSStreamFL(http_stream, listen_info.tlsContext, TLSStreamState.accepting, null, connection.remoteAddress);
-			http_stream = tls_stream;
-		}
-	}
-
-	while (!connection.empty) {
-		HTTPServerSettings settings;
-		bool keep_alive;
-
-		() @trusted {
-			import vibe.internal.utilallocator: RegionListAllocator;
-
-			version (VibeManualMemoryManagement)
-				scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
-			else
-				scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
-
-			handleRequest(http_stream, connection, listen_info, settings, keep_alive, request_allocator);
-		} ();
-		if (!keep_alive) { logTrace("No keep-alive - disconnecting client."); break; }
-
-		logTrace("Waiting for next request...");
-		// wait for another possible request on a keep-alive connection
-		if (!connection.waitForData(settings.keepAliveTimeout)) {
-			if (!connection.connected) logTrace("Client disconnected.");
-			else logDebug("Keep-alive connection timed out!");
-			break;
-		}
-	}
-
-	logTrace("Done handling connection.");
-	connection.close();
-}
-
-private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope IAllocator request_allocator)
+private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_connection, HTTPServerContext listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope IAllocator request_allocator)
 @safe {
 	import std.algorithm.searching : canFind;
 
@@ -2001,7 +2026,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	}
 
 	// Default to the first virtual host for this listener
-	HTTPListenInfo.VirtualHost context = listen_info.m_virtualHosts[0];
+	HTTPServerContext.VirtualHost context = listen_info.m_virtualHosts[0];
 	HTTPServerRequestDelegate request_task = context.requestHandler;
 	settings = context.settings;
 
