@@ -1,7 +1,7 @@
 /**
 	A HTTP 1.1/1.0 server implementation.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2017 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger, Ilya Shipunov
 */
@@ -1806,6 +1806,11 @@ final class HTTPServerContext {
 		if (settings.accessLogFile.length)
 			vhost.loggers ~= new HTTPFileLogger(settings, settings.accessLogFormat, settings.accessLogFile);
 
+		if (!m_virtualHosts.length) m_tlsContext = settings.tlsContext;
+
+		enforce((m_tlsContext !is null) == (settings.tlsContext !is null),
+			"Cannot mix HTTP and HTTPS virtual hosts within the same listener.");
+
 		if (m_tlsContext) addSNIHost(settings);
 
 		m_virtualHosts ~= vhost;
@@ -1834,11 +1839,6 @@ final class HTTPServerContext {
 
 	private void addSNIHost(HTTPServerSettings settings)
 	{
-		if (!m_virtualHosts.length) m_tlsContext = settings.tlsContext;
-
-		enforce((m_tlsContext !is null) == (settings.tlsContext !is null),
-			"Cannot mix HTTP and HTTPS virtual hosts within the same listener.");
-
 		if (settings.tlsContext !is m_tlsContext && m_tlsContext.kind != TLSContextKind.serverSNI) {
 			logDebug("Create SNI TLS context for %s, port %s", bindAddress, bindPort);
 			m_tlsContext = createTLSContext(TLSContextKind.serverSNI);
