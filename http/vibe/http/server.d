@@ -614,6 +614,10 @@ final class HTTPServerSettings {
 
 		The default value is 80. If you are running a TLS enabled server you may want to set this
 		to 443 instead.
+
+		Using a value of `0` instructs the server to use any available port on
+		the given `bindAddresses` the actual addresses and ports can then be
+		queried with `TCPListener.bindAddresses`.
 	*/
 	ushort port = 80;
 
