@@ -1192,7 +1192,7 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 			if( is_float ) {
 				ret = to!double(num);
 			} else if (is_long_overflow) {
-				ret = () @trusted { return BigInt(num); } ();
+				ret = () @trusted { return BigInt(num.to!string); } ();
 			} else {
 				ret = to!long(num);
 			}
@@ -1914,7 +1914,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				bool is_long_overflow;
 				auto num = m_range.skipNumber(is_float, is_long_overflow);
 				enforceJson(!is_float, "Expecting integer number.");
-				enforceJson(!is_long_overflow, num~" is too big for long.");
+				enforceJson(!is_long_overflow, num.to!string~" is too big for long.");
 				return to!T(num);
 			} else static if (is(T : BigInt)) {
 				bool is_float;
@@ -2268,71 +2268,93 @@ private string jsonUnescape(R)(ref R range)
 	return ret.data;
 }
 
-/// private
-private string skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow)
+private auto skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow) @safe
+	if (isNarrowString!R)
 {
-	// TODO: make this work with input ranges
+	auto r = s.representation;
+	version (assert) auto rEnd = (() @trusted => r.ptr + r.length)();
+	auto res = skipNumber(r, is_float, is_long_overflow);
+	version (assert) assert(rEnd == (() @trusted => r.ptr + r.length)()); // check nothing taken off the end
+	s = s[$ - r.length .. $];
+	return res.assumeUTF();
+}
+
+/// private
+private auto skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow)
+	if (!isNarrowString!R && isForwardRange!R)
+{
+	pragma(msg, R);
+	auto sOrig = s.save;
 	size_t idx = 0;
 	is_float = false;
 	is_long_overflow = false;
 	ulong int_part = 0;
-	if (s[idx] == '-') idx++;
-	if (s[idx] == '0') idx++;
+	if (s.front == '-') {
+		s.popFront(); ++idx;
+	}
+	if (s.front == '0') {
+		s.popFront(); ++idx;
+	}
 	else {
-		enforceJson(isDigit(s[idx]), "Digit expected at beginning of number.");
-		int_part = s[idx++] - '0';
-		while( idx < s.length && isDigit(s[idx]) )
-		{
-			if (!is_long_overflow)
-			{
-				auto dig = s[idx] - '0';
-				if ((long.max / 10) > int_part || ((long.max / 10) == int_part && (long.max % 10) >= dig))
-				{
+		enforceJson(isDigit(s.front), "Digit expected at beginning of number.");
+		int_part = s.front - '0';
+		s.popFront(); ++idx;
+		while( !s.empty && isDigit(s.front) ) {
+			if (!is_long_overflow) {
+				auto dig = s.front - '0';
+				if ((long.max / 10) > int_part || ((long.max / 10) == int_part && (long.max % 10) >= dig)) {
 					int_part *= 10;
 					int_part += dig;
 				}
-				else
-				{
+				else {
 					is_long_overflow = true;
 				}
 			}
-			idx++;
+			s.popFront(); ++idx;
 		}
 	}
 
-	if( idx < s.length && s[idx] == '.' ){
-		idx++;
+	if( !s.empty && s.front == '.' ) {
+		s.popFront(); ++idx;
 		is_float = true;
-		while( idx < s.length && isDigit(s[idx]) ) idx++;
+		while( !s.empty && isDigit(s.front) ) {
+			s.popFront(); ++idx;
+		}
 	}
 
-	if( idx < s.length && (s[idx] == 'e' || s[idx] == 'E') ){
-		idx++;
+	if( !s.empty && (s.front == 'e' || s.front == 'E') ) {
+		s.popFront(); ++idx;
 		is_float = true;
-		if( idx < s.length && (s[idx] == '+' || s[idx] == '-') ) idx++;
-		enforceJson( idx < s.length && isDigit(s[idx]), "Expected exponent." ~ s[0 .. idx]);
-		idx++;
-		while( idx < s.length && isDigit(s[idx]) ) idx++;
+		if( !s.empty && (s.front == '+' || s.front == '-') ) {
+			s.popFront(); ++idx;
+		}
+		enforceJson( !s.empty && isDigit(s.front), "Expected exponent." ~ sOrig.takeExactly(idx).to!string);
+		s.popFront(); ++idx;
+		while( !s.empty && isDigit(s.front) ) {
+			s.popFront(); ++idx;
+		}
 	}
 
-	string ret = s[0 .. idx];
-	s = s[idx .. $];
-	return ret;
+	return sOrig.takeExactly(idx);
 }
 
 unittest
 {
-	string test_1 = "9223372036854775806"; // lower then long.max
-	string test_2 = "9223372036854775807"; // long.max
-	string test_3 = "9223372036854775808"; // greater then long.max
-	bool is_float;
-	bool is_long_overflow;
-	test_1.skipNumber(is_float, is_long_overflow);
-	assert(!is_long_overflow);
-	test_2.skipNumber(is_float, is_long_overflow);
-	assert(!is_long_overflow);
-	test_3.skipNumber(is_float, is_long_overflow);
-	assert(is_long_overflow);
+	import std.meta : AliasSeq;
+	// test for string and for a simple range
+	foreach (foo; AliasSeq!(to!string, map!"a")) {
+		auto test_1 = foo("9223372036854775806"); // lower then long.max
+		auto test_2 = foo("9223372036854775807"); // long.max
+		auto test_3 = foo("9223372036854775808"); // greater then long.max
+		bool is_float;
+		bool is_long_overflow;
+		test_1.skipNumber(is_float, is_long_overflow);
+		assert(!is_long_overflow);
+		test_2.skipNumber(is_float, is_long_overflow);
+		assert(!is_long_overflow);
+		test_3.skipNumber(is_float, is_long_overflow);
+		assert(is_long_overflow);
+	}
 }
 
 /// private
