@@ -614,6 +614,10 @@ final class HTTPServerSettings {
 
 		The default value is 80. If you are running a TLS enabled server you may want to set this
 		to 443 instead.
+
+		Using a value of `0` instructs the server to use any available port on
+		the given `bindAddresses` the actual addresses and ports can then be
+		queried with `TCPListener.bindAddresses`.
 	*/
 	ushort port = 80;
 
@@ -1704,6 +1708,19 @@ struct HTTPListener {
 
 	private this(size_t[] ids) @safe { m_virtualHostIDs = ids; }
 
+	@property NetworkAddress[] bindAddresses()
+	{
+		NetworkAddress[] ret;
+		foreach (l; s_listeners)
+			if (l.m_virtualHosts.canFind!(v => m_virtualHostIDs.canFind(v.id))) {
+				NetworkAddress a;
+				a = resolveHost(l.bindAddress);
+				a.port = l.bindPort;
+				ret ~= a;
+			}
+		return ret;
+	}
+
 	/** Stops handling HTTP requests and closes the TCP listening port if
 		possible.
 	*/
@@ -1712,7 +1729,7 @@ struct HTTPListener {
 		import std.algorithm : countUntil;
 
 		foreach (vhid; m_virtualHostIDs) {
-			foreach (lidx, ref l; s_listeners) {
+			foreach (lidx, l; s_listeners) {
 				if (l.removeVirtualHost(vhid)) {
 					if (!l.hasVirtualHosts) {
 						l.m_listener.stopListening();
@@ -1792,7 +1809,7 @@ final class HTTPServerContext {
 	*/
 	size_t addVirtualHost(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
 	{
-		assert(settings.port == m_bindPort, "Virtual host settings do not match bind port.");
+		assert(settings.port == 0 || settings.port == m_bindPort, "Virtual host settings do not match bind port.");
 		assert(settings.bindAddresses.canFind(m_bindAddress), "Virtual host settings do not match bind address.");
 
 		VirtualHost vhost;
@@ -1963,6 +1980,11 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 						catch (Exception e) logError("Failed to close connection: %s", e.msg);
 					}
 				}, listen_info.bindAddress, options);
+
+			// support port 0 meaning any available port
+			if (listen_info.bindPort == 0)
+				listen_info.m_bindPort = ret.bindAddress.port;
+
 			auto proto = listen_info.tlsContext ? "https" : "http";
 			auto urladdr = listen_info.bindAddress;
 			if (urladdr.canFind(':')) urladdr = "["~urladdr~"]";
