@@ -1,0 +1,9 @@
+﻿{
+	"name": "http-request-digest-example",
+	"description": "Performs a custom HTTP request with digest authentication.",
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d:http": {"path": "../../"}
+	},
+	"versions": ["VibeCustomMain"]
+}
