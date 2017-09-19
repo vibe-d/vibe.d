@@ -405,6 +405,33 @@ unittest
 
 
 /**
+	Methods marked with this attribute will not be treated as web endpoints.
+
+	This attribute enables the definition of public methods that do not take
+	part in the interface genration process.
+*/
+@property NoRouteAttribute noRoute()
+{
+	import vibe.web.common : onlyAsUda;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return NoRouteAttribute.init;
+}
+
+///
+unittest {
+	interface IAPI {
+		// Accessible as "GET /info"
+		string getInfo();
+
+		// Not accessible over HTTP
+		@noRoute
+		int getFoo();
+	}
+}
+
+
+/**
  	Respresents a Rest error response
 */
 class RestException : HTTPStatusException {
@@ -451,6 +478,9 @@ package struct PathAttribute
 	string data;
 	alias data this;
 }
+
+/// private
+package struct NoRouteAttribute {}
 
 /// Private struct describing the origin of a parameter (Query, Header, Body).
 package struct WebParamAttribute {
