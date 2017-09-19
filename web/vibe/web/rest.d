@@ -1008,8 +1008,12 @@ unittest {
 	// Resulting API usage
 	//
 	API api = new APIImpl; // A RestInterfaceClient!API would work just as well
+
+	// GET /items/foo/name
 	assert(api.items["foo"].name == "foo");
+	// GET /items/foo/sub_items/length
 	assert(api.items["foo"].subItems.length == 10);
+	// GET /items/foo/sub_items/2/squared_position
 	assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
 }
 
@@ -1108,8 +1112,12 @@ unittest {
 	// Resulting API usage
 	//
 	API api = new APIImpl; // A RestInterfaceClient!API would work just as well
+
+	// GET /items/name?item=foo
 	assert(api.items["foo"].name == "foo");
+	// GET /items/subitems/length?item=foo
 	assert(api.items["foo"].subItems.length == 10);
+	// GET /items/subitems/squared_position?item=foo&index=2
 	assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
 }
 
@@ -1298,42 +1306,45 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 
 		foreach (i, PT; PTypes) {
 			enum sparam = sroute.parameters[i];
-			enum pname = sparam.name;
-			auto fieldname = route.parameters[i].fieldName;
-			static if (isInstanceOf!(Nullable, PT)) PT v;
-			else Nullable!PT v;
 
-			static if (sparam.kind == ParameterKind.auth) {
-				v = auth_info;
-			} else static if (sparam.kind == ParameterKind.query) {
-				if (auto pv = fieldname in req.query)
-					v = fromRestString!PT(*pv);
-			} else static if (sparam.kind == ParameterKind.wholeBody) {
-				try v = deserializeJson!PT(req.json);
-				catch (JSONException e) enforceBadRequest(false, e.msg);
-			} else static if (sparam.kind == ParameterKind.body_) {
-				try {
-					if (auto pv = fieldname in req.json)
-						v = deserializeJson!PT(*pv);
-				} catch (JSONException e)
-					enforceBadRequest(false, e.msg);
-			} else static if (sparam.kind == ParameterKind.header) {
-				if (auto pv = fieldname in req.headers)
-					v = fromRestString!PT(*pv);
-			} else static if (sparam.kind == ParameterKind.attributed) {
-				static if (!__traits(compiles, () @safe { computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ()))
-					pragma(msg, "Non-@safe @before evaluators are deprecated - annotate evaluator function for parameter "~pname~" of "~T.stringof~"."~Method~" as @safe.");
-				v = () @trusted { return computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ();
-			} else static if (sparam.kind == ParameterKind.internal) {
-				if (auto pv = fieldname in req.params)
-					v = fromRestString!PT(urlDecode(*pv));
-			} else static assert(false, "Unhandled parameter kind.");
+			static if (sparam.isIn) {
+				enum pname = sparam.name;
+				auto fieldname = route.parameters[i].fieldName;
+				static if (isInstanceOf!(Nullable, PT)) PT v;
+				else Nullable!PT v;
 
-			static if (isInstanceOf!(Nullable, PT)) params[i] = v;
-			else if (v.isNull()) {
-				static if (!is(PDefaults[i] == void)) params[i] = PDefaults[i];
-				else enforceBadRequest(false, "Missing non-optional "~sparam.kind.to!string~" parameter '"~(fieldname.length?fieldname:sparam.name)~"'.");
-			} else params[i] = v;
+				static if (sparam.kind == ParameterKind.auth) {
+					v = auth_info;
+				} else static if (sparam.kind == ParameterKind.query) {
+					if (auto pv = fieldname in req.query)
+						v = fromRestString!PT(*pv);
+				} else static if (sparam.kind == ParameterKind.wholeBody) {
+					try v = deserializeJson!PT(req.json);
+					catch (JSONException e) enforceBadRequest(false, e.msg);
+				} else static if (sparam.kind == ParameterKind.body_) {
+					try {
+						if (auto pv = fieldname in req.json)
+							v = deserializeJson!PT(*pv);
+					} catch (JSONException e)
+						enforceBadRequest(false, e.msg);
+				} else static if (sparam.kind == ParameterKind.header) {
+					if (auto pv = fieldname in req.headers)
+						v = fromRestString!PT(*pv);
+				} else static if (sparam.kind == ParameterKind.attributed) {
+					static if (!__traits(compiles, () @safe { computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ()))
+						pragma(msg, "Non-@safe @before evaluators are deprecated - annotate evaluator function for parameter "~pname~" of "~T.stringof~"."~Method~" as @safe.");
+					v = () @trusted { return computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ();
+				} else static if (sparam.kind == ParameterKind.internal) {
+					if (auto pv = fieldname in req.params)
+						v = fromRestString!PT(urlDecode(*pv));
+				} else static assert(false, "Unhandled parameter kind.");
+
+				static if (isInstanceOf!(Nullable, PT)) params[i] = v;
+				else if (v.isNull()) {
+					static if (!is(PDefaults[i] == void)) params[i] = PDefaults[i];
+					else enforceBadRequest(false, "Missing non-optional "~sparam.kind.to!string~" parameter '"~(fieldname.length?fieldname:sparam.name)~"'.");
+				} else params[i] = v;
+			}
 		}
 
 		static if (isAuthenticated!(T, Func))
