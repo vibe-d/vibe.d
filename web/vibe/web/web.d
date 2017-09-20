@@ -574,33 +574,6 @@ string trWeb(string text, string plural_text, int count, string context = null)
 
 
 /**
-	Methods marked with this attribute will not be treated as web endpoints.
-
-	This attribute enables the definition of public methods that do not take
-	part in the interface genration process.
-*/
-@property NoRouteAttribute noRoute()
-{
-	import vibe.web.common : onlyAsUda;
-	if (!__ctfe)
-		assert(false, onlyAsUda!__FUNCTION__);
-	return NoRouteAttribute.init;
-}
-
-///
-unittest {
-	interface IAPI {
-		// Accessible as "GET /info"
-		string getInfo();
-
-		// Not accessible over HTTP
-		@noRoute
-		int getFoo();
-	}
-}
-
-
-/**
 	Attribute to customize how errors/exceptions are displayed.
 
 	The first template parameter takes a function that maps an exception and an
@@ -761,8 +734,6 @@ struct SessionVar(T, string name) {
 
 	alias value this;
 }
-
-private struct NoRouteAttribute {}
 
 private struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 	import std.traits : ParameterTypeTuple, ParameterIdentifierTuple;
