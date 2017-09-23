@@ -492,6 +492,84 @@ body
 }
 
 /**
+	Returns the current request.
+
+	Note that this may only be called from a function/method
+	registered using registerWebInterface.
+*/
+@property HTTPServerRequest request() @safe
+{
+	return getRequestContext().req;
+}
+
+///
+@safe unittest {
+	void requireAuthenticated()
+	{
+		auto authorization = "Authorization" in request.headers;
+
+		enforceHTTP(authorization !is null, HTTPStatus.forbidden);
+		enforceHTTP(*authorization == "secret", HTTPStatus.forbidden);
+	}
+
+	class WebService {
+		void getPage()
+		{
+			requireAuthenticated();
+		}
+	}
+
+	void run()
+	{
+		auto router = new URLRouter;
+		router.registerWebInterface(new WebService);
+
+		auto settings = new HTTPServerSettings;
+		settings.port = 8080;
+		listenHTTP(settings, router);
+	}
+}
+
+/**
+	Returns the current response.
+
+	Note that this may only be called from a function/method
+	registered using registerWebInterface.
+*/
+@property HTTPServerResponse response() @safe
+{
+	return getRequestContext().res;
+}
+
+///
+@safe unittest {
+	void logIn()
+	{
+		auto session = response.startSession();
+		session.set("token", "secret");
+	}
+
+	class WebService {
+		void postLogin(string username, string password)
+		{
+			if (username == "foo" && password == "bar") {
+				logIn();
+			}
+		}
+	}
+
+	void run()
+	{
+		auto router = new URLRouter;
+		router.registerWebInterface(new WebService);
+
+		auto settings = new HTTPServerSettings;
+		settings.port = 8080;
+		listenHTTP(settings, router);
+	}
+}
+
+/**
 	Terminates the currently active session (if any).
 
 	Note that this may only be called from a function/method
