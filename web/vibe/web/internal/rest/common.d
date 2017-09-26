@@ -257,9 +257,7 @@ import std.traits : hasUDA;
 
 		StaticRoute[routeCount] ret;
 
-		static if (is(TImpl == class))
-			alias AUTHTP = AuthInfo!TImpl;
-		else alias AUTHTP = void;
+		alias AUTHTP = AuthInfo!TImpl;
 
 		foreach (fi, func; RouteFunctions) {
 			StaticRoute route;
