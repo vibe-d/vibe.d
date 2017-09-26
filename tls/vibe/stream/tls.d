@@ -13,6 +13,7 @@ module vibe.stream.tls;
 
 import vibe.core.log;
 import vibe.core.net;
+import vibe.core.path : NativePath;
 import vibe.core.stream;
 import vibe.core.sync;
 
@@ -306,10 +307,14 @@ interface TLSContext {
 
 	/// Sets a certificate file to use for authenticating to the remote peer
 	void useCertificateChainFile(string path);
+	/// ditto
+	final void useCertificateChainFile(NativePath path);
 
 	/// Sets the private key to use for authenticating to the remote peer based
 	/// on the configured certificate chain file.
 	void usePrivateKeyFile(string path);
+	/// ditto
+	final void usePrivateKeyFile(NativePath path);
 
 	/** Sets the list of trusted certificates for verifying peer certificates.
 
