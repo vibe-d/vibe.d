@@ -628,7 +628,7 @@ final class HTTPClient {
 		}
 
 		return () @trusted { // scoped
-			auto req = scoped!HTTPClientRequest(m_stream, m_conn.localAddress);
+			auto req = scoped!HTTPClientRequest(m_stream, m_conn);
 			if (m_useTLS)
 				req.m_peerCertificate = m_tlsStream.peerCertificate;
 
@@ -668,19 +668,20 @@ final class HTTPClientRequest : HTTPRequest {
 		FreeListRef!ChunkedOutputStream m_chunkedStream;
 		bool m_headerWritten = false;
 		FixedAppender!(string, 22) m_contentLengthBuffer;
-		NetworkAddress m_localAddress;
+		TCPConnection m_rawConn;
 		TLSCertificateInformation m_peerCertificate;
 	}
 
 
 	/// private
-	this(InterfaceProxy!Stream conn, NetworkAddress local_addr)
+	this(InterfaceProxy!Stream conn, TCPConnection raw_conn)
 	{
 		super(conn);
-		m_localAddress = local_addr;
+		m_rawConn = raw_conn;
 	}
 
-	@property NetworkAddress localAddress() const { return m_localAddress; }
+	@property NetworkAddress localAddress() const { return m_rawConn.localAddress; }
+	@property NetworkAddress remoteAddress() const { return m_rawConn.remoteAddress; }
 
 	@property ref inout(TLSCertificateInformation) peerCertificate() inout { return m_peerCertificate; }
 
