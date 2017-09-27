@@ -87,10 +87,20 @@ unittest {
 	Web/REST interface classes that have authentication enabled are required
 	to specify either the `@auth` or the `@noAuth` attribute for every public
 	method.
+
+	The type of the authentication information, as returned by the
+	`authenticate()` method, can optionally be specified as a template argument.
+	This is useful if an `interface` is annotated and the `authenticate()`
+	method is only declared in the actual class implementation.
 */
-@property RequiresAuthAttribute requiresAuth()
+@property RequiresAuthAttribute!void requiresAuth()
 {
-	return RequiresAuthAttribute.init;
+	return RequiresAuthAttribute!void.init;
+}
+/// ditto
+@property RequiresAuthAttribute!AUTH_INFO requiresAuth(AUTH_INFO)()
+{
+	return RequiresAuthAttribute!AUTH_INFO.init;
 }
 
 /** Enforces authentication and authorization.
@@ -110,7 +120,7 @@ AuthAttribute!R auth(R)(R roles) { return AuthAttribute!R.init; }
 @property NoAuthAttribute noAuth() { return NoAuthAttribute.init; }
 
 /// private
-struct RequiresAuthAttribute {}
+struct RequiresAuthAttribute(AUTH_INFO) { alias AuthInfo = AUTH_INFO; }
 
 /// private
 struct AuthAttribute(R) { alias Roles = R; }
@@ -237,10 +247,15 @@ package template AuthInfo(C, CA = C)
 
 	template impl(size_t idx) {
 		static if (idx < ATTS.length) {
-			static if (is(typeof(ATTS[idx])) && is(typeof(ATTS[idx]) == RequiresAuthAttribute)) {
-				static if (is(typeof(C.init.authenticate(HTTPServerRequest.init, HTTPServerResponse.init))))
+			static if (is(typeof(ATTS[idx])) && isInstanceOf!(RequiresAuthAttribute, typeof(ATTS[idx]))) {
+				static if (is(typeof(C.init.authenticate(HTTPServerRequest.init, HTTPServerResponse.init)))) {
 					alias impl = typeof(C.init.authenticate(HTTPServerRequest.init, HTTPServerResponse.init));
-				else
+					static assert(is(ATTS[idx].AuthInfo == void) || is(ATTS[idx].AuthInfo == impl),
+						"Type mismatch between the @requiresAuth annotation and the authenticate() method.");
+				} else static if (is(C == interface)) {
+					alias impl = ATTS[idx].AuthInfo;
+					static assert(!is(impl == void), "Interface "~C.stringof~" either needs to supply an authenticate method or must supply the authentication information via @requiresAuth!T.");
+				} else
 					static assert (false,
 						C.stringof~" must have an authenticate(...) method that takes HTTPServerRequest/HTTPServerResponse parameters and returns an authentication information object.");
 			} else alias impl = impl!(idx+1);

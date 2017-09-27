@@ -257,9 +257,7 @@ import std.traits : hasUDA;
 
 		StaticRoute[routeCount] ret;
 
-		static if (is(TImpl == class))
-			alias AUTHTP = AuthInfo!TImpl;
-		else alias AUTHTP = void;
+		alias AUTHTP = AuthInfo!TImpl;
 
 		foreach (fi, func; RouteFunctions) {
 			StaticRoute route;
@@ -715,7 +713,9 @@ unittest {
 unittest { // #1648
 	import vibe.web.auth;
 
-	@requiresAuth
+	struct AI {}
+
+	@requiresAuth!AI
 	interface I {
 		void a();
 	}
