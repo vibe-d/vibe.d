@@ -2,7 +2,7 @@ import vibe.d;
 import std.datetime;
 import vibe.web.auth;
 
-shared static this()
+void main()
 {
 	auto settings = new HTTPServerSettings;
 	// 10k + issue number -> Avoid bind errors
@@ -14,7 +14,7 @@ shared static this()
 	router.registerRestInterface(new AuthAPI);
 	listenHTTP(settings, router);
 
-	setTimer(1.seconds, {
+	runTask({
 		scope(exit) exitEventLoop();
 
 		void test(string endpoint, string user, HTTPStatus expected = HTTPStatus.ok){
@@ -35,38 +35,38 @@ shared static this()
 		test("/items/num?num=37", "admin");
 		test("/items/num?num=37", null, HTTPStatus.forbidden);
 	});
+
+	runApplication();
 }
 
 struct AuthInfo {
 	string name;
 }
 
+@requiresAuth
 interface IItemAPI {
 	struct CollectionIndices {
 		string item;
 	}
-	string getName(string item, AuthInfo info);
-	int getNum(int num);
-}
 
-@requiresAuth
-class ItemAPI : IItemAPI {
-	@anyAuth
-	string getName(string item, AuthInfo info){
-		return info.name ~ item;
-	}
-
-	@anyAuth
-	int getNum(int num){
-		return num;
-	}
+	@anyAuth string getName(string item, AuthInfo info);
+	@anyAuth int getNum(int num);
 
 	@noRoute final mixin CreateAuthFunc;
 }
 
+class ItemAPI : IItemAPI {
+	string getName(string item, AuthInfo info){
+		return info.name ~ item;
+	}
+
+	int getNum(int num){
+		return num;
+	}
+}
+
 @requiresAuth
 interface IAuthAPI {
-
 	@noAuth int getNonAuthNumber(int num);
 	@anyAuth int getAuthNumber(AuthInfo info, int num);
 	@anyAuth Collection!IItemAPI items();
