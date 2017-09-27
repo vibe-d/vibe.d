@@ -713,7 +713,9 @@ unittest {
 unittest { // #1648
 	import vibe.web.auth;
 
-	@requiresAuth
+	struct AI {}
+
+	@requiresAuth!AI
 	interface I {
 		void a();
 	}
