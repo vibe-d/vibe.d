@@ -151,7 +151,7 @@ struct Path {
 	@property bool absolute() const { return m_absolute; }
 
 	/// Forward compatibility property for vibe-code
-	@property immutable(PathEntry)[] bySegment() { return nodes; }
+	@property immutable(PathEntry)[] bySegment() const { return nodes; }
 
 	/// Resolves all '.' and '..' path entries as far as possible.
 	void normalize()
