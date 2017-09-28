@@ -308,13 +308,13 @@ interface TLSContext {
 	/// Sets a certificate file to use for authenticating to the remote peer
 	void useCertificateChainFile(string path);
 	/// ditto
-	final void useCertificateChainFile(NativePath path);
+	final void useCertificateChainFile(NativePath path) { useCertificateChainFile(path.toString()); }
 
 	/// Sets the private key to use for authenticating to the remote peer based
 	/// on the configured certificate chain file.
 	void usePrivateKeyFile(string path);
 	/// ditto
-	final void usePrivateKeyFile(NativePath path);
+	final void usePrivateKeyFile(NativePath path) { usePrivateKeyFile(path.toString()); }
 
 	/** Sets the list of trusted certificates for verifying peer certificates.
 
