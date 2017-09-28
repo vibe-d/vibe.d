@@ -873,11 +873,20 @@ final class HTTPServerRequest : HTTPRequest {
 		*/
 		TLSCertificateInformation clientCertificate;
 
-		/** The _path part of the URL.
+		/** Deprecated: The _path part of the URL.
+
+			Note that this function contains the decoded version of the
+			requested path, which can yield incorrect results if the path
+			contains URL encoded path separators. Use `requestPath` instead to
+			get an encoding-aware representation.
 
 			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
 		string path;
+
+		/** The path part of the requested URI.
+		*/
+		InetPath requestPath;
 
 		/** The user name part of the URL, if present.
 
@@ -1109,8 +1118,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 		url.username = this.username;
 		url.password = this.password;
-		url.pathString = path;
-		url.queryString = queryString;
+		url.localURI = this.requestURI;
 
 		return url;
 	}
@@ -1123,9 +1131,10 @@ final class HTTPServerRequest : HTTPRequest {
 
 		The returned string always ends with a slash.
 	*/
-	@property string rootDir() const @safe {
-		if (path.length == 0) return "./";
-		auto depth = count(path[1 .. $], '/');
+	@property string rootDir()
+	const @safe {
+		import std.range.primitives : walkLength;
+		auto depth = requestPath.bySegment.walkLength;
 		return depth == 0 ? "./" : replicate("../", depth);
 	}
 }
@@ -2185,6 +2194,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		req.queryString = url.queryString;
 		req.username = url.username;
 		req.password = url.password;
+		req.requestPath = url.path;
 
 		// URL parsing if desired
 		if (settings.options & HTTPServerOption.parseURL) {
