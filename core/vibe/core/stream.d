@@ -5,7 +5,7 @@
 	`vibe.stream` package. The `vibe.stream.operations` module contains additional high-level
 	operations on streams, such as reading streams by line or as a whole.
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	Copyright: © 2012-2017 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -25,8 +25,12 @@ import std.conv;
 	The number of bytes written is either the whole input stream when `nbytes == 0`, or exactly
 	`nbytes` for `nbytes > 0`. If the input stream contains less than `nbytes` of data, an
 	exception is thrown.
+
+	Returns:
+		The actual number of bytes written is returned. If `nbytes` is  given
+		and not equal to `ulong.max`, íts value will be returned.
 */
-void pipe(IS : InputStream, OS : OutputStream)(IS source, OS sink, ulong nbytes = 0)
+ulong pipe(IS : InputStream, OS : OutputStream)(IS source, OS sink, ulong nbytes = 0)
 @safe {
 	import vibe.internal.allocator : dispose, makeArray, theAllocator;
 
@@ -34,6 +38,7 @@ void pipe(IS : InputStream, OS : OutputStream)(IS source, OS sink, ulong nbytes 
 	scope (exit) () @trusted { theAllocator.dispose(buffer); } ();
 
 	//logTrace("default write %d bytes, empty=%s", nbytes, stream.empty);
+	ulong ret = 0;
 	if (nbytes == 0 || nbytes == ulong.max) {
 		while (!source.empty) {
 			size_t chunk = min(source.leastSize, buffer.length);
@@ -41,6 +46,7 @@ void pipe(IS : InputStream, OS : OutputStream)(IS source, OS sink, ulong nbytes 
 			//logTrace("read pipe chunk %d", chunk);
 			source.read(buffer[0 .. chunk], IOMode.all);
 			sink.write(buffer[0 .. chunk], IOMode.all);
+			ret += chunk;
 		}
 	} else {
 		while (nbytes > 0) {
@@ -49,8 +55,10 @@ void pipe(IS : InputStream, OS : OutputStream)(IS source, OS sink, ulong nbytes 
 			source.read(buffer[0 .. chunk], IOMode.all);
 			sink.write(buffer[0 .. chunk], IOMode.all);
 			nbytes -= chunk;
+			ret += chunk;
 		}
 	}
+	return ret;
 }
 
 /**
@@ -261,11 +269,13 @@ alias StreamProxy = Stream;
 alias ConnectionStreamProxy = ConnectionStream;
 alias RandomAccessStreamProxy = RandomAccessStream;
 
-enum isInputStream(T) = is(T : InputStream);
-enum isOutputStream(T) = is(T : OutputStream);
-enum isStream(T) = is(T : Stream);
-enum isConnectionStream(T) = is(T : ConnectionStream);
-enum isRandomAccessStream(T) = is(T : RandomAccessStream);
+enum isInputStream(T) = implementsInterface!(T, InputStream);
+enum isOutputStream(T) = implementsInterface!(T, OutputStream);
+enum isStream(T) = implementsInterface!(T, Stream);
+enum isConnectionStream(T) = implementsInterface!(T, ConnectionStream);
+enum isRandomAccessStream(T) = implementsInterface!(T, RandomAccessStream);
+
+private enum implementsInterface(T, I) = is(T : I) || is(T == struct);
 
 mixin template validateInputStream(T) { static assert(isInputStream!T); }
 mixin template validateOutputStream(T) { static assert(isOutputStream!T); }

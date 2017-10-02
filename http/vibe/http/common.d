@@ -472,29 +472,26 @@ FreeListRef!ChunkedInputStream createChunkedInputStreamFL(IS)(IS source_stream) 
 /**
 	Outputs data to an output stream in HTTP chunked format.
 */
-final class ChunkedOutputStream : OutputStream {
+final struct ChunkedOutputStream(OS)
+	if (isOutputStream!OS)
+{
 	@safe:
 
 	alias ChunkExtensionCallback = string delegate(in ubyte[] data);
 	private {
-		InterfaceProxy!OutputStream m_out;
-		AllocAppender!(ubyte[]) m_buffer;
+		OS m_out;
+		FreeListRef!(AllocAppender!(ubyte[])) m_buffer;
 		size_t m_maxBufferSize = 4*1024;
 		bool m_finalized = false;
+		bool m_autoFinalizeDestination = false;
 		ChunkExtensionCallback m_chunkExtensionCallback = null;
 	}
 
-	deprecated("Use createChunkedOutputStream() instead.")
-	this(OutputStream stream, IAllocator alloc = theAllocator())
-	{
-		this(interfaceProxy!OutputStream(stream), alloc, true);
-	}
-
 	/// private
-	this(InterfaceProxy!OutputStream stream, IAllocator alloc, bool dummy)
+	this(OS stream, IAllocator alloc, bool dummy)
 	{
 		m_out = stream;
-		m_buffer = AllocAppender!(ubyte[])(alloc);
+		m_buffer = FreeListRef!(AllocAppender!(ubyte[]))(alloc);
 	}
 
 	/** Maximum buffer size used to buffer individual chunks.
@@ -522,6 +519,8 @@ final class ChunkedOutputStream : OutputStream {
 	@property ChunkExtensionCallback chunkExtensionCallback() const { return m_chunkExtensionCallback; }
 	/// ditto
 	@property void chunkExtensionCallback(ChunkExtensionCallback cb) { m_chunkExtensionCallback = cb; }
+
+	@property void autoFinalizeDestination(bool enable) { m_autoFinalizeDestination = enable; }
 
 	private void append(scope void delegate(scope ubyte[] dst) @safe del, size_t nbytes)
 	{
@@ -563,7 +562,8 @@ final class ChunkedOutputStream : OutputStream {
 		return nbytes;
 	}
 
-	alias write = OutputStream.write;
+	void write(in ubyte[] bytes) { write(bytes, IOMode.all); }
+	void write(in char[] bytes) { write(cast(const(ubyte)[])bytes); }
 
 	void flush()
 	{
@@ -583,7 +583,8 @@ final class ChunkedOutputStream : OutputStream {
 		() @trusted { m_buffer.reset(AppenderResetMode.freeData); } ();
 		m_finalized = true;
 		writeChunk([]);
-		m_out.flush();
+		if (m_autoFinalizeDestination) m_out.finalize();
+		else m_out.flush();
 	}
 
 	private void writeChunk(in ubyte[] data)
@@ -606,16 +607,12 @@ final class ChunkedOutputStream : OutputStream {
 	}
 }
 
-/// Creates a new `ChunkedInputStream` instance.
-ChunkedOutputStream createChunkedOutputStream(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
-{
-	return new ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
-}
+static assert(isOutputStream!(ChunkedOutputStream!OutputStream));
 
-/// Creates a new `ChunkedOutputStream` instance.
-FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
+/// Creates a new `ChunkedInputStream` instance.
+ChunkedOutputStream!OS createChunkedOutputStream(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
 {
-	return FreeListRef!ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
+	return ChunkedOutputStream!OS(destination_stream, allocator, true);
 }
 
 

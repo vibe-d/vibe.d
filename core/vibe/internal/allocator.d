@@ -18,3 +18,26 @@ public import stdx.allocator.mallocator;
 		s_threadAllocator = () @trusted { return allocatorObject(GCAllocator.instance); } ();
 	return s_threadAllocator;
 }
+
+auto makeGCSafe(T, Allocator, A...)(Allocator allocator, auto ref A args)
+{
+	import core.memory : GC;
+	import std.traits : hasIndirections;
+
+	auto ret = allocator.make!T(args);
+	static if (is (T == class)) enum tsize = __traits(classInstanceSize, T);
+	else enum tsize = T.sizeof;
+	static if (hasIndirections!T)
+		() @trusted { GC.addRange(cast(void*)ret, tsize, typeid(T)); } ();
+	return ret;
+}
+
+void disposeGCSafe(T, Allocator)(Allocator allocator, T obj)
+{
+	import core.memory : GC;
+	import std.traits : hasIndirections;
+
+	static if (hasIndirections!T)
+		GC.removeRange(cast(void*)obj);
+	allocator.dispose(obj);
+}

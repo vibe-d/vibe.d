@@ -681,11 +681,12 @@ final class HTTPClient {
 */
 final class HTTPClientRequest : HTTPRequest {
 	private {
-		InterfaceProxy!OutputStream m_bodyWriter;
-		FreeListRef!ChunkedOutputStream m_chunkedStream;
+		OutputStream m_bodyWriter;
+		void delegate() @safe m_bodyWriterDestroy;
 		bool m_headerWritten = false;
 		FixedAppender!(string, 22) m_contentLengthBuffer;
 		TCPConnection m_rawConn;
+		bool m_isChunked;
 		TLSCertificateInformation m_peerCertificate;
 	}
 
@@ -804,8 +805,10 @@ final class HTTPClientRequest : HTTPRequest {
 		The first retrieval will cause the request header to be written, make sure
 		that all headers are set up in advance.s
 	*/
-	@property InterfaceProxy!OutputStream bodyWriter()
+	@property auto bodyWriter()
 	{
+		import vibe.internal.interfaceproxy : asInterface, freeInterface;
+
 		if (m_bodyWriter) return m_bodyWriter;
 
 		assert(!m_headerWritten, "Trying to write request body after body was already written.");
@@ -817,12 +820,14 @@ final class HTTPClientRequest : HTTPRequest {
 		}
 
 		writeHeader();
-		m_bodyWriter = m_conn;
 
 		if (headers.get("Transfer-Encoding", null) == "chunked") {
-			m_chunkedStream = createChunkedOutputStreamFL(m_bodyWriter);
-			m_bodyWriter = m_chunkedStream;
+			m_bodyWriter = asInterface!OutputStream(createChunkedOutputStream(m_bodyWriter), vibeThreadAllocator);
+			m_isChunked = true;
+		} else {
+			m_bodyWriter = asInterface!OutputStream(m_conn, vibeThreadAllocator);
 		}
+		m_bodyWriterDestroy = () @trusted { freeInterface!OutputStream(cast(typeof(asInterface!OutputStream(m_conn, vibeThreadAllocator)))m_bodyWriter, vibeThreadAllocator); };
 
 		return m_bodyWriter;
 	}
@@ -858,12 +863,13 @@ final class HTTPClientRequest : HTTPRequest {
 		// force the request to be sent
 		if (!m_headerWritten) writeHeader();
 		else {
-			bodyWriter.flush();
-			if (m_chunkedStream) {
+			if (m_isChunked) {
 				m_bodyWriter.finalize();
 				m_conn.flush();
+			} else {
+				bodyWriter.flush();
 			}
-			m_bodyWriter = typeof(m_bodyWriter).init;
+			if (m_bodyWriterDestroy) m_bodyWriterDestroy();
 			m_conn = typeof(m_conn).init;
 		}
 	}
@@ -886,11 +892,8 @@ final class HTTPClientResponse : HTTPResponse {
 	private {
 		HTTPClient m_client;
 		LockedConnection!HTTPClient lockedConnection;
-		FreeListRef!LimitedInputStream m_limitedInputStream;
-		FreeListRef!ChunkedInputStream m_chunkedInputStream;
-		FreeListRef!ZlibInputStream m_zlibInputStream;
-		FreeListRef!EndCallbackInputStream m_endCallback;
-		InterfaceProxy!InputStream m_bodyReader;
+		InputStream m_bodyReader;
+		void delegate() @safe m_bodyReaderDestroy;
 		bool m_closeConn;
 		int m_maxRequests;
 	}
@@ -970,41 +973,51 @@ final class HTTPClientResponse : HTTPResponse {
 	/**
 		An input stream suitable for reading the response body.
 	*/
-	@property InterfaceProxy!InputStream bodyReader()
+	@property auto bodyReader()
 	{
-		if( m_bodyReader ) return m_bodyReader;
+		if (m_bodyReader) return m_bodyReader;
 
 		assert (m_client, "Response was already read or no response body, may not use bodyReader.");
 
-		// prepare body the reader
-		if (auto pte = "Transfer-Encoding" in this.headers) {
-			enforce(*pte == "chunked");
-			m_chunkedInputStream = createChunkedInputStreamFL(m_client.m_stream);
-			m_bodyReader = this.m_chunkedInputStream;
-		} else if (auto pcl = "Content-Length" in this.headers) {
-			m_limitedInputStream = createLimitedInputStreamFL(m_client.m_stream, to!ulong(*pcl));
-			m_bodyReader = m_limitedInputStream;
-		} else if (isKeepAliveResponse) {
-			m_limitedInputStream = createLimitedInputStreamFL(m_client.m_stream, 0);
-			m_bodyReader = m_limitedInputStream;
-		} else {
-			m_bodyReader = m_client.m_stream;
+		void setupEndCallback(S)(auto ref S decoded_stream)
+		{
+			import std.algorithm.mutation : move;
+			import vibe.internal.interfaceproxy : asInterface, freeInterface;
+			auto br = asInterface!InputStream(createEndCallbackInputStream(decoded_stream.move, &this.finalize), vibeThreadAllocator);
+			m_bodyReader = br;
+			m_bodyReaderDestroy = () @trusted { freeInterface!InputStream(br, vibeThreadAllocator); };
 		}
 
-		if( auto pce = "Content-Encoding" in this.headers ){
-			if( *pce == "deflate" ){
-				m_zlibInputStream = createDeflateInputStreamFL(m_bodyReader);
-				m_bodyReader = m_zlibInputStream;
-			} else if( *pce == "gzip" || *pce == "x-gzip"){
-				m_zlibInputStream = createGzipInputStreamFL(m_bodyReader);
-				m_bodyReader = m_zlibInputStream;
+		void setupEncodingStream(S)(S limited_stream)
+			if (isInputStream!S)
+		{
+			if (auto pce = "Content-Encoding" in this.headers) {
+				if (*pce == "deflate") {
+					setupEndCallback(createDeflateInputStream(limited_stream));
+					return;
+				} else if( *pce == "gzip" || *pce == "x-gzip"){
+					setupEndCallback(createGzipInputStream(limited_stream));
+					return;
+				} else enforce(*pce == "identity" || *pce == "", "Unsuported content encoding: "~*pce);
 			}
-			else enforce(*pce == "identity" || *pce == "", "Unsuported content encoding: "~*pce);
+			setupEndCallback(limited_stream);
 		}
 
-		// be sure to free resouces as soon as the response has been read
-		m_endCallback = createEndCallbackInputStreamFL(m_bodyReader, &this.finalize);
-		m_bodyReader = m_endCallback;
+		void setupLimitedStream()
+		{
+			if (auto pte = "Transfer-Encoding" in this.headers) {
+				enforce(*pte == "chunked");
+				setupEncodingStream(createChunkedInputStreamFL(m_client.m_stream));
+			} else if (auto pcl = "Content-Length" in this.headers) {
+				setupEncodingStream(createLimitedInputStream(m_client.m_stream, to!ulong(*pcl)));
+			} else if (isKeepAliveResponse) {
+				setupEncodingStream(createLimitedInputStream(m_client.m_stream, 0));
+			} else {
+				setupEncodingStream(m_client.m_stream);
+			}
+		}
+
+		setupLimitedStream();
 
 		return m_bodyReader;
 	}
@@ -1137,12 +1150,11 @@ final class HTTPClientResponse : HTTPResponse {
 		// (too early happesn for empty response bodies)
 		if (!m_client) return;
 
+		if (m_bodyReaderDestroy) m_bodyReaderDestroy();
+
 		auto cli = m_client;
 		m_client = null;
 		cli.m_responding = false;
-		destroy(m_zlibInputStream);
-		destroy(m_chunkedInputStream);
-		destroy(m_limitedInputStream);
 		if (disconnect) cli.disconnect();
 		destroy(lockedConnection);
 	}
