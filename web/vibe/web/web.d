@@ -356,7 +356,7 @@ template render(string diet_file, ALIASES...) {
 	Note that this may only be called from a function/method
 	registered using registerWebInterface.
 */
-void redirect(string url)
+void redirect(string url, int status = HTTPStatus.found)
 @safe {
 	import std.algorithm : canFind, endsWith, startsWith;
 
@@ -375,7 +375,13 @@ void redirect(string url)
 		assert(fullurl.localURI.endsWith("/"), "Parent URL not ending in a slash?!");
 		fullurl.localURI = fullurl.localURI ~ url;
 	}
-	ctx.res.redirect(fullurl);
+	ctx.res.redirect(fullurl, status);
+}
+
+/// ditto
+void redirect(URL url, int status = HTTPStatus.found)
+@safe {
+	redirect(url.toString, status);
 }
 
 ///
