@@ -524,6 +524,13 @@ final class HTTPServerErrorInfo {
 alias HTTPServerErrorPageHandler = void delegate(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInfo error) @safe;
 
 
+private enum HTTPServerOptionImpl {
+	none                      = 0,
+	errorStackTraces          = 1<<7,
+	reusePort                 = 1<<8,
+}
+
+// TODO: Should be turned back into an enum once the deprecated symbols can be removed
 /**
 	Specifies optional features of the HTTP server.
 
@@ -533,20 +540,18 @@ alias HTTPServerErrorPageHandler = void delegate(HTTPServerRequest req, HTTPServ
 	will also drain the `HTTPServerRequest.bodyReader` stream whenever a request
 	body with form or JSON data is encountered.
 */
-enum HTTPServerOption {
-	none                      = 0,
-	/// Deprecated: Fills the `.path` and `.queryString` fields in the request
-	parseURL                  = 1<<0,
-	/// Deprecated: Fills the `.query` field in the request
-	parseQueryString          = 1<<1 | parseURL,
-	/// Deprecated: Fills the `.form` field in the request
-	parseFormBody             = 1<<2,
-	/// Deprecated: Fills the `.json` field in the request
-	parseJsonBody             = 1<<3,
-	/// Deprecated: Fills the `.files` field of the request for "multipart/mixed" requests
-	parseMultiPartBody        = 1<<4,
-	/// Deprecated: Fills the `.cookies` field in the request
-	parseCookies              = 1<<5,
+struct HTTPServerOption {
+	static enum none                      = HTTPServerOptionImpl.none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum parseURL                  = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum parseQueryString          = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum parseFormBody             = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum parseJsonBody             = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum parseMultiPartBody        = none;
 	/** Deprecated: Distributes request processing among worker threads
 
 		Note that this functionality assumes that the request handler
@@ -563,7 +568,8 @@ enum HTTPServerOption {
 		is more robust and often faster. The `reusePort` option works
 		the same way in this scenario.
 	*/
-	distribute                = 1<<6,
+	deprecated("Use runWorkerTaskDist or start threads separately. It will be removed in 0.9.")
+	static enum distribute				  = none;
 	/** Enables stack traces (`HTTPServerErrorInfo.debugMessage`).
 
 		Note that generating the stack traces are generally a costly
@@ -572,38 +578,34 @@ enum HTTPServerOption {
 		the application, such as function addresses, which can
 		help an attacker to abuse possible security holes.
 	*/
-	errorStackTraces          = 1<<7,
+	static enum errorStackTraces          = HTTPServerOptionImpl.errorStackTraces;
 	/// Enable port reuse in `listenTCP()`
-	reusePort                 = 1<<8,
+	static enum reusePort                 = HTTPServerOptionImpl.reusePort;
 
 	/** The default set of options.
 
 		Includes all parsing options, as well as the `errorStackTraces`
 		option if the code is compiled in debug mode.
 	*/
-	defaults =
-		parseURL |
-		parseQueryString |
-		parseFormBody |
-		parseJsonBody |
-		parseMultiPartBody |
-		parseCookies |
-		() { debug return errorStackTraces; else return none; } (),
+	static enum defaults = () { debug return HTTPServerOptionImpl.errorStackTraces; else return HTTPServerOptionImpl.none; } ().HTTPServerOption;
 
-	/// deprecated
-	None = none,
-	/// deprecated
-	ParseURL = parseURL,
-	/// deprecated
-	ParseQueryString = parseQueryString,
-	/// deprecated
-	ParseFormBody = parseFormBody,
-	/// deprecated
-	ParseJsonBody = parseJsonBody,
-	/// deprecated
-	ParseMultiPartBody = parseMultiPartBody,
-	/// deprecated
-	ParseCookies = parseCookies
+	deprecated("None has been renamed to none.")
+	static enum None = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum ParseURL = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum ParseQueryString = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum ParseFormBody = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum ParseJsonBody = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum ParseMultiPartBody = none;
+	deprecated("This is done lazily. It will be removed in 0.9.")
+	static enum ParseCookies = none;
+
+	HTTPServerOptionImpl x;
+	alias x this;
 }
 
 
@@ -643,7 +645,7 @@ final class HTTPServerSettings {
 		load in case of invalid or unwanted requests (DoS). By default,
 		HTTPServerOption.defaults is used.
 	*/
-	HTTPServerOption options = HTTPServerOption.defaults;
+	HTTPServerOptionImpl options = HTTPServerOption.defaults;
 
 	/** Time of a request after which the connection is closed with an error; not supported yet
 
