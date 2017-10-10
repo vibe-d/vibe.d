@@ -445,7 +445,7 @@ HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHe
 @safe {
 	auto tls = url.schema == "https";
 	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : tls ? 443 : 80);
-	ret.path = urlDecode(url.pathString);
+	ret.requestPath = url.path;
 	ret.queryString = url.queryString;
 	ret.username = url.username;
 	ret.password = url.password;
@@ -532,7 +532,7 @@ alias HTTPServerErrorPageHandler = void delegate(HTTPServerRequest req, HTTPServ
 */
 enum HTTPServerOption {
 	none                      = 0,
-	/// Fills the `.path` and `.queryString` fields in the request
+	/// Deprecated: Fills the `.path` and `.queryString` fields in the request
 	parseURL                  = 1<<0,
 	/// Deprecated: Fills the `.query` field in the request
 	parseQueryString          = 1<<1 | parseURL,
@@ -879,30 +879,29 @@ final class HTTPServerRequest : HTTPRequest {
 			requested path, which can yield incorrect results if the path
 			contains URL encoded path separators. Use `requestPath` instead to
 			get an encoding-aware representation.
-
-			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
-		string path;
+		string path() @safe {
+			if (_path.isNull) {
+				_path = urlDecode(requestPath.toString);
+			}
+			return _path.get;
+		}
+
+		private Nullable!string _path;
 
 		/** The path part of the requested URI.
 		*/
 		InetPath requestPath;
 
 		/** The user name part of the URL, if present.
-
-			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
 		string username;
 
 		/** The _password part of the URL, if present.
-
-			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
 		string password;
 
 		/** The _query string part of the URL.
-
-			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
 		string queryString;
 
@@ -2195,11 +2194,6 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		req.username = url.username;
 		req.password = url.password;
 		req.requestPath = url.path;
-
-		// URL parsing if desired
-		if (settings.options & HTTPServerOption.parseURL) {
-			req.path = urlDecode(url.pathString);
-		}
 
 		// lookup the session
 		if (settings.sessionStore) {
