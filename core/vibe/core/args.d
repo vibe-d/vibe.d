@@ -16,7 +16,7 @@ module vibe.core.args;
 import vibe.core.log;
 import vibe.data.json;
 
-import std.algorithm : any, map, sort;
+import std.algorithm : any, filter, map, sort, startsWith;
 import std.array : array, join, replicate, split;
 import std.exception;
 import std.file;
@@ -222,7 +222,7 @@ private void init()
 	import vibe.utils.string : stripUTF8Bom;
 
 	version (VibeDisableCommandLineParsing) {}
-	else g_args = Runtime.args;
+	else g_args = Runtime.args.filter!(arg => !arg.startsWith("--DRT-")).array;
 
 	if (!g_args.length) g_args = ["dummy"];
 
