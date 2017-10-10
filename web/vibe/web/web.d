@@ -912,6 +912,8 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
 			else static if (is(PT == Json)) {
+				import std.algorithm.comparison : among;
+				static assert(param_names[i].among("_body", "_json", "The Json parameter must be named _body or _json."));
 				enforceBadRequest(req.json.type != Json.Type.undefined, "Invalid Json passed.");
 				params[i] = req.json;
 			}

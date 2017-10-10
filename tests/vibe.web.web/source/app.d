@@ -15,7 +15,7 @@ class Service {
 	@noRoute void getFoo(HTTPServerResponse res) { res.writeBody("oops"); }
 	void getBar(HTTPServerResponse res) { res.writeBody("ok"); }
 	// you can work with Json objects directly
-	auto postJson(Json json) { return json; }
+	auto postJson(Json _json) { return _json; }
 }
 
 shared static this()
