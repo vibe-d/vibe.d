@@ -1,0 +1,3 @@
+name "tests"
+description "TCP disconnect task issue"
+dependency "vibe-d:core" path="../../"

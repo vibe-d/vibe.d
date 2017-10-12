@@ -3,6 +3,7 @@
 *.lib
 *.dll
 .*.sw*
+*.lst
 
 docs.json
 /docs/index.html
@@ -17,6 +18,11 @@ __dummy.html
 .dub
 dub.selections.json
 
+# Auto-downloaded 3rd-party
+lib/subprojects/diet/
+lib/subprojects/libevent/
+lib/subprojects/openssl/
+
 # Mono-D files
 *.userprefs
 
@@ -24,6 +30,8 @@ dub.selections.json
 vibe-d
 tests/*/tests
 __test__*__
+vibe-d-test*
+vibe-d-*-test*
 
 # Examples
 examples/app_skeleton/__test__library__

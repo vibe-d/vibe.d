@@ -2,7 +2,8 @@
 	"name": "tcp-separate-example",
 	"description": "Example using a single TCP connection from different tasks.",
 	"dependencies": {
-		"vibe-d:core": {"path": "../../"}
+		"vibe-d:core": {"path": "../../"},
+		"vibe-d:stream": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

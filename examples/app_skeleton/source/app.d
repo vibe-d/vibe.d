@@ -1,7 +1,10 @@
 module app;
 
-import vibe.d;
+import vibe.http.fileserver;
+import vibe.http.router;
+import vibe.http.server;
 import index;
+import std.functional : toDelegate;
 
 
 void showError(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInfo error)

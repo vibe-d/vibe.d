@@ -1,0 +1,59 @@
+name "core"
+description "Basic I/O and concurrency primitives, as well as low level utility functions"
+
+dependency "vibe-d:data" version=">=0.0.0"
+dependency "vibe-d:utils" version=">=0.0.0"
+
+targetType "library"
+buildRequirements "requireBoundsCheck"
+sourcePaths "."
+importPaths "."
+
+mainSourceFile "vibe/appmain.d"
+
+configuration "win32_mscoff" {
+	// this configuration works around the problem that x88_mscoff
+	// will also match the libevent configuration, even if no
+	// libevent binaries exist as MSCOFF - see also dub/#228
+	platforms "windows-x86_mscoff-dmd"
+	targetType "library"
+	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
+	versions "VibeWin32Driver"
+}
+
+configuration "libevent" {
+	platforms "windows-x86-dmd" "posix"
+	dependency "libevent" version="~>2.0.1"
+	targetType "library"
+	libs "wsock32" "ws2_32" "advapi32" platform="windows"
+	sourceFiles "../lib/win-i386/event2.lib" platform="windows-x86"
+	sourceFiles "../lib/win-amd64/event2.lib" platform="windows-x86_64"
+	copyFiles "../lib/win-i386/libevent.dll" platform="windows-x86"
+	copyFiles "../lib/win-amd64/libevent.dll" platform="windows-x86_64"
+	versions "VibeLibeventDriver"
+}
+
+configuration "libasync" {
+	dependency "libasync" version="~>0.8.1"
+	targetType "library"
+	versions "VibeUseNativeDriverType" "VibeLibasyncDriver"
+}
+
+configuration "win32" {
+	platforms "windows"
+	targetType "library"
+	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
+	versions "VibeWin32Driver"
+}
+
+configuration "winrt" {
+	platforms "windows"
+	targetType "library"
+	sourceFiles "../lib/win-i386/runtimeobject.lib" platform="windows-x86"
+	versions "VibeWinrtDriver"
+}
+
+configuration "vibe-core" {
+	targetType "none"
+	dependency "vibe-core" version=">=1.2.1-alpha.2 <2.0.0-0"
+}

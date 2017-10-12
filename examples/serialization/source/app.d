@@ -2,6 +2,7 @@ import vibe.core.log;
 import vibe.data.serialization;
 import vibe.data.json;
 import vibe.data.bson;
+import std.array : Appender, appender;
 
 
 void main()
@@ -64,15 +65,15 @@ struct CustomJsonRep {
 	static CustomJsonRep fromJson(Json value)
 	{
 		CustomJsonRep ret;
-		ret.counter = value.loword.get!long | (value.hiword.get!long << 16);
+		ret.counter = value["loword"].get!long | (value["hiword"].get!long << 16);
 		return ret;
 	}
 
 	Json toJson()
 	const {
 		auto ret = Json.emptyObject;
-		ret.loword = counter & 0xFFFF;
-		ret.hiword = (counter >> 16) & 0xFFFF;
+		ret["loword"] = counter & 0xFFFF;
+		ret["hiword"] = (counter >> 16) & 0xFFFF;
 		return ret;
 	}
 }

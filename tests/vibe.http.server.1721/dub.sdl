@@ -1,0 +1,4 @@
+name "tests"
+description "Wrong host header tests"
+dependency "vibe-d:http" path="../../"
+versions "VibeDefaultMain"

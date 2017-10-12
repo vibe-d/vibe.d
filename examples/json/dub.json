@@ -2,7 +2,8 @@
 	"name": "json-example",
 	"description": "Performs some simple operations using the Json type.",
 	"dependencies": {
-		"vibe-d:data": {"path": "../../"}
+		"vibe-d:data": {"path": "../../"},
+		"vibe-d:core": {"path": "../../"}
 	},
 	"versions": ["VibeCustomMain"]
 }

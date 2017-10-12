@@ -1,0 +1,13 @@
+doctype html
+html
+	head
+		block head
+		link(rel="stylesheet", href="#{req.rootDir}styles/common.css")
+		title #{title} - Sample service
+	body
+		- if (req.session)
+			form(method="POST", action="#{req.rootDir}logout")
+				button(type="submit") Log out
+
+		h1= title
+		block contents

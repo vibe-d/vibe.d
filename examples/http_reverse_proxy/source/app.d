@@ -9,5 +9,5 @@ shared static this()
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
 
-	listenHTTPReverseProxy(settings, "www.heise.de", 80);
+	listenHTTPReverseProxy(settings, "vibed.org", 80);
 }

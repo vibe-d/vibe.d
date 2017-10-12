@@ -13,6 +13,8 @@ import vibe.http.server;
 import vibe.web.rest;
 
 import core.time;
+import std.typecons : Nullable;
+
 
 /* --------- EXAMPLE 1 ---------- */
 
@@ -350,6 +352,8 @@ unittest
  * This is to be consistent with the way D 'out' and 'ref' works.
  * However, it makes no sense to have 'ref' or 'out' parameters on
  * body or query parameter, so those are treated as error at compile time.
+ *
+ * If no Json fieldname is passed to @bodyParam, the entire Json body is deserialized into the respective field.
  */
 @rootPathFromName
 interface Example6API
@@ -370,7 +374,14 @@ interface Example6API
 	// Finally, there is @bodyParam. It works as you expect it to work,
 	// currently serializing passed data as Json and pass them through the body.
 	@bodyParam("myFoo", "parameter")
-	string getConcat(FooType myFoo);
+	string postConcat(FooType myFoo);
+
+	// If no field name is passed to @bodyParam the entire json object is
+	// serialized into the parameter.
+	// Moreover if only one bodyParameter is present, this is the default
+	// behavior.
+	@bodyParam("obj")
+	string postConcatBody(FooType obj);
 
 	struct FooType {
 		int a;
@@ -407,9 +418,15 @@ override:
 		return "False";
 	}
 
-	string getConcat(FooType myFoo)
+	string postConcat(FooType myFoo)
 	{
+		import std.conv : to;
 		return to!string(myFoo.a)~myFoo.s~to!string(myFoo.d);
+	}
+
+	string postConcatBody(FooType obj)
+	{
+		return postConcat(obj);
 	}
 }
 
@@ -555,6 +572,11 @@ shared static this()
 			auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
 			auto answer = api.postAnswer("IDK");
 			assert(answer == "False");
+
+			Example6API.FooType fType = {a: 1, s: "str", d: 3.14};
+			auto expected = "1str3.14";
+			assert(api.postConcat(fType) == expected);
+			assert(api.postConcatBody(fType) == expected);
 		}
 
 		// Example 7 -- Custom JSON response
@@ -576,7 +598,7 @@ shared static this()
 			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/concat",
 								   (scope r) {
 							   import vibe.data.json;
-							   r.method = HTTPMethod.GET;
+							   r.method = HTTPMethod.POST;
 							   Json obj = Json.emptyObject;
 							   obj["parameter"] = serializeToJson(Example6API.FooType(42, "fortySomething", 51.42));
 							   r.writeJsonBody(obj);
@@ -585,7 +607,7 @@ shared static this()
 			assert(res.statusCode == 200);
 			assert(res.bodyReader.readAllUTF8() == `"`~expected~`"`);
 			// Then we check that both can communicate together.
-			auto answer = api.getConcat(Example6API.FooType(42, "fortySomething", 51.42));
+			auto answer = api.postConcat(Example6API.FooType(42, "fortySomething", 51.42));
 			assert(answer == expected);
 		}
 

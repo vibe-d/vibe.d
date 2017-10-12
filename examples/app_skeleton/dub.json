@@ -7,7 +7,7 @@
 		"Toni Tester"
 	],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

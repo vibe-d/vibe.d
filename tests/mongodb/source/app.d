@@ -6,6 +6,7 @@ module app;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.db.mongo.mongo;
+import std.algorithm : canFind, map, equal;
 import std.encoding : sanitize;
 
 void runTest()
@@ -32,7 +33,7 @@ void runTest()
 	assert(coll.database.getLastError().n == 1);
 	auto data = coll.findOne(["key1" : "value1"]);
 	assert(!data.isNull());
-	assert(data.key2.get!string() == "1337");
+	assert(data["key2"].get!string() == "1337");
 	coll.database.fsync();
 	auto logBson = client.getDatabase("admin").getLog("global");
 	assert(!logBson.isNull());
@@ -46,14 +47,22 @@ void runTest()
 	auto data2 = coll.find(["key1" : "value2"]);
 
 	import std.range;
-	auto converted = zip(data1, data2).map!( a => a[0].key1.get!string() ~ a[1].key1.get!string() )();
+	auto converted = zip(data1, data2).map!( a => a[0]["key1"].get!string() ~ a[1]["key1"].get!string() )();
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
 
-	import std.algorithm;
 	auto names = client.getDatabases().map!(dbs => dbs.name).array;
-	assert(!find(names, "test").empty);
-	assert(!find(names, "local").empty);
+	assert(names.canFind("test"));
+	assert(names.canFind("local"));
+
+	// test distinct()
+	coll.drop();
+	coll.insert(["a": "first", "b": "foo"]);
+	coll.insert(["a": "first", "b": "bar"]);
+	coll.insert(["a": "first", "b": "bar"]);
+	coll.insert(["a": "second", "b": "baz"]);
+	coll.insert(["a": "second", "b": "bam"]);
+	assert(coll.distinct!string("b", ["a": "first"]).equal(["foo", "bar"]));
 }
 
 int main()

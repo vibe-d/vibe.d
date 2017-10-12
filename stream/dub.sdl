@@ -1,0 +1,13 @@
+name "stream"
+description "Library of various pluggable stream implementations"
+
+dependency "vibe-d:core" version="*"
+
+targetType "library"
+sourcePaths "."
+importPaths "."
+
+
+// LDC 1.0.0 doesn't include libz in libphobos
+libs "z" platform="posix-ldc"
+libs "z" platform="gdc"

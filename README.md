@@ -9,27 +9,82 @@ available.
 
 Visit the website at <http://vibed.org/> for more information.
 
-[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.svg?branch=master)](https://travis-ci.org/rejectedsoftware/vibe.d)
+[![DUB Package](https://img.shields.io/dub/v/vibe-d.svg)](https://code.dlang.org/packages/vibe-d)
+[![Posix Build Status](https://travis-ci.org/vibe-d/vibe.d.svg?branch=master)](https://travis-ci.org/vibe-d/vibe.d)
+[![Windows Build Status](https://ci.appveyor.com/api/projects/status/cp2kxg70h54pga9d/branch/master?svg=true)](https://ci.appveyor.com/project/s-ludwig/vibe-d/branch/master)
 
+Hello Vibe.d
+------------
+
+```d
+#!/usr/bin/env dub
+/+ dub.sdl:
+name "hello_vibed"
+dependency "vibe-d" version="~>0.8.0"
++/
+import vibe.d;
+
+void main()
+{
+    auto settings = new HTTPServerSettings;
+    settings.port = 8080;
+
+    listenHTTP(settings, (req, res) { res.writeBody("Hello Vibe.d: " ~ req.path); });
+    runApplication();
+}
+```
+
+Download this file as `hello.d` and run it with [DUB](https://github.com/dlang/dub):
+
+```
+> dub hello.d
+```
+
+(or `chmod +x` and execute it: `./hello.d`)
 
 Support
 -------
 
-Vibe.d aims to support the 3 latest minor releases of D.
-At the moment, it means that the following compilers are supported and tested:
-- DMD 2.069
-- DMD 2.068
-- DMD 2.067
+Vibe.d aims to support at least the 3 latest minor releases of D.
+At the moment, the following compilers are supported and tested:
+
+- DMD 2.076.0
+- DMD 2.075.1
+- DMD 2.074.1
+- DMD 2.073.2
+- DMD 2.072.2 **Warning: 2.072.0 and 2.072.1 are affected by a serious DMD regression: [16980](https://issues.dlang.org/show_bug.cgi?id=16980)**
+- DMD 2.071.2
+- LDC 1.3.0 (FE: 2.073.2)
+- LDC 1.2.0 (FE: 2.072.2)
+- LDC 1.1.1 (FE: 2.071.2)
+
+Up to 0.8.0:
+- DMD 2.070.2
+- LDC 1.0.0 (FE: 2.070.2)
+
+Up to 0.7.31+:
+- DMD 2.069.2
+
+Up to 0.7.30:
+- DMD 2.068.2
+- LDC 0.17.0-beta.2 (FE: 2.068.2)
+
+Up to 0.7.29:
+- DMD 2.067.1
+- LDC 0.16.1
+
+Up to 0.7.27:
 - DMD 2.066
-- GDC 4.9.2 (FE: 2.066)
-- LDC 0.15.1 (FE: 2.066)
+- GDC 5.2.0
+- GDC 4.9.2
+- LDC 0.15.1
 
 
 Installation
 ------------
 
 Instead of explicitly installing vibe.d, it is recommended to use
-[DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
+[DUB](https://github.com/dlang/dub) for building vibe.d based
 applications. Once DUB is installed, you can create and run a new project
 using the following shell commands:
 

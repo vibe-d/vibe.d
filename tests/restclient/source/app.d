@@ -95,13 +95,13 @@ void assertHeader(ref InetHeaderMap headers, ShouldFail shouldFail, string heade
 void assertCorsHeaders(string url, HTTPMethod method, ShouldFail shouldFail, string origin)
 {
 	// preflight request
-	requestHTTP(url, 
+	requestHTTP(url,
 		(scope HTTPClientRequest req) {
 			req.method = HTTPMethod.OPTIONS;
 			req.headers["Origin"] = origin;
 			req.headers["Access-Control-Request-Method"] = method.to!string;
 			req.headers["Access-Control-Request-Headers"] = "Authorization";
-		}, 
+		},
 		(scope HTTPClientResponse res) {
 			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Origin",origin);
 			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Credentials","true");
@@ -111,11 +111,11 @@ void assertCorsHeaders(string url, HTTPMethod method, ShouldFail shouldFail, str
 		});
 
 	// normal request
-	requestHTTP(url, 
+	requestHTTP(url,
 		(scope HTTPClientRequest req) {
 			req.method = method;
 			req.headers["Origin"] = origin;
-		}, 
+		},
 		(scope HTTPClientResponse res) {
 			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Origin",origin);
 			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Credentials","true");
@@ -137,15 +137,15 @@ void assertCorsFails(string url, HTTPMethod method, string origin = "www.example
 // Since a CORS preflight also uses the OPTIONS method, we implemented the Allow header as well.
 void testAllowHeader(string url, HTTPMethod[] methods)
 {
-	import std.algorithm : joiner;
+	import std.algorithm : equal, joiner;
 	import std.conv : text;
-	string allow = methods.map!(m=>m.to!string).joiner(",").text;
-	requestHTTP(url, 
+	auto allow = methods.map!(m=>m.to!string);
+	requestHTTP(url,
 		(scope HTTPClientRequest req) {
 			req.method = HTTPMethod.OPTIONS;
-		}, 
+		},
 		(scope HTTPClientResponse res) {
-			res.headers.assertHeader(ShouldFail.No,"Allow",allow);
+			assert(equal(res.headers["Allow"].split(",").sort(), allow.array.sort()));
 			res.dropBody();
 		});
 }
@@ -162,7 +162,7 @@ void createRestTestInterface(URLRouter router, string path, string[] allowedOrig
 	corsRestSettings.baseURL = URL(path);
 	corsRestSettings.methodStyle = MethodStyle.lowerUnderscored;
 	corsRestSettings.allowedOrigins = allowedOrigins.dup;
-	registerRestInterface!ITestAPICors(router, new TestAPICors, corsRestSettings);	
+	registerRestInterface!ITestAPICors(router, new TestAPICors, corsRestSettings);
 }
 
 void runTest()
@@ -211,7 +211,6 @@ void runTest()
 
 int main()
 {
-	setLogLevel(LogLevel.debug_);
 	runTask(toDelegate(&runTest));
 	return runEventLoop();
 }

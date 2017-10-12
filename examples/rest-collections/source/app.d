@@ -61,7 +61,7 @@ class LocalPostAPI : PostAPI {
 	{
 		m_data = data;
 	}
-	
+
 	void post(string _thread_name, string message)
 	{
 		m_data.threads[_thread_name] ~= message;

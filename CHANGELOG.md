@@ -1,13 +1,558 @@
 ﻿Changelog
 =========
 
-v0.7.27 - 2016-01-
+v0.8.1 - 2017-08-30
+-------------------
+
+Apart from removing the old `vibe-d:diet` package in favor of `diet-ng`, this release most notably contains a number of performance improvements in the HTTP server, as well as improvements and fixes in the WebSocket code. Furthermore, initial OpenSSL 1.1.x support has been added and a few `@safe` related issues introduced in 0.8.0 have been fixed.
+
+### Features and improvements ###
+
+- Compiles on DMD 2.071.2 up to DMD 2.076.0-rc1
+- Removed vibe-d:diet sub package (superseded by diet-ng) - [pull #1835][issue1835]
+- Web framework
+    - Added convenience functions `status` and `header` to `vibe.web.web` (by Sebastian Wilzbach) - [pull #1696][issue1696]
+    - Added `vibe.web.web.determineLanguageByHeader` and improved the default language determination (by Jan Jurzitza aka WebFreak) - [pull #1850][issue1850]
+    - Added `vibe.web.web.language` property to determine the detected language (by Jan Jurzitza aka WebFreak) - [pull #1860][issue1860]
+    - Marked the global API functions in `vibe.web.web` as `@safe` - [pull #1886][issue1886]
+    - The REST interface generator avoids blindly instantiating serialization code for *all* parameters
+    - No stack trace is shown on the generated error page anymore in case of bad (query/form) parameter formatting
+- HTTP sub system
+    - The HTTP server now accepts a UTF-8 BOM for JSON requests (by Sebanstian Wilzbach) - [pull #1799][issue1799]
+    - Most parsing features activated by `HTTPServerOption` (for `HTTPServerRequest`) are now evaluated lazily instead - the corresponding options are now deprecated (by Sebastian Wilzbach):
+        - `.json` / `HTTPServerOption.parseJsonBody` - [pull #1677][issue1677]
+        - `.cookies` / `HTTPServerOption.parseCookies` - [pull #1801][issue1801]
+        - `.form` / `HTTPServerOption.parseFormBody` - [pull #1801][issue1801]
+        - `.files` / `HTTPServerOption.parseMultiPartBody` - [pull #1801][issue1801]
+        - `.query` / `HTTPServerOption.parseQueryString` - [pull #1821][issue1821]
+        - `.queryString`, `.username` and `.password` are now always filled, regardless of `HTTPServerOption.parseURL` - [pull #1821][issue1821]
+    - `HTTPServerRequest.peer` is now computed lazily
+    - Deprecated `HTTPServerOption.distribute` because of its non-thread-safe design
+    - The `HTTPServerSettings` constructor now accepts a convenient string to set the bind address - [pull #1810][issue1810]
+    - `listenHTTP` accepts the same convenience string as `HTTPServerSettings` (by Sebastian Wilzbach) - [pull #1816][issue1816]
+    - Added `HTTPReverseProxySettings.destination` (`URL`) to made UDS destinations work (by Georgi Dimitrov) - [pull #1813][issue1813]
+    - Increased the network output chunk sizes from 256 to 1024 in the HTTP client/server
+    - WebSocket messages now produce only a single network packet of possible (header and payload sent at once) - [issue #1791][issue1791], [pull #1792][issue1792]
+    - WebSocket API improvements (by Mathias Lang aka Geod24) - [pull #1534][issue1534], [pull #1836][issue1836]
+    - Renamed `HTTPServerRequest.requestURL` to `requestURI`
+    - Added `HTTPClientRequest.peerCertificate` property
+- Serialization
+    - Added deserialization support for unnamed `Tuple!(...)` (by Dentcho Bankov) - [pull #1693][issue1693]
+    - Added serialization support for named `Tuple!(...)` (by Dentcho Bankov) - [pull #1662][issue1662]
+- Added UDP multicast properties (implemented for libevent, by Sebastian Koppe) - [pull #1806][issue1806]
+- Markdown embedded URLs are now filtered by a whitelist to avoid URL based XSS exploits - [issue #1845][issue1845], [pull #1846][issue1846]
+- `lowerPrivileges` is now marked `@safe` (by Sebastian Wilzbach) - [pull #1807][issue1807]
+- Improved `urlDecode` to return a slice of its input if possible - [pull #1828][issue1828]
+- Added `DictionaryList.toString` and deprecated `alias byKeyValue this` - [issue #1873][issue1873]
+- Added support for defining a compatibility version `VibeUseOpenSSL11` to build against OpenSSL 1.1.0 instead of 1.0.x (by Robert Schadek aka burner) - [issue #1651][issue1651], [issue #1748][issue1748], [issue #1758][issue1758], [pull #1759][issue1759]
+- Added a Meson project file analogous to the 0.7.x branch (by Matthias Klumpp aka ximion) - [pull #1894][issue1894]
+- The functions in `vibe.stream.operations` now compile with non-`@safe` streams and ranges - [pull #1902][issue1902]
+- Added `TLSCertificateInformation._x509` as an temporary means to access the raw certificate (`X509*` for OpenSSL)
+
+### Bug fixes ###
+
+- Fixed "SSL_read was unsuccessful with ret 0" errors in the OpenSSL TLS implementation (by machindertech) - [issue #1124][issue1124], [pull #1395][issue1395]
+- Fixed the JSON generator to output valid JSON for `Json.undefined` values (by by Tomáš Chaloupka) - [pull #1737][issue1737], [issue #1735][issue1735]
+- Fixed using HTTP together with USDS sockets in the HTTP client (by Johannes Pfau aka jpf91) - [pull #1747][issue1747]
+- Fixed handling of `Nullable!T` in the web interface generator - invalid values are treated as an error now instead of as a 
+null value
+- Fixed a compilation error in the Botan based TLS implementation
+- Fixed an assertion in the HTTP client by using a custom allocator instead of the buggy `RegionAllocator`
+- Fixed sending of WebSocket messages with a payload length of 65536
+- Fixed an intermittent failure at shutdown when using libasync - [pull #1837][issue1837]
+- Fixed MongoDB SASL authentication when used within `shared static this` (by Sebastian Wilzbach) - [pull #1841][issue1841]
+- Fixed authentication with default settings on modern MongoDB versions by defaulting to SCRAM-SHA-1 (by Sebastian Wilzbach) - [issue #1785][issue1785], [issue #1843][issue1843]
+- Fixed the WebSocket ping logic - [issue #1471][issue1471], [pull #1848][issue1848]
+- Fixed a cause of "dwarfeh(224) fatal error" during fatal app exit and possible an infinite loop by using `abort()` instead of `exit()`
+- Fixed `URLRouter.match` to accept delegate literals (by Sebastian Wilzbach) - [pull #1866][issue1866]
+- Fixed a possible range error in the libasync driver
+- Fixed serialization of recursive data types to JSON (by Jan Jurzitza aka WebFreak) - [issue #1855][issue1855]
+- Fixed `MongoCursor.limit` and made the API `@safe` (by Jan Jurzitza aka WebFreak) - [issue #967][issue967], [pull #1871][issue1871]
+- Fixed determining the host name in `SyslogLogger` (by Jan Jurzitza aka WebFreak) - [pull #1874][issue1874]
+
+[issue967]: https://github.com/vibe-d/vibe.d/issues/967
+[issue1124]: https://github.com/vibe-d/vibe.d/issues/1124
+[issue1395]: https://github.com/vibe-d/vibe.d/issues/1395
+[issue1471]: https://github.com/vibe-d/vibe.d/issues/1471
+[issue1534]: https://github.com/vibe-d/vibe.d/issues/1534
+[issue1651]: https://github.com/vibe-d/vibe.d/issues/1651
+[issue1662]: https://github.com/vibe-d/vibe.d/issues/1662
+[issue1674]: https://github.com/vibe-d/vibe.d/issues/1674
+[issue1677]: https://github.com/vibe-d/vibe.d/issues/1677
+[issue1691]: https://github.com/vibe-d/vibe.d/issues/1691
+[issue1692]: https://github.com/vibe-d/vibe.d/issues/1692
+[issue1693]: https://github.com/vibe-d/vibe.d/issues/1693
+[issue1696]: https://github.com/vibe-d/vibe.d/issues/1696
+[issue1735]: https://github.com/vibe-d/vibe.d/issues/1735
+[issue1737]: https://github.com/vibe-d/vibe.d/issues/1737
+[issue1747]: https://github.com/vibe-d/vibe.d/issues/1747
+[issue1748]: https://github.com/vibe-d/vibe.d/issues/1748
+[issue1758]: https://github.com/vibe-d/vibe.d/issues/1758
+[issue1759]: https://github.com/vibe-d/vibe.d/issues/1759
+[issue1785]: https://github.com/vibe-d/vibe.d/issues/1785
+[issue1791]: https://github.com/vibe-d/vibe.d/issues/1791
+[issue1792]: https://github.com/vibe-d/vibe.d/issues/1792
+[issue1799]: https://github.com/vibe-d/vibe.d/issues/1799
+[issue1801]: https://github.com/vibe-d/vibe.d/issues/1801
+[issue1806]: https://github.com/vibe-d/vibe.d/issues/1806
+[issue1807]: https://github.com/vibe-d/vibe.d/issues/1807
+[issue1810]: https://github.com/vibe-d/vibe.d/issues/1810
+[issue1813]: https://github.com/vibe-d/vibe.d/issues/1813
+[issue1816]: https://github.com/vibe-d/vibe.d/issues/1816
+[issue1821]: https://github.com/vibe-d/vibe.d/issues/1821
+[issue1828]: https://github.com/vibe-d/vibe.d/issues/1828
+[issue1835]: https://github.com/vibe-d/vibe.d/issues/1835
+[issue1836]: https://github.com/vibe-d/vibe.d/issues/1836
+[issue1837]: https://github.com/vibe-d/vibe.d/issues/1837
+[issue1841]: https://github.com/vibe-d/vibe.d/issues/1841
+[issue1843]: https://github.com/vibe-d/vibe.d/issues/1843
+[issue1845]: https://github.com/vibe-d/vibe.d/issues/1845
+[issue1846]: https://github.com/vibe-d/vibe.d/issues/1846
+[issue1848]: https://github.com/vibe-d/vibe.d/issues/1848
+[issue1850]: https://github.com/vibe-d/vibe.d/issues/1850
+[issue1855]: https://github.com/vibe-d/vibe.d/issues/1855
+[issue1860]: https://github.com/vibe-d/vibe.d/issues/1860
+[issue1866]: https://github.com/vibe-d/vibe.d/issues/1866
+[issue1871]: https://github.com/vibe-d/vibe.d/issues/1871
+[issue1873]: https://github.com/vibe-d/vibe.d/issues/1873
+[issue1874]: https://github.com/vibe-d/vibe.d/issues/1874
+[issue1886]: https://github.com/vibe-d/vibe.d/issues/1886
+[issue1894]: https://github.com/vibe-d/vibe.d/issues/1894
+[issue1902]: https://github.com/vibe-d/vibe.d/issues/1902
+
+
+v0.8.0 - 2017-07-10
+-------------------
+
+The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`][diet-ng]) and for the new [vibe-core][vibe-core] package that is released simultaneously. The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d, the latter leads to some breaking API changes.
+
+### Features and improvements ###
+
+- Compiles on DMD 2.070.2 up to DMD 2.075.0-b1, this release also adds support for `-m32mscoff` builds ("x86_mscoff")
+- Global API changes
+    - Split up the library into fully separate sub packages/folders
+    - Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
+    - Added `@safe` and `nothrow` annotations in many places of the API - this is a breaking change in cases where callbacks were annotated - [pull #1618][issue1618], [issue 1595][issue1595]
+    - Reworked the buffered I/O stream API
+        - The `InputStream` based overload of `OutputStream.write` has been moved to a global function `pipe()`
+        - `read` and `write` now accept an optional `IOMode` parameter (only `IOMode.all` is supported for the original `vibe:core`, but `vibe-core` supports all modes)
+        - `InputStream.leastSize` and `.dataAvailableForRead` are scheduled for deprecation - `IOMode.immediate` and `IOMode.once` can be used in their place
+    - Added forward compatibility code to "vibe:core" so that dependent code can use either that or [vibe-core][vibe-core] as a drop-in replacement
+- HTTP server
+    - Server contexts are now managed thread-locally, which means that multiple threads will attempt to listen on the same port if requested to do so - use `HTTPServerOption.reusePort` if necessary
+    - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
+    - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
+    - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
+    - Added `HTTPServerResponse.writePrettyJsonBody`
+    - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
+    - Added `Session.remove` to remove session keys (by Sebastian Wilzbach) - [pull #1670][issue1670]
+    - Added `WebSocket.closeCode` and `closeReason` properties (by Andrei Zbikowski aka b1naryth1ef) - [pull #1675][issue1675]
+    - Added a `Variant` dictionary as `HTTPServerRequest.context` for custom value storage by high level code - [issue1529][issue1529] [pull #1550][issue1550]
+        - Usability improvements by Harry T. Vennik aka thaven - [pull #1745][issue1745]
+    - Added `checkBasicAuth` as a non-enforcing counterpart of `performBasicAuth` - [issue #1449][issue1449], [pull #1687][issue1687]
+    - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`) - [issue #1616][issue1616]
+    - Added `HTTPClientRequest.writeFormBody`
+    - Disabled stack traces on the default error page for non-debug builds by default (`HTTPServerOption.defaults`)
+- REST interface generator
+    - Added single-argument `@bodyParam` to let a single parameter represent the whole request body (by Sebastian Wilzbach) - [issue #1549][issue1549], [pull #1723][issue1723]
+    - Boolean parameters now accept "1" and case insensitive "true" as `true` - [pull #1712][issue1712]
+    - Server responses now output prettified JSON if built in debug mode
+    - Stack traces are only written in debug mode - [issue #1623][issue1623]
+    - Reduced the number of chunks written by `StreamOutputRange.put` for large input buffers (affects WebSockets and chunked HTTP responses)
+- Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
+- The string sequence `</` is now encoded as `<\/` by the JSON module to avoid a common XSS attack vector
+- Reduced synchronization overhead in the libevent driver for entities that are single-threaded
+- Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
+- Added `RedisCollection.initialize`
+- The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
+- Enabled minimal delegate syntax for `URLRouter` (e.g. `URLRouter.get("/", (req, res) { ... });`) - [issue #1668][issue1668]
+- Added serialization support for string based enum types as associative array keys (by Tomoya Tanjo) - [issue #1660][issue1660], [pull #1663][issue1663]
+- Added serialization support for `Typedef!T` - [pull #1617][issue1617]
+- Added `DictionaryList!T.byKeyValue` to replace `opApply` based iteration
+- Added `.byValue`/`.byKeyValue`/`.byIndexValue` properties to `Bson` and `Json` as a replacement for `opApply` based iteration (see [issue #1688][issue1688])
+- Added `StreamOutputRange.drop()`
+- Updated the Windows OpenSSL binaries to 1.0.2k
+- The session life time in `RedisSessionStore` is now refreshed on every access to the session (by Steven Schveighoffer) - [pull #1778][issue1778]
+- Reduced session storage overhead in `RedisSessionStore` (by Steven Schveighoffer) - [pull #1777][issue1777]
+- Enabled `HashMap`'s postblit constructor, supported by a reference counting + copy-on-write strategy
+
+### Bug fixes ###
+
+- Fixed compile error for deserializing optional class/struct fields
+- Fixed GET requests in the REST client to not send a body
+- Fixed REST request responses that return void to send an empty body (see also [issue #1682](issue1682))
+- Fixed a possible idle loop in `Task.join()` if called from outside of an event loop
+- Fixed `TaskPipe.waitForData` to actually time out if a timeout value was passed - [issue #1605][issue1605]
+- Fixed a compilation error for GDC master - [issue #1602][issue1602]
+- Fixed a linker issue for LDC on Windows - [issue #1629][issue1629]
+- Fixed a (single-threaded) concurrent AA iteration/write issue that could result in an access violation in the Win32 driver - [issue #1608][issue1608]
+- Fixed the JavaScript REST client generator to handle XHR errors (by Timoses) - [pull #1645][issue1645], [pull #1646][issue1646]
+- Fixed a possible `InvalidMemoryOperationError` in `SystemRNG`
+- Fixed `runApplication` to be able to handle extraneous command line arguments
+- Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
+- Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
+- Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
+- Fixed a missing `toRedis` conversion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
+- Fixed `createTempFile` on Windows
+- Fixed the HTTP reverse proxy to send 502 (bad gateway) instead of 500 (internal server error) for upstream errors
+- Fixed a possible `InvalidMemoryOperationError` on shutdown for failed MongoDB requests - [issue #1707][issue1707]
+- Fixed `readOption!T` to work for array types - [issue #1713][issue1713]
+- Fixed handling of remote TCP connection close during concurrent read/write - [issue #1726][issue1726], [pull #1727][issue1727]
+- Fixed libevent driver to properly handle allocator `null` return values
+- Fixed invoking vibe.d functionality from a plain `Fiber` - [issue #1742][issue1742]
+- Fixed parsing of "tcp://" URLs - [issue #1732][issue1732], [pull #1733][issue1733]
+- Fixed handling `@before` attributes on REST interface classes and intermediate interfaces - [issue #1753][issue1753], [pull #1754][issue1754]
+- Fixed a deadlock situation in the libevent driver - [pull #1756][issue1756]
+- Fixed `readUntilSmall`/`readLine` to handle alternating availability of a peek buffer - [issue #1741][issue1741], [pull #1761][issue1761]
+- Fixed `parseMultiPartForm` to handle unquoted strings in the "Content-Disposition" header (by Tomáš Chaloupka) - [issue #1562][issue1562] [pull #1725][issue1725]
+- Fixed `HTTPServerRequest.fullURL` for IPv6 address based host strings
+- Fixed building on Windows with x86_mscoff (the win32 configuration is chosen by default now) - [issue #1771][issue1771]
+
+[issue716]: https://github.com/vibe-d/vibe.d/issues/716
+[issue1449]: https://github.com/vibe-d/vibe.d/issues/1449
+[issue1529]: https://github.com/vibe-d/vibe.d/issues/1529
+[issue1549]: https://github.com/vibe-d/vibe.d/issues/1549
+[issue1550]: https://github.com/vibe-d/vibe.d/issues/1550
+[issue1562]: https://github.com/vibe-d/vibe.d/issues/1562
+[issue1595]: https://github.com/vibe-d/vibe.d/issues/1595
+[issue1596]: https://github.com/vibe-d/vibe.d/issues/1596
+[issue1602]: https://github.com/vibe-d/vibe.d/issues/1602
+[issue1605]: https://github.com/vibe-d/vibe.d/issues/1605
+[issue1608]: https://github.com/vibe-d/vibe.d/issues/1608
+[issue1616]: https://github.com/vibe-d/vibe.d/issues/1616
+[issue1617]: https://github.com/vibe-d/vibe.d/issues/1617
+[issue1618]: https://github.com/vibe-d/vibe.d/issues/1618
+[issue1623]: https://github.com/vibe-d/vibe.d/issues/1623
+[issue1629]: https://github.com/vibe-d/vibe.d/issues/1629
+[issue1632]: https://github.com/vibe-d/vibe.d/issues/1632
+[issue1634]: https://github.com/vibe-d/vibe.d/issues/1634
+[issue1636]: https://github.com/vibe-d/vibe.d/issues/1636
+[issue1642]: https://github.com/vibe-d/vibe.d/issues/1642
+[issue1645]: https://github.com/vibe-d/vibe.d/issues/1645
+[issue1646]: https://github.com/vibe-d/vibe.d/issues/1646
+[issue1648]: https://github.com/vibe-d/vibe.d/issues/1648
+[issue1655]: https://github.com/vibe-d/vibe.d/issues/1655
+[issue1659]: https://github.com/vibe-d/vibe.d/issues/1659
+[issue1660]: https://github.com/vibe-d/vibe.d/issues/1660
+[issue1663]: https://github.com/vibe-d/vibe.d/issues/1663
+[issue1668]: https://github.com/vibe-d/vibe.d/issues/1668
+[issue1670]: https://github.com/vibe-d/vibe.d/issues/1670
+[issue1675]: https://github.com/vibe-d/vibe.d/issues/1675
+[issue1682]: https://github.com/vibe-d/vibe.d/issues/1682
+[issue1687]: https://github.com/vibe-d/vibe.d/issues/1687
+[issue1688]: https://github.com/vibe-d/vibe.d/issues/1688
+[issue1707]: https://github.com/vibe-d/vibe.d/issues/1707
+[issue1712]: https://github.com/vibe-d/vibe.d/issues/1712
+[issue1713]: https://github.com/vibe-d/vibe.d/issues/1713
+[issue1723]: https://github.com/vibe-d/vibe.d/issues/1723
+[issue1725]: https://github.com/vibe-d/vibe.d/issues/1725
+[issue1726]: https://github.com/vibe-d/vibe.d/issues/1726
+[issue1727]: https://github.com/vibe-d/vibe.d/issues/1727
+[issue1732]: https://github.com/vibe-d/vibe.d/issues/1732
+[issue1733]: https://github.com/vibe-d/vibe.d/issues/1733
+[issue1741]: https://github.com/vibe-d/vibe.d/issues/1741
+[issue1742]: https://github.com/vibe-d/vibe.d/issues/1742
+[issue1745]: https://github.com/vibe-d/vibe.d/issues/1745
+[issue1753]: https://github.com/vibe-d/vibe.d/issues/1753
+[issue1754]: https://github.com/vibe-d/vibe.d/issues/1754
+[issue1756]: https://github.com/vibe-d/vibe.d/issues/1756
+[issue1761]: https://github.com/vibe-d/vibe.d/issues/1761
+[issue1771]: https://github.com/vibe-d/vibe.d/issues/1771
+[issue1777]: https://github.com/vibe-d/vibe.d/issues/1777
+[issue1778]: https://github.com/vibe-d/vibe.d/issues/1778
+[vibe-core]: https://github.com/vibe-d/vibe-core
+
+
+v0.7.31 - 2017-04-10
+--------------------
+
+This release is a backport release of the smaller changes that got into 0.8.0. The 0.7.x branch will continue to be maintained for a short while, but only bug fixes will be included from now on. Applications should switch to the 0.8.x branch as soon as possible.
+
+### Features and improvements ###
+
+- Compiles on DMD 2.068.2 up to DMD 2.074.0
+- HTTP server
+  - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
+  - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
+  - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
+  - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
+  - Added `HTTPServerResponse.writePrettyJsonBody`
+  - Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
+- Reduced synchronization overhead in the libevent driver for entities that are single-threaded
+- The REST interface server now responds with prettified JSON if built in debug mode
+- Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
+- The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
+- Added `.byValue`/`.byKeyValue`/`.byIndexValue` properties to `Bson` and `Json` as a replacement for `opApply` based iteration (see [issue #1688][issue1688])
+
+### Bug fixes ###
+
+- Fixed compile error for deserializing optional `class`/ struct` fields
+- Fixed GET requests in the REST client to not send a body
+- Fixed REST request responses that return void to not send a body
+- Fixed a possible idle loop in `Task.join()` if called from outside of an event loop
+- Fixed `TaskPipe.waitForData` to actually time out if a timeout value was passed - [issue #1605][issue1605]
+- Fixed a compilation error for GDC master - [issue #1602][issue1602]
+- Fixed a linker issue for LDC on Windows - [issue #1629][issue1629]
+- Fixed a (single-threaded) concurrent AA iteration/write issue that could result in an access violation in the Win32 driver - [issue #1608][issue1608]
+- Fixed the JavaScript REST client generator to handle XHR errors (by Timoses) - [pull #1645][issue1645], [pull #1646][issue1646]
+- Fixed a possible `InvalidMemoryOperationError` in `SystemRNG`
+- Fixed `runApplication` to be able to handle extraneous command line arguments
+- Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
+- Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
+- Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
+- Fixed a missing `toRedis` conversion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
+- Fixed an assertion failure for malformed HTML form upload filenames - [issue #1630][issue1630]
+- Fixed the HTTP server to not use chunked encoding for HTTP/1.0 requests - [issue #1721][issue1721], [pull #1722][issue1722]
+
+[issue716]: https://github.com/vibe-d/vibe.d/issues/716
+[issue1596]: https://github.com/vibe-d/vibe.d/issues/1596
+[issue1602]: https://github.com/vibe-d/vibe.d/issues/1602
+[issue1605]: https://github.com/vibe-d/vibe.d/issues/1605
+[issue1608]: https://github.com/vibe-d/vibe.d/issues/1608
+[issue1623]: https://github.com/vibe-d/vibe.d/issues/1623
+[issue1629]: https://github.com/vibe-d/vibe.d/issues/1629
+[issue1630]: https://github.com/vibe-d/vibe.d/issues/1630
+[issue1634]: https://github.com/vibe-d/vibe.d/issues/1634
+[issue1636]: https://github.com/vibe-d/vibe.d/issues/1636
+[issue1642]: https://github.com/vibe-d/vibe.d/issues/1642
+[issue1645]: https://github.com/vibe-d/vibe.d/issues/1645
+[issue1646]: https://github.com/vibe-d/vibe.d/issues/1646
+[issue1648]: https://github.com/vibe-d/vibe.d/issues/1648
+[issue1655]: https://github.com/vibe-d/vibe.d/issues/1655
+[issue1659]: https://github.com/vibe-d/vibe.d/issues/1659
+[issue1688]: https://github.com/vibe-d/vibe.d/issues/1688
+[issue1721]: https://github.com/vibe-d/vibe.d/issues/1721
+[issue1722]: https://github.com/vibe-d/vibe.d/issues/1722
+
+
+v0.7.30 - 2016-10-31
+--------------------
+
+### Features and improvements ###
+
+- General changes
+  - Compiles on DMD 2.068.2 up to 2.072.0
+  - Added `runApplication` as a single API entry point to properly initialize and run a vibe.d application (this will serve as the basis for slowly phasing out the `VibeDefaultMain` convenience mechanism)
+  - Started using an SDLang based DUB package recipe (upgrade to DUB 1.0.0 if you haven't already)
+  - Defining both, `VibeDefaultMain` and `VibeCustomMain`, results in a compile-time error to help uncover hidden build issues (by John Colvin) - [pull #1551][issue1551]
+- Web/REST interface generator
+  - Added `vibe.web.auth` as a generic way to express authorization rules and to provide a common hook for authentication
+  - Added `@noRoute` attribute for `registerWebInterface` to keep methods from generating a HTTP endpoint
+  - Added `@nestedNameStyle` to choose between the classical underscore mapping and D style mapping for form parameter names in `registerWebInterface`
+- Serialization framework
+  - All hooks now get a traits struct that carries additional information, such as user defined attributes - note that this is a breaking change for any serializer implementation! - [pull #1542][issue1542]
+  - Added `beginWriteDocument` and `endWriteDocument` hooks - [pull #1542][issue1542]
+  - Added `(begin/end)WriteDictionaryEntry` and `(begin/end)WriteArrayEntry` hooks - [pull #1542][issue1542]
+  - Exposed `vibe.data.serialization.DefaultPolicy` publicly
+- HTTP server
+  - Added `HTTPServerSettings.accessLogger` to enable using custom logger implementations
+  - Added support for the "X-Forwarded-Port" header used by reverse proxies (by Mihail-K) - [issue #1409][issue1490], [pull #1491][issue1491]
+  - Added an overload of `HTTPServerResponse.writeJsonBody` that doesn't set the response status (by Irenej Marc) - [pull #1488][issue1488]
+- Can now use the new [diet-ng][diet-ng] package in `render()`
+  - To force using it on existing projects, simply add "diet-ng" as a dependency
+  - "diet-ng" is an optional dependency of vibe.d that is chosen by default - to avoid that, remove the "diet-ng" entry from dub.selections.json.
+  - Related issues [issue #1554][issue1554], [issue #1555][issue1555]
+- Added partial Unix client socket support, HTTP client support in particular (use `http+unix://...`) (by Sebastian Koppe) - [pull #1547][issue1547]
+- Removed `Json.opDispatch` and `Bson.opDispatch`
+- Added `Bson.remove` to remove elements from a BSON object - [issue #345][issue345]
+the use of `VibeDefaultMain`)
+- Added support for tables in the Markdown compiler - [issue #1493][issue1493]
+- Added `MongoCollection.distinct()`
+- The `std.concurrency` integration code now let's the behavior of `spawn()` be configurable, defaulting now to `runWorkerTask` instead of the previous `runTask`
+- Using `VibeNoSSL` now also disables Botan support in addition to OpenSSL (by Martin Nowak) - [pull #1444][issue1444]
+- Use a minimum protocol version of TLS 1.0 for Botan, fixes compilation on Botan 1.12.6 (by Tomáš Chaloupka) - [pull #1553][issue1553]
+- Some more `URLRouter` memory/performance optimization
+- Corrected the naming convention of `vibe.db.mongo.flags.IndexFlags` - [issue #1571][issue1571]
+- Added `connectRedisDB`, taking a Redis database URL
+- `FileDescriptorEvent.wait()` now returns which triggers have fired (by Jack Applegame) - [pull #1586][issue1586]
+
+### Bug fixes ###
+
+- Fixed a compile error that happened when using the JavaScript REST interface generator for sub interfaces - [issue #1506][issue1506]
+- Fixed protocol violations in the WebSocket module (by Mathias Lang) - [pull #1508][issue1508], [pull #1511][issue1511]
+- The HTTP client now correctly appends the port in the "Host" header - [issue #1507][issue1507], [pull #1510][issue1510]
+- Fixed a possible null pointer error in `HTTPServerResponse.switchProtocol` - [issue #1502][issue1502]
+- Fixed parsing of indented Markdown code blocks (empty lines don't interrupt the block anymore) - [issue #1527][issue1527]
+- Fixed open TCP connections being left alive by `download()` (by Steven Dwy) - [pull #1532][issue1532]
+- Fixed the error message for invalid types in `Json.get` (by Charles Thibaut) - [pull #1537][issue1537]
+- Fixed the HTTP status code for invalid JSON in the REST interface generator (bad request instead of internal server error) (by Jacob Carlborg) - [pull #1538][issue1538]
+- Fixed yielded task execution in case no explicit event loop is used
+- Fixed a memory hog/leak in the libasync driver (by Martin Nowak) - [pull #1543][issue1543]
+- Fixed the JSON module to output NaN as `null` instead of `undefined` (by John Colvin) - [pull #1548][issue1548], [issue #1442][issue1442], [issue #958][issue958]
+- Fixed a possible deadlock in `LocalTaskSemaphore` (by Etienne Cimon) - [pull #1563][issue1563]
+- Fixed URL generation for paths with placeholders in the JavaScript REST client generator - [issue #1564][issue1564]
+- Fixed code generation errors in the JavaScript REST client generator and added `JSRestClientSettings` (by Oleg B. aka deviator) - [pull #1566][issue1566]
+- Fixed a bug in `FixedRingBuffer.removeAt` which potentially affected the task scheduler (by Tomáš Chaloupka) - [pull #1572][issue1572]
+- Fixed `validateEmail` to properly use `isEmail` (which used to be broken) (by Stanislav Blinov aka radcapricorn) - [issue #1580][issue1580], [pull #1582][issue1582]
+- Fixed `yield()` to always return after a single event loop iteration - [issue #1583][issue1583]
+- Fixed parsing of Markdown text nested in blockquotes, code in particular
+- Fixed a buffer read overflow in `OpenSSLContext` - [issue #1577][issue1577]
+
+
+[issue345]: https://github.com/vibe-d/vibe.d/issues/345
+[issue958]: https://github.com/vibe-d/vibe.d/issues/958
+[issue1442]: https://github.com/vibe-d/vibe.d/issues/1442
+[issue1444]: https://github.com/vibe-d/vibe.d/issues/1444
+[issue1488]: https://github.com/vibe-d/vibe.d/issues/1488
+[issue1490]: https://github.com/vibe-d/vibe.d/issues/1490
+[issue1491]: https://github.com/vibe-d/vibe.d/issues/1491
+[issue1493]: https://github.com/vibe-d/vibe.d/issues/1493
+[issue1502]: https://github.com/vibe-d/vibe.d/issues/1502
+[issue1506]: https://github.com/vibe-d/vibe.d/issues/1506
+[issue1507]: https://github.com/vibe-d/vibe.d/issues/1507
+[issue1508]: https://github.com/vibe-d/vibe.d/issues/1508
+[issue1510]: https://github.com/vibe-d/vibe.d/issues/1510
+[issue1511]: https://github.com/vibe-d/vibe.d/issues/1511
+[issue1527]: https://github.com/vibe-d/vibe.d/issues/1527
+[issue1532]: https://github.com/vibe-d/vibe.d/issues/1532
+[issue1537]: https://github.com/vibe-d/vibe.d/issues/1537
+[issue1538]: https://github.com/vibe-d/vibe.d/issues/1538
+[issue1542]: https://github.com/vibe-d/vibe.d/issues/1542
+[issue1543]: https://github.com/vibe-d/vibe.d/issues/1543
+[issue1547]: https://github.com/vibe-d/vibe.d/issues/1547
+[issue1548]: https://github.com/vibe-d/vibe.d/issues/1548
+[issue1551]: https://github.com/vibe-d/vibe.d/issues/1551
+[issue1553]: https://github.com/vibe-d/vibe.d/issues/1553
+[issue1554]: https://github.com/vibe-d/vibe.d/issues/1554
+[issue1555]: https://github.com/vibe-d/vibe.d/issues/1555
+[issue1563]: https://github.com/vibe-d/vibe.d/issues/1563
+[issue1564]: https://github.com/vibe-d/vibe.d/issues/1564
+[issue1566]: https://github.com/vibe-d/vibe.d/issues/1566
+[issue1571]: https://github.com/vibe-d/vibe.d/issues/1571
+[issue1572]: https://github.com/vibe-d/vibe.d/issues/1572
+[issue1577]: https://github.com/vibe-d/vibe.d/issues/1577
+[issue1580]: https://github.com/vibe-d/vibe.d/issues/1580
+[issue1582]: https://github.com/vibe-d/vibe.d/issues/1582
+[issue1583]: https://github.com/vibe-d/vibe.d/issues/1583
+[diet-ng]: https://github.com/rejectedsoftware/diet-ng
+
+
+v0.7.29 - 2016-07-04
+--------------------
+
+### Features and improvements ###
+
+- Dropped support for DMD frontend versions below 2.067.x - supports 2.067.1 up to 2.071.0 now
+- Removed the libev driver
+- Removed all deprecated symbols
+- Heavily optimized the `URLRouter` (>5x faster initial match graph building and around 60% faster route match performance)
+- Added CONNECT and `Connection: Upgrade` support to the reverse proxy module (by Georgi Dimitrov) - [pull #1392][issue1392]
+- Added support for using an explicit network interface for outgoing TCP and HTTP connections - [pull #1407][issue1407]
+- Cookies are now stored with their raw value, enabling handling of non-base64 encoded values (by Yannick Koechlin) - [pull #1401][issue1401]
+- Added HyperLogLog functions to the Redis client (by Yannick Koechlin) - [pull #1435][issue1435]
+- Added `RestInterfaceSettings.httpClientSettings`
+- Added `HTTPClientSettings.dnsAddressFamily`
+- Added `TCPListener.bindAddress`
+- Made `@ignore`, `@name`, `@optional`, `@byName` and `@asArray` serialization attributes customizable per serialization policy - [pull #1438][issue1438], [issue #1352][issue1352]
+- Added `HTTPStatus.unavailableForLegalReasons` (by Andrew Benton) - [pull #1358][issue1358]
+- Added support or logger implementations that can log multiple lines per log call (by Martin Nowak) - [pull #1428][issue1428]
+- Added `HTTPServerResponse.connected` (by Alexander Tumin) - [pull #1474][issue1474]
+- Added allocation free string conversion methods to `NetworkAddress`
+- Added diagnostics in case of connections getting closed during process shutdown (after the driver is already shut down) - [issue #1452][issue1452]
+- Added `disableDefaultSignalHandlers` that can be used to avoid vibe.d registering its default signal handlers - [pull #1454][issue1454], [issue #1333][issue1333]
+- Added detection of SQLite data base extensions for `getMimeTypeForFile` (by Stefan Koch) - [pull #1456][issue1456]
+- The markdown module now emits XHTML compatible `<br/>` tags (by Stefan Schmidt) - [pull #1461][issue1461]
+- Added `RedisDatabase.srandMember` overload taking a count (by Yannick Koechlin) - [pull #1447][issue1447]
+- The HTTP client now accepts `const` settings
+- Removed the libevent/Win64 configuration as the libevent binaries for that platform never existed - [issue #832][issue832]
+- Improvements to the WebSockets module, most notably reduction of memory allocations (by Mathias Lang) - [pull #1497][issue1497]
+- Added version `VibeNoOpDispatch` to force removal of `opDispatch` for `Json` and `Bson` (by David Monagle) - [pull #1526][issue1526]
+- Added a manual deprecation message for `Json.opDispatch`/`Bson.opDispatch` because `deprecated` did not have an effect
+
+### Bug fixes ###
+
+- Fixed the internal `BsonObjectID` counter to be initialized with a random value (by machindertech) - [pull #1128][issue1128]
+- Fixed a possible race condition for ID assignment in the libasync driver (by Etienne Cimon) - [pull #1399][issue1399]
+- Fixed compilation of `Bson.opt` for both const and non-const AAs/arrays - [issue #1394][issue1394]
+- Fixed handling of POST methods in the REST JavaScript client for methods with no parameters - [issue #1434][issue1434]
+- Fixed `RedisDatabase.blpop` and `RedisList.removeFrontBlock`
+- Fixed a protocol error/assertion failure when a Redis reply threw an exception - [pull #1416][issue1416], [issue #1412][issue1412]
+- Fixed possible assertion failures "Manually resuming taks that is already scheduled"
+- Fixed FreeBSD and NetBSD support (by Nikolay Tolstokulakov) - [pull #1448][issue1448]
+- Fixed handling of multiple methods with `@headerParam` parameters with the same name (by Irenej Marc) - [pull #1453][issue1453]
+- Fixed calling `async()` with an unshared delegate or with a callback that returns a `const`/`immutable` result
+- Fixed `Tid` to be considered safe to pass between threads (for worker tasks or `vibe.core.concurrency`)
+- Fixed the `HTTPClient`/`download()` to properly use TLS when redirects happen between HTTP and HTTPS (by Martin Nowak) - [pull #1265][issue1265]
+- Fixed recognizing certain HTTP content encoding strings ("x-gzip" and "") (by Ilya Yaroshenko) - [pull #1477][issue1477]
+- Fixed parsing IPv6 "Host" headers in the HTTP server - [issue #1388][issue1388], [issue #1402][issue1402]
+- Fixed an assertion failure when using threads together with `VibeIdleCollect` - [issue #1476][issue1476]
+- Fixed parsing of `vibe.conf` files that contain a UTF BOM - [issue #1470][issue1470]
+- Fixed `@before`/`@after` annotations to work for template member functions
+- Fixed "Host" header handling in the HTTP server (now optional for HTTP/1.0 and responds with "bad request" if missing)
+- Fixed `Json` to work at CTFE (by Mihail-K) - [pull #1489][issue1489]
+- Fixed `adjustMethodStyle` (used throughout `vibe.web`) for method names with trailing upper case characters
+- Fixed alignment of the `Json` type on x64, fixes possible dangling pointers due to the GC not recognizing unaligned pointers - [issue #1504][issue1504]
+- Fixed serialization policies to work for enums and other built-in types (by Tomáš Chaloupka) - [pull #1500][issue1500]
+- Fixed a bogus assertion error in `Win32TCPConnection.tcpNoDelay` and `.keepAlive` (by Денис Хлякин aka aka-demik) - [pull #1514][issue1514]
+- Fixed a deadlock in `TaskPipe` - [issue #1501][issue1501]
+
+[issue832]: https://github.com/vibe-d/vibe.d/issues/832
+[issue1128]: https://github.com/vibe-d/vibe.d/issues/1128
+[issue1265]: https://github.com/vibe-d/vibe.d/issues/1265
+[issue1333]: https://github.com/vibe-d/vibe.d/issues/1333
+[issue1352]: https://github.com/vibe-d/vibe.d/issues/1352
+[issue1358]: https://github.com/vibe-d/vibe.d/issues/1358
+[issue1388]: https://github.com/vibe-d/vibe.d/issues/1388
+[issue1392]: https://github.com/vibe-d/vibe.d/issues/1392
+[issue1394]: https://github.com/vibe-d/vibe.d/issues/1394
+[issue1399]: https://github.com/vibe-d/vibe.d/issues/1399
+[issue1401]: https://github.com/vibe-d/vibe.d/issues/1401
+[issue1402]: https://github.com/vibe-d/vibe.d/issues/1402
+[issue1407]: https://github.com/vibe-d/vibe.d/issues/1407
+[issue1412]: https://github.com/vibe-d/vibe.d/issues/1412
+[issue1416]: https://github.com/vibe-d/vibe.d/issues/1416
+[issue1428]: https://github.com/vibe-d/vibe.d/issues/1428
+[issue1434]: https://github.com/vibe-d/vibe.d/issues/1434
+[issue1435]: https://github.com/vibe-d/vibe.d/issues/1435
+[issue1438]: https://github.com/vibe-d/vibe.d/issues/1438
+[issue1447]: https://github.com/vibe-d/vibe.d/issues/1447
+[issue1448]: https://github.com/vibe-d/vibe.d/issues/1448
+[issue1452]: https://github.com/vibe-d/vibe.d/issues/1452
+[issue1453]: https://github.com/vibe-d/vibe.d/issues/1453
+[issue1454]: https://github.com/vibe-d/vibe.d/issues/1454
+[issue1456]: https://github.com/vibe-d/vibe.d/issues/1456
+[issue1461]: https://github.com/vibe-d/vibe.d/issues/1461
+[issue1470]: https://github.com/vibe-d/vibe.d/issues/1470
+[issue1474]: https://github.com/vibe-d/vibe.d/issues/1474
+[issue1476]: https://github.com/vibe-d/vibe.d/issues/1476
+[issue1477]: https://github.com/vibe-d/vibe.d/issues/1477
+[issue1489]: https://github.com/vibe-d/vibe.d/issues/1489
+[issue1500]: https://github.com/vibe-d/vibe.d/issues/1500
+[issue1504]: https://github.com/vibe-d/vibe.d/issues/1504
+[issue1514]: https://github.com/vibe-d/vibe.d/issues/1514
+[issue1526]: https://github.com/vibe-d/vibe.d/issues/1526
+
+
+v0.7.28 - 2016-02-27
+--------------------
+
+This is a hotfix release, which fixes two critical regressions. The first one resulted in memory leaks or memory corruption, while the second one could cause TCP connections to hang indefinitely in the `close` method for the libevent driver.
+
+### Bug fixes ###
+
+- Fixed a regression in `FreeListRef` which caused the reference count to live outside of the allocated memory bounds - [issue #1432][issue1432]
+- Fixed a task starvation regression in the libevent driver that happened when a connection got closed by the TCP remote peer while there was still data in the write buffer - [pull #1443][issue1443], [issue #1441][issue1441]
+- Fixed recognizing "Connection: close" headers for non-lowercase spelling of "close" - [issue #1426][issue1426]
+- Fixed the UDP receive timeout to actually work in the libevent driver - [issue #1429][issue1429]
+- Fixed handling of the "Connection" header in the HTTP server to be case insensitive - [issue #1426][issue1426]
+
+[issue1426]: https://github.com/vibe-d/vibe.d/issues/1426
+[issue1429]: https://github.com/vibe-d/vibe.d/issues/1429
+[issue1432]: https://github.com/vibe-d/vibe.d/issues/1432
+[issue1441]: https://github.com/vibe-d/vibe.d/issues/1441
+[issue1443]: https://github.com/vibe-d/vibe.d/issues/1443
+
+
+v0.7.27 - 2016-02-09
 --------------------
 
 In preparation for a full separation of the individual library components, this release splits up the code logically into multiple DUB sub packages. This enables dependent code to reduce the dependency footprint and compile times. In addition to this and a bunch of further improvements, a lot of performance tuning and some important REST interface additions went into this release.
 
+Note that the integration code for `std.concurrency` has been re-enabled with this release. This means that you can use `std.concurrency` without worrying about blocking the event loop now. However, there are a few incompatibilities between `std.concurrency` and vibe.d's own version in `vibe.core.concurrency`, such as `std.concurrency` not supporting certain `shared(T)` or `Isolated!T` to be passed to spawned tasks. If you hit any issues that cannot be easily resolved, the usual vibe.d behavior is available in the form of "Compat" suffixed functions (i.e. `sendCompat`, `receiveCompat` etc.). But note that these functions operate on separate message queue structures, so mixing the "Compat" functions with non-"Compat" versions will not work.
+
 ### Features and improvements ###
 
+- Compiles on DMD frontend versions 2.066.0 up to 2.070.0
 - Split up the library into sub packages - this prepares for a deeper split that is going to happen in the next release
 - A lot of performance tuning went into the network and HTTP code, leading to a 50% increase in single-core HTTP performance and a lot more in the multi-threaded case over 0.7.26
 - Marked more of the API `@safe` and `nothrow`
@@ -32,12 +577,14 @@ In preparation for a full separation of the individual library components, this 
 - Added `getMarkdownOutline`, which returns a tree of sections in a Markdown document
 - Added `Path.relativeToWeb`, a version of `relativeTo` with web semantics
 - Added `vibe.core.core.setupWorkerThreads` to customize the number of worker threads on startup (by Jens K. Mueller) - [pull #1350][issue1350]
-- Added support for parsing IPv6 URLs (by Mathias L. Baumann aka Marenz) - [pull #1341][issue3141]
+- Added support for parsing IPv6 URLs (by Mathias L. Baumann aka Marenz) - [pull #1341][issue1341]
 - Enabled TCP no-delay in the Redis client (by Etienne Cimon) - [pull #1361][issue1361]
 - Switch the `:javascript` Diet filter to use "application/json" as the content type - [issue #717][issue717]
 - `NetworkAddress` now accepts `std.socket.AddressFamily` constants in addition to the `AF_` ones - [issue #925][issue925]
 - Added support for X509 authentication in the MongoDB client (by machindertech) - [pull #1235][issue1235]
 - Added `TCPListenOptions.reusePort` to enable port reuse as an OS supported means for load-balancing (by Soar Qin) - [pull #1379][issue1379]
+- Added a `port` parameter to `RedisSessionStore.this()`
+- Added code to avoid writing to `HTTPServerResponse.bodyWriter` after a fixed-length response has been fully written
 
 ### Bug fixes ###
 
@@ -67,42 +614,44 @@ In preparation for a full separation of the individual library components, this 
 - Fixed a null-pointer dereference when `waitForData` gets called on a fully closed TCP connection - [issue #1384][issue1384]
 - Fixed a crash at exit caused by a bad module destructor call sequence when `std.parallelism.TaskPool` is used - [issue #1374][issue1374]
 
-[issue472]: https://github.com/rejectedsoftware/vibe.d/issues/472
-[issue604]: https://github.com/rejectedsoftware/vibe.d/issues/604
-[issue717]: https://github.com/rejectedsoftware/vibe.d/issues/717
-[issue837]: https://github.com/rejectedsoftware/vibe.d/issues/837
-[issue925]: https://github.com/rejectedsoftware/vibe.d/issues/925
-[issue960]: https://github.com/rejectedsoftware/vibe.d/issues/960
-[issue1116]: https://github.com/rejectedsoftware/vibe.d/issues/1116
-[issue1235]: https://github.com/rejectedsoftware/vibe.d/issues/1235
-[issue1268]: https://github.com/rejectedsoftware/vibe.d/issues/1268
-[issue1271]: https://github.com/rejectedsoftware/vibe.d/issues/1271
-[issue1299]: https://github.com/rejectedsoftware/vibe.d/issues/1299
-[issue1301]: https://github.com/rejectedsoftware/vibe.d/issues/1301
-[issue1312]: https://github.com/rejectedsoftware/vibe.d/issues/1312
-[issue1321]: https://github.com/rejectedsoftware/vibe.d/issues/1321
-[issue1322]: https://github.com/rejectedsoftware/vibe.d/issues/1322
-[issue1325]: https://github.com/rejectedsoftware/vibe.d/issues/1325
-[issue1326]: https://github.com/rejectedsoftware/vibe.d/issues/1326
-[issue1331]: https://github.com/rejectedsoftware/vibe.d/issues/1331
-[issue1332]: https://github.com/rejectedsoftware/vibe.d/issues/1332
-[issue1340]: https://github.com/rejectedsoftware/vibe.d/issues/1340
-[issue1341]: https://github.com/rejectedsoftware/vibe.d/issues/1341
-[issue1343]: https://github.com/rejectedsoftware/vibe.d/issues/1343
-[issue1345]: https://github.com/rejectedsoftware/vibe.d/issues/1345
-[issue1347]: https://github.com/rejectedsoftware/vibe.d/issues/1347
-[issue1348]: https://github.com/rejectedsoftware/vibe.d/issues/1348
-[issue1349]: https://github.com/rejectedsoftware/vibe.d/issues/1349
-[issue1350]: https://github.com/rejectedsoftware/vibe.d/issues/1350
-[issue1354]: https://github.com/rejectedsoftware/vibe.d/issues/1354
-[issue1356]: https://github.com/rejectedsoftware/vibe.d/issues/1356
-[issue1361]: https://github.com/rejectedsoftware/vibe.d/issues/1361
-[issue1364]: https://github.com/rejectedsoftware/vibe.d/issues/1364
-[issue1366]: https://github.com/rejectedsoftware/vibe.d/issues/1366
-[issue1374]: https://github.com/rejectedsoftware/vibe.d/issues/1374
-[issue1376]: https://github.com/rejectedsoftware/vibe.d/issues/1376
-[issue1379]: https://github.com/rejectedsoftware/vibe.d/issues/1379
-[issue1384]: https://github.com/rejectedsoftware/vibe.d/issues/1384
+[issue472]: https://github.com/vibe-d/vibe.d/issues/472
+[issue604]: https://github.com/vibe-d/vibe.d/issues/604
+[issue717]: https://github.com/vibe-d/vibe.d/issues/717
+[issue837]: https://github.com/vibe-d/vibe.d/issues/837
+[issue925]: https://github.com/vibe-d/vibe.d/issues/925
+[issue932]: https://github.com/vibe-d/vibe.d/issues/932
+[issue960]: https://github.com/vibe-d/vibe.d/issues/960
+[issue1116]: https://github.com/vibe-d/vibe.d/issues/1116
+[issue1235]: https://github.com/vibe-d/vibe.d/issues/1235
+[issue1268]: https://github.com/vibe-d/vibe.d/issues/1268
+[issue1271]: https://github.com/vibe-d/vibe.d/issues/1271
+[issue1299]: https://github.com/vibe-d/vibe.d/issues/1299
+[issue1301]: https://github.com/vibe-d/vibe.d/issues/1301
+[issue1312]: https://github.com/vibe-d/vibe.d/issues/1312
+[issue1321]: https://github.com/vibe-d/vibe.d/issues/1321
+[issue1322]: https://github.com/vibe-d/vibe.d/issues/1322
+[issue1325]: https://github.com/vibe-d/vibe.d/issues/1325
+[issue1326]: https://github.com/vibe-d/vibe.d/issues/1326
+[issue1331]: https://github.com/vibe-d/vibe.d/issues/1331
+[issue1332]: https://github.com/vibe-d/vibe.d/issues/1332
+[issue1339]: https://github.com/vibe-d/vibe.d/issues/1339
+[issue1340]: https://github.com/vibe-d/vibe.d/issues/1340
+[issue1341]: https://github.com/vibe-d/vibe.d/issues/1341
+[issue1343]: https://github.com/vibe-d/vibe.d/issues/1343
+[issue1345]: https://github.com/vibe-d/vibe.d/issues/1345
+[issue1347]: https://github.com/vibe-d/vibe.d/issues/1347
+[issue1348]: https://github.com/vibe-d/vibe.d/issues/1348
+[issue1349]: https://github.com/vibe-d/vibe.d/issues/1349
+[issue1350]: https://github.com/vibe-d/vibe.d/issues/1350
+[issue1354]: https://github.com/vibe-d/vibe.d/issues/1354
+[issue1356]: https://github.com/vibe-d/vibe.d/issues/1356
+[issue1361]: https://github.com/vibe-d/vibe.d/issues/1361
+[issue1364]: https://github.com/vibe-d/vibe.d/issues/1364
+[issue1366]: https://github.com/vibe-d/vibe.d/issues/1366
+[issue1374]: https://github.com/vibe-d/vibe.d/issues/1374
+[issue1376]: https://github.com/vibe-d/vibe.d/issues/1376
+[issue1379]: https://github.com/vibe-d/vibe.d/issues/1379
+[issue1384]: https://github.com/vibe-d/vibe.d/issues/1384
 
 
 v0.7.26 - 2015-11-04
@@ -158,24 +707,24 @@ A large revamp of the REST interface generator was done in this release, which w
 - Fixed linking on Debian, which has removed certain public OpenSSL functions (by Luca Niccoli) - [issue #1315][issue1315], [pull #1316][issue1316]
 - Fixed an assertion happening when parsing malformed URLs - [issue #1318][issue1318]
 
-[issue911]: https://github.com/rejectedsoftware/vibe.d/issues/911
-[issue1204]: https://github.com/rejectedsoftware/vibe.d/issues/1204
-[issue1206]: https://github.com/rejectedsoftware/vibe.d/issues/1206
-[issue1209]: https://github.com/rejectedsoftware/vibe.d/issues/1209
-[issue1273]: https://github.com/rejectedsoftware/vibe.d/issues/1273
-[issue1280]: https://github.com/rejectedsoftware/vibe.d/issues/1280
-[issue1281]: https://github.com/rejectedsoftware/vibe.d/issues/1281
-[issue1287]: https://github.com/rejectedsoftware/vibe.d/issues/1287
-[issue1290]: https://github.com/rejectedsoftware/vibe.d/issues/1290
-[issue1294]: https://github.com/rejectedsoftware/vibe.d/issues/1294
-[issue1227]: https://github.com/rejectedsoftware/vibe.d/issues/1227
-[issue1247]: https://github.com/rejectedsoftware/vibe.d/issues/1247
-[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1296
-[issue1297]: https://github.com/rejectedsoftware/vibe.d/issues/1297
-[issue1298]: https://github.com/rejectedsoftware/vibe.d/issues/1298
-[issue1315]: https://github.com/rejectedsoftware/vibe.d/issues/1315
-[issue1316]: https://github.com/rejectedsoftware/vibe.d/issues/1316
-[issue1318]: https://github.com/rejectedsoftware/vibe.d/issues/1318
+[issue911]: https://github.com/vibe-d/vibe.d/issues/911
+[issue1204]: https://github.com/vibe-d/vibe.d/issues/1204
+[issue1206]: https://github.com/vibe-d/vibe.d/issues/1206
+[issue1209]: https://github.com/vibe-d/vibe.d/issues/1209
+[issue1273]: https://github.com/vibe-d/vibe.d/issues/1273
+[issue1280]: https://github.com/vibe-d/vibe.d/issues/1280
+[issue1281]: https://github.com/vibe-d/vibe.d/issues/1281
+[issue1287]: https://github.com/vibe-d/vibe.d/issues/1287
+[issue1290]: https://github.com/vibe-d/vibe.d/issues/1290
+[issue1294]: https://github.com/vibe-d/vibe.d/issues/1294
+[issue1227]: https://github.com/vibe-d/vibe.d/issues/1227
+[issue1247]: https://github.com/vibe-d/vibe.d/issues/1247
+[issue1296]: https://github.com/vibe-d/vibe.d/issues/1296
+[issue1297]: https://github.com/vibe-d/vibe.d/issues/1297
+[issue1298]: https://github.com/vibe-d/vibe.d/issues/1298
+[issue1315]: https://github.com/vibe-d/vibe.d/issues/1315
+[issue1316]: https://github.com/vibe-d/vibe.d/issues/1316
+[issue1318]: https://github.com/vibe-d/vibe.d/issues/1318
 
 
 v0.7.25 - 2015-09-20
@@ -202,15 +751,15 @@ Mostly a bugfix release, including a regression fix in the web form parser, this
 - Fixed using `LibasyncUDPConnection.recv` without a timeout (by Daniel Kozak) - [pull #1242][issue1242]
 - Fixed a regression in `RestInterfaceClient`, where a `get(T id)` method would result in a URL with two consecutive underscores
 
-[issue1205]: https://github.com/rejectedsoftware/vibe.d/issues/1205
-[issue1220]: https://github.com/rejectedsoftware/vibe.d/issues/1220
-[issue1221]: https://github.com/rejectedsoftware/vibe.d/issues/1221
-[issue1232]: https://github.com/rejectedsoftware/vibe.d/issues/1232
-[issue1237]: https://github.com/rejectedsoftware/vibe.d/issues/1237
-[issue1242]: https://github.com/rejectedsoftware/vibe.d/issues/1242
-[issue1246]: https://github.com/rejectedsoftware/vibe.d/issues/1246
-[issue1254]: https://github.com/rejectedsoftware/vibe.d/issues/1254
-[issue1255]: https://github.com/rejectedsoftware/vibe.d/issues/1255
+[issue1205]: https://github.com/vibe-d/vibe.d/issues/1205
+[issue1220]: https://github.com/vibe-d/vibe.d/issues/1220
+[issue1221]: https://github.com/vibe-d/vibe.d/issues/1221
+[issue1232]: https://github.com/vibe-d/vibe.d/issues/1232
+[issue1237]: https://github.com/vibe-d/vibe.d/issues/1237
+[issue1242]: https://github.com/vibe-d/vibe.d/issues/1242
+[issue1246]: https://github.com/vibe-d/vibe.d/issues/1246
+[issue1254]: https://github.com/vibe-d/vibe.d/issues/1254
+[issue1255]: https://github.com/vibe-d/vibe.d/issues/1255
 
 
 v0.7.24 - 2015-08-10
@@ -256,7 +805,7 @@ Adds DMD 2.068.0 compatibility and contains a number of additions and fixes in a
  - Added `BigInt` support to the JSON module (by Igor Stepanov) - [pull #1118][issue1118]
  - The event loop of the win32 driver can now be stopped by sending a `WM_QUIT` message (by Денис Хлякин aka aka-demik) - [pull #1120][issue1120]
  - Marked `vibe.inet.path` as `pure` and removed casts that became superfluous
- - Added an `InputStream` based overload of `HTTPServerResponse.writeBody`
+ - Added an `InputStream` based overload of `HTTPServerResponse.writeBody` - [issue #1594][issue1594]
  - Added all Redis modules to the `vibe.vibe` module
  - Added a version of `FixedRingBuffer.opApply` that supports an index (by Tomáš Chaloupka) - [pull #1198][issue1198]
 
@@ -302,47 +851,47 @@ Adds DMD 2.068.0 compatibility and contains a number of additions and fixes in a
  - Fixed deserialization of `immutable` fields (by Jack Applegame) - [pull #1190][issue1190]
 
 
-[issue945]: https://github.com/rejectedsoftware/vibe.d/issues/945
-[issue952]: https://github.com/rejectedsoftware/vibe.d/issues/952
-[issue999]: https://github.com/rejectedsoftware/vibe.d/issues/999
-[issue1010]: https://github.com/rejectedsoftware/vibe.d/issues/1010
-[issue1032]: https://github.com/rejectedsoftware/vibe.d/issues/1032
-[issue1036]: https://github.com/rejectedsoftware/vibe.d/issues/1036
-[issue1044]: https://github.com/rejectedsoftware/vibe.d/issues/1044
-[issue1058]: https://github.com/rejectedsoftware/vibe.d/issues/1058
-[issue1067]: https://github.com/rejectedsoftware/vibe.d/issues/1067
-[issue1068]: https://github.com/rejectedsoftware/vibe.d/issues/1068
-[issue1074]: https://github.com/rejectedsoftware/vibe.d/issues/1074
-[issue1076]: https://github.com/rejectedsoftware/vibe.d/issues/1076
-[issue1082]: https://github.com/rejectedsoftware/vibe.d/issues/1082
-[issue1083]: https://github.com/rejectedsoftware/vibe.d/issues/1083
-[issue1101]: https://github.com/rejectedsoftware/vibe.d/issues/1101
-[issue1103]: https://github.com/rejectedsoftware/vibe.d/issues/1103
-[issue1106]: https://github.com/rejectedsoftware/vibe.d/issues/1106
-[issue1107]: https://github.com/rejectedsoftware/vibe.d/issues/1107
-[issue1109]: https://github.com/rejectedsoftware/vibe.d/issues/1109
-[issue1118]: https://github.com/rejectedsoftware/vibe.d/issues/1118
-[issue1120]: https://github.com/rejectedsoftware/vibe.d/issues/1120
-[issue1125]: https://github.com/rejectedsoftware/vibe.d/issues/1125
-[issue1129]: https://github.com/rejectedsoftware/vibe.d/issues/1129
-[issue1132]: https://github.com/rejectedsoftware/vibe.d/issues/1132
-[issue1135]: https://github.com/rejectedsoftware/vibe.d/issues/1135
-[issue1143]: https://github.com/rejectedsoftware/vibe.d/issues/1143
-[issue1144]: https://github.com/rejectedsoftware/vibe.d/issues/1144
-[issue1148]: https://github.com/rejectedsoftware/vibe.d/issues/1148
-[issue1156]: https://github.com/rejectedsoftware/vibe.d/issues/1156
-[issue1157]: https://github.com/rejectedsoftware/vibe.d/issues/1157
-[issue1158]: https://github.com/rejectedsoftware/vibe.d/issues/1158
-[issue1159]: https://github.com/rejectedsoftware/vibe.d/issues/1159
-[issue1172]: https://github.com/rejectedsoftware/vibe.d/issues/1172
-[issue1176]: https://github.com/rejectedsoftware/vibe.d/issues/1176
-[issue1179]: https://github.com/rejectedsoftware/vibe.d/issues/1179
-[issue1182]: https://github.com/rejectedsoftware/vibe.d/issues/1182
-[issue1183]: https://github.com/rejectedsoftware/vibe.d/issues/1183
-[issue1189]: https://github.com/rejectedsoftware/vibe.d/issues/1189
-[issue1190]: https://github.com/rejectedsoftware/vibe.d/issues/1190
-[issue1198]: https://github.com/rejectedsoftware/vibe.d/issues/1198
-[issue1199]: https://github.com/rejectedsoftware/vibe.d/issues/1199
+[issue945]: https://github.com/vibe-d/vibe.d/issues/945
+[issue952]: https://github.com/vibe-d/vibe.d/issues/952
+[issue999]: https://github.com/vibe-d/vibe.d/issues/999
+[issue1010]: https://github.com/vibe-d/vibe.d/issues/1010
+[issue1032]: https://github.com/vibe-d/vibe.d/issues/1032
+[issue1036]: https://github.com/vibe-d/vibe.d/issues/1036
+[issue1044]: https://github.com/vibe-d/vibe.d/issues/1044
+[issue1058]: https://github.com/vibe-d/vibe.d/issues/1058
+[issue1067]: https://github.com/vibe-d/vibe.d/issues/1067
+[issue1068]: https://github.com/vibe-d/vibe.d/issues/1068
+[issue1074]: https://github.com/vibe-d/vibe.d/issues/1074
+[issue1076]: https://github.com/vibe-d/vibe.d/issues/1076
+[issue1082]: https://github.com/vibe-d/vibe.d/issues/1082
+[issue1083]: https://github.com/vibe-d/vibe.d/issues/1083
+[issue1101]: https://github.com/vibe-d/vibe.d/issues/1101
+[issue1103]: https://github.com/vibe-d/vibe.d/issues/1103
+[issue1106]: https://github.com/vibe-d/vibe.d/issues/1106
+[issue1107]: https://github.com/vibe-d/vibe.d/issues/1107
+[issue1109]: https://github.com/vibe-d/vibe.d/issues/1109
+[issue1118]: https://github.com/vibe-d/vibe.d/issues/1118
+[issue1120]: https://github.com/vibe-d/vibe.d/issues/1120
+[issue1125]: https://github.com/vibe-d/vibe.d/issues/1125
+[issue1129]: https://github.com/vibe-d/vibe.d/issues/1129
+[issue1132]: https://github.com/vibe-d/vibe.d/issues/1132
+[issue1135]: https://github.com/vibe-d/vibe.d/issues/1135
+[issue1143]: https://github.com/vibe-d/vibe.d/issues/1143
+[issue1144]: https://github.com/vibe-d/vibe.d/issues/1144
+[issue1148]: https://github.com/vibe-d/vibe.d/issues/1148
+[issue1156]: https://github.com/vibe-d/vibe.d/issues/1156
+[issue1157]: https://github.com/vibe-d/vibe.d/issues/1157
+[issue1158]: https://github.com/vibe-d/vibe.d/issues/1158
+[issue1159]: https://github.com/vibe-d/vibe.d/issues/1159
+[issue1172]: https://github.com/vibe-d/vibe.d/issues/1172
+[issue1176]: https://github.com/vibe-d/vibe.d/issues/1176
+[issue1179]: https://github.com/vibe-d/vibe.d/issues/1179
+[issue1182]: https://github.com/vibe-d/vibe.d/issues/1182
+[issue1183]: https://github.com/vibe-d/vibe.d/issues/1183
+[issue1189]: https://github.com/vibe-d/vibe.d/issues/1189
+[issue1190]: https://github.com/vibe-d/vibe.d/issues/1190
+[issue1198]: https://github.com/vibe-d/vibe.d/issues/1198
+[issue1199]: https://github.com/vibe-d/vibe.d/issues/1199
 
 
 v0.7.23 - 2015-03-25
@@ -392,37 +941,37 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
  - Fixed parsing of Diet attributes that are followed by whitespace - [issue #1021][issue1021]
  - Fixed parsing of Diet string literal attributes that contain unbalanced parenthesis - [issue #1033][issue1033]
 
-[issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
-[issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
-[issue902]: https://github.com/rejectedsoftware/vibe.d/issues/902
-[issue905]: https://github.com/rejectedsoftware/vibe.d/issues/905
-[issue937]: https://github.com/rejectedsoftware/vibe.d/issues/937
-[issue946]: https://github.com/rejectedsoftware/vibe.d/issues/946
-[issue947]: https://github.com/rejectedsoftware/vibe.d/issues/947
-[issue948]: https://github.com/rejectedsoftware/vibe.d/issues/948
-[issue949]: https://github.com/rejectedsoftware/vibe.d/issues/949
-[issue961]: https://github.com/rejectedsoftware/vibe.d/issues/961
-[issue962]: https://github.com/rejectedsoftware/vibe.d/issues/962
-[issue965]: https://github.com/rejectedsoftware/vibe.d/issues/965
-[issue969]: https://github.com/rejectedsoftware/vibe.d/issues/969
-[issue970]: https://github.com/rejectedsoftware/vibe.d/issues/970
-[issue978]: https://github.com/rejectedsoftware/vibe.d/issues/978
-[issue980]: https://github.com/rejectedsoftware/vibe.d/issues/980
-[issue984]: https://github.com/rejectedsoftware/vibe.d/issues/984
-[issue987]: https://github.com/rejectedsoftware/vibe.d/issues/987
-[issue992]: https://github.com/rejectedsoftware/vibe.d/issues/992
-[issue993]: https://github.com/rejectedsoftware/vibe.d/issues/993
-[issue996]: https://github.com/rejectedsoftware/vibe.d/issues/996
-[issue1000]: https://github.com/rejectedsoftware/vibe.d/issues/1000
-[issue1001]: https://github.com/rejectedsoftware/vibe.d/issues/1001
-[issue1002]: https://github.com/rejectedsoftware/vibe.d/issues/1002
-[issue1004]: https://github.com/rejectedsoftware/vibe.d/issues/1004
-[issue1007]: https://github.com/rejectedsoftware/vibe.d/issues/1007
-[issue1008]: https://github.com/rejectedsoftware/vibe.d/issues/1008
-[issue1012]: https://github.com/rejectedsoftware/vibe.d/issues/1012
-[issue1015]: https://github.com/rejectedsoftware/vibe.d/issues/1015
-[issue1021]: https://github.com/rejectedsoftware/vibe.d/issues/1021
-[issue1033]: https://github.com/rejectedsoftware/vibe.d/issues/1033
+[issue896]: https://github.com/vibe-d/vibe.d/issues/896
+[issue896]: https://github.com/vibe-d/vibe.d/issues/896
+[issue902]: https://github.com/vibe-d/vibe.d/issues/902
+[issue905]: https://github.com/vibe-d/vibe.d/issues/905
+[issue937]: https://github.com/vibe-d/vibe.d/issues/937
+[issue946]: https://github.com/vibe-d/vibe.d/issues/946
+[issue947]: https://github.com/vibe-d/vibe.d/issues/947
+[issue948]: https://github.com/vibe-d/vibe.d/issues/948
+[issue949]: https://github.com/vibe-d/vibe.d/issues/949
+[issue961]: https://github.com/vibe-d/vibe.d/issues/961
+[issue962]: https://github.com/vibe-d/vibe.d/issues/962
+[issue965]: https://github.com/vibe-d/vibe.d/issues/965
+[issue969]: https://github.com/vibe-d/vibe.d/issues/969
+[issue970]: https://github.com/vibe-d/vibe.d/issues/970
+[issue978]: https://github.com/vibe-d/vibe.d/issues/978
+[issue980]: https://github.com/vibe-d/vibe.d/issues/980
+[issue984]: https://github.com/vibe-d/vibe.d/issues/984
+[issue987]: https://github.com/vibe-d/vibe.d/issues/987
+[issue992]: https://github.com/vibe-d/vibe.d/issues/992
+[issue993]: https://github.com/vibe-d/vibe.d/issues/993
+[issue996]: https://github.com/vibe-d/vibe.d/issues/996
+[issue1000]: https://github.com/vibe-d/vibe.d/issues/1000
+[issue1001]: https://github.com/vibe-d/vibe.d/issues/1001
+[issue1002]: https://github.com/vibe-d/vibe.d/issues/1002
+[issue1004]: https://github.com/vibe-d/vibe.d/issues/1004
+[issue1007]: https://github.com/vibe-d/vibe.d/issues/1007
+[issue1008]: https://github.com/vibe-d/vibe.d/issues/1008
+[issue1012]: https://github.com/vibe-d/vibe.d/issues/1012
+[issue1015]: https://github.com/vibe-d/vibe.d/issues/1015
+[issue1021]: https://github.com/vibe-d/vibe.d/issues/1021
+[issue1033]: https://github.com/vibe-d/vibe.d/issues/1033
 
 
 v0.7.22 - 2015-01-12
@@ -445,16 +994,16 @@ A small release mostly fixing compilation issues on DMD 2.065, LDC 0.14.0 and GD
  - Fixed messages leaking past the end of a task to the next task handled by the same fiber (by Luca Niccoli) - [pull #934][issue934]
  - Fixed various compilation errors and ICEs for DMD 2.065, GDC and LDC 0.14.0 (by Martin Nowak) - [pull #901][issue901], [pull #907][issue907], [pull #927][issue927]
 
-[issue814]: https://github.com/rejectedsoftware/vibe.d/issues/814
-[issue900]: https://github.com/rejectedsoftware/vibe.d/issues/900
-[issue901]: https://github.com/rejectedsoftware/vibe.d/issues/901
-[issue907]: https://github.com/rejectedsoftware/vibe.d/issues/907
-[issue908]: https://github.com/rejectedsoftware/vibe.d/issues/908
-[issue913]: https://github.com/rejectedsoftware/vibe.d/issues/913
-[issue922]: https://github.com/rejectedsoftware/vibe.d/issues/922
-[issue923]: https://github.com/rejectedsoftware/vibe.d/issues/923
-[issue927]: https://github.com/rejectedsoftware/vibe.d/issues/927
-[issue934]: https://github.com/rejectedsoftware/vibe.d/issues/934
+[issue814]: https://github.com/vibe-d/vibe.d/issues/814
+[issue900]: https://github.com/vibe-d/vibe.d/issues/900
+[issue901]: https://github.com/vibe-d/vibe.d/issues/901
+[issue907]: https://github.com/vibe-d/vibe.d/issues/907
+[issue908]: https://github.com/vibe-d/vibe.d/issues/908
+[issue913]: https://github.com/vibe-d/vibe.d/issues/913
+[issue922]: https://github.com/vibe-d/vibe.d/issues/922
+[issue923]: https://github.com/vibe-d/vibe.d/issues/923
+[issue927]: https://github.com/vibe-d/vibe.d/issues/927
+[issue934]: https://github.com/vibe-d/vibe.d/issues/934
 
 
 v0.7.21 - 2014-11-18
@@ -630,99 +1179,99 @@ Due to a number of highly busy months (more to come), this release got delayed f
  - Fixed `sleep(0.seconds)` to be a no-op instead of throwing an assertion error
  - Fixed a potential resource leak in `HashMap` by using `freeArray` instead of directly deallocating the block of memory (by Etienne Cimon) - [pull #893][issue893]
 
-[issue619]: https://github.com/rejectedsoftware/vibe.d/issues/619
-[issue621]: https://github.com/rejectedsoftware/vibe.d/issues/621
-[issue663]: https://github.com/rejectedsoftware/vibe.d/issues/663
-[issue684]: https://github.com/rejectedsoftware/vibe.d/issues/684
-[issue684]: https://github.com/rejectedsoftware/vibe.d/issues/684
-[issue691]: https://github.com/rejectedsoftware/vibe.d/issues/691
-[issue693]: https://github.com/rejectedsoftware/vibe.d/issues/693
-[issue694]: https://github.com/rejectedsoftware/vibe.d/issues/694
-[issue714]: https://github.com/rejectedsoftware/vibe.d/issues/714
-[issue715]: https://github.com/rejectedsoftware/vibe.d/issues/715
-[issue719]: https://github.com/rejectedsoftware/vibe.d/issues/719
-[issue720]: https://github.com/rejectedsoftware/vibe.d/issues/720
-[issue723]: https://github.com/rejectedsoftware/vibe.d/issues/723
-[issue725]: https://github.com/rejectedsoftware/vibe.d/issues/725
-[issue729]: https://github.com/rejectedsoftware/vibe.d/issues/729
-[issue731]: https://github.com/rejectedsoftware/vibe.d/issues/731
-[issue732]: https://github.com/rejectedsoftware/vibe.d/issues/732
-[issue733]: https://github.com/rejectedsoftware/vibe.d/issues/733
-[issue735]: https://github.com/rejectedsoftware/vibe.d/issues/735
-[issue738]: https://github.com/rejectedsoftware/vibe.d/issues/738
-[issue743]: https://github.com/rejectedsoftware/vibe.d/issues/743
-[issue744]: https://github.com/rejectedsoftware/vibe.d/issues/744
-[issue746]: https://github.com/rejectedsoftware/vibe.d/issues/746
-[issue748]: https://github.com/rejectedsoftware/vibe.d/issues/748
-[issue752]: https://github.com/rejectedsoftware/vibe.d/issues/752
-[issue753]: https://github.com/rejectedsoftware/vibe.d/issues/753
-[issue754]: https://github.com/rejectedsoftware/vibe.d/issues/754
-[issue755]: https://github.com/rejectedsoftware/vibe.d/issues/755
-[issue756]: https://github.com/rejectedsoftware/vibe.d/issues/756
-[issue757]: https://github.com/rejectedsoftware/vibe.d/issues/757
-[issue758]: https://github.com/rejectedsoftware/vibe.d/issues/758
-[issue759]: https://github.com/rejectedsoftware/vibe.d/issues/759
-[issue760]: https://github.com/rejectedsoftware/vibe.d/issues/760
-[issue761]: https://github.com/rejectedsoftware/vibe.d/issues/761
-[issue769]: https://github.com/rejectedsoftware/vibe.d/issues/769
-[issue771]: https://github.com/rejectedsoftware/vibe.d/issues/771
-[issue772]: https://github.com/rejectedsoftware/vibe.d/issues/772
-[issue776]: https://github.com/rejectedsoftware/vibe.d/issues/776
-[issue778]: https://github.com/rejectedsoftware/vibe.d/issues/778
-[issue779]: https://github.com/rejectedsoftware/vibe.d/issues/779
-[issue781]: https://github.com/rejectedsoftware/vibe.d/issues/781
-[issue782]: https://github.com/rejectedsoftware/vibe.d/issues/782
-[issue783]: https://github.com/rejectedsoftware/vibe.d/issues/783
-[issue785]: https://github.com/rejectedsoftware/vibe.d/issues/785
-[issue786]: https://github.com/rejectedsoftware/vibe.d/issues/786
-[issue788]: https://github.com/rejectedsoftware/vibe.d/issues/788
-[issue789]: https://github.com/rejectedsoftware/vibe.d/issues/789
-[issue790]: https://github.com/rejectedsoftware/vibe.d/issues/790
-[issue792]: https://github.com/rejectedsoftware/vibe.d/issues/792
-[issue794]: https://github.com/rejectedsoftware/vibe.d/issues/794
-[issue796]: https://github.com/rejectedsoftware/vibe.d/issues/796
-[issue799]: https://github.com/rejectedsoftware/vibe.d/issues/799
-[issue801]: https://github.com/rejectedsoftware/vibe.d/issues/801
-[issue803]: https://github.com/rejectedsoftware/vibe.d/issues/803
-[issue805]: https://github.com/rejectedsoftware/vibe.d/issues/805
-[issue806]: https://github.com/rejectedsoftware/vibe.d/issues/806
-[issue807]: https://github.com/rejectedsoftware/vibe.d/issues/807
-[issue808]: https://github.com/rejectedsoftware/vibe.d/issues/808
-[issue808]: https://github.com/rejectedsoftware/vibe.d/issues/808
-[issue809]: https://github.com/rejectedsoftware/vibe.d/issues/809
-[issue811]: https://github.com/rejectedsoftware/vibe.d/issues/811
-[issue815]: https://github.com/rejectedsoftware/vibe.d/issues/815
-[issue817]: https://github.com/rejectedsoftware/vibe.d/issues/817
-[issue818]: https://github.com/rejectedsoftware/vibe.d/issues/818
-[issue819]: https://github.com/rejectedsoftware/vibe.d/issues/819
-[issue821]: https://github.com/rejectedsoftware/vibe.d/issues/821
-[issue822]: https://github.com/rejectedsoftware/vibe.d/issues/822
-[issue823]: https://github.com/rejectedsoftware/vibe.d/issues/823
-[issue824]: https://github.com/rejectedsoftware/vibe.d/issues/824
-[issue825]: https://github.com/rejectedsoftware/vibe.d/issues/825
-[issue827]: https://github.com/rejectedsoftware/vibe.d/issues/827
-[issue829]: https://github.com/rejectedsoftware/vibe.d/issues/829
-[issue834]: https://github.com/rejectedsoftware/vibe.d/issues/834
-[issue839]: https://github.com/rejectedsoftware/vibe.d/issues/839
-[issue840]: https://github.com/rejectedsoftware/vibe.d/issues/840
-[issue841]: https://github.com/rejectedsoftware/vibe.d/issues/841
-[issue843]: https://github.com/rejectedsoftware/vibe.d/issues/843
-[issue845]: https://github.com/rejectedsoftware/vibe.d/issues/845
-[issue846]: https://github.com/rejectedsoftware/vibe.d/issues/846
-[issue847]: https://github.com/rejectedsoftware/vibe.d/issues/847
-[issue848]: https://github.com/rejectedsoftware/vibe.d/issues/848
-[issue849]: https://github.com/rejectedsoftware/vibe.d/issues/849
-[issue855]: https://github.com/rejectedsoftware/vibe.d/issues/855
-[issue860]: https://github.com/rejectedsoftware/vibe.d/issues/860
-[issue861]: https://github.com/rejectedsoftware/vibe.d/issues/861
-[issue868]: https://github.com/rejectedsoftware/vibe.d/issues/868
-[issue869]: https://github.com/rejectedsoftware/vibe.d/issues/869
-[issue879]: https://github.com/rejectedsoftware/vibe.d/issues/879
-[issue883]: https://github.com/rejectedsoftware/vibe.d/issues/883
-[issue887]: https://github.com/rejectedsoftware/vibe.d/issues/887
-[issue888]: https://github.com/rejectedsoftware/vibe.d/issues/888
-[issue890]: https://github.com/rejectedsoftware/vibe.d/issues/890
-[issue893]: https://github.com/rejectedsoftware/vibe.d/issues/893
+[issue619]: https://github.com/vibe-d/vibe.d/issues/619
+[issue621]: https://github.com/vibe-d/vibe.d/issues/621
+[issue663]: https://github.com/vibe-d/vibe.d/issues/663
+[issue684]: https://github.com/vibe-d/vibe.d/issues/684
+[issue684]: https://github.com/vibe-d/vibe.d/issues/684
+[issue691]: https://github.com/vibe-d/vibe.d/issues/691
+[issue693]: https://github.com/vibe-d/vibe.d/issues/693
+[issue694]: https://github.com/vibe-d/vibe.d/issues/694
+[issue714]: https://github.com/vibe-d/vibe.d/issues/714
+[issue715]: https://github.com/vibe-d/vibe.d/issues/715
+[issue719]: https://github.com/vibe-d/vibe.d/issues/719
+[issue720]: https://github.com/vibe-d/vibe.d/issues/720
+[issue723]: https://github.com/vibe-d/vibe.d/issues/723
+[issue725]: https://github.com/vibe-d/vibe.d/issues/725
+[issue729]: https://github.com/vibe-d/vibe.d/issues/729
+[issue731]: https://github.com/vibe-d/vibe.d/issues/731
+[issue732]: https://github.com/vibe-d/vibe.d/issues/732
+[issue733]: https://github.com/vibe-d/vibe.d/issues/733
+[issue735]: https://github.com/vibe-d/vibe.d/issues/735
+[issue738]: https://github.com/vibe-d/vibe.d/issues/738
+[issue743]: https://github.com/vibe-d/vibe.d/issues/743
+[issue744]: https://github.com/vibe-d/vibe.d/issues/744
+[issue746]: https://github.com/vibe-d/vibe.d/issues/746
+[issue748]: https://github.com/vibe-d/vibe.d/issues/748
+[issue752]: https://github.com/vibe-d/vibe.d/issues/752
+[issue753]: https://github.com/vibe-d/vibe.d/issues/753
+[issue754]: https://github.com/vibe-d/vibe.d/issues/754
+[issue755]: https://github.com/vibe-d/vibe.d/issues/755
+[issue756]: https://github.com/vibe-d/vibe.d/issues/756
+[issue757]: https://github.com/vibe-d/vibe.d/issues/757
+[issue758]: https://github.com/vibe-d/vibe.d/issues/758
+[issue759]: https://github.com/vibe-d/vibe.d/issues/759
+[issue760]: https://github.com/vibe-d/vibe.d/issues/760
+[issue761]: https://github.com/vibe-d/vibe.d/issues/761
+[issue769]: https://github.com/vibe-d/vibe.d/issues/769
+[issue771]: https://github.com/vibe-d/vibe.d/issues/771
+[issue772]: https://github.com/vibe-d/vibe.d/issues/772
+[issue776]: https://github.com/vibe-d/vibe.d/issues/776
+[issue778]: https://github.com/vibe-d/vibe.d/issues/778
+[issue779]: https://github.com/vibe-d/vibe.d/issues/779
+[issue781]: https://github.com/vibe-d/vibe.d/issues/781
+[issue782]: https://github.com/vibe-d/vibe.d/issues/782
+[issue783]: https://github.com/vibe-d/vibe.d/issues/783
+[issue785]: https://github.com/vibe-d/vibe.d/issues/785
+[issue786]: https://github.com/vibe-d/vibe.d/issues/786
+[issue788]: https://github.com/vibe-d/vibe.d/issues/788
+[issue789]: https://github.com/vibe-d/vibe.d/issues/789
+[issue790]: https://github.com/vibe-d/vibe.d/issues/790
+[issue792]: https://github.com/vibe-d/vibe.d/issues/792
+[issue794]: https://github.com/vibe-d/vibe.d/issues/794
+[issue796]: https://github.com/vibe-d/vibe.d/issues/796
+[issue799]: https://github.com/vibe-d/vibe.d/issues/799
+[issue801]: https://github.com/vibe-d/vibe.d/issues/801
+[issue803]: https://github.com/vibe-d/vibe.d/issues/803
+[issue805]: https://github.com/vibe-d/vibe.d/issues/805
+[issue806]: https://github.com/vibe-d/vibe.d/issues/806
+[issue807]: https://github.com/vibe-d/vibe.d/issues/807
+[issue808]: https://github.com/vibe-d/vibe.d/issues/808
+[issue808]: https://github.com/vibe-d/vibe.d/issues/808
+[issue809]: https://github.com/vibe-d/vibe.d/issues/809
+[issue811]: https://github.com/vibe-d/vibe.d/issues/811
+[issue815]: https://github.com/vibe-d/vibe.d/issues/815
+[issue817]: https://github.com/vibe-d/vibe.d/issues/817
+[issue818]: https://github.com/vibe-d/vibe.d/issues/818
+[issue819]: https://github.com/vibe-d/vibe.d/issues/819
+[issue821]: https://github.com/vibe-d/vibe.d/issues/821
+[issue822]: https://github.com/vibe-d/vibe.d/issues/822
+[issue823]: https://github.com/vibe-d/vibe.d/issues/823
+[issue824]: https://github.com/vibe-d/vibe.d/issues/824
+[issue825]: https://github.com/vibe-d/vibe.d/issues/825
+[issue827]: https://github.com/vibe-d/vibe.d/issues/827
+[issue829]: https://github.com/vibe-d/vibe.d/issues/829
+[issue834]: https://github.com/vibe-d/vibe.d/issues/834
+[issue839]: https://github.com/vibe-d/vibe.d/issues/839
+[issue840]: https://github.com/vibe-d/vibe.d/issues/840
+[issue841]: https://github.com/vibe-d/vibe.d/issues/841
+[issue843]: https://github.com/vibe-d/vibe.d/issues/843
+[issue845]: https://github.com/vibe-d/vibe.d/issues/845
+[issue846]: https://github.com/vibe-d/vibe.d/issues/846
+[issue847]: https://github.com/vibe-d/vibe.d/issues/847
+[issue848]: https://github.com/vibe-d/vibe.d/issues/848
+[issue849]: https://github.com/vibe-d/vibe.d/issues/849
+[issue855]: https://github.com/vibe-d/vibe.d/issues/855
+[issue860]: https://github.com/vibe-d/vibe.d/issues/860
+[issue861]: https://github.com/vibe-d/vibe.d/issues/861
+[issue868]: https://github.com/vibe-d/vibe.d/issues/868
+[issue869]: https://github.com/vibe-d/vibe.d/issues/869
+[issue879]: https://github.com/vibe-d/vibe.d/issues/879
+[issue883]: https://github.com/vibe-d/vibe.d/issues/883
+[issue887]: https://github.com/vibe-d/vibe.d/issues/887
+[issue888]: https://github.com/vibe-d/vibe.d/issues/888
+[issue890]: https://github.com/vibe-d/vibe.d/issues/890
+[issue893]: https://github.com/vibe-d/vibe.d/issues/893
 
 
 v0.7.20 - 2014-06-03
@@ -796,23 +1345,23 @@ The `vibe.web.web` web interface generator module has been extended with some im
  - Fixed compilation on 2.064 frontend based GDC - [issue #647][issue647]
  - Fixed output of empty lines in "tag." style Diet template text blocks
 
-[issue410]: https://github.com/rejectedsoftware/vibe.d/issues/410
-[issue443]: https://github.com/rejectedsoftware/vibe.d/issues/443
-[issue470]: https://github.com/rejectedsoftware/vibe.d/issues/470
-[issue540]: https://github.com/rejectedsoftware/vibe.d/issues/540
-[issue601]: https://github.com/rejectedsoftware/vibe.d/issues/601
-[issue609]: https://github.com/rejectedsoftware/vibe.d/issues/609
-[issue614]: https://github.com/rejectedsoftware/vibe.d/issues/614
-[issue618]: https://github.com/rejectedsoftware/vibe.d/issues/618
-[issue621]: https://github.com/rejectedsoftware/vibe.d/issues/621
-[issue622]: https://github.com/rejectedsoftware/vibe.d/issues/622
-[issue630]: https://github.com/rejectedsoftware/vibe.d/issues/630
-[issue632]: https://github.com/rejectedsoftware/vibe.d/issues/632
-[issue633]: https://github.com/rejectedsoftware/vibe.d/issues/633
-[issue637]: https://github.com/rejectedsoftware/vibe.d/issues/637
-[issue647]: https://github.com/rejectedsoftware/vibe.d/issues/647
-[issue653]: https://github.com/rejectedsoftware/vibe.d/issues/653
-[issue659]: https://github.com/rejectedsoftware/vibe.d/issues/659
+[issue410]: https://github.com/vibe-d/vibe.d/issues/410
+[issue443]: https://github.com/vibe-d/vibe.d/issues/443
+[issue470]: https://github.com/vibe-d/vibe.d/issues/470
+[issue540]: https://github.com/vibe-d/vibe.d/issues/540
+[issue601]: https://github.com/vibe-d/vibe.d/issues/601
+[issue609]: https://github.com/vibe-d/vibe.d/issues/609
+[issue614]: https://github.com/vibe-d/vibe.d/issues/614
+[issue618]: https://github.com/vibe-d/vibe.d/issues/618
+[issue621]: https://github.com/vibe-d/vibe.d/issues/621
+[issue622]: https://github.com/vibe-d/vibe.d/issues/622
+[issue630]: https://github.com/vibe-d/vibe.d/issues/630
+[issue632]: https://github.com/vibe-d/vibe.d/issues/632
+[issue633]: https://github.com/vibe-d/vibe.d/issues/633
+[issue637]: https://github.com/vibe-d/vibe.d/issues/637
+[issue647]: https://github.com/vibe-d/vibe.d/issues/647
+[issue653]: https://github.com/vibe-d/vibe.d/issues/653
+[issue659]: https://github.com/vibe-d/vibe.d/issues/659
 
 
 v0.7.19 - 2014-04-09
@@ -947,69 +1496,69 @@ Apart from working on the latest DMD versions, this release includes an importan
 
 Note that some fixes have been left out because they are related to changes within the development cycle of this release.
 
-[issue289]: https://github.com/rejectedsoftware/vibe.d/issues/289
-[issue289]: https://github.com/rejectedsoftware/vibe.d/issues/289
-[issue372]: https://github.com/rejectedsoftware/vibe.d/issues/372
-[issue407]: https://github.com/rejectedsoftware/vibe.d/issues/407
-[issue407]: https://github.com/rejectedsoftware/vibe.d/issues/407
-[issue419]: https://github.com/rejectedsoftware/vibe.d/issues/419
-[issue419]: https://github.com/rejectedsoftware/vibe.d/issues/419
-[issue421]: https://github.com/rejectedsoftware/vibe.d/issues/421
-[issue430]: https://github.com/rejectedsoftware/vibe.d/issues/430
-[issue432]: https://github.com/rejectedsoftware/vibe.d/issues/432
-[issue434]: https://github.com/rejectedsoftware/vibe.d/issues/434
-[issue440]: https://github.com/rejectedsoftware/vibe.d/issues/440
-[issue441]: https://github.com/rejectedsoftware/vibe.d/issues/441
-[issue442]: https://github.com/rejectedsoftware/vibe.d/issues/442
-[issue448]: https://github.com/rejectedsoftware/vibe.d/issues/448
-[issue450]: https://github.com/rejectedsoftware/vibe.d/issues/450
-[issue453]: https://github.com/rejectedsoftware/vibe.d/issues/453
-[issue460]: https://github.com/rejectedsoftware/vibe.d/issues/460
-[issue467]: https://github.com/rejectedsoftware/vibe.d/issues/467
-[issue468]: https://github.com/rejectedsoftware/vibe.d/issues/468
-[issue473]: https://github.com/rejectedsoftware/vibe.d/issues/473
-[issue474]: https://github.com/rejectedsoftware/vibe.d/issues/474
-[issue475]: https://github.com/rejectedsoftware/vibe.d/issues/475
-[issue481]: https://github.com/rejectedsoftware/vibe.d/issues/481
-[issue482]: https://github.com/rejectedsoftware/vibe.d/issues/482
-[issue485]: https://github.com/rejectedsoftware/vibe.d/issues/485
-[issue486]: https://github.com/rejectedsoftware/vibe.d/issues/486
-[issue489]: https://github.com/rejectedsoftware/vibe.d/issues/489
-[issue498]: https://github.com/rejectedsoftware/vibe.d/issues/498
-[issue499]: https://github.com/rejectedsoftware/vibe.d/issues/499
-[issue501]: https://github.com/rejectedsoftware/vibe.d/issues/501
-[issue502]: https://github.com/rejectedsoftware/vibe.d/issues/502
-[issue505]: https://github.com/rejectedsoftware/vibe.d/issues/505
-[issue507]: https://github.com/rejectedsoftware/vibe.d/issues/507
-[issue509]: https://github.com/rejectedsoftware/vibe.d/issues/509
-[issue510]: https://github.com/rejectedsoftware/vibe.d/issues/510
-[issue512]: https://github.com/rejectedsoftware/vibe.d/issues/512
-[issue518]: https://github.com/rejectedsoftware/vibe.d/issues/518
-[issue519]: https://github.com/rejectedsoftware/vibe.d/issues/519
-[issue520]: https://github.com/rejectedsoftware/vibe.d/issues/520
-[issue521]: https://github.com/rejectedsoftware/vibe.d/issues/521
-[issue527]: https://github.com/rejectedsoftware/vibe.d/issues/527
-[issue528]: https://github.com/rejectedsoftware/vibe.d/issues/528
-[issue532]: https://github.com/rejectedsoftware/vibe.d/issues/532
-[issue533]: https://github.com/rejectedsoftware/vibe.d/issues/533
-[issue535]: https://github.com/rejectedsoftware/vibe.d/issues/535
-[issue538]: https://github.com/rejectedsoftware/vibe.d/issues/538
-[issue539]: https://github.com/rejectedsoftware/vibe.d/issues/539
-[issue541]: https://github.com/rejectedsoftware/vibe.d/issues/541
-[issue543]: https://github.com/rejectedsoftware/vibe.d/issues/543
-[issue544]: https://github.com/rejectedsoftware/vibe.d/issues/544
-[issue545]: https://github.com/rejectedsoftware/vibe.d/issues/545
-[issue551]: https://github.com/rejectedsoftware/vibe.d/issues/551
-[issue552]: https://github.com/rejectedsoftware/vibe.d/issues/552
-[issue563]: https://github.com/rejectedsoftware/vibe.d/issues/563
-[issue574]: https://github.com/rejectedsoftware/vibe.d/issues/574
-[issue575]: https://github.com/rejectedsoftware/vibe.d/issues/575
-[issue582]: https://github.com/rejectedsoftware/vibe.d/issues/582
-[issue587]: https://github.com/rejectedsoftware/vibe.d/issues/587
-[issue590]: https://github.com/rejectedsoftware/vibe.d/issues/590
-[issue591]: https://github.com/rejectedsoftware/vibe.d/issues/591
-[issue597]: https://github.com/rejectedsoftware/vibe.d/issues/597
-[issue602]: https://github.com/rejectedsoftware/vibe.d/issues/602
+[issue289]: https://github.com/vibe-d/vibe.d/issues/289
+[issue289]: https://github.com/vibe-d/vibe.d/issues/289
+[issue372]: https://github.com/vibe-d/vibe.d/issues/372
+[issue407]: https://github.com/vibe-d/vibe.d/issues/407
+[issue407]: https://github.com/vibe-d/vibe.d/issues/407
+[issue419]: https://github.com/vibe-d/vibe.d/issues/419
+[issue419]: https://github.com/vibe-d/vibe.d/issues/419
+[issue421]: https://github.com/vibe-d/vibe.d/issues/421
+[issue430]: https://github.com/vibe-d/vibe.d/issues/430
+[issue432]: https://github.com/vibe-d/vibe.d/issues/432
+[issue434]: https://github.com/vibe-d/vibe.d/issues/434
+[issue440]: https://github.com/vibe-d/vibe.d/issues/440
+[issue441]: https://github.com/vibe-d/vibe.d/issues/441
+[issue442]: https://github.com/vibe-d/vibe.d/issues/442
+[issue448]: https://github.com/vibe-d/vibe.d/issues/448
+[issue450]: https://github.com/vibe-d/vibe.d/issues/450
+[issue453]: https://github.com/vibe-d/vibe.d/issues/453
+[issue460]: https://github.com/vibe-d/vibe.d/issues/460
+[issue467]: https://github.com/vibe-d/vibe.d/issues/467
+[issue468]: https://github.com/vibe-d/vibe.d/issues/468
+[issue473]: https://github.com/vibe-d/vibe.d/issues/473
+[issue474]: https://github.com/vibe-d/vibe.d/issues/474
+[issue475]: https://github.com/vibe-d/vibe.d/issues/475
+[issue481]: https://github.com/vibe-d/vibe.d/issues/481
+[issue482]: https://github.com/vibe-d/vibe.d/issues/482
+[issue485]: https://github.com/vibe-d/vibe.d/issues/485
+[issue486]: https://github.com/vibe-d/vibe.d/issues/486
+[issue489]: https://github.com/vibe-d/vibe.d/issues/489
+[issue498]: https://github.com/vibe-d/vibe.d/issues/498
+[issue499]: https://github.com/vibe-d/vibe.d/issues/499
+[issue501]: https://github.com/vibe-d/vibe.d/issues/501
+[issue502]: https://github.com/vibe-d/vibe.d/issues/502
+[issue505]: https://github.com/vibe-d/vibe.d/issues/505
+[issue507]: https://github.com/vibe-d/vibe.d/issues/507
+[issue509]: https://github.com/vibe-d/vibe.d/issues/509
+[issue510]: https://github.com/vibe-d/vibe.d/issues/510
+[issue512]: https://github.com/vibe-d/vibe.d/issues/512
+[issue518]: https://github.com/vibe-d/vibe.d/issues/518
+[issue519]: https://github.com/vibe-d/vibe.d/issues/519
+[issue520]: https://github.com/vibe-d/vibe.d/issues/520
+[issue521]: https://github.com/vibe-d/vibe.d/issues/521
+[issue527]: https://github.com/vibe-d/vibe.d/issues/527
+[issue528]: https://github.com/vibe-d/vibe.d/issues/528
+[issue532]: https://github.com/vibe-d/vibe.d/issues/532
+[issue533]: https://github.com/vibe-d/vibe.d/issues/533
+[issue535]: https://github.com/vibe-d/vibe.d/issues/535
+[issue538]: https://github.com/vibe-d/vibe.d/issues/538
+[issue539]: https://github.com/vibe-d/vibe.d/issues/539
+[issue541]: https://github.com/vibe-d/vibe.d/issues/541
+[issue543]: https://github.com/vibe-d/vibe.d/issues/543
+[issue544]: https://github.com/vibe-d/vibe.d/issues/544
+[issue545]: https://github.com/vibe-d/vibe.d/issues/545
+[issue551]: https://github.com/vibe-d/vibe.d/issues/551
+[issue552]: https://github.com/vibe-d/vibe.d/issues/552
+[issue563]: https://github.com/vibe-d/vibe.d/issues/563
+[issue574]: https://github.com/vibe-d/vibe.d/issues/574
+[issue575]: https://github.com/vibe-d/vibe.d/issues/575
+[issue582]: https://github.com/vibe-d/vibe.d/issues/582
+[issue587]: https://github.com/vibe-d/vibe.d/issues/587
+[issue590]: https://github.com/vibe-d/vibe.d/issues/590
+[issue591]: https://github.com/vibe-d/vibe.d/issues/591
+[issue597]: https://github.com/vibe-d/vibe.d/issues/597
+[issue602]: https://github.com/vibe-d/vibe.d/issues/602
 
 
 v0.7.18 - 2013-11-26
@@ -1113,46 +1662,46 @@ The new release adds support for DMD 2.064 and contains an impressive number of 
  - Fixed a race condition during shutdown in `Libevent2ManualEvent`
  - Fixed the `Task.this(in Task)` constructor to preserve the task ID
 
-[issue191]: https://github.com/rejectedsoftware/vibe.d/issues/191
-[issue309]: https://github.com/rejectedsoftware/vibe.d/issues/309
-[issue321]: https://github.com/rejectedsoftware/vibe.d/issues/321
-[issue322]: https://github.com/rejectedsoftware/vibe.d/issues/322
-[issue327]: https://github.com/rejectedsoftware/vibe.d/issues/327
-[issue330]: https://github.com/rejectedsoftware/vibe.d/issues/330
-[issue331]: https://github.com/rejectedsoftware/vibe.d/issues/331
-[issue333]: https://github.com/rejectedsoftware/vibe.d/issues/333
-[issue334]: https://github.com/rejectedsoftware/vibe.d/issues/334
-[issue336]: https://github.com/rejectedsoftware/vibe.d/issues/336
-[issue337]: https://github.com/rejectedsoftware/vibe.d/issues/337
-[issue338]: https://github.com/rejectedsoftware/vibe.d/issues/338
-[issue340]: https://github.com/rejectedsoftware/vibe.d/issues/340
-[issue341]: https://github.com/rejectedsoftware/vibe.d/issues/341
-[issue343]: https://github.com/rejectedsoftware/vibe.d/issues/343
-[issue344]: https://github.com/rejectedsoftware/vibe.d/issues/344
-[issue348]: https://github.com/rejectedsoftware/vibe.d/issues/348
-[issue349]: https://github.com/rejectedsoftware/vibe.d/issues/349
-[issue350]: https://github.com/rejectedsoftware/vibe.d/issues/350
-[issue352]: https://github.com/rejectedsoftware/vibe.d/issues/352
-[issue353]: https://github.com/rejectedsoftware/vibe.d/issues/353
-[issue354]: https://github.com/rejectedsoftware/vibe.d/issues/354
-[issue357]: https://github.com/rejectedsoftware/vibe.d/issues/357
-[issue362]: https://github.com/rejectedsoftware/vibe.d/issues/362
-[issue364]: https://github.com/rejectedsoftware/vibe.d/issues/364
-[issue365]: https://github.com/rejectedsoftware/vibe.d/issues/365
-[issue368]: https://github.com/rejectedsoftware/vibe.d/issues/368
-[issue370]: https://github.com/rejectedsoftware/vibe.d/issues/370
-[issue373]: https://github.com/rejectedsoftware/vibe.d/issues/373
-[issue374]: https://github.com/rejectedsoftware/vibe.d/issues/374
-[issue377]: https://github.com/rejectedsoftware/vibe.d/issues/377
-[issue380]: https://github.com/rejectedsoftware/vibe.d/issues/380
-[issue384]: https://github.com/rejectedsoftware/vibe.d/issues/384
-[issue385]: https://github.com/rejectedsoftware/vibe.d/issues/385
-[issue386]: https://github.com/rejectedsoftware/vibe.d/issues/386
-[issue389]: https://github.com/rejectedsoftware/vibe.d/issues/389
-[issue398]: https://github.com/rejectedsoftware/vibe.d/issues/398
-[issue399]: https://github.com/rejectedsoftware/vibe.d/issues/399
-[issue401]: https://github.com/rejectedsoftware/vibe.d/issues/401
-[issue402]: https://github.com/rejectedsoftware/vibe.d/issues/402
+[issue191]: https://github.com/vibe-d/vibe.d/issues/191
+[issue309]: https://github.com/vibe-d/vibe.d/issues/309
+[issue321]: https://github.com/vibe-d/vibe.d/issues/321
+[issue322]: https://github.com/vibe-d/vibe.d/issues/322
+[issue327]: https://github.com/vibe-d/vibe.d/issues/327
+[issue330]: https://github.com/vibe-d/vibe.d/issues/330
+[issue331]: https://github.com/vibe-d/vibe.d/issues/331
+[issue333]: https://github.com/vibe-d/vibe.d/issues/333
+[issue334]: https://github.com/vibe-d/vibe.d/issues/334
+[issue336]: https://github.com/vibe-d/vibe.d/issues/336
+[issue337]: https://github.com/vibe-d/vibe.d/issues/337
+[issue338]: https://github.com/vibe-d/vibe.d/issues/338
+[issue340]: https://github.com/vibe-d/vibe.d/issues/340
+[issue341]: https://github.com/vibe-d/vibe.d/issues/341
+[issue343]: https://github.com/vibe-d/vibe.d/issues/343
+[issue344]: https://github.com/vibe-d/vibe.d/issues/344
+[issue348]: https://github.com/vibe-d/vibe.d/issues/348
+[issue349]: https://github.com/vibe-d/vibe.d/issues/349
+[issue350]: https://github.com/vibe-d/vibe.d/issues/350
+[issue352]: https://github.com/vibe-d/vibe.d/issues/352
+[issue353]: https://github.com/vibe-d/vibe.d/issues/353
+[issue354]: https://github.com/vibe-d/vibe.d/issues/354
+[issue357]: https://github.com/vibe-d/vibe.d/issues/357
+[issue362]: https://github.com/vibe-d/vibe.d/issues/362
+[issue364]: https://github.com/vibe-d/vibe.d/issues/364
+[issue365]: https://github.com/vibe-d/vibe.d/issues/365
+[issue368]: https://github.com/vibe-d/vibe.d/issues/368
+[issue370]: https://github.com/vibe-d/vibe.d/issues/370
+[issue373]: https://github.com/vibe-d/vibe.d/issues/373
+[issue374]: https://github.com/vibe-d/vibe.d/issues/374
+[issue377]: https://github.com/vibe-d/vibe.d/issues/377
+[issue380]: https://github.com/vibe-d/vibe.d/issues/380
+[issue384]: https://github.com/vibe-d/vibe.d/issues/384
+[issue385]: https://github.com/vibe-d/vibe.d/issues/385
+[issue386]: https://github.com/vibe-d/vibe.d/issues/386
+[issue389]: https://github.com/vibe-d/vibe.d/issues/389
+[issue398]: https://github.com/vibe-d/vibe.d/issues/398
+[issue399]: https://github.com/vibe-d/vibe.d/issues/399
+[issue401]: https://github.com/vibe-d/vibe.d/issues/401
+[issue402]: https://github.com/vibe-d/vibe.d/issues/402
 
 
 v0.7.17 - 2013-09-09
@@ -1207,24 +1756,24 @@ This release fixes compiling on DMD 2.063.2 and DMD HEAD and performs a big API 
  - Fixed possible failed listen attempts in the example projects - [issue #8][issue8], [issue #249][issue249], [issue #298][issue298]
  - Fixed compilation of the libevent2 driver on Win64
 
-[issue8]: https://github.com/rejectedsoftware/vibe.d/issues/8
-[issue249]: https://github.com/rejectedsoftware/vibe.d/issues/249
-[issue256]: https://github.com/rejectedsoftware/vibe.d/issues/256
-[issue260]: https://github.com/rejectedsoftware/vibe.d/issues/260
-[issue261]: https://github.com/rejectedsoftware/vibe.d/issues/261
-[issue264]: https://github.com/rejectedsoftware/vibe.d/issues/264
-[issue268]: https://github.com/rejectedsoftware/vibe.d/issues/268
-[issue270]: https://github.com/rejectedsoftware/vibe.d/issues/270
-[issue273]: https://github.com/rejectedsoftware/vibe.d/issues/273
-[issue274]: https://github.com/rejectedsoftware/vibe.d/issues/274
-[issue277]: https://github.com/rejectedsoftware/vibe.d/issues/277
-[issue279]: https://github.com/rejectedsoftware/vibe.d/issues/279
-[issue280]: https://github.com/rejectedsoftware/vibe.d/issues/280
-[issue288]: https://github.com/rejectedsoftware/vibe.d/issues/288
-[issue293]: https://github.com/rejectedsoftware/vibe.d/issues/293
-[issue294]: https://github.com/rejectedsoftware/vibe.d/issues/294
-[issue296]: https://github.com/rejectedsoftware/vibe.d/issues/296
-[issue298]: https://github.com/rejectedsoftware/vibe.d/issues/298
+[issue8]: https://github.com/vibe-d/vibe.d/issues/8
+[issue249]: https://github.com/vibe-d/vibe.d/issues/249
+[issue256]: https://github.com/vibe-d/vibe.d/issues/256
+[issue260]: https://github.com/vibe-d/vibe.d/issues/260
+[issue261]: https://github.com/vibe-d/vibe.d/issues/261
+[issue264]: https://github.com/vibe-d/vibe.d/issues/264
+[issue268]: https://github.com/vibe-d/vibe.d/issues/268
+[issue270]: https://github.com/vibe-d/vibe.d/issues/270
+[issue273]: https://github.com/vibe-d/vibe.d/issues/273
+[issue274]: https://github.com/vibe-d/vibe.d/issues/274
+[issue277]: https://github.com/vibe-d/vibe.d/issues/277
+[issue279]: https://github.com/vibe-d/vibe.d/issues/279
+[issue280]: https://github.com/vibe-d/vibe.d/issues/280
+[issue288]: https://github.com/vibe-d/vibe.d/issues/288
+[issue293]: https://github.com/vibe-d/vibe.d/issues/293
+[issue294]: https://github.com/vibe-d/vibe.d/issues/294
+[issue296]: https://github.com/vibe-d/vibe.d/issues/296
+[issue298]: https://github.com/vibe-d/vibe.d/issues/298
 
 
 v0.7.16 - 2013-06-26
@@ -1266,14 +1815,14 @@ This release finally features support for DMD 2.063. It also contains two breaki
  - Fixed the Redis methods taking varargs - [issue #234][issue234]
  - Fixed failure to free memory after an `SSLStream` has failed to initiate the tunnel
 
-[issue200]: https://github.com/rejectedsoftware/vibe.d/issues/200
-[issue206]: https://github.com/rejectedsoftware/vibe.d/issues/206
-[issue223]: https://github.com/rejectedsoftware/vibe.d/issues/223
-[issue227]: https://github.com/rejectedsoftware/vibe.d/issues/227
-[issue229]: https://github.com/rejectedsoftware/vibe.d/issues/229
-[issue230]: https://github.com/rejectedsoftware/vibe.d/issues/230
-[issue234]: https://github.com/rejectedsoftware/vibe.d/issues/234
-[issue238]: https://github.com/rejectedsoftware/vibe.d/issues/238
+[issue200]: https://github.com/vibe-d/vibe.d/issues/200
+[issue206]: https://github.com/vibe-d/vibe.d/issues/206
+[issue223]: https://github.com/vibe-d/vibe.d/issues/223
+[issue227]: https://github.com/vibe-d/vibe.d/issues/227
+[issue229]: https://github.com/vibe-d/vibe.d/issues/229
+[issue230]: https://github.com/vibe-d/vibe.d/issues/230
+[issue234]: https://github.com/vibe-d/vibe.d/issues/234
+[issue238]: https://github.com/vibe-d/vibe.d/issues/238
 [issue75dub]: https://github.com/rejectedsoftware/dub/issues/75
 
 
@@ -1333,17 +1882,17 @@ This release cleans up the API in several places (scheduling some symbols for de
  - Fixed an error in the Deimos bindings (by Henry Robbins Gouk) - [pull #220][issue220]
  - Fixed a compilation error in the REST interface client (multiple definitions of "url__")
 
-[issue190]: https://github.com/rejectedsoftware/vibe.d/issues/190
-[issue199]: https://github.com/rejectedsoftware/vibe.d/issues/199
-[issue203]: https://github.com/rejectedsoftware/vibe.d/issues/203
-[issue204]: https://github.com/rejectedsoftware/vibe.d/issues/204
-[issue205]: https://github.com/rejectedsoftware/vibe.d/issues/205
-[issue207]: https://github.com/rejectedsoftware/vibe.d/issues/207
-[issue210]: https://github.com/rejectedsoftware/vibe.d/issues/210
-[issue211]: https://github.com/rejectedsoftware/vibe.d/issues/211
-[issue213]: https://github.com/rejectedsoftware/vibe.d/issues/213
-[issue218]: https://github.com/rejectedsoftware/vibe.d/issues/218
-[issue220]: https://github.com/rejectedsoftware/vibe.d/issues/220
+[issue190]: https://github.com/vibe-d/vibe.d/issues/190
+[issue199]: https://github.com/vibe-d/vibe.d/issues/199
+[issue203]: https://github.com/vibe-d/vibe.d/issues/203
+[issue204]: https://github.com/vibe-d/vibe.d/issues/204
+[issue205]: https://github.com/vibe-d/vibe.d/issues/205
+[issue207]: https://github.com/vibe-d/vibe.d/issues/207
+[issue210]: https://github.com/vibe-d/vibe.d/issues/210
+[issue211]: https://github.com/vibe-d/vibe.d/issues/211
+[issue213]: https://github.com/vibe-d/vibe.d/issues/213
+[issue218]: https://github.com/vibe-d/vibe.d/issues/218
+[issue220]: https://github.com/vibe-d/vibe.d/issues/220
 
 
 v0.7.14 - 2013-03-22
@@ -1386,10 +1935,10 @@ A lot has been improved on the performance and multi-threading front. The HTTP s
  - Fixed `HttpClient` to obey "Connection: close" responses
  - Fixed `Libevent2Signal` to not move tasks between threads
 
-[issue109]: https://github.com/rejectedsoftware/vibe.d/issues/109
-[issue182]: https://github.com/rejectedsoftware/vibe.d/issues/182
-[issue189]: https://github.com/rejectedsoftware/vibe.d/issues/189
-[issue195]: https://github.com/rejectedsoftware/vibe.d/issues/195
+[issue109]: https://github.com/vibe-d/vibe.d/issues/109
+[issue182]: https://github.com/vibe-d/vibe.d/issues/182
+[issue189]: https://github.com/vibe-d/vibe.d/issues/189
+[issue195]: https://github.com/vibe-d/vibe.d/issues/195
 
 
 v0.7.13 - 2013-02-24
@@ -1417,8 +1966,8 @@ This release solves some issues with the `HttpClient` in conjunction with SSL co
  - Fixed cross-thread invocations of `vibe.core.signal.Signal` in the Win32 driver
  - Fixed compilation on DMD 2.062 - [issue #183][issue183], [issue #184][issue184]
 
-[issue183]: https://github.com/rejectedsoftware/vibe.d/issues/183
-[issue184]: https://github.com/rejectedsoftware/vibe.d/issues/184
+[issue183]: https://github.com/vibe-d/vibe.d/issues/183
+[issue184]: https://github.com/vibe-d/vibe.d/issues/184
 
 
 v0.7.12 - 2013-02-11
@@ -1473,25 +2022,25 @@ Main changes are a refactored MiongoDB client, important fixes to the `HttpClien
  - Fixed use of `tmpnam` on Posix by replacing with `mkstemps`, still used on Windows - [issue #137][issue137]
  - Fixed `ZlibInputStream.empty` to be consistent with `leastSize`
 
-[issue137]: https://github.com/rejectedsoftware/vibe.d/issues/137
-[issue143]: https://github.com/rejectedsoftware/vibe.d/issues/143
-[issue154]: https://github.com/rejectedsoftware/vibe.d/issues/154
-[issue155]: https://github.com/rejectedsoftware/vibe.d/issues/155
-[issue156]: https://github.com/rejectedsoftware/vibe.d/issues/156
-[issue157]: https://github.com/rejectedsoftware/vibe.d/issues/157
-[issue159]: https://github.com/rejectedsoftware/vibe.d/issues/159
-[issue161]: https://github.com/rejectedsoftware/vibe.d/issues/161
-[issue164]: https://github.com/rejectedsoftware/vibe.d/issues/164
-[issue166]: https://github.com/rejectedsoftware/vibe.d/issues/166
-[issue168]: https://github.com/rejectedsoftware/vibe.d/issues/168
-[issue169]: https://github.com/rejectedsoftware/vibe.d/issues/169
-[issue171]: https://github.com/rejectedsoftware/vibe.d/issues/171
-[issue172]: https://github.com/rejectedsoftware/vibe.d/issues/172
-[issue173]: https://github.com/rejectedsoftware/vibe.d/issues/173
-[issue176]: https://github.com/rejectedsoftware/vibe.d/issues/176
-[issue177]: https://github.com/rejectedsoftware/vibe.d/issues/177
-[issue178]: https://github.com/rejectedsoftware/vibe.d/issues/178
-[issue180]: https://github.com/rejectedsoftware/vibe.d/issues/180
+[issue137]: https://github.com/vibe-d/vibe.d/issues/137
+[issue143]: https://github.com/vibe-d/vibe.d/issues/143
+[issue154]: https://github.com/vibe-d/vibe.d/issues/154
+[issue155]: https://github.com/vibe-d/vibe.d/issues/155
+[issue156]: https://github.com/vibe-d/vibe.d/issues/156
+[issue157]: https://github.com/vibe-d/vibe.d/issues/157
+[issue159]: https://github.com/vibe-d/vibe.d/issues/159
+[issue161]: https://github.com/vibe-d/vibe.d/issues/161
+[issue164]: https://github.com/vibe-d/vibe.d/issues/164
+[issue166]: https://github.com/vibe-d/vibe.d/issues/166
+[issue168]: https://github.com/vibe-d/vibe.d/issues/168
+[issue169]: https://github.com/vibe-d/vibe.d/issues/169
+[issue171]: https://github.com/vibe-d/vibe.d/issues/171
+[issue172]: https://github.com/vibe-d/vibe.d/issues/172
+[issue173]: https://github.com/vibe-d/vibe.d/issues/173
+[issue176]: https://github.com/vibe-d/vibe.d/issues/176
+[issue177]: https://github.com/vibe-d/vibe.d/issues/177
+[issue178]: https://github.com/vibe-d/vibe.d/issues/178
+[issue180]: https://github.com/vibe-d/vibe.d/issues/180
 
 
 v0.7.11 - 2013-01-05
@@ -1509,11 +2058,11 @@ Improves installation on Linux and fixes a configuration file handling error, as
  - User/group for privilege lowering are now specified as "user"/"group" in vibe.conf instead of "uid"/"gid" - see [issue #133][issue133]
  - Invalid uid/gid now actually cause the application startup to fail
 
-[issue133]: https://github.com/rejectedsoftware/vibe.d/issues/133
-[issue147]: https://github.com/rejectedsoftware/vibe.d/issues/147
-[issue150]: https://github.com/rejectedsoftware/vibe.d/issues/150
-[issue152]: https://github.com/rejectedsoftware/vibe.d/issues/152
-[issue153]: https://github.com/rejectedsoftware/vibe.d/issues/153
+[issue133]: https://github.com/vibe-d/vibe.d/issues/133
+[issue147]: https://github.com/vibe-d/vibe.d/issues/147
+[issue150]: https://github.com/vibe-d/vibe.d/issues/150
+[issue152]: https://github.com/vibe-d/vibe.d/issues/152
+[issue153]: https://github.com/vibe-d/vibe.d/issues/153
 
 
 v0.7.10 - 2013-01-03
@@ -1564,18 +2113,18 @@ The Win32 back end now has working TCP socket support. Also, the form and REST i
  - During the build, temporary executables are now built in `%TEMP%/.rdmd/source` so they pick up the right DLL versions
  - Fixed the daytime example (`readLine` was called with a maximum line length of zero) - [issue #122][issue122], [issue #123][issue123]
 
-[issue117]: https://github.com/rejectedsoftware/vibe.d/issues/117
-[issue122]: https://github.com/rejectedsoftware/vibe.d/issues/122
-[issue123]: https://github.com/rejectedsoftware/vibe.d/issues/123
-[issue126]: https://github.com/rejectedsoftware/vibe.d/issues/126
-[issue133]: https://github.com/rejectedsoftware/vibe.d/issues/133
-[issue136]: https://github.com/rejectedsoftware/vibe.d/issues/136
-[issue138]: https://github.com/rejectedsoftware/vibe.d/issues/138
-[issue139]: https://github.com/rejectedsoftware/vibe.d/issues/139
-[issue140]: https://github.com/rejectedsoftware/vibe.d/issues/140
-[issue141]: https://github.com/rejectedsoftware/vibe.d/issues/141
-[issue142]: https://github.com/rejectedsoftware/vibe.d/issues/142
-[issue146]: https://github.com/rejectedsoftware/vibe.d/issues/146
+[issue117]: https://github.com/vibe-d/vibe.d/issues/117
+[issue122]: https://github.com/vibe-d/vibe.d/issues/122
+[issue123]: https://github.com/vibe-d/vibe.d/issues/123
+[issue126]: https://github.com/vibe-d/vibe.d/issues/126
+[issue133]: https://github.com/vibe-d/vibe.d/issues/133
+[issue136]: https://github.com/vibe-d/vibe.d/issues/136
+[issue138]: https://github.com/vibe-d/vibe.d/issues/138
+[issue139]: https://github.com/vibe-d/vibe.d/issues/139
+[issue140]: https://github.com/vibe-d/vibe.d/issues/140
+[issue141]: https://github.com/vibe-d/vibe.d/issues/141
+[issue142]: https://github.com/vibe-d/vibe.d/issues/142
+[issue146]: https://github.com/vibe-d/vibe.d/issues/146
 
 
 v0.7.9 - 2012-10-30
@@ -1628,12 +2177,12 @@ The new release contains major improvements to the Win32 back end, as well as to
  - Fixed parsing of floating-point numbers with exponents in the JSON parser
  - Fixed some HTML output syntax errors in the Markdown compiler
 
-[issue32]: https://github.com/rejectedsoftware/vibe.d/issues/32
-[issue56]: https://github.com/rejectedsoftware/vibe.d/issues/56
-[issue106]: https://github.com/rejectedsoftware/vibe.d/issues/106
-[issue107]: https://github.com/rejectedsoftware/vibe.d/issues/107
-[issue108]: https://github.com/rejectedsoftware/vibe.d/issues/108
-[issue118]: https://github.com/rejectedsoftware/vibe.d/issues/118
+[issue32]: https://github.com/vibe-d/vibe.d/issues/32
+[issue56]: https://github.com/vibe-d/vibe.d/issues/56
+[issue106]: https://github.com/vibe-d/vibe.d/issues/106
+[issue107]: https://github.com/vibe-d/vibe.d/issues/107
+[issue108]: https://github.com/vibe-d/vibe.d/issues/108
+[issue118]: https://github.com/vibe-d/vibe.d/issues/118
 
 
 v0.7.8 - 2012-10-01
@@ -1687,15 +2236,15 @@ This release adds support for UDP sockets and contains a rather large list of sm
  - Fixed parsing of Unicode character sequences in JSON strings
  - Fixed the 100-continue response to end with an empty line
 
-[issue3]: https://github.com/rejectedsoftware/vibe.d/issues/3
-[issue84]: https://github.com/rejectedsoftware/vibe.d/issues/84
-[issue88]: https://github.com/rejectedsoftware/vibe.d/issues/88
-[issue89]: https://github.com/rejectedsoftware/vibe.d/issues/89
-[issue95]: https://github.com/rejectedsoftware/vibe.d/issues/95
-[issue96]: https://github.com/rejectedsoftware/vibe.d/issues/96
-[issue98]: https://github.com/rejectedsoftware/vibe.d/issues/98
-[issue99]: https://github.com/rejectedsoftware/vibe.d/issues/99
-[issue103]: https://github.com/rejectedsoftware/vibe.d/issues/103
+[issue3]: https://github.com/vibe-d/vibe.d/issues/3
+[issue84]: https://github.com/vibe-d/vibe.d/issues/84
+[issue88]: https://github.com/vibe-d/vibe.d/issues/88
+[issue89]: https://github.com/vibe-d/vibe.d/issues/89
+[issue95]: https://github.com/vibe-d/vibe.d/issues/95
+[issue96]: https://github.com/vibe-d/vibe.d/issues/96
+[issue98]: https://github.com/vibe-d/vibe.d/issues/98
+[issue99]: https://github.com/vibe-d/vibe.d/issues/99
+[issue103]: https://github.com/vibe-d/vibe.d/issues/103
 
 
 v0.7.7 - 2012-08-05
@@ -1719,11 +2268,11 @@ Brings some general improvements and DMD 2.060 compatibility.
 
  - The HTTP server now allows query strings that are not valid forms - [issue #73][issue73]
 
-[issue70]: https://github.com/rejectedsoftware/vibe.d/issues/70
-[issue73]: https://github.com/rejectedsoftware/vibe.d/issues/73
-[issue77]: https://github.com/rejectedsoftware/vibe.d/issues/77
-[issue80]: https://github.com/rejectedsoftware/vibe.d/issues/80
-[issue81]: https://github.com/rejectedsoftware/vibe.d/issues/81
+[issue70]: https://github.com/vibe-d/vibe.d/issues/70
+[issue73]: https://github.com/vibe-d/vibe.d/issues/73
+[issue77]: https://github.com/vibe-d/vibe.d/issues/77
+[issue80]: https://github.com/vibe-d/vibe.d/issues/80
+[issue81]: https://github.com/vibe-d/vibe.d/issues/81
 
 
 v0.7.6 - 2012-07-15
@@ -1735,7 +2284,7 @@ The most important improvements are easier setup on Linux and Mac and an importa
  
  - A good amount of performance tuning of the HTTP server
  - Implemented `vibe.core.core.yield()`. This can be used to break up long computations into smaller parts to reduce latency for other tasks
- - Added setup-linux.sh and setup-mac.sh scripts that set a symlink in /usr/bin and a config file in /etc/vibe (Thanks to Jordi Sayol)
+ - Added setup-linux.sh and setup-mac.sh scripts that set a symlink in /usr/bin and a configuration file in /etc/vibe (Thanks to Jordi Sayol)
  - Installed VPM modules are now passed as version identifiers "VPM_package_xyz" to the application to allow for optional features
  - Improved serialization of structs/classes to JSON/BSON - properties are now serialized and all non-field/property members are now ignored
  - Added directory handling functions to `vibe.core.file` (not using asynchronous operations, yet)
@@ -1748,8 +2297,8 @@ The most important improvements are easier setup on Linux and Mac and an importa
  - Fixed JSON (de)serialization of structs and classes (member names were wrong) - [issue #72][issue72]
  - Fixed `(filter)urlEncode` for character values < 0x10 - [issue #65][issue65]
 
-[issue65]: https://github.com/rejectedsoftware/vibe.d/issues/65
-[issue72]: https://github.com/rejectedsoftware/vibe.d/issues/72
+[issue65]: https://github.com/vibe-d/vibe.d/issues/65
+[issue72]: https://github.com/vibe-d/vibe.d/issues/72
 
  
 v0.7.5 - 2012-06-05
@@ -1786,7 +2335,7 @@ v0.7.4 - 2012-06-03
  - Improved stability in conjunction with TCP connections
  - Upgraded libevent to 2.0.19 on Windows
 
-[issue52]: https://github.com/rejectedsoftware/vibe.d/issues/52
+[issue52]: https://github.com/vibe-d/vibe.d/issues/52
 
  
 v0.7.3 - 2012-05-22
@@ -1806,11 +2355,11 @@ v0.7.2 - 2012-05-22
  - Changed the type for durations from `int/double` to `Duration` - [issue #18][issue18]
  - Using Deimos bindings now instead of the custom ones - [issue #48][issue48]
 
-[issue18]: https://github.com/rejectedsoftware/vibe.d/issues/18
-[issue20]: https://github.com/rejectedsoftware/vibe.d/issues/20
-[issue29]: https://github.com/rejectedsoftware/vibe.d/issues/29
-[issue43]: https://github.com/rejectedsoftware/vibe.d/issues/43
-[issue48]: https://github.com/rejectedsoftware/vibe.d/issues/48
+[issue18]: https://github.com/vibe-d/vibe.d/issues/18
+[issue20]: https://github.com/vibe-d/vibe.d/issues/20
+[issue29]: https://github.com/vibe-d/vibe.d/issues/29
+[issue43]: https://github.com/vibe-d/vibe.d/issues/43
+[issue48]: https://github.com/vibe-d/vibe.d/issues/48
 
  
 v0.7.1 - 2012-05-18

@@ -1,0 +1,19 @@
+extends layout
+
+block head
+	- auto title = "Log in";
+
+block contents
+	form(method="POST", action="login")
+		div
+			label(for="user") User name:
+			input#user(name="user", type="text")
+		div
+			label(for="password") Password (use "secret"):
+			input#password(name="password", type="password")
+
+		- if (error.length)
+			p.error= error
+
+		div
+			button(type="sumbit") Apply

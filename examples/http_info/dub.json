@@ -2,7 +2,7 @@
 	"name": "http-info-example",
 	"description": "Displays request information using a Diet template.",
 	"dependencies": {
-		"vibe-d:diet": {"path": "../../"}
+		"vibe-d:http": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

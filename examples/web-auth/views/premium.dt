@@ -1,0 +1,9 @@
+extends layout
+
+block head
+	- auto title = "Premium area";
+
+block contents
+	a(href="#{req.rootDir}") Back
+
+	p Premium Area.

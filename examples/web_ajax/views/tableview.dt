@@ -7,7 +7,7 @@ block content
 	.clear
 	h1 Welcome!
 
-	.datatable#datatable
+	#datatable.datatable
 		h2 Users
 		include createTable
 

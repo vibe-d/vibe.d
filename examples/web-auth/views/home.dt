@@ -1,0 +1,19 @@
+extends layout
+
+block head
+	- auto title = "Home";
+
+block contents
+
+	- if (!auth.isNull)
+		p Hello, #{auth.userName}! Welcome to your personal web service.
+
+		p You can <a href="settings">edit settings</a>.
+
+		p Currently your <a href="premium">premium membership</a> is #{auth.isPremiumUser ? "on" : "off"}.
+
+		- if (auth.isAdmin)
+			p View the <a href="admin"> admin panel </a>
+	- else
+		p This is an example web service.
+		p Please <a href="login">log in</a>.

@@ -1,7 +1,7 @@
 import vibe.appmain;
 import vibe.core.log;
 import vibe.http.server;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 
 
 shared static this()
@@ -11,9 +11,9 @@ shared static this()
 		settings.port = 8080;
 		settings.hostName = "hosta";
 		settings.bindAddresses = ["::1", "127.0.0.1"];
-		settings.sslContext = createSSLContext(SSLContextKind.server);
-		settings.sslContext.useCertificateChainFile("hosta.crt");
-		settings.sslContext.usePrivateKeyFile("hosta.key");
+		settings.tlsContext = createTLSContext(TLSContextKind.server);
+		settings.tlsContext.useCertificateChainFile("hosta.crt");
+		settings.tlsContext.usePrivateKeyFile("hosta.key");
 		listenHTTP(settings, &handleRequestA);
 	}
 
@@ -22,9 +22,9 @@ shared static this()
 		settings.port = 8080;
 		settings.hostName = "hostb";
 		settings.bindAddresses = ["::1", "127.0.0.1"];
-		settings.sslContext = createSSLContext(SSLContextKind.server);
-		settings.sslContext.useCertificateChainFile("hostb.crt");
-		settings.sslContext.usePrivateKeyFile("hostb.key");
+		settings.tlsContext = createTLSContext(TLSContextKind.server);
+		settings.tlsContext.useCertificateChainFile("hostb.crt");
+		settings.tlsContext.usePrivateKeyFile("hostb.key");
 		listenHTTP(settings, &handleRequestB);
 	}
 

@@ -3,8 +3,9 @@ import vibe.core.core;
 import vibe.http.fileserver;
 import vibe.http.router;
 import vibe.http.server;
+import vibe.core.stream : pipe, nullSink;
 
-import std.functional;
+import std.functional : toDelegate;
 
 
 shared string data;
@@ -41,8 +42,13 @@ void quit(scope HTTPServerRequest req, scope HTTPServerResponse res)
 }
 
 void staticAnswer(TCPConnection conn)
-{
-	conn.write("HTTP/1.0 200 OK\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+@safe nothrow {
+	try {
+		conn.write("HTTP/1.0 200 OK\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+		conn.close();
+	} catch (Exception e) {
+		// increment error counter
+	}
 }
 
 pure char[] generateData()
@@ -62,25 +68,28 @@ shared static this()
 	//setLogLevel(LogLevel.Trace);
 	data = generateData();
 
-	auto settings = new HTTPServerSettings;
-	settings.port = 8080;
-	settings.options = HTTPServerOption.parseURL|HTTPServerOption.distribute;
-	//settings.accessLogToConsole = true;
+	runWorkerTaskDist({
+		auto settings = new HTTPServerSettings;
+		settings.port = 8080;
+		settings.bindAddresses = ["127.0.0.1"];
+		settings.options = HTTPServerOption.parseURL|HTTPServerOption.reusePort;
+		//settings.accessLogToConsole = true;
 
-	auto fsettings = new HTTPFileServerSettings;
-	fsettings.serverPathPrefix = "/file";
+		auto fsettings = new HTTPFileServerSettings;
+		fsettings.serverPathPrefix = "/file";
 
-	auto routes = new URLRouter;
-	routes.get("/", staticTemplate!"home.dt");
-	routes.get("/empty", &empty);
-	routes.get("/static/10", &static_10);
-	routes.get("/static/1k", &static_1k);
-	routes.get("/static/10k", &static_10k);
-	routes.get("/static/100k", &static_100k);
-	routes.get("/quit", &quit);
-	routes.get("/file/*", serveStaticFiles("./public", fsettings));
-	routes.rebuild();
+		auto routes = new URLRouter;
+		routes.get("/", staticTemplate!"home.dt");
+		routes.get("/empty", &empty);
+		routes.get("/static/10", &static_10);
+		routes.get("/static/1k", &static_1k);
+		routes.get("/static/10k", &static_10k);
+		routes.get("/static/100k", &static_100k);
+		routes.get("/quit", &quit);
+		routes.get("/file/*", serveStaticFiles("./public", fsettings));
+		routes.rebuild();
 
-	listenHTTP(settings, routes);
-	listenTCP(8081, toDelegate(&staticAnswer), "127.0.0.1");
+		listenHTTP(settings, routes);
+		listenTCP(8081, toDelegate(&staticAnswer), "127.0.0.1", TCPListenOptions.reusePort);
+	});
 }

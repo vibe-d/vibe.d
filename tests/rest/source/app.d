@@ -12,6 +12,7 @@ import vibe.http.router;
 import vibe.http.server;
 import vibe.web.rest;
 
+import std.typecons : Nullable;
 import core.time;
 
 /* --------- EXAMPLE 1 ---------- */
@@ -370,7 +371,11 @@ interface Example6API
 	// Finally, there is @bodyParam. It works as you expect it to work,
 	// currently serializing passed data as Json and pass them through the body.
 	@bodyParam("myFoo", "parameter")
-	string getConcat(FooType myFoo);
+	string postConcat(FooType myFoo);
+
+	// expects the entire body
+	@bodyParam("obj")
+	string postConcatBody(FooType obj);
 
 	struct FooType {
 		int a;
@@ -407,9 +412,15 @@ override:
 		return "False";
 	}
 
-	string getConcat(FooType myFoo)
+	string postConcat(FooType myFoo)
 	{
+		import std.conv : to;
 		return to!string(myFoo.a)~myFoo.s~to!string(myFoo.d);
+	}
+
+	string postConcatBody(FooType obj)
+	{
+		return postConcat(obj);
 	}
 }
 
@@ -542,34 +553,46 @@ void runTests()
 		enum expected = "42fortySomething51.42"; // to!string(51.42) doesn't work at CT
 
 		auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
-		// First we make sure parameters are transmitted via query.
-		auto res = requestHTTP("http://127.0.0.1:8080/example6_api/concat",
-							   (scope r) {
-						   import vibe.data.json;
-						   r.method = HTTPMethod.GET;
-						   Json obj = Json.emptyObject;
-						   obj["parameter"] = serializeToJson(Example6API.FooType(42, "fortySomething", 51.42));
-						   r.writeJsonBody(obj);
-					   });
+		{
+			// First we make sure parameters are transmitted via query.
+			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/concat",
+								   (scope r) {
+							   import vibe.data.json;
+							   r.method = HTTPMethod.POST;
+							   Json obj = Json.emptyObject;
+							   obj["parameter"] = serializeToJson(Example6API.FooType(42, "fortySomething", 51.42));
+							   r.writeJsonBody(obj);
+						   });
 
-		assert(res.statusCode == 200);
-		assert(res.bodyReader.readAllUTF8() == `"`~expected~`"`);
-		// Then we check that both can communicate together.
-		auto answer = api.getConcat(Example6API.FooType(42, "fortySomething", 51.42));
-		assert(answer == expected);
+			assert(res.statusCode == 200);
+			assert(res.bodyReader.readAllUTF8() == `"`~expected~`"`);
+			// Then we check that both can communicate together.
+			auto answer = api.postConcat(Example6API.FooType(42, "fortySomething", 51.42));
+			assert(answer == expected);
+		}
+
+		// suppling the whole body
+		{
+			// First we make sure parameters are transmitted via query.
+			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/concat_body",
+								   (scope r) {
+							   import vibe.data.json;
+							   r.method = HTTPMethod.POST;
+							   Json obj = serializeToJson(Example6API.FooType(42, "fortySomething", 51.42));
+							   r.writeJsonBody(obj);
+						   });
+
+			assert(res.statusCode == 200);
+			assert(res.bodyReader.readAllUTF8() == `"`~expected~`"`);
+			// Then we check that both can communicate together.
+			auto answer = api.postConcatBody(Example6API.FooType(42, "fortySomething", 51.42));
+			assert(answer == expected);
+		}
 	}
 }
 
 shared static this()
 {
-	version (LDC) {
-		if (__VERSION__ == 2066) {
-			import core.stdc.stdlib;
-			logWarn("Warning: Skipping test due to codegen issue on LDC 0.15.x.");
-			exit(0);
-		}
-	}
-
 	// Registering our REST services in router
 	auto routes = new URLRouter;
 	registerRestInterface(routes, new Example1());
@@ -594,6 +617,7 @@ shared static this()
 			logInfo("Success.");
 		} catch (Exception e) {
 			import core.stdc.stdlib : exit;
+			import std.encoding : sanitize;
 			logError("Fail: %s", e.toString().sanitize);
 			exit(1);
 		} finally {

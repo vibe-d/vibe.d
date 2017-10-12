@@ -18,8 +18,10 @@ html(lang="en")
 			Two lines of
 			<b>Different</b> text
 		p Your user level:
-			input(type='checkbox', checked=is_admin ? "checked" : null) Admin
-			input(type='checkbox', checked=!is_admin ? "checked" : null) User
+			input#adm(type='checkbox', checked=is_admin ? "checked" : null)
+			label(for="adm") Admin
+			input#usr(type='checkbox', checked=!is_admin ? "checked" : null)
+			label(for="usr") User
 			
 		#sanity(style='background-color: lightgreen')
 			- if( 12 == 13 )

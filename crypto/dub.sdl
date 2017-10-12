@@ -1,0 +1,7 @@
+name "crypto"
+description "Cryptographic helper routines"
+targetType "library"
+dependency "vibe-d:core" version="*"
+sourcePaths "."
+importPaths "."
+libs "advapi32" platform="windows"
