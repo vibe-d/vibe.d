@@ -1279,7 +1279,11 @@ package class VibedScheduler : Scheduler {
 			if (LibasyncDriver.isControlThread)
 				return null;
 		}
-		setupDriver();
+		// due to useless creation of a new Condition during std.concurrency module
+		// destructor, setupDriver call is necessary in versions prior to 2.072
+		static if (__VERSION__ < 2072) {
+			setupDriver();
+		}
 		return new TaskCondition(m);
 	}
 }
