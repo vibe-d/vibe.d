@@ -944,7 +944,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			import vibe.core.log : logDebug;
 			got_error = true;
 			err.text = ex.msg;
-			debug logDebug("Error handling field '%s': %s", ex.toString().sanitize);
+			debug logDebug("Error handling field '%s': %s", param_names[i], ex.toString().sanitize);
 		}
 
 		if (got_error) {
