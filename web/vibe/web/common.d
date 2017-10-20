@@ -1,7 +1,7 @@
 /**
 	Contains common functionality for the REST and WEB interface generators.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2017 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Михаил Страшун
 */
@@ -340,19 +340,19 @@ PathAttribute path(string data)
 }
 
 ///
-unittest {
+@safe unittest {
 	@path("/foo")
 	interface IAPI
 	{
-		@path("info2") string getInfo();
+		@path("info2") string getInfo() @safe;
 	}
 
 	class API : IAPI {
-		string getInfo() { return "Hello, World!"; }
+		string getInfo() @safe { return "Hello, World!"; }
 	}
 
 	void test()
-	{
+	@safe {
 		import vibe.http.router;
 		import vibe.web.rest;
 
@@ -377,7 +377,7 @@ unittest {
 	return PathAttribute("");
 }
 ///
-unittest
+@safe unittest
 {
 	import vibe.http.router;
 	import vibe.web.rest;
@@ -385,7 +385,7 @@ unittest
 	@rootPathFromName
 	interface IAPI
 	{
-		int getFoo();
+		int getFoo() @safe;
 	}
 
 	class API : IAPI

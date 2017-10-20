@@ -15,11 +15,12 @@ import vibe.internal.meta.uda : findFirstUDA;
 import std.meta : AliasSeq, staticIndexOf;
 
 ///
-unittest {
+@safe unittest {
 	import vibe.http.router : URLRouter;
 	import vibe.web.web : noRoute, registerWebInterface;
 
 	static struct AuthInfo {
+	@safe:
 		string userName;
 
 		bool isAdmin() { return this.userName == "tom"; }
@@ -36,6 +37,7 @@ unittest {
 
 	@requiresAuth
 	static class ChatWebService {
+	@safe:
 		@noRoute AuthInfo authenticate(scope HTTPServerRequest req, scope HTTPServerResponse res)
 		{
 			if (req.headers["AuthToken"] == "foobar")
@@ -75,7 +77,7 @@ unittest {
 	}
 
 	void registerService(URLRouter router)
-	{
+	@safe {
 		router.registerWebInterface(new ChatWebService);
 	}
 }
