@@ -350,7 +350,10 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	}
 }
 
-static assert(DictionaryList!(string, true, 2).safeValueCopy);
+@safe unittest
+{
+	assert(DictionaryList!(string, true, 2).safeValueCopy);
+}
 
 @safe unittest {
 	DictionaryList!(int, true) a;
