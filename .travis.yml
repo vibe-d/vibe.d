@@ -9,10 +9,10 @@ services:
 addons:
   apt:
     packages:
-    - libevent-dev
-    - libssl-dev
-    - pkg-config
-    - zlib1g-dev
+      - pkg-config
+      - zlib1g-dev
+      - libevent-dev
+      - libssl-dev
 
 d:
   # order: latest DMD, oldest DMD, LDC/GDC, remaining DMD versions
@@ -52,11 +52,11 @@ matrix:
 
 before_install:
   - pyenv global system 3.5
-  - pip3 install meson>=0.40
+  - pip3 install 'meson>=0.42,!=0.43'
 
 install:
   - mkdir .ntmp
-  - curl -L https://github.com/ninja-build/ninja/releases/download/v1.7.2/ninja-linux.zip -o .ntmp/ninja-linux.zip
+  - curl -L https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -o .ntmp/ninja-linux.zip
   - unzip .ntmp/ninja-linux.zip -d .ntmp
 
 before_script:
