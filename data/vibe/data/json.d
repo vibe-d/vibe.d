@@ -1267,32 +1267,50 @@ Json parseJsonString(string str, string filename = null)
 }
 
 @safe unittest {
-	assert(parseJsonString("null") == Json(null));
-	assert(parseJsonString("true") == Json(true));
-	assert(parseJsonString("false") == Json(false));
-	assert(parseJsonString("1") == Json(1));
+	// These currently don't work at compile time
 	assert(parseJsonString("17559991181826658461") == Json(BigInt(17559991181826658461UL)));
 	assert(parseJsonString("99999999999999999999999999") == () @trusted { return Json(BigInt("99999999999999999999999999")); } ());
-	assert(parseJsonString("2.0") == Json(2.0));
-	assert(parseJsonString("\"test\"") == Json("test"));
-	assert(parseJsonString("[1, 2, 3]") == Json([Json(1), Json(2), Json(3)]));
-	assert(parseJsonString("{\"a\": 1}") == Json(["a": Json(1)]));
-	assert(parseJsonString(`"\\\/\b\f\n\r\t\u1234"`).get!string == "\\/\b\f\n\r\t\u1234");
 	auto json = parseJsonString(`{"hey": "This is @à test éhééhhéhéé !%/??*&?\ud83d\udcec"}`);
 	assert(json.toPrettyString() == parseJsonString(json.toPrettyString()).toPrettyString());
+
+	bool test() {
+		assert(parseJsonString("null") == Json(null));
+		assert(parseJsonString("true") == Json(true));
+		assert(parseJsonString("false") == Json(false));
+		assert(parseJsonString("1") == Json(1));
+		assert(parseJsonString("2.0") == Json(2.0));
+		assert(parseJsonString("\"test\"") == Json("test"));
+		assert(parseJsonString("[1, 2, 3]") == Json([Json(1), Json(2), Json(3)]));
+		assert(parseJsonString("{\"a\": 1}") == Json(["a": Json(1)]));
+		assert(parseJsonString(`"\\\/\b\f\n\r\t\u1234"`).get!string == "\\/\b\f\n\r\t\u1234");
+
+		return true;
+	}
+
+	// Run at compile time and runtime
+	assert(test());
+	static assert(test());
 }
 
 @safe unittest {
-	try parseJsonString(" \t\n ");
-	catch (Exception e) assert(e.msg.endsWith("JSON string contains only whitespaces."));
-	try parseJsonString(`{"a": 1`);
-	catch (Exception e) assert(e.msg.endsWith("Missing '}' before EOF."));
-	try parseJsonString(`{"a": 1 x`);
-	catch (Exception e) assert(e.msg.endsWith("Expected '}' or ',' - got 'x'."));
-	try parseJsonString(`[1`);
-	catch (Exception e) assert(e.msg.endsWith("Missing ']' before EOF."));
-	try parseJsonString(`[1 x`);
-	catch (Exception e) assert(e.msg.endsWith("Expected ']' or ',' - got 'x'."));
+	bool test() {
+		try parseJsonString(" \t\n ");
+		catch (Exception e) assert(e.msg.endsWith("JSON string contains only whitespaces."));
+		try parseJsonString(`{"a": 1`);
+		catch (Exception e) assert(e.msg.endsWith("Missing '}' before EOF."));
+		try parseJsonString(`{"a": 1 x`);
+		catch (Exception e) assert(e.msg.endsWith("Expected '}' or ',' - got 'x'."));
+		try parseJsonString(`[1`);
+		catch (Exception e) assert(e.msg.endsWith("Missing ']' before EOF."));
+		try parseJsonString(`[1 x`);
+		catch (Exception e) assert(e.msg.endsWith("Expected ']' or ',' - got 'x'."));
+
+		return true;
+	}
+
+	// Run at compile time and runtime
+	assert(test());
+	static assert(test());
 }
 
 /**
@@ -2272,9 +2290,9 @@ private auto skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow
 	if (isNarrowString!R)
 {
 	auto r = s.representation;
-	version (assert) auto rEnd = (() @trusted => r.ptr + r.length)();
+	version (assert) auto rEnd = (() @trusted => r.ptr + r.length - 1)();
 	auto res = skipNumber(r, is_float, is_long_overflow);
-	version (assert) assert(rEnd == (() @trusted => r.ptr + r.length)()); // check nothing taken off the end
+	version (assert) assert(rEnd == (() @trusted => r.ptr + r.length - 1)()); // check nothing taken off the end
 	s = s[$ - r.length .. $];
 	return res.assumeUTF();
 }
