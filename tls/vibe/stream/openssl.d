@@ -96,11 +96,11 @@ version (VibeUseOpenSSL11) {
 
 	// #  define sk_num OPENSSL_sk_num
 	extern(C) int OPENSSL_sk_num(const void *);
-	alias sk_num = OPENSSL_sk_num;
+	extern(C) int sk_num(const void* p) { return OPENSSL_sk_num(p); }
 
 	// #  define sk_value OPENSSL_sk_value
 	extern(C) void *OPENSSL_sk_value(const void *, int);
-	alias sk_value = OPENSSL_sk_value;
+	extern(C) void* sk_value(const void* p, int i) { return OPENSSL_sk_value(p, i); }
 }
 
 /**
