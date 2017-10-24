@@ -1,4 +1,4 @@
-﻿/**
+/**
 	Botan TLS implementation
 	Copyright: © 2015 RejectedSoftware e.K., GlobecSys Inc
 	Authors: Sönke Ludwig, Etienne Cimon
@@ -67,7 +67,12 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 
 	@property string alpn() const @trusted { return m_tlsChannel.underlyingChannel().applicationProtocol(); }
 
-	@property TLSCertificateInformation peerCertificate() { assert(false, "Incompatible interface method requested"); }
+	@property TLSCertificateInformation peerCertificate()
+	{
+		if (!!m_peer_cert)
+			logWarn("BotanTLSStream.peerCertificate is not implemented and does not return the actual certificate information.");
+		return TLSCertificateInformation.init;
+	}
 
 	// Constructs a new TLS Client Stream and connects with the specified handlers
 	this(InterfaceProxy!Stream underlying, BotanTLSContext ctx,
