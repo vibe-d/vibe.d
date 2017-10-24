@@ -67,7 +67,9 @@ struct Task {
 
 		// FIXME: this is not thread safe!
 		@property ref ThreadInfo tidInfo() { return m_fiber ? fiber.tidInfo : s_tidInfo; }
+		@property ref const(ThreadInfo) tidInfo() const { return m_fiber ? fiber.tidInfo : s_tidInfo; }
 		@property Tid tid() { return tidInfo.ident; }
+		@property const(Tid) tid() const { return tidInfo.ident; }
 	}
 
 	/// Reserved for internal use!
