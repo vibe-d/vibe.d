@@ -1,7 +1,7 @@
 /**
 	Internationalization/translation support for the web interface module.
 
-	Copyright: © 2014-2015 RejectedSoftware e.K.
+	Copyright: © 2014-2017 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -10,7 +10,7 @@ module vibe.web.i18n;
 import vibe.http.server : HTTPServerRequest;
 
 import std.algorithm : canFind, min, startsWith;
-import std.range.primitives : isForwardRange;
+import std.range.primitives : ElementType, isForwardRange, save;
 import std.range : only;
 
 /**
@@ -226,7 +226,7 @@ template tr(CTX, string LANG)
 /// Determines a language code from the value of a header string.
 /// Returns: The best match from the Accept-Language header for a language. `null` if there is no supported language.
 public string determineLanguageByHeader(T)(string accept_language, T allowed_languages) @safe pure @nogc
-	if (isForwardRange!T)
+	if (isForwardRange!T && is(ElementType!T : string) || is(T == typeof(only())))
 {
 	import std.algorithm : splitter, countUntil;
 	import std.string : indexOf;
@@ -252,24 +252,26 @@ public string determineLanguageByHeader(T)(string accept_language, T allowed_lan
 			aextra = accept[asep + 1 .. $];
 		}
 
-		foreach (lang; allowed_languages) {
-			string lcode, lextra;
-			sidx = lang.countUntil!(a => a == '_' || a == '-');
-			if (sidx < 0)
-				lcode = lang;
-			else {
-				lcode = lang[0 .. sidx];
-				lextra = lang[sidx + 1 .. $];
+		static if (!is(T == typeof(only()))) { // workaround for type errors
+			foreach (lang; allowed_languages.save) {
+				string lcode, lextra;
+				sidx = lang.countUntil!(a => a == '_' || a == '-');
+				if (sidx < 0)
+					lcode = lang;
+				else {
+					lcode = lang[0 .. sidx];
+					lextra = lang[sidx + 1 .. $];
+				}
+				// request en_US == serve en_US
+				if (lcode == alang && lextra == aextra)
+					return lang;
+				// request en_* == serve en
+				if (lcode == alang && !lextra.length)
+					return lang;
+				// request en* == serve en_* && be first occurence
+				if (lcode == alang && lextra.length && !fallback.length)
+					fallback = lang;
 			}
-			// request en_US == serve en_US
-			if (lcode == alang && lextra == aextra)
-				return lang;
-			// request en_* == serve en
-			if (lcode == alang && !lextra.length)
-				return lang;
-			// request en* == serve en_* && be first occurence
-			if (lcode == alang && lextra.length && !fallback.length)
-				fallback = lang;
 		}
 	}
 
@@ -278,19 +280,21 @@ public string determineLanguageByHeader(T)(string accept_language, T allowed_lan
 
 /// ditto
 public string determineLanguageByHeader(Tuple...)(string accept_language, Tuple allowed_languages) @safe pure @nogc
+	if (Tuple.length != 1 || is(Tuple[0] : string))
 {
 	return determineLanguageByHeader(accept_language, only(allowed_languages));
 }
 
 /// ditto
 public string determineLanguageByHeader(T)(HTTPServerRequest req, T allowed_languages) @safe pure
-	if (isForwardRange!T)
+	if (isForwardRange!T && is(ElementType!T : string) || is(T == typeof(only())))
 {
 	return determineLanguageByHeader(req.headers.get("Accept-Language", null), allowed_languages);
 }
 
 /// ditto
 public string determineLanguageByHeader(Tuple...)(HTTPServerRequest req, Tuple allowed_languages) @safe pure
+	if (Tuple.length != 1 || is(Tuple[0] : string))
 {
 	return determineLanguageByHeader(req.headers.get("Accept-Language", null), only(allowed_languages));
 }
@@ -323,7 +327,7 @@ package string determineLanguage(alias METHOD)(scope HTTPServerRequest req)
 				"determineLanguage in a translation context must return a language string.");
 			return CTX.determineLanguage(req);
 		} else {
-			return determineLanguageByHeader(req, CTX.languages);
+			return determineLanguageByHeader(req, only(CTX.languages));
 		}
 	} else return null;
 }
@@ -340,6 +344,24 @@ unittest { // make sure that the custom determineLanguage is called
 	}
 	auto test = new Test;
 	assert(determineLanguage!(test.test)(null) == "test");
+}
+
+unittest { // issue #1955
+	import std.meta : AliasSeq;
+	import vibe.inet.url : URL;
+	import vibe.http.server : createTestHTTPServerRequest;
+
+	static struct CTX {
+		alias languages = AliasSeq!();
+	}
+
+	@translationContext!CTX
+	class C {
+		void test() {}
+	}
+
+	auto req = createTestHTTPServerRequest(URL("http://127.0.0.1/test"));
+	assert(determineLanguage!(C.test)(req) == null);
 }
 
 package template GetTranslationContext(alias METHOD)
