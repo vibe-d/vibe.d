@@ -604,7 +604,7 @@ class RestInterfaceClient(I) : I
 		staticMap!(RestInterfaceClient, Info.SubInterfaceTypes) m_subInterfaces;
 	}
 
-	alias RequestFilter = void delegate(HTTPClientRequest req);
+	alias RequestFilter = void delegate(HTTPClientRequest req) @safe;
 
 	/**
 		Creates a new REST client implementation of $(D I).
@@ -639,13 +639,17 @@ class RestInterfaceClient(I) : I
 	{
 		return m_requestFilter;
 	}
-
 	/// ditto
 	final @property void requestFilter(RequestFilter v)
 	{
 		m_requestFilter = v;
 		foreach (i, SI; Info.SubInterfaceTypes)
 			m_subInterfaces[i].requestFilter = v;
+	}
+	/// ditto
+	final @property void requestFilter(void delegate(HTTPClientRequest req) v)
+	{
+		this.requestFilter = cast(RequestFilter)v;
 	}
 
 	//pragma(msg, "restinterface:");
@@ -1164,11 +1168,11 @@ unittest {
 alias before = vibe.internal.meta.funcattr.before;
 
 ///
-unittest {
+@safe unittest {
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 
 	interface MyService {
-		long getHeaderCount(size_t foo = 0);
+		long getHeaderCount(size_t foo = 0) @safe;
 	}
 
 	static size_t handler(HTTPServerRequest req, HTTPServerResponse res)
@@ -1186,7 +1190,7 @@ unittest {
 	}
 
 	void test(URLRouter router)
-	{
+	@safe {
 		router.registerRestInterface(new MyServiceImpl);
 	}
 }
@@ -1205,15 +1209,15 @@ unittest {
 alias after = vibe.internal.meta.funcattr.after;
 
 ///
-unittest {
+@safe unittest {
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 
 	interface MyService {
-		long getMagic();
+		long getMagic() @safe;
 	}
 
 	static long handler(long ret, HTTPServerRequest req, HTTPServerResponse res)
-	{
+	@safe {
 		return ret * 2;
 	}
 
@@ -1227,7 +1231,7 @@ unittest {
 	}
 
 	void test(URLRouter router)
-	{
+	@safe {
 		router.registerRestInterface(new MyServiceImpl);
 	}
 }
@@ -1565,7 +1569,7 @@ private string generateRestClientMethods(I)()
 
 
 private auto executeClientMethod(I, size_t ridx, ARGS...)
-	(in ref RestInterface!I intf, void delegate(HTTPClientRequest) request_filter)
+	(in ref RestInterface!I intf, void delegate(HTTPClientRequest) @safe request_filter)
 {
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.textfilter.urlencode : filterURLEncode, urlEncode;
@@ -1705,11 +1709,11 @@ import vibe.http.client : HTTPClientRequest;
  *     The Json object returned by the request
  */
 private Json request(URL base_url,
-	void delegate(HTTPClientRequest) request_filter, HTTPMethod verb,
+	void delegate(HTTPClientRequest) @safe request_filter, HTTPMethod verb,
 	string path, in ref InetHeaderMap hdrs, string query, string body_,
 	ref InetHeaderMap reqReturnHdrs, ref InetHeaderMap optReturnHdrs,
 	in HTTPClientSettings http_settings)
-{
+@safe {
 	import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
 	import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
 
@@ -1725,10 +1729,10 @@ private Json request(URL base_url,
 		foreach (k, v; hdrs)
 			req.headers[k] = v;
 
-		if (request_filter) request_filter(req);
+		if (request_filter) () @trusted { request_filter(req); } ();
 
 		if (body_ != "")
-			req.writeBody(cast(ubyte[])body_, hdrs.get("Content-Type", "application/json"));
+			req.writeBody(cast(const(ubyte)[])body_, hdrs.get("Content-Type", "application/json"));
 	};
 
 	auto resdg = (scope HTTPClientResponse res) {
@@ -1779,7 +1783,7 @@ private {
 	import std.conv : to;
 
 	string toRestString(Json value)
-	{
+	@safe {
 		switch (value.type) {
 			default: return value.toString();
 			case Json.Type.Bool: return value.get!bool ? "true" : "false";
@@ -2183,7 +2187,7 @@ private template GenOrphan(int id) {
 
 // Workaround for issue #1045 / DMD bug 14375
 // Also, an example of policy-based design using this module.
-unittest {
+@safe unittest {
 	import std.traits, std.typetuple;
 	import vibe.internal.meta.codegen;
 	import vibe.internal.meta.typetuple;
@@ -2191,20 +2195,20 @@ unittest {
 
 	interface Policies {
 		@headerParam("auth", "Authorization")
-		string BasicAuth(string auth, ulong expiry);
+		string BasicAuth(string auth, ulong expiry) @safe;
 	}
 
 	@path("/keys/")
 	interface IKeys(alias AuthenticationPolicy = Policies.BasicAuth) {
 		static assert(is(FunctionTypeOf!AuthenticationPolicy == function),
 			      "Policies needs to be functions");
-		@path("/") @method(HTTPMethod.POST)
+		@path("/") @method(HTTPMethod.POST) @safe
 		mixin CloneFunctionDecl!(AuthenticationPolicy, true, "create");
 	}
 
 	class KeysImpl : IKeys!() {
 	override:
-		string create(string auth, ulong expiry) {
+		string create(string auth, ulong expiry) @safe {
 			return "4242-4242";
 		}
 	}
@@ -2219,12 +2223,12 @@ unittest {
 				     MethodAttribute(HTTPMethod.POST),
 				     WPA(ParameterKind.header, "auth", "Authorization"))));
 
-	void register() {
+	void register() @safe {
 		auto router = new URLRouter();
 		router.registerRestInterface(new KeysImpl());
 	}
 
-	void query() {
+	void query() @safe {
 		auto client = new RestInterfaceClient!(IKeys!())("http://127.0.0.1:8080");
 		assert(client.create("Hello", 0) == "4242-4242");
 	}
