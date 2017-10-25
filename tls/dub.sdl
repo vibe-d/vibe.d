@@ -21,7 +21,19 @@ configuration "openssl-mscoff" {
 
 configuration "openssl" {
 	sourceFiles "../lib/win-i386/eay.lib" "../lib/win-i386/ssl.lib" platform="windows-x86-dmd"
-	dependency "openssl" version=">=1.0.0+1.0.0e"
+	dependency "openssl" version="~>1.0"
+}
+
+configuration "openssl-1.1" {
+	platforms "posix"
+	dependency "openssl" version="~>1.0"
+	versions "VibeUseOpenSSL11"
+}
+
+configuration "openssl-0.9" {
+	platforms "posix"
+	dependency "openssl" version="~>1.0"
+	versions "VibeUseOldOpenSSL"
 }
 
 configuration "botan" {
