@@ -25,44 +25,48 @@ import std.exception;
 */
 
 /**
+	Transparently forwards all requests to the proxy to another host.
+
+	The configurations set in 'settings' and 'proxy_settings' determines the exact
+	behavior.
+*/
+void listenHTTPProxy(HTTPServerSettings settings, HTTPProxySettings proxy_settings)
+{
+	// disable all advanced parsing in the server
+	settings.options = HTTPServerOption.None;
+	listenHTTP(settings, proxyRequest(proxy_settings));
+}
+// Compatibility alias - will be deprecated soon.
+alias listenHTTPReverseProxy = listenHTTPProxy;
+
+/**
 	Transparently forwards all requests to the proxy to a destination_host.
 
 	You can use the hostName field in the 'settings' to combine multiple internal HTTP servers
 	into one public web server with multiple virtual hosts.
 */
-void listenHTTPReverseProxy(HTTPServerSettings settings, HTTPProxySettings proxy_settings)
-{
-	// disable all advanced parsing in the server
-	settings.options = HTTPServerOption.None;
-	listenHTTP(settings, reverseProxyRequest(proxy_settings));
-}
-/// ditto
 void listenHTTPReverseProxy(HTTPServerSettings settings, string destination_host, ushort destination_port)
 {
 	URL url;
 	url.schema = "http";
 	url.host = destination_host;
 	url.port = destination_port;
-	auto proxy_settings = new HTTPProxySettings;
-	proxy_settings.reverseProxyMode = true;
+	auto proxy_settings = new HTTPProxySettings(ProxyMode.reverse);
 	proxy_settings.destination = url;
 	listenHTTPReverseProxy(settings, proxy_settings);
 }
 
-/**
-	Transparently forwards all requests to the proxy to the requestURL of the request.
-*/
+/** 
+	Transparently forwards all requests to the proxy to the requestURL of the request. 
+*/ 
 void listenHTTPForwardProxy(HTTPServerSettings settings) {
-	listenHTTP(settings, forwardProxyRequest(new HTTPProxySettings));
-}
-
-/// ditto
-void listenHTTPForwardProxy(HTTPServerSettings settings, HTTPProxySettings proxy_settings) {
-	listenHTTP(settings, forwardProxyRequest(proxy_settings));
+	auto proxy_settings = new HTTPProxySettings(ProxyMode.forward);
+	proxy_settings.handleConnectRequests = true;
+	listenHTTPProxy(settings, proxy_settings);
 }
 
 /**
-	Generic proxy delegate that will work with both forward and reverse proxies
+	Returns a HTTP request handler that forwards any request to the specified or requested host/port.
 */
 HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 {
@@ -76,7 +80,7 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 	@safe {
 		auto url = settings.destination;
 
-		if (settings.reverseProxyMode) {
+		if (settings.proxyMode == ProxyMode.reverse) {
 			url.localURI = req.requestURL;
 		}
 		else {
@@ -208,44 +212,42 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 
 	return &handleRequest;
 }
-
-/**
-	Returns a HTTP request handler that acts as a forward proxy
-*/
-HTTPServerRequestDelegateS forwardProxyRequest(HTTPProxySettings settings)
-{
-	return proxyRequest(settings);
-}
+/// Compatibility alias - will be deprecated soon
+alias reverseProxyRequest = proxyRequest;
 
 /**
 	Returns a HTTP request handler that forwards any request to the specified host/port.
 */
-HTTPServerRequestDelegateS reverseProxyRequest(HTTPProxySettings settings)
-{
-	return proxyRequest(settings);
-}
-
-/// ditto
 HTTPServerRequestDelegateS reverseProxyRequest(string destination_host, ushort destination_port)
 {
 	URL url;
 	url.schema = "http";
 	url.host = destination_host;
 	url.port = destination_port;
-	auto settings = new HTTPProxySettings;
-	settings.reverseProxyMode = true;
+	auto settings = new HTTPProxySettings(ProxyMode.reverse);
 	settings.destination = url;
-	return reverseProxyRequest(settings);
+	return proxyRequest(settings);
 }
 
 /// ditto
 HTTPServerRequestDelegateS reverseProxyRequest(URL destination)
 {
-	auto settings = new HTTPProxySettings;
-	settings.reverseProxyMode = true;
+	auto settings = new HTTPProxySettings(ProxyMode.reverse);
 	settings.destination = destination;
-	return reverseProxyRequest(settings);
+	return proxyRequest(settings);
 }
+
+/**
+	Returns a HTTP request handler that forwards any request to the requested host/port.
+*/
+HTTPServerRequestDelegateS forwardProxyRequest() {
+    return proxyRequest(new HTTPProxySettings(ProxyMode.forward));
+}
+
+/**
+	Enum to represent the two modes a proxy can operate as.
+*/
+enum ProxyMode {forward, reverse}
 
 /**
 	Provides advanced configuration facilities for reverse proxy servers.
@@ -260,12 +262,19 @@ final class HTTPProxySettings {
 	/// ditto
 	@property void destinationPort(ushort port) { destination.port = port; }
 
-	/// Whether the proxy should act as forward or reverse proxy
-	bool reverseProxyMode = false;
 	/// The destination URL to forward requests to
 	URL destination = URL("http", InetPath(""));
+	/// The mode of the proxy i.e forward, reverse
+	ProxyMode proxyMode;
 	/// Avoids compressed transfers between proxy and destination hosts
 	bool avoidCompressedRequests;
 	/// Handle CONNECT requests for creating a tunnel to the destination host
 	bool handleConnectRequests;
+
+	/// Empty default constructor for backwards compatibility - will be deprecated soon.
+	this() { }
+	/// Explicitly sets the proxy mode.
+	this(ProxyMode mode) { proxyMode = mode; }
 }
+/// Compatibility alias - will be deprecated soon.
+alias HTTPReverseProxySettings = HTTPProxySettings;
