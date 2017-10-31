@@ -157,18 +157,9 @@ mixin template translationModule(string FILENAME)
 	mixin(file_mixins);
 }
 
-private bool findLanguage(Tuple...)(string language, Tuple languages) @safe pure @nogc
-{
-	static if (Tuple.length == 1 && isForwardRange!(Tuple[0]) && !is(Tuple[0] == string)) {
-		foreach (lang; languages[0])
-			if (lang == language)
-				return true;
-	} else {
-		foreach (lang; languages)
-			if (lang == language)
-				return true;
-	}
-	return false;
+template languageSeq(CTX) {
+	static if (is(typeof([CTX.languages]) : string[])) alias languageSeq = CTX.languages;
+	else alias languageSeq = aliasSeqOf!(CTX.languages);
 }
 
 /**
@@ -186,7 +177,7 @@ template tr(CTX, string LANG)
 
 	string tr(string key, string key_plural, int n, string context = null)
 	{
-		static assert(findLanguage(LANG, CTX.languages), "Unknown language: "~LANG);
+		static assert([languageSeq!CTX].canFind(LANG), "Unknown language: "~LANG);
 
 		foreach (i, mname; __traits(allMembers, CTX)) {
 			static if (mname.startsWith(LANG~"_")) {

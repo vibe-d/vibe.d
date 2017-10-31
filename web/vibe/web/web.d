@@ -318,7 +318,7 @@ template render(string diet_file, ALIASES...) {
 			}
 		}
 
-		static if (is(TranslateContext) && !isEmpty(TranslateContext.languages)) {
+		static if (is(TranslateContext) && languageSeq!TranslateContext.length) {
 			switch (s_requestContext.language) {
 				default:
 				mixin({
@@ -984,18 +984,6 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	}
 }
 
-private bool isEmpty(T)(T range)
-{
-	import std.range : empty;
-
-	return range.empty;
-}
-
-private bool isEmpty(Tuple...)(Tuple range)
-{
-	return Tuple.length == 0;
-}
-
 private RequestContext createRequestContext(alias handler)(HTTPServerRequest req, HTTPServerResponse res)
 {
 	RequestContext ret;
@@ -1012,7 +1000,7 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 	static if (FUNCTRANS.found) alias TranslateContext = FUNCTRANS.value.Context;
 	else static if (PARENTTRANS.found) alias TranslateContext = PARENTTRANS.value.Context;
 
-	static if (is(TranslateContext) && !isEmpty(TranslateContext.languages)) {
+	static if (is(TranslateContext) && languageSeq!TranslateContext.length) {
 		switch (ret.language) {
 			default:
 			mixin({
