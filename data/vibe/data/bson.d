@@ -67,6 +67,7 @@ import std.base64;
 import std.bitmanip;
 import std.conv;
 import std.datetime;
+import std.uuid: UUID;
 import std.exception;
 import std.range;
 import std.traits;
@@ -216,6 +217,8 @@ struct Bson {
 	this(long value) { opAssign(value); }
 	/// ditto
 	this(in Json value) { opAssign(value); }
+	/// ditto
+	this(in UUID value) { opAssign(value); }
 
 	/**
 		Assigns a D type to a BSON value.
@@ -346,6 +349,11 @@ struct Bson {
 		m_type = writeBson(app, value);
 		m_data = app.data;
 	}
+	/// ditto
+	void opAssign(in UUID value)
+	{
+		opAssign(BsonBinData(BsonBinData.Type.uuid, value.data.idup));
+	}
 
 	/**
 		Returns the BSON type of this value.
@@ -428,6 +436,13 @@ struct Bson {
 		else static if( is(T == Json) ){
 			pragma(msg, "Bson.get!Json() and Bson.opCast!Json() will soon be removed. Please use Bson.toJson() instead.");
 			return this.toJson();
+		}
+		else static if( is(T == UUID) ){
+			checkType(Type.binData);
+			auto bbd = this.get!BsonBinData();
+			enforce(bbd.type == BsonBinData.Type.uuid, "BsonBinData value is type '"~to!string(bbd.type)~"', expected to be uuid");
+			const ubyte[16] b = bbd.rawData;
+			return UUID(b);
 		}
 		else static assert(false, "Cannot cast "~typeof(this).stringof~" to '"~T.stringof~"'.");
 	}
@@ -587,6 +602,18 @@ struct Bson {
 		assert(value["a"] == Bson(1));
 		assert(value["b"] == Bson(true));
 		assert(value["c"] == Bson("foo"));
+	}
+
+	///
+	unittest {
+		auto srcUuid = UUID("00010203-0405-0607-0809-0a0b0c0d0e0f");
+
+		Bson b = srcUuid;
+		auto u = b.get!UUID();
+
+		assert(b.type == Bson.Type.binData);
+		assert(b.get!BsonBinData().type == BsonBinData.Type.uuid);
+		assert(u == srcUuid);
 	}
 
 	/** Allows index based access of a BSON array value.
