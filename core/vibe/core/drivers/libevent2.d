@@ -386,7 +386,7 @@ final class Libevent2Driver : EventDriver {
 		int tmp_reuse = 1;
 		socketEnforce(() @trusted { return setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof); } () == 0,
 			"Error enabling socket address reuse on listening socket");
-		version (linux) {
+		static if (is(typeof(SO_REUSEPORT))) {
 			if (options & TCPListenOptions.reusePort) {
 				if (() @trusted { return setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &tmp_reuse, tmp_reuse.sizeof); } ()) {
 					if (errno != EINVAL && errno != ENOPROTOOPT) {
