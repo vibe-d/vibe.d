@@ -651,6 +651,7 @@ final class RedisSubscriberImpl {
 		Task m_listener;
 		Task m_listenerHelper;
 		Task m_waiter;
+		Task m_stopWaiter;
 		InterruptibleRecursiveTaskMutex m_mutex;
 		InterruptibleTaskMutex m_connMutex;
 	}
@@ -684,9 +685,37 @@ final class RedisSubscriberImpl {
 		m_connMutex = new InterruptibleTaskMutex;
 	}
 
+	// FIXME: instead of waiting here, the class must be reference counted
+	// and destructions needs to be defered until everything is stopped
 	~this() {
 		logTrace("~this");
-		bstop();
+		waitForStop();
+	}
+
+	// Task will block until the listener is finished
+	private void waitForStop()
+	{
+		logTrace("waitForStop");
+		if (!m_listening) return;
+
+		void impl() @safe {
+			m_mutex.performLocked!({
+				m_stopWaiter = Task.getThis();
+			});
+			if (!m_listening) return; // verify again in case the mutex was locked by bstop
+			scope(exit) {
+				m_mutex.performLocked!({
+					m_stopWaiter = Task();
+				});
+			}
+			bool stopped;
+			do {
+				() @trusted { receive((Action act) { if (act == Action.STOP) stopped = true;  }); } ();
+			} while (!stopped);
+
+			enforce(stopped, "Failed to wait for Redis listener to stop");
+		}
+		inTask(&impl);
 	}
 
 	/// Stop listening and yield until the operation is complete.
@@ -1112,6 +1141,8 @@ final class RedisSubscriberImpl {
 
 			if (m_waiter != Task())
 				() @trusted { m_waiter.send(Action.STOP); } ();
+			if (m_stopWaiter != Task())
+				() @trusted { m_stopWaiter.send(Action.STOP); } ();
 
 			m_listenerHelper = Task();
 			m_listener = Task();

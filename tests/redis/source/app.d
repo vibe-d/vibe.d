@@ -13,7 +13,7 @@ void runTest()
 {
 	//setLogLevel(LogLevel.trace);
 	/* open a redis server locally to run these tests
-	 * Windows download link: https://github.com/MSOpenTech/redis/tree/2.8/bin/release
+	 * Windows download link: https://github.com/MSOpenTech/redis/releases
 	 * Linux: use "yum install redis" on RHEL or "apt-get install redis" on Debian-like
 	*/
 	RedisClient redis;
@@ -96,6 +96,7 @@ void runTest()
 	{
 		RedisSubscriber scoped = redis.createSubscriber();
 		sub = scoped;
+		sleep(50.msecs);
 	}
 	import std.datetime;
 
