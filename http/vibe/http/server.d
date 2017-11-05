@@ -1007,6 +1007,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 		private void parseFormAndFiles() @safe {
 			_form = FormFields.init;
+			assert(!!bodyReader);
 			parseFormData(_form, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
 		}
 
@@ -1014,8 +1015,10 @@ final class HTTPServerRequest : HTTPRequest {
 		*/
 		@property ref FilePartFormFields files() @safe {
 			// _form and _files are parsed in one step
-			if (_form.isNull)
+			if (_form.isNull) {
 				parseFormAndFiles();
+				assert(!_form.isNull);
+			}
 
             return _files;
 		}
@@ -2257,7 +2260,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	// finalize (e.g. for chunked encoding)
 	res.finalize();
 
-	foreach (k, v ; req.files) {
+	foreach (k, v ; req._files) {
 		if (existsFile(v.tempPath)) {
 			removeFile(v.tempPath);
 			logDebug("Deleted upload tempfile %s", v.tempPath.toString());
