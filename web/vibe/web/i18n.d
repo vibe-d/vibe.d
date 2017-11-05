@@ -147,16 +147,19 @@ mixin template translationModule(string FILENAME)
 {
 	import std.string : tr;
 	enum NAME = FILENAME.tr(`/.-\`, "____");
-	private mixin template file_mixin(size_t i) {
-		static if (i < languages.length) {
-			enum components = extractDeclStrings(import(FILENAME~"."~languages[i]~".po"));
-			mixin("enum "~languages[i]~"_"~NAME~" = components;");
-			//mixin decls_mixin!(languages[i], 0);
-			mixin file_mixin!(i+1);
-		}
+	private static string file_mixins() {
+		string ret;
+		foreach (language; languages)
+			ret ~= "enum "~language~"_"~NAME~" = extractDeclStrings(import(`"~FILENAME~"."~language~".po`));\n";
+		return ret;
 	}
 
-	mixin file_mixin!0;
+	mixin(file_mixins);
+}
+
+template languageSeq(CTX) {
+	static if (is(typeof([CTX.languages]) : string[])) alias languageSeq = CTX.languages;
+	else alias languageSeq = aliasSeqOf!(CTX.languages);
 }
 
 /**
@@ -174,7 +177,7 @@ template tr(CTX, string LANG)
 
 	string tr(string key, string key_plural, int n, string context = null)
 	{
-		static assert([CTX.languages].canFind(LANG), "Unknown language: "~LANG);
+		static assert([languageSeq!CTX].canFind(LANG), "Unknown language: "~LANG);
 
 		foreach (i, mname; __traits(allMembers, CTX)) {
 			static if (mname.startsWith(LANG~"_")) {
