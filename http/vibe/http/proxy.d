@@ -56,9 +56,9 @@ void listenHTTPReverseProxy(HTTPServerSettings settings, string destination_host
 	listenHTTPReverseProxy(settings, proxy_settings);
 }
 
-/** 
-	Transparently forwards all requests to the proxy to the requestURL of the request. 
-*/ 
+/**
+	Transparently forwards all requests to the proxy to the requestURL of the request.
+*/
 void listenHTTPForwardProxy(HTTPServerSettings settings) {
 	auto proxy_settings = new HTTPProxySettings(ProxyMode.forward);
 	proxy_settings.handleConnectRequests = true;
