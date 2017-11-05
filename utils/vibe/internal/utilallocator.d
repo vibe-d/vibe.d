@@ -115,7 +115,11 @@ final class RegionListAllocator(Allocator, bool leak = false) : IAllocator {
 	} else {
 		override Ternary resolveInternalPointer(void* p, ref void[] result) { return Ternary.unknown; }
 	}
-	override Ternary owns(void[] b) { return Ternary.unknown; }
+	static if (is(Parameters!(IAllocator.owns)[0] == const(void[]))) {
+	    override Ternary owns(const void[] b) { return Ternary.unknown; }
+	} else {
+	    override Ternary owns(void[] b) { return Ternary.unknown; }
+	}
 
 
 	override bool reallocate(ref void[] arr, size_t newsize)
