@@ -11,6 +11,7 @@ fi
 
 ( $VIBE | grep -q '^argtest=$' ) || die "Fail (no argument)"
 ( $VIBE -- --argtest=aoeu | grep -q '^argtest=aoeu$' ) || die "Fail (with argument)"
+( $VIBE -- --argtest=aoeu --DRT-gcopt=profile:1 | grep -q '^argtest=aoeu$' ) || die "Fail (with argument)"
 ( ( ! $VIBE -- --inexisting 2>&1 ) | grep -qF 'Unrecognized command line option' ) || die "Fail (unknown argument)"
 
 echo 'OK'
