@@ -1,4 +1,3 @@
 name "tests"
 description "IPv6 request"
 dependency "vibe-d:http" path="../../"
-versions "VibeDefaultMain"

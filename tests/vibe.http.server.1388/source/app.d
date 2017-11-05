@@ -5,8 +5,9 @@ import vibe.stream.operations;
 import core.time : msecs;
 import std.datetime : Clock, UTC;
 
-shared static this()
+void main()
 {
+	version (none) {
 	auto s1 = new HTTPServerSettings;
 	s1.bindAddresses = ["::1"];
 	s1.port = 11388;
@@ -30,6 +31,11 @@ shared static this()
 
 		exitEventLoop();
 	});
+	runApplication();
+	}
+
+	import vibe.core.log : logWarn;
+	logWarn("Test disabled due to issues listening on ::1 on Travis-CI");
 }
 
 void handler(scope HTTPServerRequest req, scope HTTPServerResponse res)
