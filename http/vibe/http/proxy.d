@@ -94,11 +94,18 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 				throw new HTTPStatusException(HTTPStatus.methodNotAllowed);
 			}
 
+			// CONNECT resources are of the form server:port and not
+			// schema://server:port, so they need some adjustment
+			// TODO: use a more efficient means to parse this
+			url = URL.parse("http://"~req.requestURL);
+
 			TCPConnection ccon;
 			try ccon = connectTCP(url.getFilteredHost, url.port);
 			catch (Exception e) {
 				throw new HTTPStatusException(HTTPStatus.badGateway, "Connection to upstream server failed: "~e.msg);
 			}
+
+			res.writeVoidBody();
 			auto scon = res.connectProxy();
 			assert (scon);
 
