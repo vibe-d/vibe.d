@@ -1,0 +1,8 @@
+﻿{
+	"name": "http-forward-proxy-example",
+	"description": "Sets up a simple forward proxy.",
+	"dependencies": {
+		"vibe-d:http": {"path": "../../"}
+	},
+	"versions": ["VibeDefaultMain"]
+}
