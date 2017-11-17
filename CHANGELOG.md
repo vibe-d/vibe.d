@@ -4,31 +4,36 @@
 v0.8.2 - 2017-11-
 -------------------
 
+The major changes in this release are HTTP forward proxy support, handling incoming HTTP requests on custom transports and a MongoDB based session store. On top of that, there are many smaller improvements in the HTTP server, web/REST generator, JSON/BSON support and the TLS sub system.
+
 ### Features and improvements ###
 
-- Added `SysTime`/`Duration` based overloads for `Cookie.expire`/`.maxAge` - [issue #1701][issue1701], [pull #1889][issue1889]
-- Deprecated non-`nothrow` WebSocket handler callbacks - [issue #1420][issue1420], [pull #1890][issue1890]
-- Added `setCommandLineArgs` - can be used together with a `VibeDisableCommandLineParsing` version to customize command line parsing - [pull #1916][issue1916]
+- Web/REST framework
+    - Added support for `@noRoute` in the REST interface generator - [issue #1934][issue1934]
+    - Added support for `@requiresAuth` on REST interfaces in addition to classes - [pull #1939][issue1939]
+    - Added global `request`/`response` properties for the web interface generator (by Benjamin Schaaf) - [issue #1937][issue1937], [pull #1938][issue1938]
+    - The language list for `@translationContext` can now be specified as a compile-time constant array in addition to a tuple (by Jan Jurzitza aka WebFreak) - [pull #1879][issue1879]
+- HTTP sub system
+    - Added HTTP forward proxy support based on the existing reverse proxy code (by Matt Remmel) - [pull #1893][issue1893]
+    - Deprecated non-`nothrow` WebSocket handler callbacks - [issue #1420][issue1420], [pull #1890][issue1890]
+    - Added `handleHTTPConnection` to serve HTTP requests on a custom transport - [pull #1929][issue1929]
+    - Added `HTTPServerRequest.requestPath` as an `InetPath` property replacing `.path` to avoid encoding related issues - [pull #1940][issue1940]
+    - Added `HTTPClientRequest.remoteAddress`
+    - Added `HTTPListener.bindAddresses` property, this allows querying the actual port when passing `0` to `HTTPServerSettings.bindPort` - [issue #1818][issue1818], [pull #1930][issue1930]
+    - Added `SysTime`/`Duration` based overloads for `Cookie.expire`/`.maxAge` - [issue #1701][issue1701], [pull #1889][issue1889]
+- MongoDB driver
+    - Added `MongoSessionStore` for MongoDB based HTTP session storage
+    - The MongoDB driver now forwards server error messages (by Martin Nowak) - [pull #1951][issue1951]
 - Extended the JSON parser to handle forward ranges in addition to random access ranges (by John Colvin) - [pull #1906][issue1906]
-- Added `handleHTTPConnection` to serve HTTP requests on a custom transport - [pull #1929][issue1929]
-- Added `HTTPListener.bindAddresses` property, this allows querying the actual port when passing `0` to `HTTPServerSettings.bindPort` - [issue #1818][issue1818], [pull #1930][issue1930]
-- Added support for `@noRoute` in the REST interface generator - [issue #1934][issue1934]
-- Added support for `@requiresAuth` on REST interfaces in addition to classes - [pull #1939][issue1939]
-- Added global `request`/`response` properties for the web interface generator (by Benjamin Schaaf) - [issue #1937][issue1937], [pull #1938][issue1938]
-- Added `NativePath` based overloads of `TLSContext.usePrivateKeyFile` and `.useCertificateChainFile`
-- Added `HTTPClientRequest.remoteAddress`
-- Added `HTTPServerRequest.requestPath` as an `InetPath` property replacing `.path` to avoid encoding related issues - [pull #1940][issue1940]
-- Added `MongoSessionStore` for MongoDB based HTTP session storage
-- The MongoDB driver now forwards server error messages (by Martin Nowak) - [pull #1951][issue1951]
 - Added `std.uuid.UUID` conversion support for `Bson` (by Denis Feklushkin) - [pull #1404][issue1404]
 - Added "openssl-1.1" and "openssl-0.9" configurations to the vibe-d:tls package to enable switching the OpenSSL target version without having to define version constants - [pull #1965][issue1965]
-- The language list for `@translationContext` can now be specified as a compile-time constant array in addition to a tuple (by Jan Jurzitza aka WebFreak) - [pull #1879][issue1879]
-- Added HTTP forward proxy support based on the existing reverse proxy code (by Matt Remmel) - [pull #1893][issue1893]
+- Added `NativePath` based overloads of `TLSContext.usePrivateKeyFile` and `.useCertificateChainFile`
+- Added `setCommandLineArgs` - can be used together with a `VibeDisableCommandLineParsing` version to customize command line parsing - [pull #1916][issue1916]
 
 ### Bug fixes ###
 
 - Fixed getting the X509 certificate for printing certificate errors on OpenSSL 1.1 (by Martin Nowak) - [pull #1921][issue1921]
-- Fixed handling of `out` parameters in the REST interface (were erreneously read from the request) - [issue #1933][issue1933], [pull #1935][issue1935]
+- Fixed handling of `out` parameters in the REST interface (were erroneously read from the request) - [issue #1933][issue1933], [pull #1935][issue1935]
 - Fixed an "orphan format specifier" error in the web interface handling code
 - Fixed the JSON parser to work at compile-time (by Benjamin Schaaf) - [pull #1960][issue1960]
 - Fixed an error in the Botan TLS provider if used to serve HTTPS - [issue #1918][issue1918], [pull #1964][issue1964]
