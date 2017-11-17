@@ -1,6 +1,79 @@
 ﻿Changelog
 =========
 
+v0.8.2 - 2017-11-
+-------------------
+
+### Features and improvements ###
+
+- Added `SysTime`/`Duration` based overloads for `Cookie.expire`/`.maxAge` - [issue #1701][issue1701], [pull #1889][issue1889]
+- Deprecated non-`nothrow` WebSocket handler callbacks - [issue #1420][issue1420], [pull #1890][issue1890]
+- Added `setCommandLineArgs` - can be used together with a `VibeDisableCommandLineParsing` version to customize command line parsing - [pull #1916][issue1916]
+- Extended the JSON parser to handle forward ranges in addition to random access ranges (by John Colvin) - [pull #1906][issue1906]
+- Added `handleHTTPConnection` to serve HTTP requests on a custom transport - [pull #1929][issue1929]
+- Added `HTTPListener.bindAddresses` property, this allows querying the actual port when passing `0` to `HTTPServerSettings.bindPort` - [issue #1818][issue1818], [pull #1930][issue1930]
+- Added support for `@noRoute` in the REST interface generator - [issue #1934][issue1934]
+- Added support for `@requiresAuth` on REST interfaces in addition to classes - [pull #1939][issue1939]
+- Added global `request`/`response` properties for the web interface generator (by Benjamin Schaaf) - [issue #1937][issue1937], [pull #1938][issue1938]
+- Added `NativePath` based overloads of `TLSContext.usePrivateKeyFile` and `.useCertificateChainFile`
+- Added `HTTPClientRequest.remoteAddress`
+- Added `HTTPServerRequest.requestPath` as an `InetPath` property replacing `.path` to avoid encoding related issues - [pull #1940][issue1940]
+- Added `MongoSessionStore` for MongoDB based HTTP session storage
+- The MongoDB driver now forwards server error messages (by Martin Nowak) - [pull #1951][issue1951]
+- Added `std.uuid.UUID` conversion support for `Bson` (by Denis Feklushkin) - [pull #1404][issue1404]
+- Added "openssl-1.1" and "openssl-0.9" configurations to the vibe-d:tls package to enable switching the OpenSSL target version without having to define version constants - [pull #1965][issue1965]
+- The language list for `@translationContext` can now be specified as a compile-time constant array in addition to a tuple (by Jan Jurzitza aka WebFreak) - [pull #1879][issue1879]
+- Added HTTP forward proxy support based on the existing reverse proxy code (by Matt Remmel) - [pull #1893][issue1893]
+
+### Bug fixes ###
+
+- Fixed getting the X509 certificate for printing certificate errors on OpenSSL 1.1 (by Martin Nowak) - [pull #1921][issue1921]
+- Fixed handling of `out` parameters in the REST interface (were erreneously read from the request) - [issue #1933][issue1933], [pull #1935][issue1935]
+- Fixed an "orphan format specifier" error in the web interface handling code
+- Fixed the JSON parser to work at compile-time (by Benjamin Schaaf) - [pull #1960][issue1960]
+- Fixed an error in the Botan TLS provider if used to serve HTTPS - [issue #1918][issue1918], [pull #1964][issue1964]
+- Fixed a web interface generator compile error in case of an empty language list in the `@translationContext` - [issue #1955][issue1955], [pull #1956][issue1956]
+- Fixed a bogus error during HTTP request finalization - [issue #1966][issue1966]
+- Fixed the command line argument parser getting tripped up by druntime arguments ("--DRT-...") (by Martin Nowak) - [pull #1944][issue1944]
+- Fixed a possible race condition when stopping a `RedisListener` (by Etienne Cimon) - [pull #1201][issue1201], [pull #1971][issue1971]
+- Fixed support for `TCPListenOptions.reusePort` on macOS and FreeBSD - [pull #1972][issue1972]
+- Fixed handling of CONNECT requests in the HTTP proxy server - [pull #1973][issue1973]
+
+[issue1701]: https://github.com/vibe-d/vibe.d/issues/1701
+[issue1889]: https://github.com/vibe-d/vibe.d/issues/1889
+[issue1420]: https://github.com/vibe-d/vibe.d/issues/1420
+[issue1890]: https://github.com/vibe-d/vibe.d/issues/1890
+[issue1916]: https://github.com/vibe-d/vibe.d/issues/1916
+[issue1906]: https://github.com/vibe-d/vibe.d/issues/1906
+[issue1929]: https://github.com/vibe-d/vibe.d/issues/1929
+[issue1818]: https://github.com/vibe-d/vibe.d/issues/1818
+[issue1930]: https://github.com/vibe-d/vibe.d/issues/1930
+[issue1934]: https://github.com/vibe-d/vibe.d/issues/1934
+[issue1939]: https://github.com/vibe-d/vibe.d/issues/1939
+[issue1937]: https://github.com/vibe-d/vibe.d/issues/1937
+[issue1938]: https://github.com/vibe-d/vibe.d/issues/1938
+[issue1940]: https://github.com/vibe-d/vibe.d/issues/1940
+[issue1951]: https://github.com/vibe-d/vibe.d/issues/1951
+[issue1404]: https://github.com/vibe-d/vibe.d/issues/1404
+[issue1965]: https://github.com/vibe-d/vibe.d/issues/1965
+[issue1879]: https://github.com/vibe-d/vibe.d/issues/1879
+[issue1893]: https://github.com/vibe-d/vibe.d/issues/1893
+[issue1921]: https://github.com/vibe-d/vibe.d/issues/1921
+[issue1933]: https://github.com/vibe-d/vibe.d/issues/1933
+[issue1935]: https://github.com/vibe-d/vibe.d/issues/1935
+[issue1960]: https://github.com/vibe-d/vibe.d/issues/1960
+[issue1918]: https://github.com/vibe-d/vibe.d/issues/1918
+[issue1964]: https://github.com/vibe-d/vibe.d/issues/1964
+[issue1955]: https://github.com/vibe-d/vibe.d/issues/1955
+[issue1956]: https://github.com/vibe-d/vibe.d/issues/1956
+[issue1966]: https://github.com/vibe-d/vibe.d/issues/1966
+[issue1944]: https://github.com/vibe-d/vibe.d/issues/1944
+[issue1201]: https://github.com/vibe-d/vibe.d/issues/1201
+[issue1971]: https://github.com/vibe-d/vibe.d/issues/1971
+[issue1972]: https://github.com/vibe-d/vibe.d/issues/1972
+[issue1973]: https://github.com/vibe-d/vibe.d/issues/1973
+
+
 v0.8.1 - 2017-08-30
 -------------------
 
