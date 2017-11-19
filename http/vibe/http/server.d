@@ -344,7 +344,7 @@ version (Have_diet_ng)
 	import diet.traits;
 
 	@dietTraits
-	private struct DefaultFilters {
+	struct DefaultFilters {
 		import diet.html : HTMLOutputStyle;
 		import std.string : splitLines;
 
