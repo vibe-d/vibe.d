@@ -33,6 +33,7 @@ import deimos.openssl.bio;
 import deimos.openssl.err;
 import deimos.openssl.rand;
 import deimos.openssl.ssl;
+import deimos.openssl.stack;
 import deimos.openssl.x509v3;
 
 version (VibePragmaLib) {
@@ -96,11 +97,11 @@ version (VibeUseOpenSSL11) {
 
 	// #  define sk_num OPENSSL_sk_num
 	extern(C) int OPENSSL_sk_num(const void *);
-	extern(C) int sk_num(const void* p) { return OPENSSL_sk_num(p); }
+	extern(C) int sk_num(const(_STACK)* p) { return OPENSSL_sk_num(p); }
 
 	// #  define sk_value OPENSSL_sk_value
 	extern(C) void *OPENSSL_sk_value(const void *, int);
-	extern(C) void* sk_value(const void* p, int i) { return OPENSSL_sk_value(p, i); }
+	extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
 }
 
 /**
