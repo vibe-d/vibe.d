@@ -336,15 +336,18 @@ void setVibeDistHost(string host, ushort port)
 	import vibe.stream.wrapper : streamOutputRange;
 	import diet.html : compileHTMLDietFile;
 	auto output = streamOutputRange!1024(res.bodyWriter);
-	compileHTMLDietFile!(template_file, ALIASES, DefaultFilters)(output);
+	compileHTMLDietFile!(template_file, ALIASES, DefaultDietFilters)(output);
 }
 
 version (Have_diet_ng)
 {
 	import diet.traits;
 
+	/**
+		Provides the default `css`, `javascript`, `markdown` and `htmlescape` filters
+	 */
 	@dietTraits
-	private struct DefaultFilters {
+	struct DefaultDietFilters {
 		import diet.html : HTMLOutputStyle;
 		import std.string : splitLines;
 
@@ -415,7 +418,7 @@ version (Have_diet_ng)
 			import std.string : strip;
 			import diet.html : compileHTMLDietString;
 			auto dst = appender!string;
-			dst.compileHTMLDietString!(diet, DefaultFilters);
+			dst.compileHTMLDietString!(diet, DefaultDietFilters);
 			return strip(cast(string)(dst.data));
 		}
 
