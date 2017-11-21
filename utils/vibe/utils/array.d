@@ -573,18 +573,8 @@ struct ArraySet(Key)
 	import stdx.allocator.building_blocks.affix_allocator : AffixAllocator;
 
 	private {
-		static if (__VERSION__ < 2074) {
-			struct AW { // work around AffixAllocator limitations
-				IAllocator alloc;
-				alias alloc this;
-				enum alignment = max(Key.alignof, int.alignof);
-				void[] resolveInternalPointer(void* p) { void[] ret; alloc.resolveInternalPointer(p, ret); return ret; }
-			}
-			alias AllocatorType = AffixAllocator!(AW, int);
-		} else {
-			IAllocator AW(IAllocator a) { return a; }
-			alias AllocatorType = AffixAllocator!(IAllocator, int);
-		}
+		IAllocator AW(IAllocator a) { return a; }
+		alias AllocatorType = AffixAllocator!(IAllocator, int);
 		Key[4] m_staticEntries;
 		Key[] m_entries;
 		AllocatorType m_allocator;
