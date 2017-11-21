@@ -569,8 +569,8 @@ unittest {
 
 struct ArraySet(Key)
 {
-	import std.experimental.allocator : makeArray, expandArray, dispose;
-	import std.experimental.allocator.building_blocks.affix_allocator : AffixAllocator;
+	import stdx.allocator : makeArray, expandArray, dispose;
+	import stdx.allocator.building_blocks.affix_allocator : AffixAllocator;
 
 	private {
 		static if (__VERSION__ < 2074) {
@@ -720,8 +720,8 @@ struct ArraySet(Key)
 }
 
 @safe nothrow unittest {
-	import std.experimental.allocator : allocatorObject;
-	import std.experimental.allocator.mallocator : Mallocator;
+	import stdx.allocator : allocatorObject;
+	import stdx.allocator.mallocator : Mallocator;
 
 	ArraySet!int s;
 	s.setAllocator(() @trusted { return Mallocator.instance.allocatorObject; } ());
