@@ -37,12 +37,14 @@ if meson.get_compiler('d').get_id() == 'llvm'
     add_global_arguments(['-d-version=VibeLibeventDriver',
                           '-d-version=Have_openssl',
                           '-d-version=Have_diet_ng',
+                          '-d-version=Have_stdx_allocator',
                           flag_new_openssl_ldc], language : 'd')
 endif
 if meson.get_compiler('d').get_id() == 'dmd'
     add_global_arguments(['-version=VibeLibeventDriver',
                           '-version=Have_openssl',
                           '-version=Have_diet_ng',
+                          '-version=Have_stdx_allocator',
                           flag_new_openssl_dmd], language : 'd')
 endif
 if meson.get_compiler('d').get_id() == 'gnu'
@@ -56,6 +58,7 @@ endif
 # we need to search for this dependency after setting global compiler flags, because
 # it may pull in a subproject after which setting global flags is not allowed anymore
 diet_dep = dependency('diet', fallback: ['diet', 'diet_dep'])
+allocator_dep = subproject('allocator').get_variable('allocator_dep')
 
 # directory where the external dependencies are included from.
 # Meson will search for this dir in both build_root and source_root

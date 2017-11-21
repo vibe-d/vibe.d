@@ -1,0 +1,4 @@
+[wrap-git]
+directory=allocator
+url=https://github.com/wilzbach/stdx-allocator
+revision=head

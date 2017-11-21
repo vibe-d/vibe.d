@@ -23,41 +23,33 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Build Targets
 #
 
-stream_link_with = [vibe_utils_lib,
-                    vibe_core_lib,
-                    vibe_data_lib]
-
 # Cryptographic helper routines
 vibe_stream_lib = library('vibe-stream',
         [vibe_stream_src],
-        include_directories: [vibe_utils_src_dir,
-                              vibe_core_src_dir,
-                              vibe_data_src_dir],
+        dependencies: [vibe_core_dep],
         install: true,
-        link_with: [stream_link_with],
         version: project_version,
         soversion: project_soversion
 )
 pkgc.generate(name: 'vibe-stream',
-              libraries: [vibe_stream_lib] + stream_link_with,
+              libraries: [vibe_stream_lib],
               subdirs: 'd/vibe',
               version: project_version,
+              requires: ['vibe-core', 'vibe-data'],
               description: 'Library of various pluggable stream implementations for Vibe.'
 )
 
+vibe_stream_dep = declare_dependency(
+    link_with: [vibe_stream_lib],
+    include_directories: [vibe_stream_src_dir],
+    dependencies: [vibe_core_dep]
+)
 #
 # Tests
 #
 vibe_test_stream_exe = executable('vibe-test_stream',
     [vibe_stream_src],
-    include_directories: [vibe_utils_src_dir,
-                          vibe_core_src_dir,
-                          vibe_data_src_dir],
-    dependencies: [zlib_dep,
-                   crypto_dep,
-                   ssl_dep,
-                   libevent_dep],
-    link_with: [stream_link_with],
+    dependencies: [vibe_core_dep],
     d_args: meson.get_compiler('d').unittest_args(),
     link_args: '-main'
 )

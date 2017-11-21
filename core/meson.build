@@ -40,30 +40,26 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Build Targets
 #
 
-core_link_with = [vibe_utils_lib,
-                  vibe_data_lib]
-
 # Basic I/O and concurrency primitives, as well as low level utility functions
 vibe_core_lib = library('vibe-core',
         [vibe_core_src],
-        include_directories: [vibe_utils_src_dir,
-                              vibe_data_src_dir,
-                              openssl_inc,
-                              libevent_inc],
         install: true,
-        dependencies: [crypto_dep,
-                       ssl_dep,
-                       libevent_dep,
-                       zlib_dep],
-        link_with: [core_link_with],
+        dependencies: [vibe_utils_dep, vibe_data_dep],
         version: project_version,
         soversion: project_soversion
 )
 pkgc.generate(name: 'vibe-core',
-              libraries: [vibe_core_lib] + core_link_with,
+              libraries: [vibe_core_lib],
+              requires: ['vibe-data', 'vibe-utils'],
               subdirs: 'd/vibe',
               version: project_version,
               description: 'Basic I/O and concurrency primitives, as well as low level utility functions of Vibe.'
+)
+
+vibe_core_dep = declare_dependency(
+    link_with: [vibe_core_lib],
+    include_directories: [vibe_core_src_dir],
+    dependencies: [vibe_utils_dep, vibe_data_dep],
 )
 
 #
@@ -71,15 +67,7 @@ pkgc.generate(name: 'vibe-core',
 #
 vibe_test_core_exe = executable('vibe-test_core',
     [vibe_core_src],
-    include_directories: [vibe_utils_src_dir,
-                          vibe_data_src_dir,
-                          openssl_inc,
-                          libevent_inc],
-    dependencies: [zlib_dep,
-                   crypto_dep,
-                   ssl_dep,
-                   libevent_dep],
-    link_with: [core_link_with],
+    dependencies: [vibe_utils_dep, vibe_data_dep],
     d_args: meson.get_compiler('d').unittest_args(),
     link_args: '-main'
 )

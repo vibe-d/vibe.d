@@ -28,40 +28,36 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Build Targets
 #
 
-http_link_with = [vibe_core_lib,
-                  vibe_utils_lib,
-                  vibe_data_lib,
-                  vibe_stream_lib,
-                  vibe_textfilter_lib,
-                  vibe_inet_lib,
-                  vibe_tls_lib,
-                  vibe_crypto_lib]
-
 # HTTP server and client implementation and higher level HTTP functionality
 vibe_http_lib = library('vibe-http',
         [vibe_http_src],
-        include_directories: [vibe_utils_src_dir,
-                              vibe_core_src_dir,
-                              vibe_data_src_dir,
-                              vibe_stream_src_dir,
-                              vibe_textfilter_src_dir,
-                              vibe_inet_src_dir,
-                              vibe_tls_src_dir,
-                              vibe_crypto_src_dir,
-                              openssl_inc],
-        install: true,
-        dependencies: [zlib_dep,
+        dependencies: [
+                       vibe_inet_dep,
+                       vibe_tls_dep,
+                       vibe_crypto_dep,
                        diet_dep],
-        link_with: [http_link_with],
+        install: true,
         version: project_version,
         soversion: project_soversion
 )
 pkgc.generate(name: 'vibe-http',
-              libraries: [vibe_http_lib] + http_link_with,
+              libraries: [vibe_http_lib],
               subdirs: 'd/vibe',
               version: project_version,
-              requires: 'diet',
+              requires: ['diet',
+                         'vibe-inet',
+                         'vibe-tls',
+                         'vibe-crypto'],
               description: 'Vibe HTTP server and client implementation and higher level HTTP functionality'
+)
+
+vibe_http_dep = declare_dependency(
+    link_with: [vibe_http_lib],
+    include_directories: [vibe_http_src_dir],
+    dependencies: [vibe_inet_dep,
+                   vibe_tls_dep,
+                   vibe_crypto_dep,
+                   diet_dep],
 )
 
 #
@@ -69,21 +65,10 @@ pkgc.generate(name: 'vibe-http',
 #
 vibe_test_http_exe = executable('vibe-test_http',
     [vibe_http_src],
-    include_directories: [vibe_utils_src_dir,
-                          vibe_core_src_dir,
-                          vibe_data_src_dir,
-                          vibe_stream_src_dir,
-                          vibe_textfilter_src_dir,
-                          vibe_inet_src_dir,
-                          vibe_tls_src_dir,
-                          vibe_crypto_src_dir,
-                          openssl_inc],
-    dependencies: [zlib_dep,
-                   crypto_dep,
-                   ssl_dep,
-                   libevent_dep,
+    dependencies: [vibe_inet_dep,
+                   vibe_tls_dep,
+                   vibe_crypto_dep,
                    diet_dep],
-    link_with: [http_link_with],
     d_args: meson.get_compiler('d').unittest_args(),
     link_args: '-main'
 )

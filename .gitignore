@@ -19,6 +19,7 @@ __dummy.html
 dub.selections.json
 
 # Auto-downloaded 3rd-party
+lib/subprojects/allocator
 lib/subprojects/diet/
 lib/subprojects/libevent/
 lib/subprojects/openssl/
