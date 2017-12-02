@@ -359,6 +359,102 @@ HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @syst
 	});
 }
 
+/**
+ * Provides the reason that a websocket connection has closed.
+ *
+ * Further documentation for the WebSocket and it's codes can be found from:
+ * https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent
+ *
+ * ---
+ *
+ * void echoSocket(scope WebSocket sock)
+ * {
+ *   import std.datetime : seconds;
+ *
+ *   while(sock.waitForData(3.seconds))
+ *   {
+ *     string msg = sock.receiveText;
+ *     logInfo("Got a message: %s", msg);
+ *     sock.send(msg);
+ *   }
+ *
+ *   if(sock.connected)
+ *     sock.close(WebSocketCloseReason.policyViolation, "timeout");
+ * }
+ */
+enum WebSocketCloseReason : short
+{
+	normalClosure = 1000,
+	goingAway = 1001,
+	protocolError = 1002,
+	unsupportedData = 1003,
+	noStatusReceived = 1005,
+	abnormalClosure = 1006,
+	invalidFramePayloadData = 1007,
+	policyViolation = 1008,
+	messageTooBig = 1009,
+	internalError = 1011,
+	serviceRestart = 1012,
+	tryAgainLater = 1013,
+	badGateway = 1014,
+	tlsHandshake = 1015
+}
+
+string toString(WebSocketCloseReason reason) @nogc @safe
+{
+	switch(reason / 1000)
+	{
+		case 0:
+			return "Reserved and Unused";
+		case 1:
+			switch(reason)
+			{
+				case 1000:
+					return "Normal Closure";
+				case 1001:
+					return "Going Away";
+				case 1002:
+					return "Protocol Error";
+				case 1003:
+					return "Unsupported Data";
+				case 1004:
+					return "RESERVED";
+				case 1005:
+					return "No Status Recvd";
+				case 1006:
+					return "Abnormal Closure";
+				case 1007:
+					return "Invalid Frame Payload Data";
+				case 1008:
+					return "Policy Violation";
+				case 1009:
+					return "Message Too Big";
+				case 1010:
+					return "Missing Extension";
+				case 1011:
+					return "Internal Error";
+				case 1012:
+					return "Service Restart";
+				case 1013:
+					return "Try Again Later";
+				case 1014:
+					return "Bad Gateway";
+				case 1015:
+					return "TLS Handshake";
+				default:
+					return "RESERVED";
+			}
+		case 2:
+			return "Reserved for extensions";
+		case 3:
+			return "Available for frameworks and libraries";
+		case 4:
+			return "Available for applications";
+		default:
+			return "UNDEFINED - Nasal Demons";
+	}
+}
+
 
 /**
  * Represents a single _WebSocket connection.
@@ -569,6 +665,9 @@ final class WebSocket {
 	{
 		//control frame payloads are limited to 125 bytes
 		assert(reason.length <= 123);
+
+		if(reason.length == 0)
+			reason = (cast(WebSocketCloseReason)code).toString;
 
 		if (connected) {
 			send((scope msg) {
