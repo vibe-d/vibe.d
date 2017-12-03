@@ -680,11 +680,18 @@ final class WebSocket {
 	*/
 	void close(short code = 0, scope const(char)[] reason = "")
 	{
-		//control frame payloads are limited to 125 bytes
-		assert(reason.length <= 123);
+		//assume the default is normal, intentional closure
+		if(code == 0)
+			code = WebSocketCloseReason.normalClosure;
 
-		if(reason.length == 0)
+		if(reason is null || reason.length == 0)
 			reason = (cast(WebSocketCloseReason)code).toString;
+
+		//control frame payloads are limited to 125 bytes
+		version(assert)
+			assert(reason.length <= 123);
+		else
+			reason = reason[0 .. 123];
 
 		if (connected) {
 			send((scope msg) {
@@ -772,7 +779,7 @@ final class WebSocket {
 						logDebug("Got closing frame (%s)", m_sentCloseFrame);
 
 						// If no close code was passed, we default to 1005
-						this.m_closeCode = 1005;
+						this.m_closeCode = WebSocketCloseReason.noStatusReceived;
 
 						// If provided in the frame, attempt to parse the close code/reason
 						if (msg.peek().length >= short.sizeof) {
@@ -805,7 +812,7 @@ final class WebSocket {
 
 		// If no close code was passed, e.g. this was an unclean termination
 		//  of our websocket connection, set the close code to 1006.
-		if (this.m_closeCode == 0) this.m_closeCode = 1006;
+		if (this.m_closeCode == 0) this.m_closeCode = WebSocketCloseReason.abnormalClosure;
 		m_writeMutex.performLocked!({ m_conn.close(); });
 	}
 
