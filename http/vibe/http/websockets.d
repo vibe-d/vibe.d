@@ -402,7 +402,10 @@ enum WebSocketCloseReason : short
 
 string toString(WebSocketCloseReason reason) @nogc @safe
 {
-	switch(reason / 1000)
+	import std.math : floor;
+
+	//round down to the nearest thousand to get category
+	switch(cast(short)(cast(float)reason / 1000f).floor)
 	{
 		case 0:
 			return "Reserved and Unused";
@@ -453,6 +456,20 @@ string toString(WebSocketCloseReason reason) @nogc @safe
 		default:
 			return "UNDEFINED - Nasal Demons";
 	}
+}
+
+unittest
+{
+	assert((cast(WebSocketCloseReason)   0).toString == "Reserved and Unused");
+	assert((cast(WebSocketCloseReason)   1).toString == "Reserved and Unused");
+	assert(WebSocketCloseReason.normalClosure.toString == "Normal Closure");
+	assert(WebSocketCloseReason.abnormalClosure.toString == "Abnormal Closure");
+	assert((cast(WebSocketCloseReason)1020).toString == "RESERVED");
+	assert((cast(WebSocketCloseReason)2000).toString == "Reserved for extensions");
+	assert((cast(WebSocketCloseReason)3000).toString == "Available for frameworks and libraries");
+	assert((cast(WebSocketCloseReason)4000).toString == "Available for applications");
+	assert((cast(WebSocketCloseReason)5000).toString == "UNDEFINED - Nasal Demons");
+	assert((cast(WebSocketCloseReason)  -1).toString == "UNDEFINED - Nasal Demons");
 }
 
 
