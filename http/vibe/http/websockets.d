@@ -401,7 +401,7 @@ enum WebSocketCloseReason : short
 	tlsHandshake = 1015
 }
 
-string toString(WebSocketCloseReason reason) @nogc @safe
+string closeReasonString(WebSocketCloseReason reason) @nogc @safe
 {
 	import std.math : floor;
 
@@ -461,16 +461,16 @@ string toString(WebSocketCloseReason reason) @nogc @safe
 
 unittest
 {
-	assert((cast(WebSocketCloseReason)   0).toString == "Reserved and Unused");
-	assert((cast(WebSocketCloseReason)   1).toString == "Reserved and Unused");
-	assert(WebSocketCloseReason.normalClosure.toString == "Normal Closure");
-	assert(WebSocketCloseReason.abnormalClosure.toString == "Abnormal Closure");
-	assert((cast(WebSocketCloseReason)1020).toString == "RESERVED");
-	assert((cast(WebSocketCloseReason)2000).toString == "Reserved for extensions");
-	assert((cast(WebSocketCloseReason)3000).toString == "Available for frameworks and libraries");
-	assert((cast(WebSocketCloseReason)4000).toString == "Available for applications");
-	assert((cast(WebSocketCloseReason)5000).toString == "UNDEFINED - Nasal Demons");
-	assert((cast(WebSocketCloseReason)  -1).toString == "UNDEFINED - Nasal Demons");
+	assert((cast(WebSocketCloseReason)   0).closeReasonString == "Reserved and Unused");
+	assert((cast(WebSocketCloseReason)   1).closeReasonString == "Reserved and Unused");
+	assert(WebSocketCloseReason.normalClosure.closeReasonString == "Normal Closure");
+	assert(WebSocketCloseReason.abnormalClosure.closeReasonString == "Abnormal Closure");
+	assert((cast(WebSocketCloseReason)1020).closeReasonString == "RESERVED");
+	assert((cast(WebSocketCloseReason)2000).closeReasonString == "Reserved for extensions");
+	assert((cast(WebSocketCloseReason)3000).closeReasonString == "Available for frameworks and libraries");
+	assert((cast(WebSocketCloseReason)4000).closeReasonString == "Available for applications");
+	assert((cast(WebSocketCloseReason)5000).closeReasonString == "UNDEFINED - Nasal Demons");
+	assert((cast(WebSocketCloseReason)  -1).closeReasonString == "UNDEFINED - Nasal Demons");
 }
 
 
@@ -682,7 +682,7 @@ final class WebSocket {
 	void close(short code = WebSocketCloseReason.normalClosure, scope const(char)[] reason = "")
 	{
 		if(reason.length == 0)
-			reason = (cast(WebSocketCloseReason)code).toString;
+			reason = (cast(WebSocketCloseReason)code).closeReasonString;
 
 		//control frame payloads are limited to 125 bytes
 		version(assert)
