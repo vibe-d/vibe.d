@@ -242,7 +242,7 @@ void removeDirectory(Path path)
 }
 /// ditto
 void removeDirectory(string path)
-{
+@trusted {
 	std.file.rmdirRecurse(path);
 }
 
@@ -285,7 +285,7 @@ size_t getDirectorySize(Path path)
 }
 /// ditto
 size_t getDirectorySize(string path)
-{
+@trusted {
 	size_t total;
 	foreach( DirEntry ent; dirEntries(path, SpanMode.depth) )
 		total += makeFileInfo(ent).size;
