@@ -384,6 +384,7 @@ HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @syst
  */
 enum WebSocketCloseReason : short
 {
+	none = 0,
 	normalClosure = 1000,
 	goingAway = 1001,
 	protocolError = 1002,
@@ -678,20 +679,16 @@ final class WebSocket {
 			code = Numeric code indicating a termination reason.
 			reason = Message describing why the connection was terminated.
 	*/
-	void close(short code = 0, scope const(char)[] reason = "")
+	void close(short code = WebSocketCloseReason.normalClosure, scope const(char)[] reason = "")
 	{
-		//assume the default is normal, intentional closure
-		if(code == 0)
-			code = WebSocketCloseReason.normalClosure;
-
-		if(reason is null || reason.length == 0)
+		if(reason.length == 0)
 			reason = (cast(WebSocketCloseReason)code).toString;
 
 		//control frame payloads are limited to 125 bytes
 		version(assert)
 			assert(reason.length <= 123);
 		else
-			reason = reason[0 .. 123];
+			reason = reason[0 .. min($, 123)];
 
 		if (connected) {
 			send((scope msg) {
