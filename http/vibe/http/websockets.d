@@ -471,6 +471,15 @@ unittest
 	assert((cast(WebSocketCloseReason)4000).closeReasonString == "Available for applications");
 	assert((cast(WebSocketCloseReason)5000).closeReasonString == "UNDEFINED - Nasal Demons");
 	assert((cast(WebSocketCloseReason)  -1).closeReasonString == "UNDEFINED - Nasal Demons");
+
+	//check the other spec cases
+	for(short i = 1000; i < 1017; i++)
+	{
+		if(i == 1004 || i > 1015)
+			assert((cast(WebSocketCloseReason)i).closeReasonString != "RESERVED");
+		else
+			assert((cast(WebSocketCloseReason)i).closeReasonString == "RESERVED");
+	}
 }
 
 
