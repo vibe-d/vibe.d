@@ -476,9 +476,17 @@ unittest
 	for(short i = 1000; i < 1017; i++)
 	{
 		if(i == 1004 || i > 1015)
-			assert((cast(WebSocketCloseReason)i).closeReasonString != "RESERVED");
+		{
+			assert(
+				(cast(WebSocketCloseReason)i).closeReasonString == "RESERVED",
+				"(incorrect) code %d = %s".format(i, closeReasonString(cast(WebSocketCloseReason)i))
+			);
+		}
 		else
-			assert((cast(WebSocketCloseReason)i).closeReasonString == "RESERVED");
+			assert(
+				(cast(WebSocketCloseReason)i).closeReasonString != "RESERVED",
+				"(incorrect) code %d = %s".format(i, closeReasonString(cast(WebSocketCloseReason)i))
+			);
 	}
 }
 
