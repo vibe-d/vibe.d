@@ -81,7 +81,7 @@ import std.encoding : sanitize;
 
 		$(UL
 			$(LI An array of values is mapped to
-				$(D &lt;parameter_name&gt;_&lt;index&gt;), where $(D index)
+				`<parameter_name>_<index>`, where `index`
 				denotes the zero based index of the array entry. The length
 				of the array is determined by searching for the first
 				non-existent index in the set of form fields.)
@@ -93,7 +93,7 @@ import std.encoding : sanitize;
 			$(LI $(D struct) type parameters that don't define a $(D fromString)
 				or a $(D fromStringValidate) method will be mapped to one
 				form field per struct member with a scheme similar to how
-				arrays are treated: $(D &lt;parameter_name&gt;_&lt;member_name&gt;))
+				arrays are treated: `<parameter_name>_<member_name>`)
 			$(LI Boolean parameters will be set to $(D true) if a form field of
 				the corresponding name is present and to $(D false) otherwise.
 				This is compatible to how check boxes in HTML forms work.)
