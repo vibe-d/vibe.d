@@ -698,7 +698,7 @@ final class WebSocket {
 	*/
 	void close(short code = WebSocketCloseReason.normalClosure, scope const(char)[] reason = "")
 	{
-		if(reason.length == 0)
+		if(reason !is null && reason.length == 0)
 			reason = (cast(WebSocketCloseReason)code).closeReasonString;
 
 		//control frame payloads are limited to 125 bytes
