@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.8.2 - 2017-11-
+v0.8.2 - 2017-12-11
 -------------------
 
 The major changes in this release are HTTP forward proxy support, handling incoming HTTP requests on custom transports and a MongoDB based session store. On top of that, there are many smaller improvements in the HTTP server, web/REST generator, JSON/BSON support and the TLS sub system.
