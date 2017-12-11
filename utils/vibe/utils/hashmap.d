@@ -50,19 +50,8 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	alias Key = TKey;
 	alias Value = TValue;
 
-	static if (__VERSION__ < 2074) {
-		struct AW { // work around AffixAllocator limitations
-			import std.algorithm.comparison : max;
-			IAllocator alloc;
-			alias alloc this;
-			enum alignment = max(Key.alignof, int.alignof);
-			void[] resolveInternalPointer(void* p) { void[] ret; alloc.resolveInternalPointer(p, ret); return ret; }
-		}
-		alias AllocatorType = AffixAllocator!(AW, int);
-	} else {
-		IAllocator AW(IAllocator a) { return a; }
-		alias AllocatorType = AffixAllocator!(IAllocator, int);
-	}
+	IAllocator AW(IAllocator a) { return a; }
+	alias AllocatorType = AffixAllocator!(IAllocator, int);
 
 	struct TableEntry {
 		UnConst!Key key = Traits.clearValue;

@@ -569,22 +569,12 @@ unittest {
 
 struct ArraySet(Key)
 {
-	import std.experimental.allocator : makeArray, expandArray, dispose;
-	import std.experimental.allocator.building_blocks.affix_allocator : AffixAllocator;
+	import stdx.allocator : makeArray, expandArray, dispose;
+	import stdx.allocator.building_blocks.affix_allocator : AffixAllocator;
 
 	private {
-		static if (__VERSION__ < 2074) {
-			struct AW { // work around AffixAllocator limitations
-				IAllocator alloc;
-				alias alloc this;
-				enum alignment = max(Key.alignof, int.alignof);
-				void[] resolveInternalPointer(void* p) { void[] ret; alloc.resolveInternalPointer(p, ret); return ret; }
-			}
-			alias AllocatorType = AffixAllocator!(AW, int);
-		} else {
-			IAllocator AW(IAllocator a) { return a; }
-			alias AllocatorType = AffixAllocator!(IAllocator, int);
-		}
+		IAllocator AW(IAllocator a) { return a; }
+		alias AllocatorType = AffixAllocator!(IAllocator, int);
 		Key[4] m_staticEntries;
 		Key[] m_entries;
 		AllocatorType m_allocator;
@@ -720,8 +710,8 @@ struct ArraySet(Key)
 }
 
 @safe nothrow unittest {
-	import std.experimental.allocator : allocatorObject;
-	import std.experimental.allocator.mallocator : Mallocator;
+	import stdx.allocator : allocatorObject;
+	import stdx.allocator.mallocator : Mallocator;
 
 	ArraySet!int s;
 	s.setAllocator(() @trusted { return Mallocator.instance.allocatorObject; } ());

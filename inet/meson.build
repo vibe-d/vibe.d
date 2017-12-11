@@ -20,30 +20,28 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Build Targets
 #
 
-inet_link_with = [vibe_utils_lib,
-                  vibe_core_lib,
-                  vibe_data_lib,
-                  vibe_stream_lib,
-                  vibe_textfilter_lib]
-
 # Internet standard functionality
 vibe_inet_lib = library('vibe-inet',
         [vibe_inet_src],
-        include_directories: [vibe_utils_src_dir,
-                              vibe_core_src_dir,
-                              vibe_data_src_dir,
-                              vibe_stream_src_dir,
-                              vibe_textfilter_src_dir],
+        dependencies: [vibe_stream_dep,
+                       vibe_textfilter_dep],
         install: true,
-        link_with: [inet_link_with],
         version: project_version,
         soversion: project_soversion
 )
 pkgc.generate(name: 'vibe-inet',
-              libraries: [vibe_inet_lib] + inet_link_with,
+              libraries: [vibe_inet_lib],
               subdirs: 'd/vibe',
+              requires: ['vibe-stream', 'vibe-textfilter'],
               version: project_version,
               description: 'Internet standard functionality for Vibe.'
+)
+
+vibe_inet_dep = declare_dependency(
+    link_with: [vibe_inet_lib],
+    include_directories: [vibe_inet_src_dir],
+    dependencies: [vibe_stream_dep,
+                   vibe_textfilter_dep],
 )
 
 #
@@ -51,18 +49,8 @@ pkgc.generate(name: 'vibe-inet',
 #
 vibe_test_inet_exe = executable('vibe-test_inet',
     [vibe_inet_src],
-    include_directories: [vibe_utils_src_dir,
-                          vibe_core_src_dir,
-                          vibe_data_src_dir,
-                          vibe_stream_src_dir,
-                          vibe_textfilter_src_dir,
-                          openssl_inc,
-                          libevent_inc],
-    dependencies: [zlib_dep,
-                   crypto_dep,
-                   ssl_dep,
-                   libevent_dep],
-    link_with: [inet_link_with],
+    dependencies: [vibe_stream_dep,
+                   vibe_textfilter_dep],
     d_args: meson.get_compiler('d').unittest_args(),
     link_args: '-main'
 )

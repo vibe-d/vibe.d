@@ -45,20 +45,12 @@ environment:
     DVersion: 2.072.2
     arch: x64
     config: vibe-core
-  - DC: dmd
-    DVersion: 2.071.2
-    arch: x86
-    config: vibe-core
   - DC: ldc
     DVersion: 1.3.0
     arch: x64
     config: vibe-core
   - DC: ldc
     DVersion: 1.2.0
-    arch: x64
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.1.0
     arch: x64
     config: vibe-core
 

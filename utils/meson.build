@@ -38,7 +38,8 @@ vibe_utils_lib = library('vibe-utils',
         dependencies: [crypto_dep,
                        ssl_dep,
                        libevent_dep,
-                       zlib_dep],
+                       zlib_dep,
+                       allocator_dep],
         version: project_version,
         soversion: project_soversion
 )
@@ -46,7 +47,18 @@ pkgc.generate(name: 'vibe-utils',
               libraries: vibe_utils_lib,
               subdirs: 'd/vibe',
               version: project_version,
+              requires: ['allocator'],
               description: 'Low level utility functionality of Vibe.'
+)
+
+vibe_utils_dep = declare_dependency(
+    link_with: [vibe_utils_lib],
+    include_directories: [vibe_utils_src_dir, openssl_inc, libevent_inc],
+    dependencies: [crypto_dep,
+                    ssl_dep,
+                    libevent_dep,
+                    zlib_dep,
+                    allocator_dep],
 )
 
 #
@@ -54,11 +66,7 @@ pkgc.generate(name: 'vibe-utils',
 #
 vibe_test_utils_exe = executable('vibe-test_utils',
     [vibe_utils_src],
-    include_directories: [openssl_inc, libevent_inc],
-    dependencies: [zlib_dep,
-                   crypto_dep,
-                   ssl_dep,
-                   libevent_dep],
+    dependencies: [vibe_utils_dep],
     d_args: meson.get_compiler('d').unittest_args(),
     link_args: '-main'
 )

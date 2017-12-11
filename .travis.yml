@@ -19,18 +19,17 @@ d:
   # this way the overall test time gets cut down (GDC/LDC are a lot
   # slower tham DMD, so they should be started early), while still
   # catching most DMD version related build failures early
-  - dmd-2.077.0
-  - dmd-2.071.2
+  - dmd-2.077.1
+  - dmd-2.072.2
+  - ldc-1.6.0
   - ldc-1.5.0
   - ldc-1.4.0
   - ldc-1.3.0
   - ldc-1.2.0
-  - ldc-1.1.1
   - dmd-2.076.1
   - dmd-2.075.1
   - dmd-2.074.1
   - dmd-2.073.2
-  - dmd-2.072.2
   - dmd-beta
 
 env:
@@ -45,8 +44,6 @@ matrix:
       env: DFLAGS="-cov -version=VibedSetCoverageMerge" DUB_BUILD_MODE="singleFile"
   exclude:
     - d: ldc-1.2.0
-      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
-    - d: ldc-1.1.1
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
   allow_failures:
     - d: dmd-beta
