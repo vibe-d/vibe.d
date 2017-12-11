@@ -33,7 +33,7 @@ import std.exception;
 void listenHTTPProxy(HTTPServerSettings settings, HTTPProxySettings proxy_settings)
 {
 	// disable all advanced parsing in the server
-	settings.options = HTTPServerOption.None;
+	settings.options = HTTPServerOption.none;
 	listenHTTP(settings, proxyRequest(proxy_settings));
 }
 // Compatibility alias - will be deprecated soon.
