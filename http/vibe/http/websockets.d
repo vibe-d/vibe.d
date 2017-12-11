@@ -359,6 +359,137 @@ HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @syst
 	});
 }
 
+/**
+ * Provides the reason that a websocket connection has closed.
+ *
+ * Further documentation for the WebSocket and it's codes can be found from:
+ * https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent
+ *
+ * ---
+ *
+ * void echoSocket(scope WebSocket sock)
+ * {
+ *   import std.datetime : seconds;
+ *
+ *   while(sock.waitForData(3.seconds))
+ *   {
+ *     string msg = sock.receiveText;
+ *     logInfo("Got a message: %s", msg);
+ *     sock.send(msg);
+ *   }
+ *
+ *   if(sock.connected)
+ *     sock.close(WebSocketCloseReason.policyViolation, "timeout");
+ * }
+ */
+enum WebSocketCloseReason : short
+{
+	none = 0,
+	normalClosure = 1000,
+	goingAway = 1001,
+	protocolError = 1002,
+	unsupportedData = 1003,
+	noStatusReceived = 1005,
+	abnormalClosure = 1006,
+	invalidFramePayloadData = 1007,
+	policyViolation = 1008,
+	messageTooBig = 1009,
+	internalError = 1011,
+	serviceRestart = 1012,
+	tryAgainLater = 1013,
+	badGateway = 1014,
+	tlsHandshake = 1015
+}
+
+string closeReasonString(WebSocketCloseReason reason) @nogc @safe
+{
+	import std.math : floor;
+
+	//round down to the nearest thousand to get category
+	switch(cast(short)(cast(float)reason / 1000f).floor)
+	{
+		case 0:
+			return "Reserved and Unused";
+		case 1:
+			switch(reason)
+			{
+				case 1000:
+					return "Normal Closure";
+				case 1001:
+					return "Going Away";
+				case 1002:
+					return "Protocol Error";
+				case 1003:
+					return "Unsupported Data";
+				case 1004:
+					return "RESERVED";
+				case 1005:
+					return "No Status Recvd";
+				case 1006:
+					return "Abnormal Closure";
+				case 1007:
+					return "Invalid Frame Payload Data";
+				case 1008:
+					return "Policy Violation";
+				case 1009:
+					return "Message Too Big";
+				case 1010:
+					return "Missing Extension";
+				case 1011:
+					return "Internal Error";
+				case 1012:
+					return "Service Restart";
+				case 1013:
+					return "Try Again Later";
+				case 1014:
+					return "Bad Gateway";
+				case 1015:
+					return "TLS Handshake";
+				default:
+					return "RESERVED";
+			}
+		case 2:
+			return "Reserved for extensions";
+		case 3:
+			return "Available for frameworks and libraries";
+		case 4:
+			return "Available for applications";
+		default:
+			return "UNDEFINED - Nasal Demons";
+	}
+}
+
+unittest
+{
+	assert((cast(WebSocketCloseReason)   0).closeReasonString == "Reserved and Unused");
+	assert((cast(WebSocketCloseReason)   1).closeReasonString == "Reserved and Unused");
+	assert(WebSocketCloseReason.normalClosure.closeReasonString == "Normal Closure");
+	assert(WebSocketCloseReason.abnormalClosure.closeReasonString == "Abnormal Closure");
+	assert((cast(WebSocketCloseReason)1020).closeReasonString == "RESERVED");
+	assert((cast(WebSocketCloseReason)2000).closeReasonString == "Reserved for extensions");
+	assert((cast(WebSocketCloseReason)3000).closeReasonString == "Available for frameworks and libraries");
+	assert((cast(WebSocketCloseReason)4000).closeReasonString == "Available for applications");
+	assert((cast(WebSocketCloseReason)5000).closeReasonString == "UNDEFINED - Nasal Demons");
+	assert((cast(WebSocketCloseReason)  -1).closeReasonString == "UNDEFINED - Nasal Demons");
+
+	//check the other spec cases
+	for(short i = 1000; i < 1017; i++)
+	{
+		if(i == 1004 || i > 1015)
+		{
+			assert(
+				(cast(WebSocketCloseReason)i).closeReasonString == "RESERVED",
+				"(incorrect) code %d = %s".format(i, closeReasonString(cast(WebSocketCloseReason)i))
+			);
+		}
+		else
+			assert(
+				(cast(WebSocketCloseReason)i).closeReasonString != "RESERVED",
+				"(incorrect) code %d = %s".format(i, closeReasonString(cast(WebSocketCloseReason)i))
+			);
+	}
+}
+
 
 /**
  * Represents a single _WebSocket connection.
@@ -565,10 +696,16 @@ final class WebSocket {
 			code = Numeric code indicating a termination reason.
 			reason = Message describing why the connection was terminated.
 	*/
-	void close(short code = 0, scope const(char)[] reason = "")
+	void close(short code = WebSocketCloseReason.normalClosure, scope const(char)[] reason = "")
 	{
+		if(reason !is null && reason.length == 0)
+			reason = (cast(WebSocketCloseReason)code).closeReasonString;
+
 		//control frame payloads are limited to 125 bytes
-		assert(reason.length <= 123);
+		version(assert)
+			assert(reason.length <= 123);
+		else
+			reason = reason[0 .. min($, 123)];
 
 		if (connected) {
 			send((scope msg) {
@@ -656,7 +793,7 @@ final class WebSocket {
 						logDebug("Got closing frame (%s)", m_sentCloseFrame);
 
 						// If no close code was passed, we default to 1005
-						this.m_closeCode = 1005;
+						this.m_closeCode = WebSocketCloseReason.noStatusReceived;
 
 						// If provided in the frame, attempt to parse the close code/reason
 						if (msg.peek().length >= short.sizeof) {
@@ -689,7 +826,7 @@ final class WebSocket {
 
 		// If no close code was passed, e.g. this was an unclean termination
 		//  of our websocket connection, set the close code to 1006.
-		if (this.m_closeCode == 0) this.m_closeCode = 1006;
+		if (this.m_closeCode == 0) this.m_closeCode = WebSocketCloseReason.abnormalClosure;
 		m_writeMutex.performLocked!({ m_conn.close(); });
 	}
 
