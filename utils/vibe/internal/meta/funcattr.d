@@ -183,7 +183,7 @@ unittest {
 */
 auto computeAttributedParameter(alias FUNCTION, string NAME, ARGS...)(ARGS args)
 {
-	import std.typetuple : Filter;
+	import std.meta : Filter;
 	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
 	alias input_attributes = Filter!(isInputAttribute, RecursiveFunctionAttributes!FUNCTION);
 	foreach (att; input_attributes)
@@ -203,10 +203,7 @@ auto computeAttributedParameter(alias FUNCTION, string NAME, ARGS...)(ARGS args)
 */
 auto computeAttributedParameterCtx(alias FUNCTION, string NAME, T, ARGS...)(T ctx, ARGS args)
 {
-	static if (__VERSION__ >= 2072)
-		import std.typetuple : AliasSeq, Filter;
-	else
-		import std.typetuple : AliasSeq = TypeTuple, Filter;
+	import std.meta : AliasSeq, Filter;
 	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
 	alias input_attributes = Filter!(isInputAttribute, RecursiveFunctionAttributes!FUNCTION);
 	foreach (att; input_attributes)

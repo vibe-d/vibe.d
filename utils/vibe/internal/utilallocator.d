@@ -20,10 +20,7 @@ final class RegionListAllocator(Allocator, bool leak = false) : IAllocator {
 	import std.algorithm.comparison : min, max;
 	import std.conv : emplace;
 
-	static if (__VERSION__ < 2072)
-		import stdx.allocator.common : Ternary;
-	else
-		import std.typecons : Ternary;
+	import std.typecons : Ternary;
 
 	static struct Pool { Pool* next; void[] data; void[] remaining; }
 	private {

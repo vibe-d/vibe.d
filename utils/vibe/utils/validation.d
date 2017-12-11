@@ -67,11 +67,9 @@ bool validateEmail(R)(ref R error_sink, string str, size_t max_length = 64)
 		return false;
 	}
 
-	static if (__VERSION__ >= 2072) {
-		if (() @trusted { return !isEmail(str); }()) {
-			error_sink.put("The email address is invalid.");
-			return false;
-		}
+	if (() @trusted { return !isEmail(str); }()) {
+		error_sink.put("The email address is invalid.");
+		return false;
 	}
 
 	return true;

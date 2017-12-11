@@ -196,10 +196,7 @@ in {
 
 	// Initialize the object in its pre-ctor state
 	() @trusted {
-		static if (__VERSION__ < 2071)
-			chunk[0 .. classSize] = typeid(T).init[];
-		else
-			chunk[0 .. classSize] = typeid(T).initializer[]; // Avoid deprecation warning
+		chunk[0 .. classSize] = typeid(T).initializer[]; // Avoid deprecation warning
 	} ();
 
 	// Call the ctor if any
