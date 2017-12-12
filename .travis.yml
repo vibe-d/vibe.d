@@ -52,7 +52,7 @@ matrix:
 
 before_install:
   - pyenv global system 3.5
-  - pip3 install 'meson>=0.42,!=0.43'
+  - pip3 install 'meson>=0.42,!=0.43,!=0.44'
 
 install:
   - mkdir .ntmp
