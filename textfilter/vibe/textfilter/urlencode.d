@@ -254,10 +254,7 @@ private struct StringSliceAppender(S) {
 	{
 		import std.encoding : encode;
 		char[6] chars;
-		static if (__VERSION__ < 2072)
-			auto n = () @trusted { return encode(ch, chars[]); } ();
-		else
-			auto n = encode(ch, chars[]);
+		auto n = encode(ch, chars[]);
 		foreach (char c; chars[0 .. n]) put(c);
 	}
 

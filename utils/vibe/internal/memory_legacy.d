@@ -834,10 +834,7 @@ in {
 	auto result = cast(T) chunk.ptr;
 
 	// Initialize the object in its pre-ctor state
-	static if (__VERSION__ < 2071)
-		chunk[0 .. classSize] = typeid(T).init[];
-	else
-		chunk[0 .. classSize] = typeid(T).initializer[]; // Avoid deprecation warning
+	chunk[0 .. classSize] = typeid(T).initializer[]; // Avoid deprecation warning
 
 	// Call the ctor if any
 	static if (is(typeof(result.__ctor(args))))

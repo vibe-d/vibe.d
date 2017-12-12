@@ -582,8 +582,6 @@ struct ArraySet(Key)
 
 	~this()
 	@trusted {
-		static if (__VERSION__ <= 2071)
-			scope (failure) assert(false);
 		if (m_entries.ptr) {
 			if (--allocator.prefix(m_entries) <= 0) {
 				try allocator.dispose(m_entries);
@@ -594,8 +592,6 @@ struct ArraySet(Key)
 
 	this(this)
 	@trusted {
-		static if (__VERSION__ <= 2071)
-			scope (failure) assert(false);
 		if (m_entries.ptr) {
 			allocator.prefix(m_entries)++;
 		}
@@ -603,8 +599,6 @@ struct ArraySet(Key)
 
 	@property ArraySet dup()
 	{
-		static if (__VERSION__ <= 2071)
-			scope (failure) assert(false);
 		ArraySet ret;
 		ret.m_staticEntries = m_staticEntries;
 		ret.m_allocator = m_allocator;
