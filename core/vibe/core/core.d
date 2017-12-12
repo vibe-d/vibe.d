@@ -691,8 +691,8 @@ public void setupWorkerThreads(uint num = logicalProcessorCount())
 public @property uint logicalProcessorCount()
 {
 	version (linux) {
-		import core.sys.linux.sys.sysinfo;
-		return get_nprocs();
+		import core.sys.posix.unistd;
+        return sysconf(_SC_NPROCESSORS_ONLN);
 	} else version (OSX) {
 		int count;
 		size_t count_len = count.sizeof;
