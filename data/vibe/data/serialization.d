@@ -1918,6 +1918,16 @@ unittest {
 	assert(deser.bar_ == 42);
 }
 
+@safe unittest { // issue 1941
+	static struct Bar { Bar[] foos; int i; }
+	Bar b1 = {[{null, 2}], 1};
+	auto s = serialize!TestSerializer(b1);
+	auto b = deserialize!(TestSerializer, Bar)(s);
+	assert(b.i == 1);
+	assert(b.foos.length == 1);
+	assert(b.foos[0].i == 2);
+}
+
 unittest { // issue 1991 - @system property getters/setters does not compile
 	static class A {
 		@property @name("foo") {
