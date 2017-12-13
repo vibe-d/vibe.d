@@ -484,6 +484,14 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					return;
 				}
 			}
+			static auto safeGetMember(string mname)(ref T val) @safe {
+				static if (__traits(compiles, __traits(getMember, val, mname))) {
+					return __traits(getMember, val, mname);
+				} else {
+					pragma(msg, "Warning: Getter for "~fullyQualifiedName!T~"."~mname~" is not @safe");
+					return () @trusted { return __traits(getMember, val, mname); } ();
+				}
+			}
 			static if (hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
 				enum nfields = getExpandedFieldCount!(TU, SerializableFields!(TU, Policy));
 				ser.beginWriteArray!Traits(nfields);
@@ -494,7 +502,10 @@ private template serializeValueImpl(Serializer, alias Policy) {
 						alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[j]));
 						alias STraits = SubTraits!(Traits, TM, TA);
 						ser.beginWriteArrayEntry!STraits(fcount);
-						ser.serializeValue!(TM, TA)(tuple(__traits(getMember, value, mname))[j]);
+						static if (TMS.length == 1)
+							ser.serializeValue!(TM, TA)(safeGetMember!mname(value));
+						else
+							ser.serializeValue!(TM, TA)(tuple(__traits(getMember, value, mname))[j]);
 						ser.endWriteArrayEntry!STraits(fcount);
 						fcount++;
 					}
@@ -512,7 +523,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 					enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 					static if (TM.length == 1) {
-						auto vt = __traits(getMember, value, mname);
+						auto vt = safeGetMember!mname(value);
 					} else {
 						auto vt = tuple!TM(__traits(getMember, value, mname));
 					}
@@ -715,6 +726,16 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			bool[getExpandedFieldsData!(T, SerializableFields!(T, Policy)).length] set;
 			static if (is(T == class)) ret = new T;
 
+			void safeSetMember(string mname, U)(ref T value, U fval)
+			@safe {
+				static if (__traits(compiles, () @safe { __traits(getMember, value, mname) = fval; }))
+					__traits(getMember, value, mname) = fval;
+				else {
+					pragma(msg, "Warning: Setter for "~fullyQualifiedName!T~"."~mname~" is not @safe");
+					() @trusted { __traits(getMember, value, mname) = fval; } ();
+				}
+			}
+
 			static if (hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
 				size_t idx = 0;
 				ser.readArray!Traits((sz){}, {
@@ -736,7 +757,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 								set[i] = true;
 								ser.beginReadArrayEntry!STraits(i);
 								static if (MT.length == 1) {
-									__traits(getMember, ret, mname) = ser.deserializeValue!(TMTI, TMTIA);
+									safeSetMember!mname(ret, ser.deserializeValue!(TMTI, TMTIA));
 								} else {
 									__traits(getMember, ret, mname)[msindex] = ser.deserializeValue!(TMTI, TMTIA);
 								}
@@ -764,7 +785,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 									set[i] = true;
 									ser.beginReadDictionaryEntry!STraits(fname);
 									static if (TM.length == 1) {
-										__traits(getMember, ret, mname) = ser.deserializeValue!(TM, TA);
+										safeSetMember!mname(ret, ser.deserializeValue!(TM, TA));
 									} else {
 										__traits(getMember, ret, mname) = ser.deserializeValue!(Tuple!TM, TA);
 									}
@@ -1895,4 +1916,17 @@ unittest {
 	assert(ser == "D("~Sn~"){DE(i,bar)(V(i)(42))DE(i,bar)}D("~Sn~")", ser);
 	auto deser = deserialize!(TestSerializer, S)(ser);
 	assert(deser.bar_ == 42);
+}
+
+unittest { // issue 1991 - @system property getters/setters does not compile
+	static class A {
+		@property @name("foo") {
+			string fooString() const { return "a"; }
+			void fooString(string a) {  }
+		}
+	}
+
+	auto a1 = new A;
+	auto b = serialize!TestSerializer(a1);
+	auto a2 = deserialize!(TestSerializer, A)(b);
 }
