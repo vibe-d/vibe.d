@@ -197,3 +197,39 @@ Install the DMD compiler and vibe.d's dependencies using portupgrade or a simila
     sudo portupgrade -PN devel/libevent2 devel/pkgconf
 
 Optionally, run `./setup-freebsd.sh` to create a user/group pair for privilege lowering.
+
+
+Switching between OpenSSL versions
+----------------------------------
+
+By default, vibe.d is built against OpenSSL 1.0.x. On systems that use the newer
+1.1.x branch, this can be overridden on the DUB command line using
+`--override-config vibe-d:tls/openssl-1.1`. Alternatively, the same can be done
+using a sub configuration directive in the package recipe:
+
+SDL syntax:
+```
+dependency "vibe-d:tls" version="~>0.8.2"
+subConfiguration "vibe-d:tls" "openssl-1.1"
+```
+
+JSON syntax:
+```
+{
+    ...
+    "dependencies": {
+        ...
+        "vibe-d:tls": "*"
+    },
+    "subConfigurations": {
+        ...
+        "vibe-d:tls": "openssl-1.1"
+    }
+}
+```
+
+For older systems there is also an "openssl-0.9" configuration that can be
+used in analogy to the above to build against the OpenSSL 0.9.8 branch.
+
+Finally, there is a "botan" configuration for using the D port of the Botan
+library.
