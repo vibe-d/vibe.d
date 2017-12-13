@@ -50,10 +50,3 @@ configuration "win32" {
 	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
 	versions "VibeWin32Driver"
 }
-
-configuration "winrt" {
-	platforms "windows"
-	targetType "library"
-	sourceFiles "../lib/win-i386/runtimeobject.lib" platform="windows-x86"
-	versions "VibeWinrtDriver"
-}

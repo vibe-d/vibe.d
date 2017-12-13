@@ -49,9 +49,6 @@ configuration "libasync" {
 configuration "win32" {
 	subConfiguration "vibe-d:core" "win32"
 }
-configuration "winrt" {
-	subConfiguration "vibe-d:core" "winrt"
-}
 
 subPackage "utils"
 subPackage "data"
