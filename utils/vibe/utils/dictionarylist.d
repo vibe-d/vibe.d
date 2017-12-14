@@ -195,7 +195,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	/// ditto
 	inout(T) get(T)(string key) // Work around DMD bug
 	inout if (typedGet!T) {
-		return get!T(key, T.init);
+		return get!T(key, inout(T).init);
 	}
 
 	/** Returns all values matching the given key.
