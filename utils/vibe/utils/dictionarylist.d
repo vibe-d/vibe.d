@@ -400,3 +400,15 @@ unittest {
 	assert(text(l) == `["foo": 42, "bar": 43]`, text(l));
 	assert(l.toString() == `["foo": 42, "bar": 43]`, l.toString());
 }
+
+// Issue 2004
+@safe unittest {
+	import std.variant : Variant;
+	DictionaryList!Variant l;
+	class C {
+		int x = 123;
+	}
+	l["foo"] = new C;
+	auto c = l.get!C("foo");
+	assert(c.x == 123);
+}
