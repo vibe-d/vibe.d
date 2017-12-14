@@ -15,6 +15,20 @@ import std.datetime : Clock, SysTime, UTC;
 import std.typecons : Nullable;
 import std.variant;
 
+///
+unittest {
+	import vibe.http.server : HTTPServerSettings;
+	import core.time : hours;
+
+	auto store = new MongoSessionStore("mongodb://127.0.0.1/mydb", "sessions");
+	store.expirationTime = 5.hours;
+
+	auto settings = new HTTPServerSettings("127.0.0.1:8080");
+	settings.sessionStore = store;
+
+	//listenHTTP(settings, router);
+}
+
 
 final class MongoSessionStore : SessionStore {
 @safe:

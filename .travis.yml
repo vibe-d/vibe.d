@@ -51,7 +51,7 @@ matrix:
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 before_install:
-  - pyenv global system 3.5
+  - pyenv global system 3.6
   - pip3 install 'meson>=0.42,!=0.43,!=0.44'
 
 install:
