@@ -2301,7 +2301,6 @@ private auto skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow
 private auto skipNumber(R)(ref R s, out bool is_float, out bool is_long_overflow)
 	if (!isNarrowString!R && isForwardRange!R)
 {
-	pragma(msg, R);
 	auto sOrig = s.save;
 	size_t idx = 0;
 	is_float = false;
