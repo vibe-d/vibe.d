@@ -56,6 +56,9 @@ environment:
 
 skip_tags: false
 
+services:
+  - mongodb
+
 install:
   - ps: function SetUpDCompiler
         {
