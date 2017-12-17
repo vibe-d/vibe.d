@@ -690,37 +690,9 @@ public void setupWorkerThreads(uint num = logicalProcessorCount())
 */
 public @property uint logicalProcessorCount()
 {
-	version (linux) {
-		import std.parallelism : totalCPUs;
-		return totalCPUs;
-	} else version (OSX) {
-		int count;
-		size_t count_len = count.sizeof;
-		sysctlbyname("hw.logicalcpu", &count, &count_len, null, 0);
-		return cast(uint)count_len;
-        } else version (FreeBSD) {
-                int count;
-                size_t count_len = count.sizeof;
-                sysctlbyname("hw.logicalcpu", &count, &count_len, null, 0);
-                return cast(uint)count_len;
-        } else version (NetBSD) {
-                int count;
-                size_t count_len = count.sizeof;
-                sysctlbyname("hw.logicalcpu", &count, &count_len, null, 0);
-                return cast(uint)count_len;
-    } else version (Solaris) {
-        return get_nprocs();
-	} else version (Windows) {
-		import core.sys.windows.windows;
-		SYSTEM_INFO sysinfo;
-		GetSystemInfo(&sysinfo);
-		return sysinfo.dwNumberOfProcessors;
-	} else static assert(false, "Unsupported OS!");
+	import std.parallelism : totalCPUs;
+	return totalCPUs;
 }
-version (OSX) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
-version (FreeBSD) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
-version (NetBSD) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
-version (Solaris) private extern(C) int get_nprocs();
 
 /**
 	Suspends the execution of the calling task to let other tasks and events be
