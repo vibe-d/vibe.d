@@ -241,6 +241,9 @@ struct FilePart {
 	InetHeaderMap headers;
 	NativePath.Segment filename;
 	NativePath tempPath;
+
+	// avoids NativePath.Segment.toString() being called
+	string toString() const { return filename.name; }
 }
 
 
