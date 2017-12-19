@@ -69,8 +69,11 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 
 	@property TLSCertificateInformation peerCertificate()
 	{
+		import vibe.core.log : logWarn;
+
 		if (!!m_peer_cert)
 			logWarn("BotanTLSStream.peerCertificate is not implemented and does not return the actual certificate information.");
+
 		return TLSCertificateInformation.init;
 	}
 
