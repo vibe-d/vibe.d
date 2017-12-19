@@ -3,7 +3,12 @@ import vibe.core.core;
 import vibe.http.client;
 
 import core.atomic;
-import std.datetime;
+
+static if (__VERSION__ >= 2076)
+	import std.datetime.stopwatch;
+else
+	import std.datetime;
+
 import std.functional;
 import std.stdio;
 
@@ -77,7 +82,11 @@ void benchmark()
 
 	long keep_alives = 0;
 	while (true) {
-		auto tm = sw.peek().msecs;
+		static if (__VERSION__ >= 2076)
+			auto tm = sw.peek().total!"msecs";
+		else
+			auto tm = sw.peek().msecs;
+
 		if (nreq >= nreqc && tm >= next_ts) {
 			writefln("%s iterations: %s req/s, %s err/s (%s active conn, %s disconnects/s)", nreq, (nreq*1_000)/tm, (nerr*1_000)/tm, nconn, (ndisconns*1_000)/tm);
 			nreqc.atomicOp!"+="(1000);
