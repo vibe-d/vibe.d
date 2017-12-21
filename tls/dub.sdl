@@ -15,7 +15,7 @@ copyFiles "../lib/win-amd64/libeay32.dll" "../lib/win-amd64/ssleay32.dll" platfo
 configuration "openssl-mscoff" {
 	platforms "windows-x86_mscoff" "windows-x86_64" "windows-x86-ldc"
 	dependency "openssl" version=">=1.0.0+1.0.0e"
-	sourceFiles "../lib/win-i386-mscoff/libeay32.lib" "../lib/win-i386-mscoff/ssleay32.lib" platform="windows-x86_mscoff"
+	sourceFiles "../lib/win-i386-mscoff/libeay32.lib" "../lib/win-i386-mscoff/ssleay32.lib" platform="windows-x86"
 	sourceFiles "../lib/win-amd64/libeay32.lib" "../lib/win-amd64/ssleay32.lib" platform="windows-x86_64"
 }
 
