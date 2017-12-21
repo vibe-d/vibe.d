@@ -402,7 +402,7 @@ unittest {
 }
 
 // Issue 2004
-@safe unittest {
+unittest {
 	import std.variant : Variant;
 	DictionaryList!Variant l;
 	class C {
