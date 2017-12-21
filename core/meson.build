@@ -17,7 +17,6 @@ vibe_core_src = [
     'vibe/core/drivers/timerqueue.d',
     'vibe/core/drivers/utils.d',
     'vibe/core/drivers/win32.d',
-    'vibe/core/drivers/winrt.d',
     'vibe/core/file.d',
     'vibe/core/log.d',
     'vibe/core/net.d',

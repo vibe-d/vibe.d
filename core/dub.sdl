@@ -11,6 +11,11 @@ importPaths "."
 
 mainSourceFile "vibe/appmain.d"
 
+configuration "vibe-core" {
+	targetType "none"
+	dependency "vibe-core" version=">=1.4.0-alpha.1 <2.0.0-0"
+}
+
 configuration "win32_mscoff" {
 	// this configuration works around the problem that x88_mscoff
 	// will also match the libevent configuration, even if no
@@ -44,16 +49,4 @@ configuration "win32" {
 	targetType "library"
 	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
 	versions "VibeWin32Driver"
-}
-
-configuration "winrt" {
-	platforms "windows"
-	targetType "library"
-	sourceFiles "../lib/win-i386/runtimeobject.lib" platform="windows-x86"
-	versions "VibeWinrtDriver"
-}
-
-configuration "vibe-core" {
-	targetType "none"
-	dependency "vibe-core" version=">=1.4.0-alpha.1 <2.0.0-0"
 }

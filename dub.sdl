@@ -3,7 +3,7 @@ description "Event driven web and concurrency framework"
 homepage "http://vibed.org/"
 
 license "MIT"
-copyright "Copyright © 2012-2016 rejectedsoftware e.K."
+copyright "Copyright © 2012-2017 rejectedsoftware e.K."
 authors "Sönke Ludwig" "Jan Krüger" "Matthias Dondorff" "see github for more"
 
 systemDependencies "Optionally libevent 2.0.x, OpenSSL 1.0.x"
@@ -34,6 +34,9 @@ x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
 	"--ex" "vibe.core.drivers." "--ex" "vibe.internal." "--ex" "vibe.web.internal."\
 	"--ex" "diet.internal"
 
+configuration "vibe-core" {
+	subConfiguration "vibe-d:core" "vibe-core"
+}
 configuration "win32_mscoff" {
 	subConfiguration "vibe-d:core" "win32_mscoff"
 }
@@ -45,12 +48,6 @@ configuration "libasync" {
 }
 configuration "win32" {
 	subConfiguration "vibe-d:core" "win32"
-}
-configuration "winrt" {
-	subConfiguration "vibe-d:core" "winrt"
-}
-configuration "vibe-core" {
-	subConfiguration "vibe-d:core" "vibe-core"
 }
 
 subPackage "utils"

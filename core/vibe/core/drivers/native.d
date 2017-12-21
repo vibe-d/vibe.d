@@ -16,7 +16,4 @@ version (VibeLibeventDriver) {
 } else version (VibeWin32Driver) {
 	import vibe.core.drivers.win32;
 	alias NativeEventDriver = Win32EventDriver;
-} else version (VibeWinrtDriver) {
-	import vibe.core.drivers.winrt;
-	alias NativeEventDriver = WinRTEventDriver;
 } else static assert(false, "No event driver has been selected. Please specify a -version=Vibe*Driver for the desired driver.");
