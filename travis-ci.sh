@@ -2,47 +2,55 @@
 
 set -e -x -o pipefail
 
-DUB_ARGS=${DUB_ARGS:-}
-
-./scripts/test_version.sh
-
-# Check for trailing whitespace"
-grep -nrI --include=*.d '\s$'  && (echo "Trailing whitespace found"; exit 1)
-
-# test for successful release build
-dub build --combined -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
-dub clean --all-packages
-
 DUB_ARGS="--build-mode=${DUB_BUILD_MODE:-separate} ${DUB_ARGS:-}"
+# default to run all parts
+: ${PARTS:=lint,builds,unittests,examples,tests,meson}
+# default to libevent driver
+: ${VIBED_DRIVER:=libevent}
 
-# test for successful 32-bit build
-if [ "$DC" == "dmd" ]; then
-	dub build --combined --arch=x86 --config=${VIBED_DRIVER=libevent}
-	dub clean --all-packages
+if [[ $PARTS =~ (^|,)lint(,|$) ]]; then
+    ./scripts/test_version.sh
+    # Check for trailing whitespace"
+    grep -nrI --include=*.d '\s$'  && (echo "Trailing whitespace found"; exit 1)
 fi
 
-dub test :data --compiler=$DC $DUB_ARGS
-dub test :core --compiler=$DC --config=${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :mongodb --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :redis --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :web --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :utils --compiler=$DC $DUB_ARGS
-dub test :http --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :mail --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :stream --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :crypto --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :tls --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :textfilter --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :inet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub clean --all-packages
+if [[ $PARTS =~ (^|,)builds(,|$) ]]; then
+    # test for successful release build
+    dub build --combined -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
+    dub clean --all-packages
 
-if [ ${BUILD_EXAMPLE=1} -eq 1 ]; then
+    # test for successful 32-bit build
+    if [ "$DC" == "dmd" ]; then
+        dub build --combined --arch=x86 --config=${VIBED_DRIVER=libevent}
+        dub clean --all-packages
+    fi
+fi
+
+if [[ $PARTS =~ (^|,)unittests(,|$) ]]; then
+    dub test :data --compiler=$DC $DUB_ARGS
+    dub test :core --compiler=$DC --config=$VIBED_DRIVER $DUB_ARGS
+    dub test :mongodb --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :redis --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :web --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :utils --compiler=$DC $DUB_ARGS
+    dub test :http --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :mail --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :stream --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :crypto --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :tls --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :textfilter --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :inet --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub clean --all-packages
+fi
+
+if [[ $PARTS =~ (^|,)examples(,|$) ]]; then
     for ex in $(\ls -1 examples/); do
         echo "[INFO] Building example $ex"
         (cd examples/$ex && dub build --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS && dub clean)
     done
 fi
-if [ ${RUN_TEST=1} -eq 1 ]; then
+
+if [[ $PARTS =~ (^|,)tests(,|$) ]]; then
     for ex in `\ls -1 tests/`; do
         if [ -r tests/$ex/dub.json ] || [ -r tests/$ex/dub.sdl ]; then
             echo "[INFO] Running test $ex"
@@ -52,7 +60,7 @@ if [ ${RUN_TEST=1} -eq 1 ]; then
 fi
 
 # test building with Meson
-if [[ ${VIBED_DRIVER=libevent} = libevent ]]; then
+if [[ $PARTS =~ (^|,)meson(,|$) ]]; then
     mkdir build && cd build
     meson ..
 
