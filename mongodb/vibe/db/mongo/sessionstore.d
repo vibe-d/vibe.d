@@ -17,16 +17,27 @@ import std.variant;
 
 ///
 unittest {
-	import vibe.http.server : HTTPServerSettings;
+	import vibe.core.core : runApplication;
+	import vibe.db.mongo.sessionstore : MongoSessionStore;
+	import vibe.http.server : HTTPServerSettings, listenHTTP;
+	import vibe.http.router : URLRouter;
 	import core.time : hours;
 
-	auto store = new MongoSessionStore("mongodb://127.0.0.1/mydb", "sessions");
-	store.expirationTime = 5.hours;
+	void main()
+	{
+		auto store = new MongoSessionStore("mongodb://127.0.0.1/mydb", "sessions");
+		store.expirationTime = 5.hours;
 
-	auto settings = new HTTPServerSettings("127.0.0.1:8080");
-	settings.sessionStore = store;
+		auto settings = new HTTPServerSettings("127.0.0.1:8080");
+		settings.sessionStore = store;
 
-	//listenHTTP(settings, router);
+		auto router = new URLRouter;
+		// TODO: add some routes
+
+		listenHTTP(settings, router);
+
+		runApplication();
+	}
 }
 
 
