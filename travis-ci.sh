@@ -5,8 +5,8 @@ set -e -x -o pipefail
 DUB_ARGS="--build-mode=${DUB_BUILD_MODE:-separate} ${DUB_ARGS:-}"
 # default to run all parts
 : ${PARTS:=lint,builds,unittests,examples,tests,meson}
-# default to libevent driver
-: ${VIBED_DRIVER:=libevent}
+# default to vibe-core driver
+: ${VIBED_DRIVER:=vibe-core}
 
 if [[ $PARTS =~ (^|,)lint(,|$) ]]; then
     ./scripts/test_version.sh
