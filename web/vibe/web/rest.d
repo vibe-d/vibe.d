@@ -166,7 +166,7 @@
 				source the parameter `name` from a field named "field" of the
 				query string.)
 			$(LI `@bodyParam("name", "field")`: Applied on a method, it will
-				source the parameter `name` from a field named "feild" of the
+				source the parameter `name` from a field named "field" of the
 				request body in JSON format.)
 		)
 
