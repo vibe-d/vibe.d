@@ -992,6 +992,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	static if (hasAuth)
 		handleAuthorization!(C, overload, params)(auth_info);
 
+	// set statusCode before calling method so it can be altered
+	res.statusCode = extractSuccessCode!overload(cast(HTTPStatus) res.statusCode);
+
 	// execute the method and write the result
 	try {
 		import vibe.internal.meta.funcattr;

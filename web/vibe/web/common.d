@@ -298,6 +298,39 @@ ContentTypeAttribute contentType(string data)
 
 
 /**
+	Attribute to set the 2XX HTTP status code returned when the method succeeds.
+ */
+SuccessCodeAttribute successCode(HTTPStatus code)
+@safe {
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	assert(isSuccessCode(code));
+	return SuccessCodeAttribute(code);
+}
+
+///
+unittest {
+	interface IAPI
+	{
+		// Will return "201 Created" instead of default "200 OK"
+		@successCode(HTTPStatus.created) void createEntry();
+	}
+}
+
+/// Get any applied successCode value or return `default_`
+HTTPStatus extractSuccessCode(alias Func)(HTTPStatus default_ = HTTPStatus.ok)
+{
+	import std.meta : Filter;
+	import vibe.internal.meta.traits : RecursiveFunctionAttributes;
+	enum pred(alias E) = is(typeof(E) == SuccessCodeAttribute);
+	alias UDAs = Filter!(pred, RecursiveFunctionAttributes!(Func));
+	static if (UDAs.length)
+		return UDAs[0];
+	else
+		return default_;
+}
+
+/**
 	Attribute to force a specific HTTP method for an interface method.
 
 	The usual URL generation rules are still applied, so if there
@@ -469,6 +502,13 @@ package struct ContentTypeAttribute
 package struct MethodAttribute
 {
 	HTTPMethod data;
+	alias data this;
+}
+
+/// private
+package struct SuccessCodeAttribute
+{
+	HTTPStatus data;
 	alias data this;
 }
 

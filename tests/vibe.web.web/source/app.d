@@ -36,6 +36,9 @@ shared static this()
 		}
 		test("/foo", HTTPStatus.notFound);
 		test("/bar", HTTPStatus.ok);
+		test("/status1", HTTPStatus.created);
+		test("/status2", HTTPStatus.noContent);
+		test("/status3", HTTPStatus.internalServerError);
 		logInfo("All web tests succeeded.");
 	});
 }
@@ -43,4 +46,10 @@ shared static this()
 class Service {
 	@noRoute void getFoo(HTTPServerResponse res) { res.writeBody("oops"); }
 	void getBar(HTTPServerResponse res) { res.writeBody("ok"); }
+	@successCode(HTTPStatus.created)
+	void getStatus1(HTTPServerResponse res) { res.writeVoidBody(); }
+	@successCode(HTTPStatus.created)
+	void getStatus2(HTTPServerResponse res) { status = HTTPStatus.noContent; res.writeVoidBody(); }
+	@successCode(HTTPStatus.created)
+	void getStatus3(HTTPServerResponse res) { throw new Exception(""); }
 }

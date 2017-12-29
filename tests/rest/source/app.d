@@ -449,6 +449,25 @@ class Example7 : Example7API {
 	}
 }
 
+@rootPathFromName
+@safe interface Example8API {
+	// POST /entry1/
+	// returns 201 Created
+	@successCode(HTTPStatus.created)
+	void createEntry1();
+	// POST /entry2/
+	void createEntry2();
+	// POST /entry3/
+	@successCode(HTTPStatus.created)
+	int createEntry3();
+}
+
+class Example8 : Example8API {
+	void createEntry1() {}
+	@successCode(HTTPStatus.created)
+	void createEntry2() {}
+	int createEntry3() { return 0; }
+}
 
 void runTests()
 {
@@ -589,6 +608,21 @@ void runTests()
 			assert(answer == expected);
 		}
 	}
+
+	// Example 8
+	{
+		import vibe.http.client : requestHTTP;
+
+		foreach (path; ["entry1", "entry2", "entry3"]) {
+			auto res = requestHTTP("http://127.0.0.1:8080/example8_api/" ~ path,
+		    	                   (scope r) {
+				r.method = HTTPMethod.POST;
+			});
+
+			assert(res.statusCode == HTTPStatus.created);
+			res.dropBody;
+		}
+	}
 }
 
 shared static this()
@@ -604,6 +638,7 @@ shared static this()
 	registerRestInterface(routes, new Example5());
 	registerRestInterface(routes, new Example6());
 	registerRestInterface(routes, new Example7());
+	registerRestInterface(routes, new Example8());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 8080;
