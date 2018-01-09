@@ -371,6 +371,7 @@ struct RedisHash(T = string) {
 
 	this(RedisDatabase db, string key) { value = RedisValue(db, key); }
 
+	void remove()() { value.remove(); }
 	size_t remove(scope string[] fields...) { return cast(size_t)m_db.hdel(m_key, fields); }
 	bool exists(string field) { return m_db.hexists(m_key, field); }
 
