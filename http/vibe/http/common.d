@@ -714,7 +714,7 @@ final class Cookie {
 
 	/// Parses the cookie from a header field, returning the name of the cookie.
 	string parse(string headerString) {
-		auto parts = headerString.toLower().splitter("; ");
+		auto parts = headerString.splitter("; ");
 		auto name = parts.front[0..headerString.indexOf('=')];
 		m_value = parts.front[name.length+1..$];
 		parts.popFront();
@@ -723,7 +723,7 @@ final class Cookie {
 			if (idx == -1) {
 				idx = part.length;
 			}
-			auto key = part[0..idx];
+			auto key = part[0..idx].toLower();
 			auto value = part[min(idx+1, $)..$];
 			switch(key) {
 				case "httponly":
@@ -733,16 +733,16 @@ final class Cookie {
 					m_secure = true;
 					break;
 				case "expires":
-					m_expires = key;
+					m_expires = value;
 					break;
 				case "max-age":
-					m_maxAge = key.to!long;
+					m_maxAge = value.to!long;
 					break;
 				case "domain":
-					m_domain = key;
+					m_domain = value;
 					break;
 				case "path":
-					m_path = key;
+					m_path = value;
 					break;
 				default:
 					break;
