@@ -602,6 +602,7 @@ struct RedisZSet(T = string) {
 
 	long insert(ARGS...)(ARGS args) { return m_db.zadd(m_key, args); }
 	long remove(ARGS...)(ARGS members) { return m_db.zrem(m_key, members); }
+	void remove()() { value.remove(); }
 	long length() { return m_db.zcard(m_key); }
 
 	long count(string INT = "[]")(double min, double max)
