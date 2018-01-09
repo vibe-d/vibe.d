@@ -811,7 +811,7 @@ unittest {
 	assert(c.httpOnly == true);
 	assert(c.secure == true);
 	assert(c.expires == "Wed, 09 Jun 2021 10:18:14 GMT");
-	assert(c.maxAge == 60000.seconds);
+	assert(c.maxAge == 60000L);
 	assert(c.domain == "foo.com");
 	assert(c.path == "/users");
 }
