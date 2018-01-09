@@ -712,6 +712,45 @@ final class Cookie {
 		}
 	}
 
+	/// Parses the cookie from a header field, returning the name of the cookie.
+	string parse(string headerString) {
+		auto parts = headerString.toLower().splitter("; ");
+		auto name = parts.front[0..headerString.indexOf('=')];
+		m_value = parts.front[name.length+1..$];
+		parts.popFront();
+		foreach(part; parts) {
+			auto idx = part.indexOf('=');
+			if (idx == -1) {
+				idx = part.length;
+			}
+			auto key = part[0..idx];
+			auto value = part[min(idx+1, $)..$];
+			switch(key) {
+				case "httponly":
+					m_httpOnly = true;
+					break;
+				case "secure":
+					m_secure = true;
+					break;
+				case "expires":
+					m_expires = key;
+					break;
+				case "max-age":
+					m_maxAge = key.to!long;
+					break;
+				case "domain":
+					m_domain = key;
+					break;
+				case "path":
+					m_path = key;
+					break;
+				default:
+					break;
+			}
+		}
+		return name;
+	}
+
 	/// Writes out the full cookie in HTTP compatible format.
 	void writeString(R)(R dst, string name)
 		if (isOutputRange!(R, char))
@@ -765,6 +804,16 @@ unittest {
 	assertThrown(c.value);
 
 	assertThrown(c.setValue("foo;bar", Cookie.Encoding.raw));
+
+	auto name = c.parse("foo=bar; HttpOnly; Secure; Expires=Wed, 09 Jun 2021 10:18:14 GMT; Max-Age=60000; Domain=foo.com; Path=/users");
+	assert(name == "foo");
+	assert(c.value == "bar");
+	assert(c.httpOnly == true);
+	assert(c.secure == true);
+	assert(c.expires == "Wed, 09 Jun 2021 10:18:14 GMT");
+	assert(c.maxAge == "60000");
+	assert(c.domain == "foo.com");
+	assert(c.path == "/users");
 }
 
 

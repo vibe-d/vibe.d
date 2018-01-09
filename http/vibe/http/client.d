@@ -917,7 +917,12 @@ final class HTTPClientResponse : HTTPResponse {
 		foreach (k, v; this.headers)
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
-
+		if ("Set-Cookie" in this.headers) {
+			foreach(cookieString; this.headers.getAll("Set-Cookie")) {
+				auto cookie = new Cookie;
+				cookies[cookie.parse(cookieString)] = cookie;
+			}
+		}
 		Duration server_timeout;
 		bool has_server_timeout;
 		if (auto pka = "Keep-Alive" in this.headers) {
