@@ -888,7 +888,7 @@ final class HTTPClientResponse : HTTPResponse {
 
 	/// All cookies that shall be set on the client for this request
 	override @property Cookie[string] cookies() {
-		if ("Set-Cookie" in this.headers && cookies is null) {
+		if ("Set-Cookie" in this.headers && m_cookies is null) {
 			foreach(cookieString; this.headers.getAll("Set-Cookie")) {
 				auto cookie = parseHTTPCookie(cookieString);
 				m_cookies[cookie.name] = cookie;
