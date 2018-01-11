@@ -876,12 +876,25 @@ final class HTTPClientResponse : HTTPResponse {
 		InterfaceProxy!InputStream m_bodyReader;
 		bool m_closeConn;
 		int m_maxRequests;
+		Cookie[string] m_cookies;
 	}
 
 	/// Contains the keep-alive 'max' parameter, indicates how many requests a client can
 	/// make before the server closes the connection.
 	@property int maxRequests() const {
 		return m_maxRequests;
+	}
+
+
+	/// All cookies that shall be set on the client for this request
+	override @property Cookie[string] cookies() {
+		if ("Set-Cookie" in this.headers && cookies is null) {
+			foreach(cookieString; this.headers.getAll("Set-Cookie")) {
+				auto cookie = parseHTTPCookie(cookieString);
+				m_cookies[cookie.name] = cookie;
+			}
+		}
+		return m_cookies;
 	}
 
 	/// private
@@ -917,12 +930,6 @@ final class HTTPClientResponse : HTTPResponse {
 		foreach (k, v; this.headers)
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
-		if ("Set-Cookie" in this.headers) {
-			foreach(cookieString; this.headers.getAll("Set-Cookie")) {
-				auto cookie = new Cookie;
-				cookies[cookie.parse(cookieString)] = cookie;
-			}
-		}
 		Duration server_timeout;
 		bool has_server_timeout;
 		if (auto pka = "Keep-Alive" in this.headers) {

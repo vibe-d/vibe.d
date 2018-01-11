@@ -277,6 +277,8 @@ class HTTPRequest {
 class HTTPResponse {
 	@safe:
 
+	private Cookie[string] m_cookie;
+
 	public {
 		/// The protocol version of the response - should not be changed
 		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
@@ -294,7 +296,7 @@ class HTTPResponse {
 		InetHeaderMap headers;
 
 		/// All cookies that shall be set on the client for this request
-		Cookie[string] cookies;
+		@property Cookie[string] cookies() { return m_cookie; }
 	}
 
 	public override string toString()
@@ -618,11 +620,39 @@ FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_s
 	return FreeListRef!ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
 }
 
+/// Parses the cookie from a header field, returning the name of the cookie.
+Cookie parseHTTPCookie(string headerString) 
+@safe {
+	auto cookie = new Cookie;
+	auto parts = headerString.splitter(';');
+	cookie.m_name = parts.front[0..headerString.indexOf('=')];
+	cookie.m_value = parts.front[cookie.m_name.length+1..$];
+	parts.popFront();
+	foreach(part; parts) {
+		auto idx = part.indexOf('=');
+		if (idx == -1) {
+			idx = part.length;
+		}
+		auto key = part[0..idx].toLower().strip();
+		auto value = part[min(idx+1, $)..$].strip();
+		switch(key) {
+			case "httponly": cookie.m_httpOnly = true; break;
+			case "secure": cookie.m_secure = true; break;
+			case "expires": cookie.m_expires = value; break;
+			case "max-age":	cookie.m_maxAge = value.to!long; break;
+			case "domain": cookie.m_domain = value; break;
+			case "path": cookie.m_path = value; break;
+			default: break;
+		}
+	}
+	return cookie;
+}
 
 final class Cookie {
 	@safe:
 
 	private {
+		string m_name;
 		string m_value;
 		string m_domain;
 		string m_path;
@@ -637,6 +667,11 @@ final class Cookie {
 		raw,
 		none = raw
 	}
+
+	/// Cookie anme
+	@property void name(string name) { m_name = name; }
+	/// ditto
+	@property string name() const { return m_name; }
 
 	/// Cookie payload
 	@property void value(string value) { m_value = urlEncode(value); }
@@ -712,45 +747,6 @@ final class Cookie {
 		}
 	}
 
-	/// Parses the cookie from a header field, returning the name of the cookie.
-	string parse(string headerString) {
-		auto parts = headerString.splitter("; ");
-		auto name = parts.front[0..headerString.indexOf('=')];
-		m_value = parts.front[name.length+1..$];
-		parts.popFront();
-		foreach(part; parts) {
-			auto idx = part.indexOf('=');
-			if (idx == -1) {
-				idx = part.length;
-			}
-			auto key = part[0..idx].toLower();
-			auto value = part[min(idx+1, $)..$];
-			switch(key) {
-				case "httponly":
-					m_httpOnly = true;
-					break;
-				case "secure":
-					m_secure = true;
-					break;
-				case "expires":
-					m_expires = value;
-					break;
-				case "max-age":
-					m_maxAge = value.to!long;
-					break;
-				case "domain":
-					m_domain = value;
-					break;
-				case "path":
-					m_path = value;
-					break;
-				default:
-					break;
-			}
-		}
-		return name;
-	}
-
 	/// Writes out the full cookie in HTTP compatible format.
 	void writeString(R)(R dst, string name)
 		if (isOutputRange!(R, char))
@@ -805,8 +801,8 @@ unittest {
 
 	assertThrown(c.setValue("foo;bar", Cookie.Encoding.raw));
 
-	auto name = c.parse("foo=bar; HttpOnly; Secure; Expires=Wed, 09 Jun 2021 10:18:14 GMT; Max-Age=60000; Domain=foo.com; Path=/users");
-	assert(name == "foo");
+	c = parseHTTPCookie("foo=bar; HttpOnly; Secure; Expires=Wed, 09 Jun 2021 10:18:14 GMT; Max-Age=60000; Domain=foo.com; Path=/users");
+	assert(c.name == "foo");
 	assert(c.value == "bar");
 	assert(c.httpOnly == true);
 	assert(c.secure == true);
