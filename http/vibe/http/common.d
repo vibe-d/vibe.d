@@ -15,6 +15,7 @@ import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
 import vibe.utils.array;
+import vibe.utils.dictionarylist;
 import vibe.internal.allocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
@@ -277,7 +278,7 @@ class HTTPRequest {
 class HTTPResponse {
 	@safe:
 
-	private Cookie[string] m_cookie;
+	protected DictionaryList!Cookie m_cookies;
 
 	public {
 		/// The protocol version of the response - should not be changed
@@ -296,7 +297,7 @@ class HTTPResponse {
 		InetHeaderMap headers;
 
 		/// All cookies that shall be set on the client for this request
-		@property Cookie[string] cookies() { return m_cookie; }
+		@property DictionaryList!Cookie cookies() { return m_cookies; }
 	}
 
 	public override string toString()
@@ -621,12 +622,12 @@ FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_s
 }
 
 /// Parses the cookie from a header field, returning the name of the cookie.
-Cookie parseHTTPCookie(string headerString) 
+Tuple!(string, Cookie) parseHTTPCookie(string headerString)
 @safe {
 	auto cookie = new Cookie;
 	auto parts = headerString.splitter(';');
-	cookie.m_name = parts.front[0..headerString.indexOf('=')];
-	cookie.m_value = parts.front[cookie.m_name.length+1..$];
+	auto name = parts.front[0..headerString.indexOf('=')];
+	cookie.m_value = parts.front[name.length+1..$];
 	parts.popFront();
 	foreach(part; parts) {
 		auto idx = part.indexOf('=');
@@ -645,14 +646,13 @@ Cookie parseHTTPCookie(string headerString)
 			default: break;
 		}
 	}
-	return cookie;
+	return tuple(name, cookie);
 }
 
 final class Cookie {
 	@safe:
 
 	private {
-		string m_name;
 		string m_value;
 		string m_domain;
 		string m_path;
@@ -667,11 +667,6 @@ final class Cookie {
 		raw,
 		none = raw
 	}
-
-	/// Cookie anme
-	@property void name(string name) { m_name = name; }
-	/// ditto
-	@property string name() const { return m_name; }
 
 	/// Cookie payload
 	@property void value(string value) { m_value = urlEncode(value); }
@@ -801,15 +796,15 @@ unittest {
 
 	assertThrown(c.setValue("foo;bar", Cookie.Encoding.raw));
 
-	c = parseHTTPCookie("foo=bar; HttpOnly; Secure; Expires=Wed, 09 Jun 2021 10:18:14 GMT; Max-Age=60000; Domain=foo.com; Path=/users");
-	assert(c.name == "foo");
-	assert(c.value == "bar");
-	assert(c.httpOnly == true);
-	assert(c.secure == true);
-	assert(c.expires == "Wed, 09 Jun 2021 10:18:14 GMT");
-	assert(c.maxAge == 60000L);
-	assert(c.domain == "foo.com");
-	assert(c.path == "/users");
+	auto tup = parseHTTPCookie("foo=bar; HttpOnly; Secure; Expires=Wed, 09 Jun 2021 10:18:14 GMT; Max-Age=60000; Domain=foo.com; Path=/users");
+	assert(tup[0] == "foo");
+	assert(tup[1].value == "bar");
+	assert(tup[1].httpOnly == true);
+	assert(tup[1].secure == true);
+	assert(tup[1].expires == "Wed, 09 Jun 2021 10:18:14 GMT");
+	assert(tup[1].maxAge == 60000L);
+	assert(tup[1].domain == "foo.com");
+	assert(tup[1].path == "/users");
 }
 
 

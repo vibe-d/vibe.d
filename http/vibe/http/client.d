@@ -23,6 +23,7 @@ import vibe.stream.operations;
 import vibe.stream.wrapper : createConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.utils.array;
+import vibe.utils.dictionarylist;
 import vibe.internal.allocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
@@ -876,7 +877,6 @@ final class HTTPClientResponse : HTTPResponse {
 		InterfaceProxy!InputStream m_bodyReader;
 		bool m_closeConn;
 		int m_maxRequests;
-		Cookie[string] m_cookies;
 	}
 
 	/// Contains the keep-alive 'max' parameter, indicates how many requests a client can
@@ -887,11 +887,11 @@ final class HTTPClientResponse : HTTPResponse {
 
 
 	/// All cookies that shall be set on the client for this request
-	override @property Cookie[string] cookies() {
-		if ("Set-Cookie" in this.headers && m_cookies is null) {
+	override @property DictionaryList!Cookie cookies() {
+		if ("Set-Cookie" in this.headers && m_cookies.length == 0) {
 			foreach(cookieString; this.headers.getAll("Set-Cookie")) {
 				auto cookie = parseHTTPCookie(cookieString);
-				m_cookies[cookie.name] = cookie;
+				m_cookies[cookie[0]] = cookie[1];
 			}
 		}
 		return m_cookies;
