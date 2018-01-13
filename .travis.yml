@@ -14,6 +14,11 @@ addons:
       - libevent-dev
       - libssl-dev
 
+branches:
+  only:
+  - master
+  - 0.7.x
+
 d:
   # order: latest DMD, oldest DMD, LDC/GDC, remaining DMD versions
   # this way the overall test time gets cut down (GDC/LDC are a lot

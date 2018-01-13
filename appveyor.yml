@@ -66,7 +66,11 @@ environment:
     arch: x64
     config: vibe-core
 
-skip_tags: false
+branches:
+  only:
+    - master
+    - 0.7.x
+skip_tags: true
 
 services:
   - mongodb
