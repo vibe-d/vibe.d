@@ -1141,9 +1141,17 @@ final class HTTPServerRequest : HTTPRequest {
 	*/
 	@property string rootDir()
 	const @safe {
-		import std.range.primitives : walkLength;
-		auto depth = requestPath.bySegment.walkLength;
+		import std.algorithm.searching : count;
+		auto depth = requestPath.bySegment.count!(s => s.name.length > 0);
+		if (!requestPath.endsWithSlash) depth--;
 		return depth == 0 ? "./" : replicate("../", depth);
+	}
+
+	unittest {
+		assert(createTestHTTPServerRequest(URL("http://localhost/")).rootDir == "./");
+		assert(createTestHTTPServerRequest(URL("http://localhost/foo")).rootDir == "./");
+		assert(createTestHTTPServerRequest(URL("http://localhost/foo/")).rootDir == "../");
+		assert(createTestHTTPServerRequest(URL("http://localhost/foo/bar")).rootDir == "../");
 	}
 }
 
