@@ -200,8 +200,8 @@ class HTTPFileServerSettings {
 	/// Prefix of the request path to strip before looking up files
 	string serverPathPrefix = "/";
 
-	/// Maximum cache age to report to the client (24 hours by default)
-	Duration maxAge;// = hours(24);
+	/// Maximum cache age to report to the client (zero by default)
+	Duration maxAge = 0.seconds;
 
 	/// General options
 	HTTPFileServerOption options = HTTPFileServerOption.defaults; /// additional options
@@ -232,8 +232,6 @@ class HTTPFileServerSettings {
 
 	this()
 	{
-		// need to use the contructor because the Ubuntu 13.10 GDC cannot CTFE dur()
-		maxAge = 24.hours;
 	}
 
 	this(string path_prefix)
