@@ -133,7 +133,7 @@ html
 
 	Params:
 		FILENAME = Base name of the set of PO files to mix in. A file with the
-			name "<FILENAME>.<LANGUAGE>.po" must be available as a string import
+			name `"<FILENAME>.<LANGUAGE>.po"` must be available as a string import
 			for each language defined in the translation context.
 
 	Bugs:
