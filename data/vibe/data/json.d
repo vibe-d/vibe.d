@@ -2201,6 +2201,7 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 
 							dst.formattedWrite("\\u%04X\\u%04X", first, last);
 						}
+						startPos = pos;
 						pos -= 1;
 					}
 				} 
