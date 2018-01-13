@@ -1074,7 +1074,7 @@ struct Json {
 	private void checkType(TYPES...)(string op = null)
 	const {
 		bool matched = false;
-		foreach (T; TYPES) if (m_type == typeId!T) matched = true;
+		foreach (T; TYPES) if (m_type == typeId!T || (is(T == string) && m_type == Type.null_)) matched = true;
 		if (matched) return;
 
 		string name;
@@ -2497,4 +2497,17 @@ private auto trustedRange(R)(R range)
 	assert(b.foos.length == 1);
 	assert(b.foos[0].i == 2);
 	assert(b.foos[0].foos.length == 0);
+}
+
+@safe unittest { // null string deserialization
+	static struct Foo { @optional string bar; }
+	auto f = deserializeJson!Foo(`{"bar":null}`);
+	assert(f.bar is null);
+
+	auto j = parseJsonString(`{"bar":null}`);
+	assert(j["bar"].get!string is null);
+
+	auto pv = "bar" in j;
+	auto v = deserializeJson!string(*pv);
+	assert(v is null);
 }
