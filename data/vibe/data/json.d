@@ -2165,7 +2165,7 @@ string convertJsonToASCII(string json)
 private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 {
 	size_t startPos = 0;
-	
+
 	void putInterval(size_t curPos)
 	{
 		if (curPos > startPos)
@@ -2204,8 +2204,8 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 						startPos = pos;
 						pos -= 1;
 					}
-				} 
-				else 
+				}
+				else
 				{
 					if (ch < 0x20)
 					{
@@ -2230,7 +2230,7 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 				break;
 		}
 	}
-	// if the whole string was unescaped
+	// last interval
 	putInterval(s.length);
 }
 
