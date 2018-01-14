@@ -5,14 +5,20 @@ module app;
 
 import vibe.core.core;
 import vibe.core.log;
+import vibe.data.bson;
 import vibe.db.mongo.mongo;
 import std.algorithm : canFind, map, equal;
 import std.encoding : sanitize;
 
+struct DBTestEntry
+{
+	string key1, key2;
+}
+
 void runTest()
 {
 	MongoClient client;
-	try client = connectMongoDB("localhost");
+	try client = connectMongoDB("127.0.0.1");
 	catch (Exception e) {
 		logInfo("Failed to connect to local MongoDB server. Skipping test.");
 		Throwable th = e;
@@ -40,9 +46,9 @@ void runTest()
 
 	// testing cursor range interface
 	coll.remove();
-	coll.insert(["key1" : "value1"]);
-	coll.insert(["key1" : "value2"]);
-	coll.insert(["key1" : "value2"]);
+	coll.insert(["key1" : "value1", "key2": "3"]);
+	coll.insert(["key1" : "value2", "key2": "2"]);
+	coll.insert(["key1" : "value2", "key2": "1"]);
 	auto data1 = coll.find(["key1" : "value1"]);
 	auto data2 = coll.find(["key1" : "value2"]);
 
@@ -54,6 +60,30 @@ void runTest()
 	auto names = client.getDatabases().map!(dbs => dbs.name).array;
 	assert(names.canFind("test"));
 	assert(names.canFind("local"));
+
+	import std.stdio;
+	AggregateOptions options;
+	options.cursor.batchSize = 5;
+	assert(coll.aggregate!DBTestEntry(
+		[
+			["$match": Bson(["key1": Bson("value2")])],
+			["$sort": Bson(["key2": Bson(-1)])]
+		],
+		options
+	).equal([DBTestEntry("value2", "2"), DBTestEntry("value2", "1")]));
+
+	assert(coll.aggregate!DBTestEntry(
+		[
+			["$match": Bson(["key1": Bson("value2")])],
+			["$sort": Bson(["key2": Bson(1)])]
+		],
+		AggregateOptions.init
+	).equal([DBTestEntry("value2", "1"), DBTestEntry("value2", "2")]));
+
+	assert(coll.aggregate(
+		["$match": Bson(["key1": Bson("value2")])],
+		["$sort": Bson(["key2": Bson(1)])]
+	).get!(Bson[]).map!(a => a["key2"].get!string).equal(["1", "2"]));
 
 	// test distinct()
 	coll.drop();
