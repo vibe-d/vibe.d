@@ -629,7 +629,7 @@ struct Collation {
 	  To specify simple binary comparison, specify locale value of "simple".
 	 */
 	string locale;
-	/// The level of comparison to perform. Corresponds to ICU Comparison Levels. 
+	/// The level of comparison to perform. Corresponds to ICU Comparison Levels.
 	int strength;
 	/// Flag that determines whether to include case comparison at strength level 1 or 2.
 	bool caseLevel;
