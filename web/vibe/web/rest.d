@@ -1407,8 +1407,12 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 
 				ret = () @trusted { return evaluateOutputModifiers!CFunc(ret, req, res); } ();
 				returnHeaders();
-				debug res.writePrettyJsonBody(ret);
-				else res.writeJsonBody(ret);
+				static if (!__traits(compiles, () @safe { res.writeJsonBody(ret); }))
+					pragma(msg, "Non-@safe serialization of REST return types deprecated - ensure that "~RT.stringof~" is safely serializable.");
+				() @trusted {
+					debug res.writePrettyJsonBody(ret);
+					else res.writeJsonBody(ret);
+				}();
 			}
 		} catch (HTTPStatusException e) {
 			if (res.headerWritten)
