@@ -2161,15 +2161,24 @@ string convertJsonToASCII(string json)
 /// private
 private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 {
-	char lastch;
+	size_t startPos = 0;
+
+	void putInterval(size_t curPos)
+	{
+		if (curPos > startPos)
+			dst.put(s[startPos..curPos]);
+		startPos = curPos + 1;
+	}
+
 	for (size_t pos = 0; pos < s.length; pos++) {
 		immutable(char) ch = s[pos];
 
 		switch (ch) {
 			default:
 				static if (escape_unicode) {
-					if (ch > 0x20 && ch < 0x80) dst.put(ch);
-					else {
+					if (ch <= 0x20 || ch >= 0x80)
+					{
+						putInterval(pos);
 						import std.utf : decode;
 						int len;
 						dchar codepoint = decode(s, pos);
@@ -2189,29 +2198,37 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 
 							dst.formattedWrite("\\u%04X\\u%04X", first, last);
 						}
-
+						startPos = pos;
 						pos -= 1;
-
 					}
-				} else {
-					if (ch < 0x20) dst.formattedWrite("\\u%04X", ch);
-					else dst.put(ch);
+				}
+				else
+				{
+					if (ch < 0x20)
+					{
+						putInterval(pos);
+						dst.formattedWrite("\\u%04X", ch);
+					}
 				}
 				break;
-			case '\\': dst.put("\\\\"); break;
-			case '\r': dst.put("\\r"); break;
-			case '\n': dst.put("\\n"); break;
-			case '\t': dst.put("\\t"); break;
-			case '\"': dst.put("\\\""); break;
+			case '\\': putInterval(pos); dst.put("\\\\"); break;
+			case '\r': putInterval(pos); dst.put("\\r"); break;
+			case '\n': putInterval(pos); dst.put("\\n"); break;
+			case '\t': putInterval(pos); dst.put("\\t"); break;
+			case '\"': putInterval(pos); dst.put("\\\""); break;
 			case '/':
 				// this avoids the sequence "</" in the output, which is prone
 				// to cross site scripting attacks when inserted into web pages
-				if (lastch == '<') dst.put("\\/");
-				else dst.put(ch);
+				if (pos > 0 && s[pos-1] == '<')
+				{
+					putInterval(pos);
+					dst.put("\\/");
+				}
 				break;
 		}
-		lastch = ch;
 	}
+	// last interval
+	putInterval(s.length);
 }
 
 /// private
