@@ -60,34 +60,48 @@ version (Windows)
 else
 	version(VibePragmaLib) pragma(lib, "event");
 
-version(Windows) {
+version(Windows)
+{
 	import core.sys.windows.winsock2;
 	alias EWOULDBLOCK = WSAEWOULDBLOCK;
-} else version(OSX) {
+}
+else version(OSX)
+{
 	static if (__VERSION__ < 2077) {
 		enum IP_ADD_MEMBERSHIP = 12;
 		enum IP_MULTICAST_LOOP = 11;
 	}
 	else
 		import core.sys.darwin.netinet.in_ : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
-} else version (FreeBSD) {
+}
+else version (FreeBSD)
+{
 	static if (__VERSION__ < 2077) {
 		enum IP_ADD_MEMBERSHIP  = 12;
 		enum IP_MULTICAST_LOOP  = 11;
 	}
 	else
 		import core.sys.freebsd.netinet.in_ : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
-} else version (linux) {
+}
+else version (DragonFlyBSD)
+{
+    import core.sys.dragonflybsd.netinet.in_ : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+}
+else version (linux)
+{
 	static if (__VERSION__ < 2077) {
 		enum IP_ADD_MEMBERSHIP =  35;
 		enum IP_MULTICAST_LOOP =  34;
 	}
 	else
 		import core.sys.linux.netinet.in_ : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
-} else version (Solaris) {
+}
+else version (Solaris)
+{
 	enum IP_ADD_MEMBERSHIP = 0x13;
 	enum IP_MULTICAST_LOOP = 0x12;
 }
+else static assert(false, "IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP required but not provided for this OS");
 
 final class Libevent2Driver : EventDriver {
 @safe:
