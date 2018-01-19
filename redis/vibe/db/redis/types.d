@@ -374,6 +374,7 @@ struct RedisHash(T = string) {
 	bool remove() { return value.remove(); }
 	size_t remove(scope string[] fields...) { return cast(size_t)m_db.hdel(m_key, fields); }
 	bool exists(string field) { return m_db.hexists(m_key, field); }
+	bool exists() { return value.exists; }
 
 	void opIndexAssign(T value, string field) { m_db.hset(m_key, field, value.toRedis()); }
 	T opIndex(string field) { return m_db.hget!string(m_key, field).fromRedis!T(); }
