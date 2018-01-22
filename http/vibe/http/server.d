@@ -985,6 +985,7 @@ final class HTTPServerRequest : HTTPRequest {
 				if (icmp2(contentType, "application/json") == 0 || icmp2(contentType, "application/vnd.api+json") == 0 ) {
 					auto bodyStr = bodyReader.readAllUTF8();
 					if (!bodyStr.empty) _json = parseJson(bodyStr);
+					else _json = Json.undefined;
 				} else {
 					_json = Json.undefined;
 				}
