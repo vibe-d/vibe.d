@@ -562,20 +562,25 @@ private struct MatchTree(T) {
 	import std.array : array;
 
 	private {
+		alias NodeIndex = uint;
+		alias TerminalTagIndex = uint;
+		alias TerminalIndex = ushort;
+		alias VarIndex = ushort;
+
 		struct Node {
-			size_t terminalsStart; // slice into m_terminalTags
-			size_t terminalsEnd;
-			uint[ubyte.max+1] edges = uint.max; // character -> index into m_nodes
+			TerminalTagIndex terminalsStart; // slice into m_terminalTags
+			TerminalTagIndex terminalsEnd;
+			NodeIndex[ubyte.max+1] edges = NodeIndex.max; // character -> index into m_nodes
 		}
 		struct TerminalTag {
-			size_t index; // index into m_terminals array
-			size_t var; // index into Terminal.varNames/varValues or size_t.max
+			TerminalIndex index; // index into m_terminals array
+			VarIndex var = VarIndex.max; // index into Terminal.varNames/varValues or VarIndex.max
 		}
 		struct Terminal {
 			string pattern;
 			T data;
 			string[] varNames;
-			size_t[size_t] varMap; // maps node index to variable index
+			VarIndex[NodeIndex] varMap;
 		}
 		Node[] m_nodes; // all nodes as a single array
 		TerminalTag[] m_terminalTags;
@@ -589,6 +594,7 @@ private struct MatchTree(T) {
 
 	void addTerminal(string pattern, T data)
 	{
+		assert(m_terminals.length < TerminalIndex.max, "Attempt to register too many routes.");
 		m_terminals ~= Terminal(pattern, data, null, null);
 		m_upToDate = false;
 	}
@@ -615,7 +621,7 @@ private struct MatchTree(T) {
 		logInfo("Nodes:");
 		foreach (i, n; m_nodes) {
 			logInfo("  %s %s", i, m_terminalTags[n.terminalsStart .. n.terminalsEnd]
-				.map!(t => format("T%s%s", t.index, t.var != size_t.max ? "("~m_terminals[t.index].varNames[t.var]~")" : "")).join(" "));
+				.map!(t => format("T%s%s", t.index, t.var != VarIndex.max ? "("~m_terminals[t.index].varNames[t.var]~")" : "")).join(" "));
 			//logInfo("  %s %s-%s", i, n.terminalsStart, n.terminalsEnd);
 
 
@@ -635,16 +641,16 @@ private struct MatchTree(T) {
 				else logInfo("    %s-%s -> %s", mapChar(from), mapChar(to), node);
 			}
 
-			uint last_to = uint.max;
+			auto last_to = NodeIndex.max;
 			ubyte last_ch = 0;
 			foreach (ch, e; n.edges)
 				if (e != last_to) {
-					if (last_to != uint.max)
+					if (last_to != NodeIndex.max)
 						printRange(last_to, last_ch, cast(ubyte)(ch-1));
 					last_ch = cast(ubyte)ch;
 					last_to = e;
 				}
-			if (last_to != uint.max)
+			if (last_to != NodeIndex.max)
 				printRange(last_to, last_ch, ubyte.max);
 		}
 	}
@@ -679,53 +685,54 @@ private struct MatchTree(T) {
 		// follow the path through the match graph
 		foreach (i, char ch; text) {
 			auto nidx = n.edges[cast(size_t)ch];
-			if (nidx == uint.max) return null;
+			if (nidx == NodeIndex.max) return null;
 			n = &m_nodes[nidx];
 		}
 
 		// finally, find a matching terminal node
 		auto nidx = n.edges[TerminalChar];
-		if (nidx == uint.max) return null;
+		if (nidx == NodeIndex.max) return null;
 		n = &m_nodes[nidx];
 		return n;
 	}
 
 	private void matchVars(string[] dst, in Terminal* term, string text)
 	const {
-		auto nidx = 0;
-		size_t activevar = size_t.max;
+		NodeIndex nidx = 0;
+		VarIndex activevar = VarIndex.max;
 		size_t activevarstart;
 
 		dst[] = null;
 
 		// folow the path throgh the match graph
 		foreach (i, char ch; text) {
-			auto var = term.varMap.get(nidx, size_t.max);
+			auto var = term.varMap.get(nidx, VarIndex.max);
 
 			// detect end of variable
-			if (var != activevar && activevar != size_t.max) {
+			if (var != activevar && activevar != VarIndex.max) {
 				dst[activevar] = text[activevarstart .. i-1];
-				activevar = size_t.max;
+				activevar = VarIndex.max;
 			}
 
 			// detect beginning of variable
-			if (var != size_t.max && activevar == size_t.max) {
+			if (var != VarIndex.max && activevar == VarIndex.max) {
 				activevar = var;
 				activevarstart = i;
 			}
 
 			nidx = m_nodes[nidx].edges[cast(ubyte)ch];
-			assert(nidx != uint.max);
+			assert(nidx != NodeIndex.max);
 		}
 
 		// terminate any active varible with the end of the input string or with the last character
-		auto var = term.varMap.get(nidx, size_t.max);
-		if (activevar != size_t.max) dst[activevar] = text[activevarstart .. (var == activevar ? $ : $-1)];
+		auto var = term.varMap.get(nidx, VarIndex.max);
+		if (activevar != VarIndex.max) dst[activevar] = text[activevarstart .. (var == activevar ? $ : $-1)];
 	}
 
 	private void rebuildGraph()
 	{
 		import std.array : appender;
+		import std.conv : to;
 
 		if (m_upToDate) return;
 		m_upToDate = true;
@@ -736,36 +743,40 @@ private struct MatchTree(T) {
 		if (!m_terminals.length) return;
 
 		MatchGraphBuilder builder;
-		foreach (i, ref t; m_terminals)
-			t.varNames = builder.insert(t.pattern, i);
+		foreach (i, ref t; m_terminals) {
+			t.varNames = builder.insert(t.pattern, i.to!TerminalIndex);
+			assert(t.varNames.length <= VarIndex.max, "Too many variables in route.");
+		}
 		//builder.print();
 		builder.disambiguate();
 
-		auto nodemap = new uint[builder.m_nodes.length];
-		nodemap[] = uint.max;
+		auto nodemap = new NodeIndex[builder.m_nodes.length];
+		nodemap[] = NodeIndex.max;
 
 		auto nodes = appender!(Node[]);
 		nodes.reserve(1024);
+		auto termtags = appender!(TerminalTag[]);
+		termtags.reserve(1024);
 
-		uint process(size_t n)
+		NodeIndex process(NodeIndex n)
 		{
 			import std.algorithm : canFind;
 
-			if (nodemap[n] != uint.max) return nodemap[n];
-			auto nmidx = cast(uint)nodes.data.length;
+			if (nodemap[n] != NodeIndex.max) return nodemap[n];
+			auto nmidx = cast(NodeIndex)nodes.data.length;
 			nodemap[n] = nmidx;
 			nodes.put(Node.init);
 
 			Node nn;
-			nn.terminalsStart = m_terminalTags.length;
+			nn.terminalsStart = termtags.data.length.to!TerminalTagIndex;
 			foreach (t; builder.m_nodes[n].terminals) {
-				auto var = t.var.length ? m_terminals[t.index].varNames.countUntil(t.var) : size_t.max;
-				assert(!m_terminalTags[nn.terminalsStart .. $].canFind!(u => u.index == t.index && u.var == var));
-				m_terminalTags ~= TerminalTag(t.index, var);
-				if (var != size_t.max)
+				auto var = cast(VarIndex)t.var;
+				assert(!termtags.data[nn.terminalsStart .. $].canFind!(u => u.index == t.index && u.var == var));
+				termtags ~= TerminalTag(cast(TerminalIndex)t.index, var);
+				if (var != VarIndex.max)
 					m_terminals[t.index].varMap[nmidx] = var;
 			}
-			nn.terminalsEnd = m_terminalTags.length;
+			nn.terminalsEnd = termtags.data.length.to!TerminalTagIndex;
 			foreach (ch, targets; builder.m_nodes[n].edges)
 				foreach (to; targets)
 					nn.edges[ch] = process(to);
@@ -778,6 +789,7 @@ private struct MatchTree(T) {
 		process(builder.m_nodes[0].edges['^'][0]);
 
 		m_nodes = nodes.data;
+		m_terminalTags = termtags.data;
 
 		logDebug("Match tree has %s(%s) nodes, %s terminals", m_nodes.length, builder.m_nodes.length, m_terminals.length);
 	}
@@ -861,27 +873,32 @@ unittest {
 
 private struct MatchGraphBuilder {
 @safe:
-
 	import std.array : array;
 	import std.algorithm : filter;
 	import std.string : format;
 
+	alias NodeIndex = uint;
+	alias TerminalIndex = ushort;
+	alias VarIndex = ushort;
+
 	private {
 		enum TerminalChar = 0;
 		struct TerminalTag {
-			size_t index;
-			string var;
+			TerminalIndex index;
+			VarIndex var = VarIndex.max;
 			bool opEquals(in ref TerminalTag other) const { return index == other.index && var == other.var; }
 		}
 		struct Node {
-			size_t idx;
+			NodeIndex[1] idx;
 			TerminalTag[] terminals;
-			size_t[][ubyte.max+1] edges;
+			NodeIndex[][ubyte.max+1] edges;
 		}
 		Node[] m_nodes;
 	}
 
-	string[] insert(string pattern, size_t terminal)
+	@disable this(this);
+
+	string[] insert(string pattern, TerminalIndex terminal)
 	{
 		import std.algorithm : canFind;
 
@@ -891,7 +908,7 @@ private struct MatchGraphBuilder {
 
 		// create start node and connect to zero node
 		auto nidx = addNode();
-		addEdge(0, nidx, '^', terminal, null);
+		addEdge(0, nidx, '^', terminal);
 
 		while (pattern.length) {
 			auto ch = pattern[0];
@@ -901,28 +918,29 @@ private struct MatchGraphBuilder {
 
 				foreach (v; ubyte.min .. ubyte.max+1) {
 					if (v == TerminalChar) continue;
-					addEdge(nidx, nidx, cast(ubyte)v, terminal, null);
+					addEdge(nidx, nidx, cast(ubyte)v, terminal);
 				}
 			} else if (ch == ':') {
 				pattern = pattern[1 .. $];
 				auto name = skipPathNode(pattern);
 				assert(name.length > 0, "Missing placeholder name: "~full_pattern);
 				assert(!vars.canFind(name), "Duplicate placeholder name ':"~name~"': '"~full_pattern~"'");
+				auto varidx = cast(VarIndex)vars.length;
 				vars ~= name;
 				assert(!pattern.length || (pattern[0] != '*' && pattern[0] != ':'),
 					"Cannot have two placeholders directly follow each other.");
 
 				foreach (v; ubyte.min .. ubyte.max+1) {
 					if (v == TerminalChar || v == '/') continue;
-					addEdge(nidx, nidx, cast(ubyte)v, terminal, name);
+					addEdge(nidx, nidx, cast(ubyte)v, terminal, varidx);
 				}
 			} else {
-				nidx = addEdge(nidx, ch, terminal, null);
+				nidx = addEdge(nidx, ch, terminal);
 				pattern = pattern[1 .. $];
 			}
 		}
 
-		addEdge(nidx, TerminalChar, terminal, null);
+		addEdge(nidx, TerminalChar, terminal);
 		return vars;
 	}
 
@@ -935,9 +953,9 @@ private struct MatchGraphBuilder {
 		if (!m_nodes.length) return;
 
 		import vibe.utils.hashmap;
-		HashMap!(size_t[], size_t) combined_nodes;
+		HashMap!(NodeIndex[], NodeIndex) combined_nodes;
 		auto visited = new bool[m_nodes.length * 2];
-		Stack!size_t node_stack;
+		Stack!NodeIndex node_stack;
 		node_stack.reserve(m_nodes.length);
 		node_stack.push(0);
 		while (!node_stack.empty) {
@@ -956,10 +974,13 @@ private struct MatchGraphBuilder {
 				if (chnodes.length <= 1) continue;
 
 				// generate combined state for ambiguous edges
-				if (auto pn = () @trusted { return chnodes in combined_nodes; } ()) { m_nodes[n].edges[ch] = singleNodeArray(*pn); continue; }
+				if (auto pn = () @trusted { return chnodes in combined_nodes; } ()) {
+					m_nodes[n].edges[ch] = m_nodes[*pn].idx;
+					continue;
+				}
 
 				// for new combinations, create a new node
-				size_t ncomb = addNode();
+				NodeIndex ncomb = addNode();
 				combined_nodes[chnodes] = ncomb;
 
 				// allocate memory for all edges combined
@@ -969,7 +990,7 @@ private struct MatchGraphBuilder {
 					foreach (edges; cn.edges)
 						total_edge_count +=edges.length;
 				}
-				auto mem = new size_t[total_edge_count];
+				auto mem = new NodeIndex[total_edge_count];
 
 				// write all edges
 				size_t idx = 0;
@@ -988,7 +1009,7 @@ private struct MatchGraphBuilder {
 				foreach (i; 1 .. m_nodes[ncomb].terminals.length)
 					assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
 
-				m_nodes[n].edges[ch] = singleNodeArray(ncomb);
+				m_nodes[n].edges[ch] = m_nodes[ncomb].idx;
 			}
 
 			// process nodes recursively
@@ -1015,36 +1036,39 @@ private struct MatchGraphBuilder {
 				if (ch == '/') return "/";
 				return ch.to!string;
 			}
-			logInfo("  %s %s", i, n.terminals.map!(t => format("T%s%s", t.index, t.var.length ? "("~t.var~")" : "")).join(" "));
+			logInfo("  %s %s", i, n.terminals.map!(t => t.var != VarIndex.max ? format("T%s(%s)", t.index, t.var) : format("%s", t.index)).join(" "));
 			foreach (ch, tnodes; n.edges)
 				foreach (tn; tnodes)
 					logInfo("    %s -> %s", mapChar(cast(ubyte)ch), tn);
 		}
 	}
 
-	private void addEdge(size_t from, size_t to, ubyte ch, size_t terminal, string var)
+	private void addEdge(NodeIndex from, NodeIndex to, ubyte ch, TerminalIndex terminal, VarIndex var = VarIndex.max)
 	{
 		auto e = &m_nodes[from].edges[ch];
-		if (!(*e).length) *e = singleNodeArray(to);
-		else *e ~= to;
+		assert(m_nodes[to].idx[0] == to);
+		if (!(*e).length) *e = m_nodes[to].idx;
+		else *e ~= m_nodes[to].idx;
 		addTerminal(to, terminal, var);
 	}
 
-	private size_t addEdge(size_t from, ubyte ch, size_t terminal, string var)
+	private NodeIndex addEdge(NodeIndex from, ubyte ch, TerminalIndex terminal, VarIndex var = VarIndex.max)
 	{
 		import std.algorithm : canFind;
 		import std.string : format;
-		assert(!m_nodes[from].edges[ch].length > 0, format("%s is in %s", ch, m_nodes[from].edges));
+		if (m_nodes[from].edges[ch].length > 0)
+			assert(false, format("%s is in %s", ch, m_nodes[from].edges));
 		auto nidx = addNode();
 		addEdge(from, nidx, ch, terminal, var);
 		return nidx;
 	}
 
-	private void addTerminal(size_t node, size_t terminal, string var)
+	private void addTerminal(NodeIndex node, TerminalIndex terminal, VarIndex var)
 	{
 		foreach (ref t; m_nodes[node].terminals) {
 			if (t.index == terminal) {
-				assert(t.var.length == 0 || t.var == var, "Ambiguous route var match!? '"~t.var~"' vs. '"~var~"'");
+				if (t.var != VarIndex.max && t.var != var)
+					assert(false, format("Ambiguous route var match!? %s vs %s", t.var, var));
 				t.var = var;
 				return;
 			}
@@ -1052,16 +1076,12 @@ private struct MatchGraphBuilder {
 		m_nodes[node].terminals ~= TerminalTag(terminal, var);
 	}
 
-	private size_t addNode()
+	private NodeIndex addNode()
 	{
-		auto idx = m_nodes.length;
+		assert(m_nodes.length <= 1_000_000_000, "More than 1B nodes in tree!?");
+		auto idx = cast(NodeIndex)m_nodes.length;
 		m_nodes ~= Node(idx, null, null);
 		return idx;
-	}
-
-	private size_t[] singleNodeArray(size_t node)
-	@trusted {
-		return (&m_nodes[node].idx)[0 .. 1];
 	}
 
 	private static addToArray(T)(ref T[] arr, T[] elems) { foreach (e; elems) addToArray(arr, e); }
