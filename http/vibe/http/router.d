@@ -730,7 +730,7 @@ private struct MatchTree(T) {
 	}
 
 	private void rebuildGraph()
-	{
+	@trusted {
 		import std.array : appender;
 		import std.conv : to;
 
@@ -778,20 +778,21 @@ private struct MatchTree(T) {
 			}
 			nn.terminalsEnd = termtags.data.length.to!TerminalTagIndex;
 			foreach (ch, targets; builder.m_nodes[n].edges)
-				foreach (to; targets)
+				foreach (to; builder.m_edgeEntries.getItems(targets))
 					nn.edges[ch] = process(to);
 
 			nodes.data[nmidx] = nn;
 
 			return nmidx;
 		}
-		assert(builder.m_nodes[0].edges['^'].length == 1, "Graph must be disambiguated before purging.");
-		process(builder.m_nodes[0].edges['^'][0]);
+		assert(builder.m_edgeEntries.hasLength(builder.m_nodes[0].edges['^'], 1),
+			"Graph must be disambiguated before purging.");
+		process(builder.m_edgeEntries.getItems(builder.m_nodes[0].edges['^']).front);
 
 		m_nodes = nodes.data;
 		m_terminalTags = termtags.data;
 
-		logDebug("Match tree has %s(%s) nodes, %s terminals", m_nodes.length, builder.m_nodes.length, m_terminals.length);
+		logDebug("Match tree has %s (of %s in the builder) nodes, %s terminals", m_nodes.length, builder.m_nodes.length, m_terminals.length);
 	}
 }
 
@@ -873,6 +874,7 @@ unittest {
 
 private struct MatchGraphBuilder {
 @safe:
+	import std.container.array : Array;
 	import std.array : array;
 	import std.algorithm : filter;
 	import std.string : format;
@@ -880,20 +882,20 @@ private struct MatchGraphBuilder {
 	alias NodeIndex = uint;
 	alias TerminalIndex = ushort;
 	alias VarIndex = ushort;
+	alias NodeSet = LinkedSetBacking!NodeIndex.Handle;
 
 	private {
 		enum TerminalChar = 0;
 		struct TerminalTag {
 			TerminalIndex index;
 			VarIndex var = VarIndex.max;
-			bool opEquals(in ref TerminalTag other) const { return index == other.index && var == other.var; }
 		}
 		struct Node {
-			NodeIndex[1] idx;
-			TerminalTag[] terminals;
-			NodeIndex[][ubyte.max+1] edges;
+			Array!TerminalTag terminals;
+			NodeSet[ubyte.max+1] edges;
 		}
-		Node[] m_nodes;
+		Array!Node m_nodes;
+		LinkedSetBacking!NodeIndex m_edgeEntries;
 	}
 
 	@disable this(this);
@@ -945,16 +947,17 @@ private struct MatchGraphBuilder {
 	}
 
 	void disambiguate()
-	{
+	@trusted {
 		import std.algorithm : map, sum;
 		import std.array : appender, join;
 
-//logInfo("Disambiguate");
+		//logInfo("Disambiguate with %s initial nodes", m_nodes.length);
 		if (!m_nodes.length) return;
 
 		import vibe.utils.hashmap;
-		HashMap!(NodeIndex[], NodeIndex) combined_nodes;
-		auto visited = new bool[m_nodes.length * 2];
+		HashMap!(size_t, NodeIndex) combined_nodes;
+		Array!bool visited;
+		visited.length = m_nodes.length * 2;
 		Stack!NodeIndex node_stack;
 		node_stack.reserve(m_nodes.length);
 		node_stack.push(0);
@@ -963,108 +966,129 @@ private struct MatchGraphBuilder {
 
 			while (n >= visited.length) visited.length = visited.length * 2;
 			if (visited[n]) continue;
-//logInfo("Disambiguate %s", n);
+			//logInfo("Disambiguate %s (stack=%s)", n, node_stack.fill);
 			visited[n] = true;
 
-			foreach (ch_; ubyte.min .. ubyte.max+1) {
-				ubyte ch = cast(ubyte)ch_;
-				auto chnodes = m_nodes[n].edges[ch_];
+			foreach (ch; ubyte.min .. ubyte.max+1) {
+				auto chnodes = m_nodes[n].edges[ch];
+				size_t chhash = m_edgeEntries.getHash(chnodes);
 
 				// handle trivial cases
-				if (chnodes.length <= 1) continue;
+				if (m_edgeEntries.hasMaxLength(chnodes, 1))
+					continue;
 
 				// generate combined state for ambiguous edges
-				if (auto pn = () @trusted { return chnodes in combined_nodes; } ()) {
-					m_nodes[n].edges[ch] = m_nodes[*pn].idx;
+				if (auto pn = () @trusted { return chhash in combined_nodes; } ()) {
+					m_nodes[n].edges[ch] = m_edgeEntries.create(*pn);
+					assert(m_edgeEntries.hasLength(m_nodes[n].edges[ch], 1));
 					continue;
 				}
 
 				// for new combinations, create a new node
 				NodeIndex ncomb = addNode();
-				combined_nodes[chnodes] = ncomb;
-
-				// allocate memory for all edges combined
-				size_t total_edge_count = 0;
-				foreach (chn; chnodes) {
-					Node* cn = &m_nodes[chn];
-					foreach (edges; cn.edges)
-						total_edge_count +=edges.length;
-				}
-				auto mem = new NodeIndex[total_edge_count];
+				combined_nodes[chhash] = ncomb;
 
 				// write all edges
 				size_t idx = 0;
 				foreach (to_ch; ubyte.min .. ubyte.max+1) {
-					size_t start = idx;
-					foreach (chn; chnodes) {
-						auto edges = m_nodes[chn].edges[to_ch];
-						mem[idx .. idx + edges.length] = edges;
-						idx += edges.length;
-					}
-					m_nodes[ncomb].edges[to_ch] = mem[start .. idx];
+					auto e = &m_nodes[ncomb].edges[to_ch];
+					foreach (chn; m_edgeEntries.getItems(chnodes))
+						m_edgeEntries.insert(e, m_edgeEntries.getItems(m_nodes[chn].edges[to_ch]));
 				}
 
 				// add terminal indices
-				foreach (chn; chnodes) addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
+				foreach (chn; m_edgeEntries.getItems(chnodes))
+					foreach (t; m_nodes[chn].terminals)
+						addTerminal(ncomb, t.index, t.var);
 				foreach (i; 1 .. m_nodes[ncomb].terminals.length)
 					assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
 
-				m_nodes[n].edges[ch] = m_nodes[ncomb].idx;
+				m_nodes[n].edges[ch] = m_edgeEntries.create(ncomb);
+				assert(m_edgeEntries.hasLength(m_nodes[n].edges[ch], 1));
 			}
 
 			// process nodes recursively
-			foreach (ch; ubyte.min .. ubyte.max+1)
-				node_stack.push(m_nodes[n].edges[ch]);
+			foreach (ch; ubyte.min .. ubyte.max+1) {
+				// should only have single out-edges now
+				assert(m_edgeEntries.hasMaxLength(m_nodes[n].edges[ch], 1));
+				foreach (e; m_edgeEntries.getItems(m_nodes[n].edges[ch]))
+					node_stack.push(e);
+			}
 		}
+
+		import std.algorithm.sorting : sort;
+		foreach (ref n; m_nodes)
+			n.terminals[].sort!((a, b) => a.index < b.index)();
+
 		debug logDebug("Disambiguate done: %s nodes, %s max stack size", m_nodes.length, node_stack.maxSize);
 	}
 
 	void print()
-	const {
+	const @trusted {
 		import std.algorithm : map;
 		import std.array : join;
 		import std.conv : to;
 		import std.string : format;
 
 		logInfo("Nodes:");
-		foreach (i, n; m_nodes) {
+		size_t i = 0;
+		foreach (n; m_nodes) {
 			string mapChar(ubyte ch) {
 				if (ch == TerminalChar) return "$";
 				if (ch >= '0' && ch <= '9') return to!string(cast(dchar)ch);
 				if (ch >= 'a' && ch <= 'z') return to!string(cast(dchar)ch);
 				if (ch >= 'A' && ch <= 'Z') return to!string(cast(dchar)ch);
+				if (ch == '^') return "^";
 				if (ch == '/') return "/";
-				return ch.to!string;
+				return format("$%s", ch);
 			}
-			logInfo("  %s %s", i, n.terminals.map!(t => t.var != VarIndex.max ? format("T%s(%s)", t.index, t.var) : format("%s", t.index)).join(" "));
-			foreach (ch, tnodes; n.edges)
-				foreach (tn; tnodes)
-					logInfo("    %s -> %s", mapChar(cast(ubyte)ch), tn);
+			logInfo("  %s: %s", i, n.terminals[].map!(t => t.var != VarIndex.max ? format("T%s(%s)", t.index, t.var) : format("T%s", t.index)).join(" "));
+			ubyte first_char;
+			size_t list_hash;
+			NodeSet list;
+
+			void printEdges(ubyte last_char) {
+				if (!list.empty) {
+					string targets;
+					foreach (tn; m_edgeEntries.getItems(list))
+						targets ~= format(" %s", tn);
+					if (targets.length > 0)
+						logInfo("    [%s ... %s] -> %s", mapChar(first_char), mapChar(last_char), targets);
+				}
+			}
+			foreach (ch, tnodes; n.edges) {
+				auto h = m_edgeEntries.getHash(tnodes);
+				if (h != list_hash) {
+					printEdges(cast(ubyte)(ch-1));
+					list_hash = h;
+					list = tnodes;
+					first_char = cast(ubyte)ch;
+				}
+			}
+			printEdges(ubyte.max);
+			i++;
 		}
 	}
 
 	private void addEdge(NodeIndex from, NodeIndex to, ubyte ch, TerminalIndex terminal, VarIndex var = VarIndex.max)
-	{
-		auto e = &m_nodes[from].edges[ch];
-		assert(m_nodes[to].idx[0] == to);
-		if (!(*e).length) *e = m_nodes[to].idx;
-		else *e ~= m_nodes[to].idx;
+	@trusted {
+		m_edgeEntries.insert(&m_nodes[from].edges[ch], to);
 		addTerminal(to, terminal, var);
 	}
 
 	private NodeIndex addEdge(NodeIndex from, ubyte ch, TerminalIndex terminal, VarIndex var = VarIndex.max)
-	{
+	@trusted {
 		import std.algorithm : canFind;
 		import std.string : format;
-		if (m_nodes[from].edges[ch].length > 0)
-			assert(false, format("%s is in %s", ch, m_nodes[from].edges));
+		if (!m_nodes[from].edges[ch].empty)
+			assert(false, format("%s is in %s", ch, m_nodes[from].edges[]));
 		auto nidx = addNode();
 		addEdge(from, nidx, ch, terminal, var);
 		return nidx;
 	}
 
 	private void addTerminal(NodeIndex node, TerminalIndex terminal, VarIndex var)
-	{
+	@trusted {
 		foreach (ref t; m_nodes[node].terminals) {
 			if (t.index == terminal) {
 				if (t.var != VarIndex.max && t.var != var)
@@ -1077,23 +1101,145 @@ private struct MatchGraphBuilder {
 	}
 
 	private NodeIndex addNode()
-	{
+	@trusted {
 		assert(m_nodes.length <= 1_000_000_000, "More than 1B nodes in tree!?");
 		auto idx = cast(NodeIndex)m_nodes.length;
-		m_nodes ~= Node(idx, null, null);
+		m_nodes ~= Node.init;
 		return idx;
 	}
+}
 
-	private static addToArray(T)(ref T[] arr, T[] elems) { foreach (e; elems) addToArray(arr, e); }
-	private static addToArray(T)(ref T[] arr, T elem)
-	{
-		import std.algorithm : canFind;
-		if (!arr.canFind(elem)) arr ~= elem;
+struct LinkedSetBacking(T) {
+	import std.container.array : Array;
+	import std.range : isInputRange;
+
+	static struct Handle {
+		uint index = uint.max;
+		@property bool empty() const { return index == uint.max; }
 	}
+
+	private {
+		static struct Entry {
+			uint next;
+			T value;
+		}
+
+		Array!Entry m_storage;
+
+		static struct Range {
+			private {
+				Array!Entry* backing;
+				uint index;
+			}
+
+			@property bool empty() const { return index == uint.max; }
+			@property ref const(T) front() const { return (*backing)[index].value; }
+
+			void popFront()
+			{
+				index = (*backing)[index].next;
+			}
+		}
+	}
+
+	@property Handle emptySet() { return Handle.init; }
+
+	Handle create(scope T[] items...)
+	{
+		Handle ret;
+		foreach (i; items)
+			ret.index = createNode(i, ret.index);
+		return ret;
+	}
+
+	void insert(Handle* h, T value)
+	{
+		/*foreach (c; getItems(*h))
+			if (value == c)
+				return;*/
+		h.index = createNode(value, h.index);
+	}
+
+	void insert(R)(Handle* h, R items)
+		if (isInputRange!R)
+	{
+		foreach (itm; items)
+			insert(h, itm);
+	}
+
+	size_t getHash(Handle sh)
+	const {
+		// NOTE: the returned hash is order independent, to avoid bogus
+		//       mismatches when comparing lists of different order
+		size_t ret = 0x72d2da6c;
+		while (sh != Handle.init) {
+			ret ^= (hashOf(m_storage[sh.index].value) ^ 0xb1bdfb8d) * 0x5dbf04a4;
+			sh.index = m_storage[sh.index].next;
+		}
+		return ret;
+	}
+
+	auto getItems(Handle sh) { return Range(&m_storage, sh.index); }
+	auto getItems(Handle sh) const { return Range(&(cast()this).m_storage, sh.index); }
+
+	bool hasMaxLength(Handle sh, size_t l)
+	const {
+		uint idx = sh.index;
+		do {
+			if (idx == uint.max) return true;
+			idx = m_storage[idx].next;
+		} while (l-- > 0);
+		return false;
+	}
+
+	bool hasLength(Handle sh, size_t l)
+	const {
+		uint idx = sh.index;
+		while (l-- > 0) {
+			if (idx == uint.max) return false;
+			idx = m_storage[idx].next;
+		}
+		return idx == uint.max;
+	}
+
+	private uint createNode(ref T val, uint next)
+	{
+		auto id = cast(uint)m_storage.length;
+		m_storage ~= Entry(next, val);
+		return id;
+	}
+}
+
+unittest {
+	import std.algorithm.comparison : equal;
+
+	LinkedSetBacking!int b;
+	auto s = b.emptySet;
+	assert(s.empty);
+	assert(b.getItems(s).empty);
+	s = b.create(3, 5, 7);
+	assert(b.getItems(s).equal([7, 5, 3]));
+	assert(!b.hasLength(s, 2));
+	assert(b.hasLength(s, 3));
+	assert(!b.hasLength(s, 4));
+	assert(!b.hasMaxLength(s, 2));
+	assert(b.hasMaxLength(s, 3));
+	assert(b.hasMaxLength(s, 4));
+
+	auto h = b.getHash(s);
+	assert(h != b.getHash(b.emptySet));
+	s = b.create(5, 3, 7);
+	assert(b.getHash(s) == h);
+
+	b.insert(&s, 11);
+	assert(b.hasLength(s, 4));
+	assert(b.getHash(s) != h);
 }
 
 private struct Stack(E)
 {
+	import std.range : isInputRange;
+
 	private {
 		E[] m_storage;
 		size_t m_fill;
@@ -1101,6 +1247,8 @@ private struct Stack(E)
 	}
 
 	@property bool empty() const { return m_fill == 0; }
+
+	@property size_t fill() const { return m_fill; }
 
 	debug @property size_t maxSize() const { return m_maxFill; }
 
@@ -1121,7 +1269,8 @@ private struct Stack(E)
 		debug if (m_fill > m_maxFill) m_maxFill = m_fill;
 	}
 
-	void push(E[] els)
+	void push(R)(R els)
+		if (isInputRange!R)
 	{
 		reserve(els.length);
 		foreach (el; els)
