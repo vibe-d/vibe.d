@@ -698,6 +698,7 @@ final class WebSocket {
 	*/
 	void close(short code = WebSocketCloseReason.normalClosure, scope const(char)[] reason = "")
 	{
+		import std.algorithm.comparison : min;
 		if(reason !is null && reason.length == 0)
 			reason = (cast(WebSocketCloseReason)code).closeReasonString;
 
