@@ -528,7 +528,6 @@ private enum HTTPServerOptionImpl {
 	none                      = 0,
 	errorStackTraces          = 1<<7,
 	reusePort                 = 1<<8,
-	distribute                = 1<<9 // deprecated
 }
 
 // TODO: Should be turned back into an enum once the deprecated symbols can be removed
@@ -570,7 +569,7 @@ struct HTTPServerOption {
 		the same way in this scenario.
 	*/
 	deprecated("Use runWorkerTaskDist or start threads separately. It will be removed in 0.9.")
-	static enum distribute                = HTTPServerOptionImpl.distribute;
+	static enum distribute                = none;
 	/** Enables stack traces (`HTTPServerErrorInfo.debugMessage`).
 
 		Note that generating the stack traces are generally a costly
@@ -1983,7 +1982,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 	import vibe.core.core : runWorkerTaskDist;
 	import std.algorithm : canFind, find;
 
-	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort)
+	static TCPListener doListen(HTTPServerContext listen_info, bool reusePort)
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
@@ -2024,7 +2023,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 		if (!l.empty) linfo = l.front;
 		else {
 			auto li = new HTTPServerContext(addr, settings.port);
-			if (auto tcp_lst = doListen(li, (settings.options & HTTPServerOptionImpl.distribute) != 0, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
+			if (auto tcp_lst = doListen(li, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
 			{
 				li.m_listener = tcp_lst;
 				s_listeners ~= li;
