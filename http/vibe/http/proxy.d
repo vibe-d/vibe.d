@@ -279,7 +279,7 @@ final class HTTPProxySettings {
 	bool handleConnectRequests;
 
 	/// Empty default constructor for backwards compatibility - will be deprecated soon.
-	this() { }
+	this() { proxyMode = ProxyMode.reverse; }
 	/// Explicitly sets the proxy mode.
 	this(ProxyMode mode) { proxyMode = mode; }
 }
