@@ -17,8 +17,6 @@ enum Test {
 
 void test1()
 {
-	scope (failure) assert(false);
-
 	Test test;
 	Task lt;
 
