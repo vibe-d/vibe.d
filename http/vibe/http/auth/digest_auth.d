@@ -80,7 +80,7 @@ private bool checkDigest(scope HTTPServerRequest req, DigestAuthInfo info, scope
 				case "realm": realm = kv[1][1..$-1]; break;
 				case "username": username = kv[1][1..$-1]; break;
 				case "nonce": nonce = kv[1][1..$-1]; break;
-				case "uri": uri = kv[1][1..$-1]; break;
+				case "uri": uri = kv[1..$].join("=")[1..$-1]; break;
 				case "response": response = kv[1][1..$-1]; break;
 				case "algorithm": algorithm = kv[1][1..$-1]; break;
 			}
