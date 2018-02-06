@@ -47,10 +47,24 @@ interface RandomNumberStream : InputStream {
 }
 
 
+version (OSX)
+    version = secure_arc4random;//AES
+version (OpenBSD)
+    version = secure_arc4random;//ChaCha20
+version (NetBSD)
+    version = secure_arc4random;//ChaCha20
+version (secure_arc4random)
+extern(C) @nogc nothrow private @system
+{
+	void arc4random_buf(scope void* buf, size_t nbytes);
+}
+
 /**
 	Operating system specific cryptography secure random number generator.
 
-	It uses the "CryptGenRandom" function for Windows and "/dev/urandom" for Posix.
+	It uses the "CryptGenRandom" function for Windows; the "arc4random_buf"
+	function (not based on RC4 but on a modern and cryptographically secure
+	cipher) for macOS/OpenBSD/NetBSD; and "/dev/urandom" for other Posix platforms.
 	It's recommended to combine the output use additional processing generated random numbers
 	via provided functions for systems where security matters.
 
@@ -69,6 +83,10 @@ final class SystemRNG : RandomNumberStream {
 	{
 		//cryptographic service provider
 		private HCRYPTPROV hCryptProv;
+	}
+	else version(secure_arc4random)
+	{
+		//Using arc4random does not involve any extra fields.
 	}
 	else version(Posix)
 	{
@@ -94,6 +112,10 @@ final class SystemRNG : RandomNumberStream {
 			enforce!CryptoException(CryptAcquireContext(&this.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) != 0,
 				text("Cannot init SystemRNG: Error id is ", GetLastError()));
 		}
+		else version(secure_arc4random)
+		{
+			//arc4random requires no setup or cleanup.
+		}
 		else version(Posix)
 		{
 			//open file
@@ -111,6 +133,10 @@ final class SystemRNG : RandomNumberStream {
 		version(Windows)
 		{
 			CryptReleaseContext(this.hCryptProv, 0);
+		}
+		else version (secure_arc4random)
+		{
+			//arc4random requires no setup or cleanup.
 		}
 		else version (Posix)
 		{
@@ -137,6 +163,10 @@ final class SystemRNG : RandomNumberStream {
 			{
 				throw new CryptoException(text("Cannot get next random number: Error id is ", GetLastError()));
 			}
+		}
+		else version (secure_arc4random)
+		{
+			arc4random_buf(buffer.ptr, buffer.length);//Cannot fail.
 		}
 		else version (Posix)
 		{
