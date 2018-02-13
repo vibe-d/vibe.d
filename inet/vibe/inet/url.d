@@ -95,53 +95,51 @@ struct URL {
 				str = str[2 .. $];
 			}
 
-			if (schema != "file") {
-				auto si = str.indexOfCT('/');
-				if( si < 0 ) si = str.length;
-				auto ai = str[0 .. si].indexOfCT('@');
-				sizediff_t hs = 0;
-				if( ai >= 0 ){
-					hs = ai+1;
-					auto ci = str[0 .. ai].indexOfCT(':');
-					if( ci >= 0 ){
-						m_username = str[0 .. ci];
-						m_password = str[ci+1 .. ai];
-					} else m_username = str[0 .. ai];
-					enforce(m_username.length > 0, "Empty user name in URL.");
-				}
-
-				m_host = str[hs .. si];
-
-				auto findPort ( string src )
-				{
-					auto pi = src.indexOfCT(':');
-					if(pi > 0) {
-						enforce(pi < src.length-1, "Empty port in URL.");
-						m_port = to!ushort(src[pi+1..$]);
-					}
-					return pi;
-				}
-
-
-				auto ip6 = m_host.indexOfCT('[');
-				if (ip6 == 0) { // [ must be first char
-					auto pe = m_host.indexOfCT(']');
-					if (pe > 0) {
-						findPort(m_host[pe..$]);
-						m_host = m_host[1 .. pe];
-					}
-				}
-				else {
-					auto pi = findPort(m_host);
-					if(pi > 0) {
-						m_host = m_host[0 .. pi];
-					}
-				}
-
-				enforce(!requires_host || m_schema == "file" || m_host.length > 0,
-						"Empty server name in URL.");
-				str = str[si .. $];
+			auto si = str.indexOfCT('/');
+			if( si < 0 ) si = str.length;
+			auto ai = str[0 .. si].indexOfCT('@');
+			sizediff_t hs = 0;
+			if( ai >= 0 ){
+				hs = ai+1;
+				auto ci = str[0 .. ai].indexOfCT(':');
+				if( ci >= 0 ){
+					m_username = str[0 .. ci];
+					m_password = str[ci+1 .. ai];
+				} else m_username = str[0 .. ai];
+				enforce(m_username.length > 0, "Empty user name in URL.");
 			}
+
+			m_host = str[hs .. si];
+
+			auto findPort ( string src )
+			{
+				auto pi = src.indexOfCT(':');
+				if(pi > 0) {
+					enforce(pi < src.length-1, "Empty port in URL.");
+					m_port = to!ushort(src[pi+1..$]);
+				}
+				return pi;
+			}
+
+
+			auto ip6 = m_host.indexOfCT('[');
+			if (ip6 == 0) { // [ must be first char
+				auto pe = m_host.indexOfCT(']');
+				if (pe > 0) {
+					findPort(m_host[pe..$]);
+					m_host = m_host[1 .. pe];
+				}
+			}
+			else {
+				auto pi = findPort(m_host);
+				if(pi > 0) {
+					m_host = m_host[0 .. pi];
+				}
+			}
+
+			enforce(!requires_host || m_schema == "file" || m_host.length > 0,
+					"Empty server name in URL.");
+			str = str[si .. $];
 		}
 
 		this.localURI = str;
@@ -455,10 +453,11 @@ unittest {
 unittest {
 	assert(URL("file:///test").pathString == "/test");
 	assert(URL("file:///test").path.toString() == "/test");
-	assert(URL("file://test").pathString == "test");
-	assert(URL("file://test").path.toString() == "test");
-	assert(URL("file://./test").pathString == "./test");
-	assert(URL("file://./test").path.toString() == "./test");
+	assert(URL("file://test").host == "test");
+	assert(URL("file://test").pathString() == "");
+	assert(URL("file://./test").host == ".");
+	assert(URL("file://./test").pathString == "/test");
+	assert(URL("file://./test").path.toString() == "/test");
 }
 
 unittest { // issue #1318
@@ -487,4 +486,16 @@ unittest { // issue #1732
 	auto url = URL("tcp://0.0.0.0:1234");
 	url.port = 4321;
 	assert(url.toString == "tcp://0.0.0.0:4321", url.toString);
+}
+
+unittest { // host name role in file:// URLs
+	auto url = URL.parse("file:///foo/bar");
+	assert(url.host == "");
+	assert(url.path == InetPath("/foo/bar"));
+	assert(url.toString() == "file:///foo/bar");
+
+	url = URL.parse("file://foo/bar/baz");
+	assert(url.host == "foo");
+	assert(url.path == InetPath("/bar/baz"));
+	assert(url.toString() == "file://foo/bar/baz");
 }

@@ -4,7 +4,7 @@ set -e -x -o pipefail
 
 DUB_ARGS="--build-mode=${DUB_BUILD_MODE:-separate} ${DUB_ARGS:-}"
 # default to run all parts
-: ${PARTS:=lint,builds,unittests,examples,tests,meson}
+: ${PARTS:=lint,builds,unittests,examples,tests}
 # default to vibe-core driver
 : ${VIBED_DRIVER:=vibe-core}
 

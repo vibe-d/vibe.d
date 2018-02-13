@@ -1,14 +1,32 @@
 # Documentation: https://github.com/codecov/support/wiki/codecov.yml
+# Validate with: curl --data-binary @.codecov.yml https://codecov.io/validate
+
+codecov:
+  notify:
+    # We don't want to wait for the CodeCov report
+    # See https://github.com/codecov/support/issues/312
+    require_ci_to_pass: false
+    after_n_builds: 1  # send notifications after the first upload
+    wait_for_ci: false
+
+  # At Travis, the PR is merged into `master` before the testsuite is run.
+  # This allows CodeCov to adjust the resulting coverage diff, s.t. it matches
+  # with the GitHub diff.
+  # https://github.com/codecov/support/issues/363
+  # https://docs.codecov.io/v4.3.6/docs/comparing-commits
+  allow_coverage_offsets: true
 
 coverage:
   precision: 3
   round: down
-  range: 80...100
+  range: 50...100
 
   status:
     # Learn more at https://codecov.io/docs#yaml_default_commit_status
-    project: true
-    patch: true
+    project: off
+    patch:
+        default:
+            threshold: 5
     changes: false
 
 comment: false

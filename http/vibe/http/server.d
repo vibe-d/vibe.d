@@ -1852,7 +1852,7 @@ final class HTTPServerContext {
 		if (settings.hostName.length) {
 			auto proto = settings.tlsContext ? "https" : "http";
 			auto port = settings.tlsContext && settings.port == 443 || !settings.tlsContext && settings.port == 80 ? "" : ":" ~ settings.port.to!string;
-			logInfo("Added virtual host %s://%s%s/ (%s)", proto, settings.hostName, m_bindPort, m_bindAddress);
+			logInfo("Added virtual host %s://%s:%s/ (%s)", proto, settings.hostName, m_bindPort, m_bindAddress);
 		}
 
 		return vhost.id;
