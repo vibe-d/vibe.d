@@ -1138,6 +1138,14 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	}
 
 	override @property Duration readTimeout() const { return m_settings.readTimeout; }
+	
+	override @property void writeTimeout(Duration dur)
+	{
+		m_settings.writeTimeout = dur;
+		conn.setOption(TCPOption.TIMEOUT_SEND, dur);
+	}
+
+	override @property Duration writeTimeout() const { return m_settings.writeTimeout; }
 
 	override @property void keepAlive(bool enabled)
 	{
@@ -1559,6 +1567,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	struct Settings {
 		void delegate(TCPConnection) onConnect;
 		Duration readTimeout;
+		Duration writeTimeout;
 		bool keepAlive;
 		bool tcpNoDelay;
 		Waiter reader;

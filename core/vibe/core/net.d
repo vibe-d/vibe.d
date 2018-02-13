@@ -360,6 +360,11 @@ interface TCPConnection : ConnectionStream {
 	@property void readTimeout(Duration duration);
 	/// ditto
 	@property Duration readTimeout() const;
+	
+	/// Controls the write time out after which the connection is closed automatically.
+	@property void writeTimeout(Duration duration);
+	/// ditto
+	@property Duration writeTimeout() const;
 
 	/// Returns the IP address of the connected peer.
 	@property string peerAddress() const;

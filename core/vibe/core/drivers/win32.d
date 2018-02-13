@@ -1077,6 +1077,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		Task m_writeOwner;
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;
+		Duration m_writeTimeout;
 		bool m_keepAlive;
 		SOCKET m_socket;
 		NetworkAddress m_localAddress;
@@ -1186,6 +1187,16 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, &vdw, vdw.sizeof);
 	}
 	override @property Duration readTimeout() const { return m_readTimeout; }
+	
+	override @property void writeTimeout(Duration v)
+	{
+		m_writeTimeout = v;
+		auto msecs = v.total!"msecs"();
+		assert(msecs < DWORD.max);
+		DWORD vdw = cast(DWORD)msecs;
+		setsockopt(m_socket, SOL_SOCKET, SO_SNDTIMEO, &vdw, vdw.sizeof);
+	}
+	override @property Duration writeTimeout() const { return m_writeTimeout; }
 
 	override @property void keepAlive(bool enabled)
 	{

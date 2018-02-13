@@ -67,6 +67,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		bool m_tcpNoDelay = false;
 		bool m_tcpKeepAlive = false;
 		Duration m_readTimeout;
+		Duration m_writeTimeout;
 		char[64] m_peerAddressBuf;
 		NetworkAddress m_localAddress, m_remoteAddress;
 		event* m_waitDataEvent;
@@ -119,15 +120,30 @@ package final class Libevent2TCPConnection : TCPConnection {
 	@property void readTimeout(Duration v)
 	{
 		m_readTimeout = v;
+		timeval towrite = m_writeTimeout.toTimeVal();
 		if( v == dur!"seconds"(0) ){
-			() @trusted { bufferevent_set_timeouts(m_ctx.event, null, null); } ();
+			() @trusted { bufferevent_set_timeouts(m_ctx.event, null, &towrite); } ();
 		} else {
 			assert(v.total!"seconds" <= int.max);
 			timeval toread = v.toTimeVal();
-			() @trusted { bufferevent_set_timeouts(m_ctx.event, &toread, null); } ();
+			() @trusted { bufferevent_set_timeouts(m_ctx.event, &toread, &towrite); } ();
 		}
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
+	
+	@property void writeTimeout(Duration v)
+	{
+		m_writeTimeout = v;
+		timeval toread = m_readTimeout.toTimeVal();
+		if( v == dur!"seconds"(0) ){
+			() @trusted { bufferevent_set_timeouts(m_ctx.event, &toread, null); } ();
+		} else {
+			assert(v.total!"seconds" <= int.max);
+			timeval towrite = v.toTimeVal();
+			() @trusted { bufferevent_set_timeouts(m_ctx.event, &toread, &towrite); } ();
+		}
+	}
+	@property Duration writeTimeout() const { return m_writeTimeout; }
 
 	@property void keepAlive(bool enable)
 	{
