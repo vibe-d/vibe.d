@@ -53,7 +53,7 @@ import std.encoding : sanitize;
 	$(TABLE
 		$(TR $(TH HTTP method) $(TH Recognized prefixes))
 		$(TR $(TD GET)	  $(TD get, query))
-		$(TR $(TD PUT)    $(TD set, put))
+		$(TR $(TD PUT)	  $(TD set, put))
 		$(TR $(TD POST)   $(TD add, create, post))
 		$(TR $(TD DELETE) $(TD remove, erase, delete))
 		$(TR $(TD PATCH)  $(TD update, patch))
@@ -157,6 +157,8 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 		url_prefix = concatURL(url_prefix, cls_path.value, true);
 	}
 
+	alias AuthInfoType = AuthInfo!C;
+
 	foreach (M; __traits(allMembers, C)) {
 		/*static if (isInstanceOf!(SessionVar, __traits(getMember, instance, M))) {
 			__traits(getMember, instance, M).m_getContext = toDelegate({ return s_requestContext; });
@@ -180,7 +182,47 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 					subsettings.urlPrefix = concatURL(url_prefix, url, true);
 					registerWebInterface!RT(router, __traits(getMember, instance, M)(), subsettings);
 				} else {
-					auto fullurl = concatURL(url_prefix, url);
+					import std.meta : AliasSeq, ApplyLeft, Filter, templateAnd, templateNot;
+
+					// adds underscored params to the route param parser
+					static if (!minfo.hadPathUDA) {
+						import vibe.internal.meta.funcattr : IsAttributedParameter;
+						import std.range.primitives : empty;
+
+						// exclude all other possible injection paths
+						enum hasOtherInjectionPath(PT) = is(PT == InputStream) ||
+							is(PT == HTTPServerRequest) || is(PT == HTTPRequest) ||
+							is(PT == HTTPServerResponse) || is(PT == HTTPResponse) ||
+							is(PT == WebSocket) ||
+							is(PT == bool) ||
+							is(PT == AuthInfoType);
+						alias hasNoAttributes = templateNot!(ApplyLeft!(IsAttributedParameter, overload));
+						alias paramTypes = Parameters!overload;
+						enum param_names = {
+							string[] params;
+							foreach (i, paramName; ParameterIdentifierTuple!overload)
+							{
+								if (paramName[0] == '_' && hasNoAttributes!paramName &&
+										!hasOtherInjectionPath!(paramTypes[i]) &&
+									paramName != "_error")
+									params ~= paramName;
+							}
+							return params;
+						}();
+						static if (!param_names.empty) {
+							string endurl;
+							foreach (name; param_names) {
+								endurl ~= "/:" ~ name[1 .. $];
+							}
+							auto fullurl = concatURL(url_prefix, url.concatURL(endurl));
+						} else {
+							auto fullurl = concatURL(url_prefix, url);
+						}
+					} else {
+						auto fullurl = concatURL(url_prefix, url);
+					}
+					import vibe.core.log;
+					logDebug("[Web] registering: %s", fullurl);
 					router.match(minfo.method, fullurl, (HTTPServerRequest req, HTTPServerResponse res) @trusted {
 						handleRequest!(M, overload)(req, res, instance, settings);
 					});
@@ -284,7 +326,7 @@ unittest {
 	$(UL
 		$(LI The `req` variable that holds the current request object)
 		$(LI If the `@translationContext` attribute us used, enables the
-		     built-in i18n support of Diet templates)
+			 built-in i18n support of Diet templates)
 	)
 */
 template render(string diet_file, ALIASES...) {
@@ -362,7 +404,7 @@ void redirect(string url)
 		fullurl.localURI = url;
 	} else if (url.canFind(":")) { // TODO: better URL recognition
 		fullurl = URL(url);
-	} else  if (ctx.req.fullURL.path.endsWithSlash) {
+	} else	if (ctx.req.fullURL.path.endsWithSlash) {
 		fullurl = ctx.req.fullURL;
 		fullurl.localURI = fullurl.path.toString() ~ url;
 	} else {
