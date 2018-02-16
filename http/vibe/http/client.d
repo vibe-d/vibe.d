@@ -148,9 +148,9 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 	else
 	{
 		version(UnixSocket)
-			use_tls = url.schema == "https";
-		else
 			use_tls = url.schema == "https" || url.schema == "https+unix";
+		else
+			use_tls = url.schema == "https";
 	}
 
 	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
