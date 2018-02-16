@@ -258,6 +258,12 @@ class HTTPClientSettings {
 
 	/// Can be used to force looking up IPv4/IPv6 addresses for host names.
 	AddressFamily dnsAddressFamily = AddressFamily.UNSPEC;
+
+	/** Allows to customize the TLS context before connecting to a server.
+
+		Note that this overrides a callback set with `HTTPClient.setTLSContextSetup`.
+	*/
+	void delegate(TLSContext ctx) @safe nothrow tlsContextSetup;
 }
 
 ///
@@ -350,7 +356,8 @@ final class HTTPClient {
 			m_tls = createTLSContext(TLSContextKind.client);
 			// this will be changed to trustedCert once a proper root CA store is available by default
 			m_tls.peerValidationMode = TLSPeerValidationMode.none;
-			() @trusted { if (ms_tlsSetup) ms_tlsSetup(m_tls); } ();
+			if (settings.tlsContextSetup) settings.tlsContextSetup(m_tls);
+			else () @trusted { if (ms_tlsSetup) ms_tlsSetup(m_tls); } ();
 		}
 	}
 
