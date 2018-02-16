@@ -50,7 +50,7 @@ class MongoException : Exception
 {
 @safe:
 
-	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
 	}
@@ -65,7 +65,7 @@ class MongoDriverException : MongoException
 {
 @safe:
 
-	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
 	}
@@ -85,7 +85,7 @@ class MongoDBException : MongoException
 	alias description this;
 
 	this(MongoErrorDescription description, string file = __FILE__,
-			int line = __LINE__, Throwable next = null)
+			size_t line = __LINE__, Throwable next = null)
 	{
 		super(description.message, file, line, next);
 		this.description = description;
@@ -101,7 +101,7 @@ class MongoAuthException : MongoException
 {
 @safe:
 
-	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
 	}

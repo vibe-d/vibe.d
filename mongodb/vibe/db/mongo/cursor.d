@@ -16,6 +16,7 @@ import std.array : array;
 import std.algorithm : map, max, min;
 import std.exception;
 
+deprecated alias MongoCursor(Q, R = Bson, S = Bson) = MongoCursor!R;
 
 /**
 	Represents a cursor for a MongoDB query.
@@ -24,13 +25,19 @@ import std.exception;
 
 	This struct uses reference counting to destroy the underlying MongoDB cursor.
 */
-struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
-	private MongoCursorData!(Q, R, S) m_data;
+struct MongoCursor(DocType = Bson) {
+	private MongoCursorData!DocType m_data;
 
-	package this(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
+	package this(Q, S)(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
 	{
 		// TODO: avoid memory allocation, if possible
-		m_data = new MongoCursorData!(Q, R, S)(client, collection, flags, nskip, nret, query, return_field_selector);
+		m_data = new MongoFindCursor!(Q, DocType, S)(client, collection, flags, nskip, nret, query, return_field_selector);
+	}
+
+	package this(MongoClient client, string collection, long cursor, DocType[] existing_documents)
+	{
+		// TODO: avoid memory allocation, if possible
+		m_data = new MongoGenericCursor!DocType(client, collection, cursor, existing_documents);
 	}
 
 	this(this)
@@ -59,7 +66,7 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 		input range interface. Note that calling this function is only allowed
 		if empty returns false.
 	*/
-	@property R front() { return m_data.front; }
+	@property DocType front() { return m_data.front; }
 
 	/**
 		Controls the order in which the query returns matching documents.
@@ -191,9 +198,9 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 	{
 		import std.typecons : Tuple, tuple;
 		static struct Rng {
-			private MongoCursorData!(Q, R, S) data;
+			private MongoCursorData!DocType data;
 			@property bool empty() { return data.empty; }
-			@property Tuple!(size_t, R) front() { return tuple(data.index, data.front); }
+			@property Tuple!(size_t, DocType) front() { return tuple(data.index, data.front); }
 			void popFront() { data.popFront(); }
 		}
 		return Rng(m_data);
@@ -204,24 +211,118 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 /**
 	Internal class exposed through MongoCursor.
 */
-private class MongoCursorData(Q, R, S) {
+private abstract class MongoCursorData(DocType) {
 	private {
 		int m_refCount = 1;
 		MongoClient m_client;
 		string m_collection;
 		long m_cursor;
-		QueryFlags m_flags;
 		int m_nskip;
 		int m_nret;
-		Q m_query;
-		S m_returnFieldSelector;
 		Bson m_sort = Bson(null);
 		int m_offset;
 		size_t m_currentDoc = 0;
-		R[] m_documents;
+		DocType[] m_documents;
 		bool m_iterationStarted = false;
 		size_t m_limit = 0;
 		bool m_needDestroy = false;
+	}
+
+	final @property bool empty()
+	@safe {
+		if (!m_iterationStarted) startIterating();
+		if (m_limit > 0 && index >= m_limit) {
+			destroy();
+			return true;
+		}
+		if( m_currentDoc < m_documents.length )
+			return false;
+		if( m_cursor == 0 )
+			return true;
+
+		auto conn = m_client.lockConnection();
+		conn.getMore!DocType(m_collection, m_nret, m_cursor, &handleReply, &handleDocument);
+		return m_currentDoc >= m_documents.length;
+	}
+
+	final @property size_t index()
+	@safe {
+		return m_offset + m_currentDoc;
+	}
+
+	final @property DocType front()
+	@safe {
+		if (!m_iterationStarted) startIterating();
+		assert(!empty(), "Cursor has no more data.");
+		return m_documents[m_currentDoc];
+	}
+
+	final void sort(Bson order)
+	@safe {
+		assert(!m_iterationStarted, "Cursor cannot be modified after beginning iteration");
+		m_sort = order;
+	}
+
+	final void limit(size_t count)
+	@safe {
+		// A limit() value of 0 (e.g. “.limit(0)”) is equivalent to setting no limit.
+		if (count > 0) {
+			if (m_nret == 0 || m_nret > count)
+				m_nret = min(count, 1024);
+
+			if (m_limit == 0 || m_limit > count)
+				m_limit = count;
+		}
+	}
+
+	final void skip(int count)
+	@safe {
+		// A skip() value of 0 (e.g. “.skip(0)”) is equivalent to setting no skip.
+		m_nskip = max(m_nskip, count);
+	}
+
+	final void popFront()
+	@safe {
+		if (!m_iterationStarted) startIterating();
+		assert(!empty(), "Cursor has no more data.");
+		m_currentDoc++;
+	}
+
+	abstract void startIterating() @safe;
+
+	final private void destroy()
+	@safe {
+		if (m_cursor == 0) return;
+		auto conn = m_client.lockConnection();
+		conn.killCursors(() @trusted { return (&m_cursor)[0 .. 1]; } ());
+		m_cursor = 0;
+	}
+
+	final private void handleReply(long cursor, ReplyFlags flags, int first_doc, int num_docs)
+	{
+		enforce!MongoDriverException(!(flags & ReplyFlags.CursorNotFound), "Invalid cursor handle.");
+		enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), "Query failed. Does the database exist?");
+
+		m_cursor = cursor;
+		m_offset = first_doc;
+		m_documents.length = num_docs;
+		m_currentDoc = 0;
+	}
+
+	final private void handleDocument(size_t idx, ref DocType doc)
+	{
+		m_documents[idx] = doc;
+	}
+}
+
+/**
+	Internal class implementing MongoCursorData for find queries
+ */
+private class MongoFindCursor(Q, R, S) : MongoCursorData!R {
+	private {
+		QueryFlags m_flags;
+		Q m_query;
+		S m_returnFieldSelector;
 	}
 
 	this(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
@@ -235,67 +336,7 @@ private class MongoCursorData(Q, R, S) {
 		m_returnFieldSelector = return_field_selector;
 	}
 
-	@property bool empty()
-	@safe {
-		if (!m_iterationStarted) startIterating();
-		if (m_limit > 0 && index >= m_limit) {
-			destroy();
-			return true;
-		}
-		if( m_currentDoc < m_documents.length )
-			return false;
-		if( m_cursor == 0 )
-			return true;
-
-		auto conn = m_client.lockConnection();
-		conn.getMore!R(m_collection, m_nret, m_cursor, &handleReply, &handleDocument);
-		return m_currentDoc >= m_documents.length;
-	}
-
-	@property size_t index()
-	@safe {
-		return m_offset + m_currentDoc;
-	}
-
-	@property R front()
-	@safe {
-		if (!m_iterationStarted) startIterating();
-		assert(!empty(), "Cursor has no more data.");
-		return m_documents[m_currentDoc];
-	}
-
-	void sort(Bson order)
-	@safe {
-		assert(!m_iterationStarted, "Cursor cannot be modified after beginning iteration");
-		m_sort = order;
-	}
-
-	void limit(size_t count)
-	@safe {
-		// A limit() value of 0 (e.g. “.limit(0)”) is equivalent to setting no limit.
-		if (count > 0) {
-			if (m_nret == 0 || m_nret > count)
-				m_nret = min(count, 1024);
-
-			if (m_limit == 0 || m_limit > count)
-				m_limit = count;
-		}
-	}
-
-	void skip(int count)
-	@safe {
-		// A skip() value of 0 (e.g. “.skip(0)”) is equivalent to setting no skip.
-		m_nskip = max(m_nskip, count);
-	}
-
-	void popFront()
-	@safe {
-		if (!m_iterationStarted) startIterating();
-		assert(!empty(), "Cursor has no more data.");
-		m_currentDoc++;
-	}
-
-	private void startIterating()
+	override void startIterating()
 	@safe {
 		auto conn = m_client.lockConnection();
 
@@ -327,29 +368,23 @@ private class MongoCursorData(Q, R, S) {
 
 		m_iterationStarted = true;
 	}
+}
 
-	private void destroy()
-	@safe {
-		if (m_cursor == 0) return;
-		auto conn = m_client.lockConnection();
-		conn.killCursors(() @trusted { return (&m_cursor)[0 .. 1]; } ());
-		m_cursor = 0;
-	}
-
-	private void handleReply(long cursor, ReplyFlags flags, int first_doc, int num_docs)
+/**
+	Internal class implementing MongoCursorData for already initialized generic cursors
+ */
+private class MongoGenericCursor(DocType) : MongoCursorData!DocType {
+	this(MongoClient client, string collection, long cursor, DocType[] existing_documents)
 	{
-		// FIXME: use MongoDB exceptions
-		enforce(!(flags & ReplyFlags.CursorNotFound), "Invalid cursor handle.");
-		enforce(!(flags & ReplyFlags.QueryFailure), "Query failed. Does the database exist?");
-
+		m_client = client;
+		m_collection = collection;
 		m_cursor = cursor;
-		m_offset = first_doc;
-		m_documents.length = num_docs;
-		m_currentDoc = 0;
+		m_iterationStarted = true;
+		m_documents = existing_documents;
 	}
 
-	private void handleDocument(size_t idx, ref R doc)
-	{
-		m_documents[idx] = doc;
+	override void startIterating()
+	@safe {
+		assert(false, "Calling startIterating on an opaque already initialized cursor");
 	}
 }
