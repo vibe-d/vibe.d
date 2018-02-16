@@ -232,8 +232,8 @@ import vibe.core.log;
 import vibe.http.router : URLRouter;
 import vibe.http.client : HTTPClientSettings;
 import vibe.http.common : HTTPMethod;
-import vibe.http.server : HTTPServerRequestDelegate;
-import vibe.http.status : isSuccessCode;
+import vibe.http.server : HTTPServerRequestDelegate, HTTPServerRequest, HTTPServerResponse;
+import vibe.http.status : HTTPStatus, isSuccessCode;
 import vibe.internal.meta.uda;
 import vibe.internal.meta.funcattr;
 import vibe.inet.url;
@@ -471,8 +471,6 @@ HTTPServerRequestDelegate serveRestJSClient(I)(RestInterfaceSettings settings)
 	import std.digest.md : md5Of;
 	import std.digest.digest : toHexString;
 	import std.array : appender;
-	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
-	import vibe.http.status : HTTPStatus;
 
 	auto app = appender!string();
 	generateRestJSClient!I(app, settings);
@@ -777,6 +775,23 @@ class RestInterfaceSettings {
 	/// Overrides the default HTTP client settings used by the `RestInterfaceClient`.
 	HTTPClientSettings httpClientSettings;
 
+	/** Optional handler used to render custom replies in case of errors.
+
+		The handler needs to set the response status code to the provided
+		`RestErrorInformation.statusCode` value and can then write a custom
+		response body.
+
+		Note that the REST interface generator by default handles any exceptions thrown
+		during request handling and sents a JSON response with the error message. The
+		low level `HTTPServerSettings.errorPageHandler` is not invoked.
+
+		If `errorHandler` is not set, a JSON object with a single field "statusMessage"
+		will be sent. In debug builds, there may also be an additional
+		"statusDebugMessage" field that contains the full exception text, including a
+		possible stack trace.
+	*/
+	RestErrorHandler errorHandler;
+
 	@property RestInterfaceSettings dup()
 	const @safe {
 		auto ret = new RestInterfaceSettings;
@@ -785,6 +800,31 @@ class RestInterfaceSettings {
 		ret.stripTrailingUnderscore = this.stripTrailingUnderscore;
 		ret.allowedOrigins = this.allowedOrigins.dup;
 		return ret;
+	}
+}
+
+alias RestErrorHandler = void delegate(HTTPServerRequest, HTTPServerResponse, RestErrorInformation error) @safe;
+
+struct RestErrorInformation {
+	/// The status code that the handler should send in the reply
+	HTTPStatus statusCode;
+
+	/** If triggered by an exception, this contains the catched exception
+		object.
+	*/
+	Exception exception;
+
+	private this(Exception e, HTTPStatus default_status)
+	@safe {
+		import vibe.http.common : HTTPStatusException;
+
+		this.exception = e;
+
+		if (auto he = cast(HTTPStatusException)e) {
+			this.statusCode = cast(HTTPStatus)he.status;
+		} else {
+			this.statusCode = default_status;
+		}
 	}
 }
 
@@ -1270,8 +1310,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 {
 	import std.meta : AliasSeq;
 	import std.string : format;
-	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
-	import vibe.http.common : HTTPStatusException, HTTPStatus, enforceBadRequest;
+	import vibe.http.common : HTTPStatusException, enforceBadRequest;
 	import vibe.utils.string : sanitizeUTF8;
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.internal.meta.funcattr : IsAttributedParameter, computeAttributedParameterCtx;
@@ -1301,58 +1340,96 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				"The request body must contain a JSON object.");
 		}
 
-		static if (isAuthenticated!(T, Func)) {
-			auto auth_info = handleAuthentication!Func(inst, req, res);
-			if (res.headerWritten) return;
-		}
+		void handleException(Exception e, HTTPStatus default_status)
+		@safe {
+			logDebug("REST handler exception: %s", () @trusted { return e.toString(); } ());
+			if (res.headerWritten) {
+				logDebug("Response already started. Client will not receive an error code!");
+				return;
+			}
 
-		PTypes params;
-
-		foreach (i, PT; PTypes) {
-			enum sparam = sroute.parameters[i];
-
-			static if (sparam.isIn) {
-				enum pname = sparam.name;
-				auto fieldname = route.parameters[i].fieldName;
-				static if (isInstanceOf!(Nullable, PT)) PT v;
-				else Nullable!PT v;
-
-				static if (sparam.kind == ParameterKind.auth) {
-					v = auth_info;
-				} else static if (sparam.kind == ParameterKind.query) {
-					if (auto pv = fieldname in req.query)
-						v = fromRestString!PT(*pv);
-				} else static if (sparam.kind == ParameterKind.wholeBody) {
-					try v = deserializeJson!PT(req.json);
-					catch (JSONException e) enforceBadRequest(false, e.msg);
-				} else static if (sparam.kind == ParameterKind.body_) {
-					try {
-						if (auto pv = fieldname in req.json)
-							v = deserializeJson!PT(*pv);
-					} catch (JSONException e)
-						enforceBadRequest(false, e.msg);
-				} else static if (sparam.kind == ParameterKind.header) {
-					if (auto pv = fieldname in req.headers)
-						v = fromRestString!PT(*pv);
-				} else static if (sparam.kind == ParameterKind.attributed) {
-					static if (!__traits(compiles, () @safe { computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ()))
-						pragma(msg, "Non-@safe @before evaluators are deprecated - annotate evaluator function for parameter "~pname~" of "~T.stringof~"."~Method~" as @safe.");
-					v = () @trusted { return computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ();
-				} else static if (sparam.kind == ParameterKind.internal) {
-					if (auto pv = fieldname in req.params)
-						v = fromRestString!PT(urlDecode(*pv));
-				} else static assert(false, "Unhandled parameter kind.");
-
-				static if (isInstanceOf!(Nullable, PT)) params[i] = v;
-				else if (v.isNull()) {
-					static if (!is(PDefaults[i] == void)) params[i] = PDefaults[i];
-					else enforceBadRequest(false, "Missing non-optional "~sparam.kind.to!string~" parameter '"~(fieldname.length?fieldname:sparam.name)~"'.");
-				} else params[i] = v;
+			if (settings.errorHandler) {
+				settings.errorHandler(req, res, RestErrorInformation(e, default_status));
+			} else if (auto se = cast(HTTPStatusException)e) {
+				res.writeJsonBody(["statusMessage": se.msg], se.status);
+			} else debug {
+				res.writeJsonBody(
+					[ "statusMessage": e.msg, "statusDebugMessage": () @trusted { return sanitizeUTF8(cast(ubyte[])e.toString()); } () ],
+					HTTPStatus.internalServerError
+				);
+			} else {
+				res.writeJsonBody(["statusMessage": e.msg], default_status);
 			}
 		}
 
-		static if (isAuthenticated!(T, Func))
-			handleAuthorization!(T, Func, params)(auth_info);
+		try {
+			static if (isAuthenticated!(T, Func)) {
+				auto auth_info = handleAuthentication!Func(inst, req, res);
+				if (res.headerWritten) return;
+			}
+		} catch (Exception e) {
+			handleException(e, HTTPStatus.unauthorized);
+			return;
+		}
+
+
+		PTypes params;
+
+		try {
+			foreach (i, PT; PTypes) {
+				enum sparam = sroute.parameters[i];
+
+				static if (sparam.isIn) {
+					enum pname = sparam.name;
+					auto fieldname = route.parameters[i].fieldName;
+					static if (isInstanceOf!(Nullable, PT)) PT v;
+					else Nullable!PT v;
+
+					static if (sparam.kind == ParameterKind.auth) {
+						v = auth_info;
+					} else static if (sparam.kind == ParameterKind.query) {
+						if (auto pv = fieldname in req.query)
+							v = fromRestString!PT(*pv);
+					} else static if (sparam.kind == ParameterKind.wholeBody) {
+						try v = deserializeJson!PT(req.json);
+						catch (JSONException e) enforceBadRequest(false, e.msg);
+					} else static if (sparam.kind == ParameterKind.body_) {
+						try {
+							if (auto pv = fieldname in req.json)
+								v = deserializeJson!PT(*pv);
+						} catch (JSONException e)
+							enforceBadRequest(false, e.msg);
+					} else static if (sparam.kind == ParameterKind.header) {
+						if (auto pv = fieldname in req.headers)
+							v = fromRestString!PT(*pv);
+					} else static if (sparam.kind == ParameterKind.attributed) {
+						static if (!__traits(compiles, () @safe { computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ()))
+							pragma(msg, "Non-@safe @before evaluators are deprecated - annotate evaluator function for parameter "~pname~" of "~T.stringof~"."~Method~" as @safe.");
+						v = () @trusted { return computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ();
+					} else static if (sparam.kind == ParameterKind.internal) {
+						if (auto pv = fieldname in req.params)
+							v = fromRestString!PT(urlDecode(*pv));
+					} else static assert(false, "Unhandled parameter kind.");
+
+					static if (isInstanceOf!(Nullable, PT)) params[i] = v;
+					else if (v.isNull()) {
+						static if (!is(PDefaults[i] == void)) params[i] = PDefaults[i];
+						else enforceBadRequest(false, "Missing non-optional "~sparam.kind.to!string~" parameter '"~(fieldname.length?fieldname:sparam.name)~"'.");
+					} else params[i] = v;
+				}
+			}
+		} catch (Exception e) {
+			handleException(e, HTTPStatus.badRequest);
+			return;
+		}
+
+		static if (isAuthenticated!(T, Func)) {
+			try handleAuthorization!(T, Func, params)(auth_info);
+			catch (Exception e) {
+				handleException(e, HTTPStatus.forbidden);
+				return false;
+			}
+		}
 
 		void handleCors()
 		{
@@ -1414,26 +1491,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 					else res.writeJsonBody(ret);
 				}();
 			}
-		} catch (HTTPStatusException e) {
-			if (res.headerWritten)
-				logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
-			else {
-				returnHeaders();
-				res.writeJsonBody([ "statusMessage": e.msg ], e.status);
-			}
 		} catch (Exception e) {
-			// TODO: better error description!
-			logDebug("REST handler exception: %s", () @trusted { return e.toString(); } ());
-			if (res.headerWritten) logDebug("Response already started. Client will not receive an error code!");
-			else
-			{
-				returnHeaders();
-				debug res.writeJsonBody(
-						[ "statusMessage": e.msg, "statusDebugMessage": () @trusted { return sanitizeUTF8(cast(ubyte[])e.toString()); } () ],
-						HTTPStatus.internalServerError
-					);
-				else res.writeJsonBody(["statusMessage": e.msg], HTTPStatus.internalServerError);
-			}
+			returnHeaders();
+			handleException(e, HTTPStatus.internalServerError);
 		}
 	}
 
@@ -1458,7 +1518,6 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
  */
 private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange routes, RestInterfaceSettings settings = null)
 {
-	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 	import std.algorithm : map, joiner, any;
 	import std.conv : text;
 	import std.array : array;
