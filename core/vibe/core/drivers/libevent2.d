@@ -389,8 +389,29 @@ final class Libevent2Driver : EventDriver {
 
 	Libevent2TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) @safe connection_callback, string address, TCPListenOptions options)
 	{
-		auto bind_addr = resolveHost(address, AF_UNSPEC, false);
-		bind_addr.port = port;
+		NetworkAddress bind_addr;
+		version(Posix)
+		{
+			import core.sys.posix.sys.un;
+			import core.stdc.string : strcpy;
+
+			if (address[0] == '/')
+			{
+				bind_addr.family = AF_UNIX;
+				sockaddr_un* s = bind_addr.sockAddrUnix();
+				enforce(s.sun_path.length > address.length, "Unix sockets cannot have that long a name.");
+				s.sun_family = AF_UNIX;
+				() @trusted { strcpy(cast(char*)s.sun_path.ptr,address.toStringz()); } ();
+			} else
+			{
+				bind_addr = resolveHost(address, AF_UNSPEC, false);
+				bind_addr.port = port;
+			}
+		} else
+		{
+			bind_addr = resolveHost(address, AF_UNSPEC, false);
+			bind_addr.port = port;
+		}
 
 		auto listenfd_raw = () @trusted { return socket(bind_addr.family, SOCK_STREAM, 0); } ();
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
