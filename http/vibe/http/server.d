@@ -52,6 +52,14 @@ else version (Have_botan) {}
 else version (Have_openssl) {}
 else version = HaveNoTLS;
 
+version(Posix)
+{
+	version(VibeLibeventDriver)
+	{
+		version = UnixSocket;
+	}
+}
+
 /**************************************************************************************************/
 /* Public functions                                                                               */
 /**************************************************************************************************/
@@ -1750,7 +1758,18 @@ struct HTTPListener {
 				if (l.removeVirtualHost(vhid)) {
 					if (!l.hasVirtualHosts) {
 						l.m_listener.stopListening();
-						logInfo("Stopped to listen for HTTP%s requests on %s:%s", l.tlsContext ? "S": "", l.bindAddress, l.bindPort);
+						version(UnixSocket)
+						{
+							if (l.bindAddress[0] == '/') {
+								logInfo("Stopped to listen for HTTP%s requests on %s", l.tlsContext ? "S": "", l.bindAddress);
+							}
+							else {
+								logInfo("Stopped to listen for HTTP%s requests on %s:%s", l.tlsContext ? "S": "", l.bindAddress, l.bindPort);
+							}
+						}
+						else {
+							logInfo("Stopped to listen for HTTP%s requests on %s:%s", l.tlsContext ? "S": "", l.bindAddress, l.bindPort);
+						}
 						s_listeners = s_listeners[0 .. lidx] ~ s_listeners[lidx+1 .. $];
 					}
 				}
@@ -2005,10 +2024,27 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 			auto proto = listen_info.tlsContext ? "https" : "http";
 			auto urladdr = listen_info.bindAddress;
 			if (urladdr.canFind(':')) urladdr = "["~urladdr~"]";
+			version(UnixSocket) if (urladdr[0] == '/') {
+				proto ~= "+unix";
+				logInfo("Listening for requests on %s://%s/", proto, urladdr);
+				return ret;
+			}
 			logInfo("Listening for requests on %s://%s:%s/", proto, urladdr, listen_info.bindPort);
 			return ret;
 		} catch( Exception e ) {
-			logWarn("Failed to listen on %s:%s", listen_info.bindAddress, listen_info.bindPort);
+			version(UnixSocket)
+			{
+				if (listen_info.bindAddress[0] == '/') {
+					logWarn("Failed to listen on %s", listen_info.bindAddress);
+				}
+				else {
+					logWarn("Failed to listen on %s:%s", listen_info.bindAddress, listen_info.bindPort);
+				}
+			}
+			else
+			{
+				logWarn("Failed to listen on %s:%s", listen_info.bindAddress, listen_info.bindPort);
+			}
 			return TCPListener.init;
 		}
 	}
