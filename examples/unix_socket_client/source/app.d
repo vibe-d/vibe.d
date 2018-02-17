@@ -5,7 +5,7 @@ import std.stdio;
 
 void main()
 {
-	URL url = URL("http+unix://%2Fvar%2Frun%2Fdocker.sock/containers/json");
+	URL url = URL("http+unix://%2Ftmp%2Fvibe.sock/hello");
 	writeln(url);
 	requestHTTP(url,(scope req){},(scope res){
 		writeln(res.bodyReader.readAllUTF8);
