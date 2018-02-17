@@ -130,7 +130,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		}
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
-	
+
 	@property void writeTimeout(Duration v)
 	{
 		m_writeTimeout = v;

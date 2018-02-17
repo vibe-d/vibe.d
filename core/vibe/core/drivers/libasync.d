@@ -1138,7 +1138,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	}
 
 	override @property Duration readTimeout() const { return m_settings.readTimeout; }
-	
+
 	override @property void writeTimeout(Duration dur)
 	{
 		m_settings.writeTimeout = dur;

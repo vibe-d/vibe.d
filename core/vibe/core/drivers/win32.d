@@ -1187,7 +1187,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, &vdw, vdw.sizeof);
 	}
 	override @property Duration readTimeout() const { return m_readTimeout; }
-	
+
 	override @property void writeTimeout(Duration v)
 	{
 		m_writeTimeout = v;
