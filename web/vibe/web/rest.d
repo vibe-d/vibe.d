@@ -1362,14 +1362,16 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			}
 		}
 
-		try {
-			static if (isAuthenticated!(T, Func)) {
-				auto auth_info = handleAuthentication!Func(inst, req, res);
-				if (res.headerWritten) return;
+		static if (isAuthenticated!(T, Func)) {
+			typeof(handleAuthentication!Func(inst, req, res)) auth_info;
+
+			try auth_info = handleAuthentication!Func(inst, req, res);
+			catch (Exception e) {
+				handleException(e, HTTPStatus.unauthorized);
+				return;
 			}
-		} catch (Exception e) {
-			handleException(e, HTTPStatus.unauthorized);
-			return;
+
+			if (res.headerWritten) return;
 		}
 
 
@@ -1427,7 +1429,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			try handleAuthorization!(T, Func, params)(auth_info);
 			catch (Exception e) {
 				handleException(e, HTTPStatus.forbidden);
-				return false;
+				return;
 			}
 		}
 
