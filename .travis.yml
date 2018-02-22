@@ -52,7 +52,7 @@ matrix:
 
 before_install:
   - pyenv global system 3.6
-  - pip3 install 'git+git://github.com/mesonbuild/meson.git@ca2db0f482e17b89d1b05ad056e4815bac4ad95d'
+  - pip3 install 'meson>=0.44.1'
 
 install:
   - mkdir .ntmp
