@@ -90,11 +90,12 @@ void runTest()
 	router.registerRestInterface(new LocalAPI);
 
 	auto settings = new HTTPServerSettings;
+	settings.port = 0;
+	settings.bindAddresses = ["127.0.0.1"];
 	settings.disableDistHost = true;
-	settings.port = 8000;
-	listenHTTP(settings, router);
+	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
-	auto api = new RestInterfaceClient!API("http://127.0.0.1:8000/");
+	auto api = new RestInterfaceClient!API("http://" ~ serverAddr.toString);
 	assert(api.items["foo"].subItems.length == 2);
 	assert(api.items["foo"].subItems[0].name == "hello");
 	assert(api.items["foo"].subItems[1].name == "world");

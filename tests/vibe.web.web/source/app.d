@@ -13,19 +13,17 @@ import std.format : format;
 shared static this()
 {
 	auto settings = new HTTPServerSettings;
+	settings.port = 0;
 	settings.bindAddresses = ["127.0.0.1"];
-	settings.port = 9132;
-
 	auto router = new URLRouter;
 	router.registerWebInterface(new Service);
-
-	listenHTTP(settings, router);
+	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
 	runTask({
 		scope (exit) exitEventLoop();
 
 		void test(string url, HTTPStatus expected) {
-			requestHTTP("http://127.0.0.1:9132"~url,
+			requestHTTP("http://" ~ serverAddr.toString ~ url,
 				(scope req) {
 				},
 				(scope res) {

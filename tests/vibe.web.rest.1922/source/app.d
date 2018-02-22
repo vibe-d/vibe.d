@@ -5,24 +5,21 @@ import vibe.web.auth;
 void main()
 {
 	auto settings = new HTTPServerSettings;
-	// 10k + issue number -> Avoid bind errors
-	settings.port = 11922;
-	settings.bindAddresses = ["::1", "127.0.0.1"];
-	settings.sessionStore = new MemorySessionStore();
-
+	settings.port = 0;
+	settings.bindAddresses = ["127.0.0.1"];
 	auto router = new URLRouter;
 	router.registerRestInterface(new AuthAPI);
-	listenHTTP(settings, router);
+	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
 	runTask({
 		scope(exit) exitEventLoop();
 
-		void test(string endpoint, string user, HTTPStatus expected = HTTPStatus.ok){
-			requestHTTP("http://127.0.0.1:11922"~endpoint, (scope req){
+		void test(string url, string user, HTTPStatus expected = HTTPStatus.ok){
+			requestHTTP("http://" ~ serverAddr.toString ~ url, (scope req){
 				if(user !is null)
 					req.headers["AuthUser"] = user;
 			}, (scope res) {
-				assert(res.statusCode == expected, format("Unexpected status code for GET %s (%s): %s\n%s", endpoint, user, res.statusCode,res.readJson));
+				assert(res.statusCode == expected, format("Unexpected status code for GET %s (%s): %s\n%s", url, user, res.statusCode,res.readJson));
 			});
 		}
 

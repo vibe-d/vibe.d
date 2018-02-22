@@ -5,12 +5,12 @@ import vibe.stream.operations;
 
 shared static this()
 {
-	listenTCP(11426, (TCPConnection c) {
+	immutable serverAddr = listenTCP(0, (TCPConnection c) {
 		c.write("HTTP/1.1 200 OK\r\nConnection: Close\r\n\r\nqwerty");
-	}, "127.0.0.1");
+	}, "127.0.0.1").bindAddress;
 
 	runTask({
-		requestHTTP("http://127.0.0.1:11426",
+		requestHTTP("http://" ~ serverAddr.toString,
 			(scope req) {},
 			(scope res) {
 				assert(res.bodyReader.readAllUTF8() == "qwerty");

@@ -9,12 +9,12 @@ void main()
 {
 	version (none) {
 	auto s1 = new HTTPServerSettings;
+	s1.port = 0;
 	s1.bindAddresses = ["::1"];
-	s1.port = 11388;
-	listenHTTP(s1, &handler);
+	immutable serverAddr = listenHTTP(s1, &handler).bindAddresses[0];
 
 	runTask({
-		auto conn = connectTCP("::1", 11388);
+		auto conn = connectTCP(serverAddr);
 		conn.write("GET / HTTP/1.1\r\nHost: [::1]\r\n\r\n");
 		string res = cast(string)conn.readLine();
 		assert(res == "HTTP/1.1 200 OK", res);
@@ -35,7 +35,7 @@ void main()
 	}
 
 	import vibe.core.log : logWarn;
-	logWarn("Test disabled due to issues listening on ::1 on Travis-CI");
+	logWarn("Test disabled due to missing IPv6 support (loopback) on Travis-CI");
 }
 
 void handler(scope HTTPServerRequest req, scope HTTPServerResponse res)

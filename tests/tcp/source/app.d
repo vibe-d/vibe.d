@@ -5,8 +5,6 @@ import vibe.stream.operations;
 import core.time;
 import std.datetime : StopWatch;
 
-enum port = 12675;
-
 enum Test {
   receive,
   receiveExisting,
@@ -20,7 +18,7 @@ void test1()
 	Test test;
 	Task lt;
 
-	listenTCP(port, (conn) {
+	auto l = listenTCP(0, (conn) {
 		lt = Task.getThis();
 		try {
 			while (!conn.empty) {
@@ -66,8 +64,9 @@ void test1()
 			assert(false, e.msg);
 		}
 	}, "127.0.0.1");
+	scope (exit) l.stopListening;
 
-	auto conn = connectTCP("127.0.0.1", port);
+	auto conn = connectTCP(l.bindAddress);
 
 	test = Test.receive;
 	conn.write("next\r\n");
@@ -105,7 +104,7 @@ void test2()
 {
 	Task lt;
 	logInfo("Perform test \"disconnect with pending data\"");
-	listenTCP(port+1, (conn) {
+	auto l = listenTCP(0, (conn) {
 		try {
 			lt = Task.getThis();
 			sleep(1.seconds);
@@ -124,8 +123,9 @@ void test2()
 			assert(false, e.msg);
 		}
 	}, "127.0.0.1");
+	scope (exit) l.stopListening;
 
-	auto conn = connectTCP("127.0.0.1", port+1);
+	auto conn = connectTCP(l.bindAddress);
 	conn.write("test");
 	conn.close();
 
