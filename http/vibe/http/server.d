@@ -1455,6 +1455,10 @@ final class HTTPServerResponse : HTTPResponse {
 	*/
 	void redirect(string url, int status = HTTPStatus.Found)
 	@safe {
+		// Disallow any characters that may influence the header parsing
+		enforce(!url.representation.canFind!(ch => ch < 0x20),
+			"Control character in redirection URL.");
+
 		statusCode = status;
 		headers["Location"] = url;
 		writeBody("redirecting...");
