@@ -33,7 +33,7 @@ d:
   - dmd-beta
 
 env:
-  - VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests
+  - VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests,meson
   - VIBED_DRIVER=vibe-core PARTS=builds,unittests,examples,tests
   - VIBED_DRIVER=libasync PARTS=builds,unittests
 
