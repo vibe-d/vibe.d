@@ -33,7 +33,7 @@ d:
   - dmd-beta
 
 env:
-  - VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests
+  - VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests,meson
   - VIBED_DRIVER=vibe-core PARTS=builds,unittests,examples,tests
   - VIBED_DRIVER=libasync PARTS=builds,unittests
 
@@ -52,7 +52,7 @@ matrix:
 
 before_install:
   - pyenv global system 3.6
-  - pip3 install 'git+git://github.com/mesonbuild/meson.git@ca2db0f482e17b89d1b05ad056e4815bac4ad95d'
+  - pip3 install 'meson>=0.44.1'
 
 install:
   - mkdir .ntmp
