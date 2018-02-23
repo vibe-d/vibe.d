@@ -38,6 +38,9 @@ void testProtocol(TCPConnection server, bool terminate)
 
 void runTest()
 {
+	import std.algorithm : find;
+	import std.socket : AddressFamily;
+
 	// server for a simple line based protocol
 	auto l1 = listenTCP(0, (client) {
 		while (!client.empty) {
@@ -50,7 +53,7 @@ void runTest()
 
 			client.write(format("Hash: %08X\r\n", typeid(string).getHash(&ln)));
 		}
-	})[0];
+	}).find!(l => l.bindAddress.family == AddressFamily.INET).front;
 	scope (exit) l1.stopListening;
 
 	// proxy server
@@ -71,7 +74,7 @@ void runTest()
 		}
 		server.write(client);
 		logInfo("Proxy out");
-	})[0];
+	}).find!(l => l.bindAddress.family == AddressFamily.INET).front;
 	scope (exit) l2.stopListening;
 
 	// test server
