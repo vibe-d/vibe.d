@@ -1,0 +1,6 @@
+{
+	"name": "2080",
+	"dependencies": {
+		"vibe-d:http": { "path": "../../" }
+	}
+}
