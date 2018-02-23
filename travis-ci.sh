@@ -53,8 +53,12 @@ fi
 if [[ $PARTS =~ (^|,)tests(,|$) ]]; then
     for ex in `\ls -1 tests/`; do
         if [ -r tests/$ex/dub.json ] || [ -r tests/$ex/dub.sdl ]; then
-            echo "[INFO] Running test $ex"
-            (cd tests/$ex && dub --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS && dub clean)
+            if [ $ex == "vibe.http.client.2080" ]; then
+                echo "[WARNING] Skipping test $ex due to TravisCI incompatibility".
+            else
+                echo "[INFO] Running test $ex"
+                (cd tests/$ex && dub --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS && dub clean)
+            fi
         fi
     done
 fi
