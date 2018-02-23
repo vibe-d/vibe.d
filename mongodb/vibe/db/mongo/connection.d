@@ -184,8 +184,8 @@ final class MongoConnection {
 		m_bytesRead = 0;
 		if(m_settings.digest != string.init)
 		{
-			if (m_settings.authMechanism == MongoAuthMechanism.none)
-				authenticate();
+			if (m_settings.authMechanism == MongoAuthMechanism.mongoDBCR)
+				authenticate(); // use old mechanism if explicitly stated
 			else {
 				/**
 				SCRAM-SHA-1 was released in March 2015 and on a properly
@@ -194,9 +194,9 @@ final class MongoConnection {
 				no authentication is tried in case of an error.
 				*/
 				try
-					scramAuthenticate();
+					scramAuthenticate(); // scram-sha-1 is default in version v3.0+
 				catch (MongoAuthException e)
-					authenticate();
+					authenticate(); // fall back if scram-sha-1 fails
 			}
 
 		}
