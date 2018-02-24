@@ -131,6 +131,7 @@ struct Path {
 		m_nodes = splitPath(pathstr);
 		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && (m_nodes[0].toString().canFind(':') || m_nodes[0] == "\\"));
 		m_endsWithSlash = pathstr.endsWith("/");
+		version(Windows) m_endsWithSlash |= pathstr.endsWith(`\`);
 	}
 
 	/// Constructs a path object from a list of PathEntry objects.
@@ -427,6 +428,14 @@ unittest
 		assert(p1.relativeTo(p2).toString() == "");
 		assert(p2.relativeTo(p2).toString() == "./");
 		assert(p2.relativeTo(p1).toString() == "./");
+	}
+
+	// trailing back-slash on Windows
+	version(Windows)
+	{
+		auto winpath = "C:\\windows\\test\\";
+		auto winpathp = Path(winpath);
+		assert(winpathp.toNativeString() == winpath);
 	}
 }
 
