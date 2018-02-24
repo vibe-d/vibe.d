@@ -11,6 +11,7 @@ module vibe.http.auth.digest_auth;
 
 import vibe.http.server;
 import vibe.core.log;
+import vibe.inet.url;
 
 import std.base64;
 import std.datetime;
@@ -179,3 +180,132 @@ string createDigestPassword(string realm, string user, string password)
 }
 
 alias DigestHashCallback = string delegate(string realm, string user);
+
+/// Structure which describes requirements of the digest authentication - see https://tools.ietf.org/html/rfc2617
+struct DigestAuthParams {
+	enum Qop { none = 0, auth = 1, auth_int = 2 }
+	enum Algorithm { none = 0, md5 = 1, md5_sess = 2 }
+
+	string realm, domain, nonce, opaque;
+	Algorithm algorithm = Algorithm.md5;
+	bool stale;
+	Qop qop;
+
+	/// Parses WWW-Authenticate header value with the digest parameters
+	this(string auth) {
+		import std.algorithm : splitter;
+
+		assert(auth.startsWith("Digest "), "Correct Digest authentication request not provided");
+
+		foreach (param; auth["Digest ".length..$].splitter(','))
+		{
+			auto idx = param.indexOf("=");
+			if (idx <= 0) {
+				logError("Invalid parameter in auth header: %s (%s)", param, auth);
+				continue;
+			}
+			auto k = param[0..idx];
+			auto v = param[idx+1..$];
+			switch (k.strip().toLower()) {
+				default: break;
+				case "realm": realm = v[1..$-1]; break;
+				case "domain": domain = v[1..$-1]; break;
+				case "nonce": nonce = v[1..$-1]; break;
+				case "opaque": opaque = v[1..$-1]; break;
+				case "stale": stale = v.toLower() == "true"; break;
+				case "algorithm":
+					switch (v) {
+						default: break;
+						case "MD5": algorithm = Algorithm.md5; break;
+						case "MD5-sess": algorithm = Algorithm.md5_sess; break;
+					}
+					break;
+				case "qop":
+					foreach (q; v[1..$-1].splitter(',')) {
+						switch (q) {
+							default: break;
+							case "auth": qop |= Qop.auth; break;
+							case "auth-int": qop |= Qop.auth_int; break;
+						}
+					}
+					break;
+			}
+		}
+	}
+}
+
+/**
+	Creates the digest authorization request header.
+
+	Params:
+		username = user name
+		password = user password
+		url = requested url
+		auth = value from the WWW-Authenticate response header
+		cnonce = client generated unique data string (required only when some qop is requested)
+		nc = the count of requests sent by the client (required only when some qop is requested)
+		entityBody = request entity body required only if qop==auth-int
+*/
+auto createDigestAuthHeader(U)(HTTPMethod method, U url, string username, string password, DigestAuthParams auth,
+	string cnonce = null, int nc = 0, in ubyte[] entityBody = null)
+if (is(U == string) || is(U == URL)) {
+
+	import std.array : appender;
+	import std.format : formattedWrite;
+
+	auto getHA1(string username, string password, string realm, string nonce = null, string cnonce = null) {
+
+		assert((nonce is null && cnonce is null) || (nonce !is null && cnonce !is null));
+
+		auto ha1 = toHexString!(LetterCase.lower)(md5Of(format("%s:%s:%s", username, realm, password))).dup;
+		if (nonce !is null) ha1 = toHexString!(LetterCase.lower)(md5Of(format("%s:%s:%s", ha1, nonce, cnonce))).dup;
+		return ha1;
+	}
+
+	auto getHA2(HTTPMethod method, string uri, in ubyte[] ebody = null) {
+		return ebody is null
+			? toHexString!(LetterCase.lower)(md5Of(format("%s:%s", method, uri))).dup
+			: toHexString!(LetterCase.lower)(md5Of(format("%s:%s:%s", method, uri, toHexString!(LetterCase.lower)(md5Of(ebody)).dup))).dup;
+	}
+
+	static if (is(U == string)) auto uri = URL(url).pathString;
+	else auto uri = url.pathString;
+
+	auto dig = appender!string();
+	dig ~= "Digest ";
+	dig ~= `username="`; dig ~= username; dig ~= `", `;
+	dig ~= `realm="`; dig ~= auth.realm; dig ~= `", `;
+	dig ~= `nonce="`; dig ~= auth.nonce; dig ~= `", `;
+	dig ~= `uri="`; dig ~= uri; dig ~= `", `;
+	if (auth.opaque.length) { dig ~= `opaque="`; dig ~= auth.opaque; dig ~= `", `; }
+
+	//choose one of provided qop
+	DigestAuthParams.Qop qop;
+	if ((auth.qop & DigestAuthParams.Qop.auth) == DigestAuthParams.Qop.auth) qop = DigestAuthParams.Qop.auth;
+	else if ((auth.qop & DigestAuthParams.Qop.auth_int) == DigestAuthParams.Qop.auth_int) qop = DigestAuthParams.Qop.auth_int;
+
+	if (qop != DigestAuthParams.Qop.none) {
+		assert(cnonce !is null, "cnonce is required");
+		assert(nc != 0, "nc is required");
+
+		dig ~= `qop="`; dig ~= qop == DigestAuthParams.Qop.auth ? "auth" : "auth-int"; dig ~= `", `;
+		dig ~= `cnonce="`; dig ~= cnonce; dig ~= `", `;
+		dig ~= `nc="`; dig.formattedWrite("%08x", nc); dig ~= `", `;
+	}
+
+	auto ha1 = auth.algorithm == DigestAuthParams.Algorithm.md5_sess
+		? getHA1(username, password, auth.realm, auth.nonce, cnonce)
+		: getHA1(username, password, auth.realm);
+
+	auto ha2 = qop != DigestAuthParams.Qop.auth_int
+		? getHA2(method, uri)
+		: getHA2(method, uri, entityBody);
+
+	auto resp = qop == DigestAuthParams.Qop.none
+		? toHexString!(LetterCase.lower)(md5Of(format("%s:%s:%s", ha1, auth.nonce, ha2))).dup
+		: toHexString!(LetterCase.lower)(md5Of(format("%s:%s:%08x:%s:%s:%s", ha1, auth.nonce, nc, cnonce, qop == DigestAuthParams.Qop.auth ? "auth" : "auth-int" , ha2))).dup;
+
+	dig ~= `response="`; dig ~= resp; dig ~= `"`;
+
+	return dig.data;
+}
