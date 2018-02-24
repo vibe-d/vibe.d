@@ -47,18 +47,16 @@ enum Param3 = 1;
 shared static this()
 {
 	auto settings = new HTTPServerSettings;
-    // 10k + issue number -> Avoid bind errors
-	settings.port = 11140;
-	settings.bindAddresses = ["::1", "127.0.0.1"];
-
+	settings.port = 0;
+	settings.bindAddresses = ["127.0.0.1"];
 	auto router = new URLRouter;
 	router.registerRestInterface(new OrientDBRoot);
-	listenHTTP(settings, router);
+	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
 	setTimer(1.seconds, {
 			scope (exit) exitEventLoop(true);
 			auto api = new RestInterfaceClient!IOrientDBRoot(
-				"http://127.0.0.1:11140/");
+				"http://"~serverAddr.toString);
 			api.query.sql(Param1, Param2, Param3);
 			api.query.sql2(Param1, Param2ALT, Param3);
 		});

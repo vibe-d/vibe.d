@@ -7,7 +7,7 @@ ubyte[] buf;
 
 void performTest(bool reverse)
 {
-	auto l = listenTCP(11375, (conn) {
+	auto l = listenTCP(0, (conn) {
 		bool read_ex = false;
 		bool write_ex = false;
 		auto rt = runTask!TCPConnection((conn) {
@@ -42,7 +42,7 @@ void performTest(bool reverse)
 
 	runTask({
 		try {
-			auto conn = connectTCP("127.0.0.1", 11375);
+			auto conn = connectTCP(l.bindAddress);
 			sleep(reverse ? 20.msecs : 100.msecs);
 			conn.close();
 		} catch (Exception e) assert(false, e.msg);

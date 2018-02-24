@@ -9,25 +9,24 @@ shared static this()
 {
 	// determine external network interface
 	auto ec = connectTCP("vibed.org", 80);
-	auto li = ec.localAddress;
+	auto externalAddr = ec.localAddress;
 	ec.close();
-	li.port = 0;
-	logInfo("External interface: %s", li.toString());
+	logInfo("External interface: %s", externalAddr.toString());
 
 	auto settings = new HTTPServerSettings;
-	// 10k + issue number -> Avoid bind errors
-	settings.port = 11389;
-	settings.bindAddresses = [li.toAddressString()];
-	listenHTTP(settings, (req, res) {
+	settings.port = 0;
+	settings.bindAddresses = [externalAddr.toAddressString()];
+	immutable serverAddr = listenHTTP(settings, (req, res) {
 		if (req.clientAddress.toAddressString() == "127.0.0.1")
 			res.writeBody("local");
 		else res.writeBody("remote");
-	});
+	}).bindAddresses[0];
 
 	runTask({
 		scope(exit) exitEventLoop(true);
 
-		auto url = "http://"~li.toAddressString~":11389/";
+		auto url = "http://"~serverAddr.toString;
+		logInfo(url);
 
 		auto cs = new HTTPClientSettings;
 		cs.networkInterface = resolveHost("127.0.0.1");
@@ -35,7 +34,7 @@ shared static this()
 		assert(res == "local", "Unexpected reply: "~res);
 
 		auto cs2 = new HTTPClientSettings;
-		cs2.networkInterface = li;
+		cs2.networkInterface = resolveHost(externalAddr.toAddressString());
 		res = requestHTTP(url, null, cs2).bodyReader.readAllUTF8();
 		assert(res == "remote", "Unexpected reply: "~res);
     });

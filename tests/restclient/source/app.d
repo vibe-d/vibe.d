@@ -177,10 +177,13 @@ void runTest()
 
 	auto settings = new HTTPServerSettings;
 	settings.disableDistHost = true;
-	settings.port = 8000;
-	listenHTTP(settings, router);
+	settings.port = 0;
+	settings.bindAddresses = ["127.0.0.1"];
+	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
-	auto api = new RestInterfaceClient!ITestAPI("http://127.0.0.1:8000/root/");
+	immutable url = "http://" ~ serverAddr.toString;
+
+	auto api = new RestInterfaceClient!ITestAPI(url ~ "/root/");
 	assert(api.getInfo() == "description");
 	assert(api.info() == "description2");
 	assert(api.customParameters("one", "two") == "onetwo");
@@ -192,19 +195,19 @@ void runTest()
 	assert(api.sub.get(5) == 5);
 	assert(api.testKeyword(3, 4) == 7);
 
-	assertCorsFails("http://127.0.0.1:8000/cors1/foo", HTTPMethod.GET, "www.non-existent.com");
-	assertCorsPasses("http://127.0.0.1:8000/cors1/foo", HTTPMethod.GET, "www.foobar.com");
-	assertCorsPasses("http://127.0.0.1:8000/cors1/foo", HTTPMethod.GET, "www.example.com");
-	assertCorsPasses("http://127.0.0.1:8000/cors2/foo", HTTPMethod.GET, "www.abcdefg.com");
-	assertCorsPasses("http://127.0.0.1:8000/cors3/foo", HTTPMethod.GET, "www.foobar.com");
-	assertCorsFails("http://127.0.0.1:8000/cors3/foo", HTTPMethod.GET, "www.bazbaz.com");
+	assertCorsFails(url ~ "/cors1/foo", HTTPMethod.GET, "www.non-existent.com");
+	assertCorsPasses(url ~ "/cors1/foo", HTTPMethod.GET, "www.foobar.com");
+	assertCorsPasses(url ~ "/cors1/foo", HTTPMethod.GET, "www.example.com");
+	assertCorsPasses(url ~ "/cors2/foo", HTTPMethod.GET, "www.abcdefg.com");
+	assertCorsPasses(url ~ "/cors3/foo", HTTPMethod.GET, "www.foobar.com");
+	assertCorsFails(url ~ "/cors3/foo", HTTPMethod.GET, "www.bazbaz.com");
 
-	testAllowHeader("http://127.0.0.1:8000/cors1/foo",   [HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
-	testAllowHeader("http://127.0.0.1:8000/cors1/bar/6", [HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
-	testAllowHeader("http://127.0.0.1:8000/cors1/7/foo", [HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
-	testCors("http://127.0.0.1:8000/cors1/foo", 			[HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
-	testCors("http://127.0.0.1:8000/cors1/bar/6", 		[HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
-	testCors("http://127.0.0.1:8000/cors1/7/foo", 		[HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
+	testAllowHeader(url ~ "/cors1/foo",   [HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
+	testAllowHeader(url ~ "/cors1/bar/6", [HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
+	testAllowHeader(url ~ "/cors1/7/foo", [HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
+	testCors(url ~ "/cors1/foo", 			[HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
+	testCors(url ~ "/cors1/bar/6", 		[HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
+	testCors(url ~ "/cors1/7/foo", 		[HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
 
 	exitEventLoop(true);
 }

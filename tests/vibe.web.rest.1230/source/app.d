@@ -15,21 +15,21 @@ class Test : ITestAPI {
 shared static this()
 {
 	auto settings = new HTTPServerSettings;
- 	settings.port = 11230;
-	settings.bindAddresses = ["::1", "127.0.0.1"];
+	settings.port = 0;
+	settings.bindAddresses = ["127.0.0.1"];
 
 	auto router = new URLRouter;
 	router.registerRestInterface(new Test);
-	listenHTTP(settings, router);
+	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
 	runTask({
 		scope (exit) exitEventLoop(true);
 		auto api = new RestInterfaceClient!ITestAPI(
-			"http://127.0.0.1:11230/");
+			"http://" ~ serverAddr.toString);
 		assert(api.postDefault(42, true) == "Value: 42, Check: true");
 		assert(api.postDefault(42, false) == "Value: 42, Check: false");
 		assert(api.postDefault(42) == "Value: 42, Check: true");
-		requestHTTP("http://127.0.0.1:11230/default",
+		requestHTTP("http://" ~ serverAddr.toString ~ "/default",
 			(scope req) {
 				req.method = HTTPMethod.POST;
 				req.writeBody(cast(const(ubyte)[])`{"value":42}`, "application/json");
@@ -39,7 +39,7 @@ shared static this()
 				assert(res.readJson.get!string == "Value: 42, Check: true");
 			}
 		);
-		requestHTTP("http://127.0.0.1:11230/default",
+		requestHTTP("http://" ~ serverAddr.toString ~ "/default",
 			(scope req) {
 				req.method = HTTPMethod.POST;
 				req.writeBody(cast(const(ubyte)[])`{"value":42,"check":true}`, "application/json");

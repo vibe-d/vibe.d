@@ -4,18 +4,17 @@ import std.datetime;
 shared static this()
 {
 	auto settings = new HTTPServerSettings;
-    // 10k + issue number -> Avoid bind errors
-	settings.port = 11125;
-	settings.bindAddresses = ["::1", "127.0.0.1"];
-    auto router = new URLRouter;
-    router.registerRestInterface(new Llama);
-    listenHTTP(settings, router);
+	settings.port = 0;
+	settings.bindAddresses = ["127.0.0.1"];
+	auto router = new URLRouter;
+	router.registerRestInterface(new Llama);
+	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
     // Client
     setTimer(1.seconds, {
             scope(exit) exitEventLoop(true);
 
-            auto api = new RestInterfaceClient!ILlama("http://127.0.0.1:11125/");
+            auto api = new RestInterfaceClient!ILlama("http://"~serverAddr.toString);
             auto r = api.updateLlama("llama");
             assert(r == "llama", "[vibe.web.rest.1125.Client] Expected llama, got: " ~ r);
         });

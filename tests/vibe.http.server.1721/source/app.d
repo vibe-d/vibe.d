@@ -11,15 +11,15 @@ shared static this()
 {
 	auto s1 = new HTTPServerSettings;
 	s1.options &= ~HTTPServerOption.errorStackTraces;
+	s1.port = 0;
 	s1.bindAddresses = ["127.0.0.1"];
-	s1.port = 11721;
-	listenHTTP(s1, &handler);
+	immutable serverAddr = listenHTTP(s1, &handler).bindAddresses[0];
 
 	runTask({
 		scope (exit) exitEventLoop();
 
 		try {
-			auto conn = connectTCP("127.0.0.1", 11721);
+			auto conn = connectTCP(serverAddr);
 			conn.write("GET / HTTP/1.0\r\n\r\n");
 			string res = cast(string)conn.readLine();
 			assert(res == "HTTP/1.0 200 OK", res);

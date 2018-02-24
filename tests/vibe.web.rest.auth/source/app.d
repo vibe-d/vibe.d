@@ -17,18 +17,18 @@ import std.format : format;
 shared static this()
 {
 	auto settings = new HTTPServerSettings;
-	settings.port = 9128;
-	settings.bindAddresses = ["::1", "127.0.0.1"];
-    auto router = new URLRouter;
-    router.registerRestInterface(new Service);
-    listenHTTP(settings, router);
+	settings.port = 0;
+	settings.bindAddresses = ["127.0.0.1"];
+	auto router = new URLRouter;
+	router.registerRestInterface(new Service);
+	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
     runTask({
         scope (exit) exitEventLoop();
 
         void test(string url, string user, HTTPStatus expected)
         {
-            requestHTTP("http://127.0.0.1:9128"~url, (scope req) {
+            requestHTTP("http://" ~ serverAddr.toString ~ url, (scope req) {
                 if (user !is null) req.addBasicAuth(user, "secret");
             }, (scope res) {
                 res.dropBody();
