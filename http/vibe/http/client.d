@@ -79,6 +79,8 @@ HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientR
 /// ditto
 HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester = null, const(HTTPClientSettings) settings = defaultSettings)
 {
+	import std.algorithm.searching : canFind;
+
 	version(UnixSocket) {
 		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
 	} else {
@@ -99,27 +101,29 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 
 	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
 	auto res = cli.request((req){
-			if (url.localURI.length) {
-				assert(url.path.absolute, "Request URL path must be absolute.");
-				req.requestURL = url.localURI;
-			}
-			if (settings.proxyURL.schema !is null)
-				req.requestURL = url.toString(); // proxy exception to the URL representation
+		if (url.localURI.length) {
+			assert(url.path.absolute, "Request URL path must be absolute.");
+			req.requestURL = url.localURI;
+		}
+		if (settings.proxyURL.schema !is null)
+			req.requestURL = url.toString(); // proxy exception to the URL representation
 
-			// Provide port number when it is not the default one (RFC2616 section 14.23)
-			if (url.port && url.port != url.defaultPort)
-				req.headers["Host"] = format("%s:%d", url.host, url.port);
-			else
-				req.headers["Host"] = url.host;
+		// Provide port number when it is not the default one (RFC2616 section 14.23)
+		// IPv6 addresses need to be put into brackets
+		auto hoststr = url.host.canFind(':') ? "["~url.host~"]" : url.host;
+		if (url.port && url.port != url.defaultPort)
+			req.headers["Host"] = format("%s:%d", hoststr, url.port);
+		else
+			req.headers["Host"] = hoststr;
 
-			if ("authorization" !in req.headers && url.username != "") {
-				import std.base64;
-				string pwstr = url.username ~ ":" ~ url.password;
-				req.headers["Authorization"] = "Basic " ~
-					cast(string)Base64.encode(cast(ubyte[])pwstr);
-			}
-			if (requester) requester(req);
-		});
+		if ("authorization" !in req.headers && url.username != "") {
+			import std.base64;
+			string pwstr = url.username ~ ":" ~ url.password;
+			req.headers["Authorization"] = "Basic " ~
+				cast(string)Base64.encode(cast(ubyte[])pwstr);
+		}
+		if (requester) requester(req);
+	});
 
 	// make sure the connection stays locked if the body still needs to be read
 	if( res.m_client ) res.lockedConnection = cli;
