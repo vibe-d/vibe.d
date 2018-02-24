@@ -71,15 +71,16 @@ public import vibe.data.serialization;
 public import std.json : JSONException;
 import std.algorithm;
 import std.array;
+import std.bigint;
 import std.conv;
 import std.datetime;
 import std.exception;
 import std.format;
-import std.string;
+import std.json : JSONValue, JSON_TYPE;
 import std.range;
+import std.string;
 import std.traits;
 import std.typecons : Tuple;
-import std.bigint;
 
 /******************************************************************************/
 /* public types                                                               */
@@ -1071,6 +1072,76 @@ struct Json {
 		return ret.data;
 	}
 
+	/**
+		Converts this Json object to a std.json.JSONValue object
+	 */
+	JSONValue toJSONValue()
+	const @safe {
+		final switch (type) {
+			case Json.Type.undefined:
+			case Json.Type.null_:
+				return JSONValue(null);
+			case Json.Type.bool_:
+				return JSONValue(get!bool);
+			case Json.Type.int_:
+				return JSONValue(get!long);
+			case Json.Type.bigInt:
+				auto bi = get!BigInt;
+				if (bi > long.max)
+					return JSONValue((() @trusted => cast(ulong)get!BigInt)());
+				else
+					return JSONValue((() @trusted => cast(long)get!BigInt)());
+			case Json.Type.float_:
+				return JSONValue(get!double);
+			case Json.Type.string:
+				return JSONValue(get!string);
+			case Json.Type.array:
+				JSONValue[] ret;
+				foreach (ref const Json e; byValue)
+					ret ~= e.toJSONValue;
+				return JSONValue(ret);
+			case Json.Type.object:
+				JSONValue[string] ret;
+				foreach (string k, ref const Json e; byKeyValue) {
+					if( e.type == Json.Type.undefined ) continue;
+					ret[k] = e.toJSONValue;
+				}
+				return JSONValue(ret);
+		}
+	}
+
+	/**
+		Converts a std.json.JSONValue object to a vibe Json object.
+	 */
+	static Json fromJSONValue(in JSONValue value)
+	@safe {
+		final switch (value.type) {
+			case JSON_TYPE.NULL:
+				return Json(null);
+			case JSON_TYPE.OBJECT:
+				return (() @trusted {
+					Json[string] ret;
+					foreach (string k, ref const JSONValue v; value.object)
+						ret[k] = Json.fromJSONValue(v);
+					return Json(ret);
+				})();
+			case JSON_TYPE.ARRAY:
+				return (() @trusted => Json(value.array.map!(a => Json.fromJSONValue(a)).array))();
+			case JSON_TYPE.STRING:
+				return Json(value.str);
+			case JSON_TYPE.INTEGER:
+				return Json(value.integer);
+			case JSON_TYPE.UINTEGER:
+				return Json(BigInt(value.uinteger));
+			case JSON_TYPE.FLOAT:
+				return Json(value.floating);
+			case JSON_TYPE.TRUE:
+				return Json(true);
+			case JSON_TYPE.FALSE:
+				return Json(false);
+		}
+	}
+
 	private void checkType(TYPES...)(string op = null)
 	const {
 		bool matched = false;
@@ -1651,7 +1722,7 @@ unittest { // issue #1660 - deserialize AA whose key type is string-based enum
 struct JsonSerializer {
 	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
 
-	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
+	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json) || is (T == JSONValue); }
 
 	private {
 		Json m_current;
@@ -1679,7 +1750,9 @@ struct JsonSerializer {
 	void writeValue(Traits, T)(in T value)
 		if (!is(T == Json))
 	{
-		static if (isJsonSerializable!T) {
+		static if (is(T == JSONValue)) {
+			m_current = Json.fromJSONValue(value);
+		} else static if (isJsonSerializable!T) {
 			static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
 				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
 			m_current = () @trusted { return value.toJson(); } ();
@@ -1724,6 +1797,7 @@ struct JsonSerializer {
 	T readValue(Traits, T)()
 	@safe {
 		static if (is(T == Json)) return m_current;
+		else static if (is(T == JSONValue)) return m_current.toJSONValue;
 		else static if (isJsonSerializable!T) {
 			static if (!__traits(compiles, () @safe { return T.fromJson(m_current); } ()))
 				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".fromJson() with @safe.");
@@ -1761,7 +1835,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 
 	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
 
-	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
+	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json) || is(T == JSONValue); }
 
 	this(R range)
 	{
@@ -1810,6 +1884,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				m_range.put('"');
 			}
 			else static if (is(T == Json)) m_range.writeJsonString(value);
+			else static if (is(T == JSONValue)) m_range.writeJsonString(() @trusted { return Json.fromJSONValue(value); } ());
 			else static if (isJsonSerializable!T) {
 				static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
 					pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
@@ -1945,6 +2020,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 			else static if (is(T == string)) return m_range.skipJsonString(&m_line);
 			else static if (is(T == Json)) return m_range.parseJson(&m_line);
+			else static if (is(T == JSONValue)) return m_range.parseJson(&m_line).toJSONValue;
 			else static if (isJsonSerializable!T) {
 				static if (!__traits(compiles, () @safe { return T.fromJson(Json.init); } ()))
 					pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".fromJson() with @safe.");
@@ -2514,4 +2590,30 @@ private auto trustedRange(R)(R range)
 	assert(b.foos.length == 1);
 	assert(b.foos[0].i == 2);
 	assert(b.foos[0].foos.length == 0);
+}
+
+@safe unittest { // Json <-> std.json.JSONValue
+	auto astr = `{
+		"null": null,
+		"string": "Hello",
+		"integer": 123456,
+		"uinteger": 18446744073709551614,
+		"float": 12.34,
+		"object": { "hello": "world" },
+		"array": [1, 2, "string"],
+		"true": true,
+		"false": false
+	}`;
+	auto a = parseJsonString(astr);
+
+	// test JSONValue -> Json conversion
+	assert(Json.fromJSONValue(a.toJSONValue) == a);
+
+	// test Json -> JSONValue conversion
+	auto v = a.toJSONValue;
+	assert(deserializeJson!JSONValue(serializeToJson(v)) == v);
+
+	// test JSON strint <-> JSONValue serialization
+	assert(deserializeJson!JSONValue(astr) == v);
+	assert(parseJsonString(serializeToJsonString(v)) == a);
 }
