@@ -81,6 +81,7 @@ import std.range;
 import std.string;
 import std.traits;
 import std.typecons : Tuple;
+import std.uuid;
 
 /******************************************************************************/
 /* public types                                                               */
@@ -198,6 +199,8 @@ struct Json {
 	/// ditto
 	this(string v) @trusted { m_type = Type.string; m_string = v; }
 	/// ditto
+	this(UUID v) { this(v.toString()); }
+	/// ditto
 	this(Json[] v) @trusted { m_type = Type.array; m_array = v; }
 	/// ditto
 	this(Json[string] v) @trusted { m_type = Type.object; m_object = v; }
@@ -276,6 +279,8 @@ struct Json {
 	double opAssign(double v) { runDestructors(); m_type = Type.float_; m_float = v; return v; }
 	/// ditto
 	string opAssign(string v) { runDestructors(); m_type = Type.string; m_string = v; return v; }
+	/// ditto
+	UUID opAssign(UUID v) { opAssign(v.toString()); return v; }
 	/// ditto
 	Json[] opAssign(Json[] v) {
 		runDestructors();
@@ -611,6 +616,7 @@ struct Json {
 		else static if (is(T == double)) return m_float;
 		else static if (is(T == float)) return cast(T)m_float;
 		else static if (is(T == string)) return m_string;
+		else static if (is(T == UUID)) return UUID(m_string);
 		else static if (is(T == Json[])) return m_array;
 		else static if (is(T == Json[string])) return m_object;
 		else static if (is(T == BigInt)) return m_type == Type.bigInt ? m_bigInt : BigInt(m_int);
@@ -1067,6 +1073,7 @@ struct Json {
 		else static if( is(T == float) ) return Type.float_;
 		else static if( is(T : long) ) return Type.int_;
 		else static if( is(T == string) ) return Type.string;
+		else static if( is(T == UUID) ) return Type.string;
 		else static if( is(T == Json[]) ) return Type.array;
 		else static if( is(T == Json[string]) ) return Type.object;
 		else static if( is(T == BigInt) ) return Type.bigInt;
@@ -1715,13 +1722,31 @@ unittest { // issue #1660 - deserialize AA whose key type is string-based enum
 	assert(deserializeJson!S(j).f == [Foo.Bar: 2000]);
 }
 
+unittest {
+	struct V {
+		UUID v;
+	}
+
+	const u = UUID("318d7a61-e41b-494e-90d3-0a99f5531bfe");
+	auto s = `{"v":"318d7a61-e41b-494e-90d3-0a99f5531bfe"}`;
+	auto j = Json(["v": Json(u)]);
+
+	const v = V(u);
+
+	assert(serializeToJson(v) == j);
+	assert(deserializeJson!V(j).v == u);
+
+	assert(serializeToJsonString(v) == s);
+	assert(deserializeJson!V(s).v == u);
+}
+
 /**
 	Serializer for a plain Json representation.
 
 	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToJson, deserializeJson
 */
 struct JsonSerializer {
-	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || isJsonSerializable!T; }
+	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || is(T == UUID) || isJsonSerializable!T; }
 
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json) || is (T == JSONValue); }
 
@@ -1859,7 +1884,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 		size_t m_level = 0;
 	}
 
-	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || isJsonSerializable!T; }
+	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || is(T == UUID) || isJsonSerializable!T; }
 
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json) || is(T == JSONValue); }
 
@@ -1909,6 +1934,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				m_range.jsonEscape(value);
 				m_range.put('"');
 			} else static if (isSomeString!T) writeValue!Traits(value.to!string); // TODO: avoid memory allocation
+			else static if (is(T == UUID)) writeValue!Traits(value.toString());
 			else static if (is(T == Json)) m_range.writeJsonString(value);
 			else static if (is(T == JSONValue)) m_range.writeJsonString(Json(value));
 			else static if (isJsonSerializable!T) {
@@ -2056,6 +2082,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				} else return m_range.skipJsonString(&m_line);
 			}
 			else static if (isSomeString!T) return readValue!(Traits, string).to!T;
+			else static if (is(T == UUID)) return UUID(readValue!(Traits, string)());
 			else static if (is(T == Json)) return m_range.parseJson(&m_line);
 			else static if (is(T == JSONValue)) return cast(JSONValue)m_range.parseJson(&m_line);
 			else static if (isJsonSerializable!T) {
