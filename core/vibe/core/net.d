@@ -43,17 +43,19 @@ NetworkAddress resolveHost(string host, ushort address_family, bool use_dns = tr
 /**
 	Starts listening on the specified port.
 
-	'connection_callback' will be called for each client that connects to the
-	server socket. Each new connection gets its own fiber. The stream parameter
-	then allows to perform blocking I/O on the client socket.
-
-	The address parameter can be used to specify the network
-	interface on which the server socket is supposed to listen for connections.
-	By default, all IPv4 and IPv6 interfaces will be used.
-
 	Using a `@system` callback is scheduled for deprecation. Use a `@safe`
 	callback instead.
+
+	Params:
+
+		port = specified port to listen for new connections
+		connection_callback = this callback will be called for each client that connects to the
+			server socket. Each new connection gets its own fiber. The stream parameter
+			then allows to perform blocking I/O on the client socket.
+		address = network interface on which the server socket is supposed to listen for connections. The deprecated default was to use all IPv4 and IPv6 interfaces.
+		options = set additional options for the TCPListener
 */
+deprecated(`Set the bindingAddress explicitly: listenTCP(<port>, <callback>, "127.0.0.1", <options>)`)
 TCPListener[] listenTCP(ushort port, void delegate(TCPConnection stream) @safe connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
 	TCPListener[] ret;
@@ -70,11 +72,13 @@ TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) @safe con
 	return getEventDriver().listenTCP(port, connection_callback, address, options);
 }
 /// ditto
+deprecated(`Use a @safe connection_callback and set the bindingAddress explicitly: listenTCP(<port>, <callback>, "127.0.0.1", <options>)`)
 TCPListener[] listenTCP(ushort port, void delegate(TCPConnection stream) @system connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 @system {
 	return listenTCP(port, (s) @trusted => connection_callback(s), options);
 }
 /// ditto
+deprecated("Use a @safe connection_callback.")
 TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) @system connection_callback, string address, TCPListenOptions options = TCPListenOptions.defaults)
 @system {
 	return listenTCP(port, (s) @trusted => connection_callback(s), address, options);
@@ -86,6 +90,7 @@ TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) @system c
 
 	This function is the same as listenTCP but takes a function callback instead of a delegate.
 */
+deprecated(`Set the bindingAddress explicitly: listenTCP_s(<port>, <callback>, "127.0.0.1", <options>)`)
 TCPListener[] listenTCP_s(ushort port, void function(TCPConnection stream) @safe connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
 	return listenTCP(port, () @trusted { return toDelegate(connection_callback); } (), options);
@@ -133,7 +138,13 @@ TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_address = anyA
 /**
 	Creates a bound UDP socket suitable for sending and receiving packets.
 */
-UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
+deprecated(`Set the bindingAddress explicitly: listenUDP(<port>, "127.0.0.1")`)
+UDPConnection listenUDP(ushort port)
+{
+	return getEventDriver().listenUDP(port, "0.0.0.0");
+}
+
+UDPConnection listenUDP(ushort port, string bind_address)
 {
 	return getEventDriver().listenUDP(port, bind_address);
 }
