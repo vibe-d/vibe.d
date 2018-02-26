@@ -4,6 +4,12 @@
 *.dll
 .*.sw*
 *.lst
+*.map
+*.pdb
+*.suo
+*.sln
+*.visualdproj
+*.exe_cv
 
 docs.json
 /docs/index.html
