@@ -1,6 +1,80 @@
 ﻿Changelog
 =========
 
+v0.8.3 - 2018-02-
+-------------------
+
+The deprecation phase of the legacy "vibe-d:core" module starts with this release by defaulting to the new "vibe-core" package. Additionally, DMD 2.079.0 is supported and some notable improvements have been made to the HTTP implementation, as well as other parts of the library.
+
+### Features and improvements ###
+
+- The "vibe-core" package is now used by default - the "libevent"/"win32"/"libasync" configurations can still be used to continue using the legacy vibe-d:core package, but beware that it will be removed by the end of the year
+- Compiles on DMD 2.073.2 up to 2.078.3
+- HTTP sub system
+    - `URLRouter` has been refactored to avoid fragment the heap during the initialization phase, which can cut process memory usage dramatically - [issue #1359][issue1359], [pull #2043][issue2043]
+    - Added `WebSocketCloseReason ` and improved close reason handling (by Andrew Benton) - [pull #1990][issue1990]
+    - Added `HTTPClientSettings.tlsContextSetup` to enable more fine-grained TLS settings customization - [pull #2071][issue2071]
+    - Added a check in `HTTPServerResponse.redirect` to avoid sending any control characters (e.g. header injections) - [pull #2074][issue2074]
+    - Added `createDigestAuthHeader` to create a client header for HTTP digest authentication (by Tomáš Chaloupka) - [pull #1931][issue1931]
+    - Deprecated all parsing related `HTTPServerOption` values (by Sebastian Wilzbach) - [pull #1947][issue1947]
+    - Changed the HTTP file server to not send cache directives by default - [pull #2031][issue2031]
+- Added `RestInterfaceSettings.errorHandler` to enable customization of error responses - [pull #2072][issue2072]
+- Reworked MongoDB cursor support to properly support aggregation on 3.6 servers (by Jan Jurzitza aka WebFreak001) - [issue #1718][issue1718], [issue #2036][issue2036], [pull #2037][issue2037]
+- Changed the MongoDB code to default to SCRAM-SHA-1 authentication (by Sebastian Wilzbach) - [issue #1967][issue1967], [pull #2027][issue2027]
+- Now uses `arc4random_buf` instead of "/dev/urandom" on systems that support it with a secure hash function (by Nathan Sashihara) - [pull #2063][issue2063]
+- Added conversion functions for `Json` <-> `std.json.JSONValue` (by Jan Jurzitza aka WebFreak001) - [issue #1465][issue1465], [pull #1904][issue1904], [pull #2085][issue2085]
+
+### Bug fixes ###
+
+- Fixed compilation on DragonFlyBSD (by Diederik de Groot) - [pull #2028][issue2028]
+- Fixed `RedisHash.opIndexAssign!"-"` (by Geoffrey-A) - [pull #2013][issue2013]
+- Fixed `DictionaryList` to work with class/interface types (by H. S. Teoh aka quickfur) - [issue #2004][issue2004], [pull #2005][issue2005]
+- Fixed compilation of types with `@system` getters/setters in the serialization module - [issue #1991][issue1991], [issue #1941][issue1941], [pull #2001][issue2001]
+- Fixed compilation of methods with unsafe return types in the REST interface generator (by Martin Nowak) - [pull #2035][issue2035]
+- Fixed a connection leakage in `vibe.inet.urltransfer` (by Martin Nowak) - [pull #2050][issue2ß5ß]
+- Fixed parsing the host part of `file://` URLs - [issue #2048][issue2048], [pull #2049][issue2049]
+- Fixed handling of `https+unix://` URLs in the HTTP client (by Les De Ridder) - [pull #2070][issue2070]
+- Fixed the HTTP proxy mode to default to "reverse" (regression in 0.8.2) - [pull #2056][issue2056]
+- Fixed the HTTP client to send a valid "Host" header when requesting from an IPv6 URL - [issue #2080][issue2080], [pull #2082][issue2082]
+- Fixed the old `Path` implementation to preserve trailing slashes on Windows (by Martin Nowak) - [pull #2079][issue2079]
+- Fixed a regression (0.8.2) in `HTTPServerRequest.rootDir` - [pull #2032][issue2032]
+
+[issue1359]: https://github.com/vibe-d/vibe.d/issues/1359
+[issue1465]: https://github.com/vibe-d/vibe.d/issues/1465
+[issue1718]: https://github.com/vibe-d/vibe.d/issues/1718
+[issue1904]: https://github.com/vibe-d/vibe.d/issues/1904
+[issue1931]: https://github.com/vibe-d/vibe.d/issues/1931
+[issue1941]: https://github.com/vibe-d/vibe.d/issues/1941
+[issue1947]: https://github.com/vibe-d/vibe.d/issues/1947
+[issue1967]: https://github.com/vibe-d/vibe.d/issues/1967
+[issue1990]: https://github.com/vibe-d/vibe.d/issues/1990
+[issue1991]: https://github.com/vibe-d/vibe.d/issues/1991
+[issue2001]: https://github.com/vibe-d/vibe.d/issues/2001
+[issue2004]: https://github.com/vibe-d/vibe.d/issues/2004
+[issue2005]: https://github.com/vibe-d/vibe.d/issues/2005
+[issue2013]: https://github.com/vibe-d/vibe.d/issues/2013
+[issue2027]: https://github.com/vibe-d/vibe.d/issues/2027
+[issue2028]: https://github.com/vibe-d/vibe.d/issues/2028
+[issue2031]: https://github.com/vibe-d/vibe.d/issues/2031
+[issue2032]: https://github.com/vibe-d/vibe.d/issues/2032
+[issue2036]: https://github.com/vibe-d/vibe.d/issues/2036
+[issue2037]: https://github.com/vibe-d/vibe.d/issues/2037
+[issue2043]: https://github.com/vibe-d/vibe.d/issues/2043
+[issue2048]: https://github.com/vibe-d/vibe.d/issues/2048
+[issue2049]: https://github.com/vibe-d/vibe.d/issues/2049
+[issue2056]: https://github.com/vibe-d/vibe.d/issues/2056
+[issue2063]: https://github.com/vibe-d/vibe.d/issues/2063
+[issue2070]: https://github.com/vibe-d/vibe.d/issues/2070
+[issue2071]: https://github.com/vibe-d/vibe.d/issues/2071
+[issue2072]: https://github.com/vibe-d/vibe.d/issues/2072
+[issue2074]: https://github.com/vibe-d/vibe.d/issues/2074
+[issue2079]: https://github.com/vibe-d/vibe.d/issues/2079
+[issue2080]: https://github.com/vibe-d/vibe.d/issues/2080
+[issue2082]: https://github.com/vibe-d/vibe.d/issues/2082
+[issue2085]: https://github.com/vibe-d/vibe.d/issues/2085
+[issue2ß5ß]: https://github.com/vibe-d/vibe.d/issues/2ß5ß
+
+
 v0.8.2 - 2017-12-11
 -------------------
 
@@ -130,7 +204,7 @@ Apart from removing the old `vibe-d:diet` package in favor of `diet-ng`, this re
 ### Bug fixes ###
 
 - Fixed "SSL_read was unsuccessful with ret 0" errors in the OpenSSL TLS implementation (by machindertech) - [issue #1124][issue1124], [pull #1395][issue1395]
-- Fixed the JSON generator to output valid JSON for `Json.undefined` values (by by Tomáš Chaloupka) - [pull #1737][issue1737], [issue #1735][issue1735]
+- Fixed the JSON generator to output valid JSON for `Json.undefined` values (by Tomáš Chaloupka) - [pull #1737][issue1737], [issue #1735][issue1735]
 - Fixed using HTTP together with USDS sockets in the HTTP client (by Johannes Pfau aka jpf91) - [pull #1747][issue1747]
 - Fixed handling of `Nullable!T` in the web interface generator - invalid values are treated as an error now instead of as a 
 null value
