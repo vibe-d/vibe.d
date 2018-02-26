@@ -203,6 +203,33 @@ struct Json {
 	this(Json[string] v) @trusted { m_type = Type.object; m_object = v; }
 
 	/**
+		Converts a std.json.JSONValue object to a vibe Json object.
+	 */
+	this(in JSONValue value)
+	@safe {
+		final switch (value.type) {
+			case JSON_TYPE.NULL: this = null; break;
+			case JSON_TYPE.OBJECT:
+				this = emptyObject;
+				() @trusted {
+					foreach (string k, ref const JSONValue v; value.object)
+						this[k] = Json(v);
+				} ();
+				break;
+			case JSON_TYPE.ARRAY:
+				this = (() @trusted => Json(value.array.map!(a => Json(a)).array))();
+				break;
+			case JSON_TYPE.STRING: this = value.str; break;
+			case JSON_TYPE.INTEGER: this = value.integer; break;
+			case JSON_TYPE.UINTEGER: this = BigInt(value.uinteger); break;
+			case JSON_TYPE.FLOAT: this = value.floating; break;
+			case JSON_TYPE.TRUE: this = true; break;
+			case JSON_TYPE.FALSE: this = false; break;
+		}
+	}
+
+
+	/**
 		Allows assignment of D values to a JSON value.
 	*/
 	ref Json opAssign(Json v)
@@ -512,6 +539,47 @@ struct Json {
 		else return Rng(false, null, m_object.byValue);
 	}
 
+
+	/**
+		Converts this Json object to a std.json.JSONValue object
+	 */
+	T opCast(T)() const @safe
+		if (is(T == JSONValue))
+	{
+		final switch (type) {
+			case Json.Type.undefined:
+			case Json.Type.null_:
+				return JSONValue(null);
+			case Json.Type.bool_:
+				return JSONValue(get!bool);
+			case Json.Type.int_:
+				return JSONValue(get!long);
+			case Json.Type.bigInt:
+				auto bi = get!BigInt;
+				if (bi > long.max)
+					return JSONValue((() @trusted => cast(ulong)get!BigInt)());
+				else
+					return JSONValue((() @trusted => cast(long)get!BigInt)());
+			case Json.Type.float_:
+				return JSONValue(get!double);
+			case Json.Type.string:
+				return JSONValue(get!string);
+			case Json.Type.array:
+				JSONValue[] ret;
+				foreach (ref const Json e; byValue)
+					ret ~= cast(JSONValue)e;
+				return JSONValue(ret);
+			case Json.Type.object:
+				JSONValue[string] ret;
+				foreach (string k, ref const Json e; byKeyValue) {
+					if( e.type == Json.Type.undefined ) continue;
+					ret[k] = cast(JSONValue)e;
+				}
+				return JSONValue(ret);
+		}
+	}
+
+
 	/**
 		Converts the JSON value to the corresponding D type - types must match exactly.
 
@@ -529,7 +597,7 @@ struct Json {
 
 		See_Also: `opt`, `to`, `deserializeJson`
 	*/
-	inout(T) opCast(T)() inout { return get!T; }
+	inout(T) opCast(T)() inout if (!is(T == JSONValue)) { return get!T; }
 	/// ditto
 	@property inout(T) get(T)()
 	inout @trusted {
@@ -675,6 +743,8 @@ struct Json {
 				case Type.array: return BigInt(0);
 				case Type.object: return BigInt(0);
 			}
+		} else static if (is(T == JSONValue)) {
+			return cast(JSONValue)this;
 		} else static assert(0, "JSON can only be cast to (bool, long, std.bigint.BigInt, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
 
@@ -1070,76 +1140,6 @@ struct Json {
 		auto ret = appender!string();
 		writePrettyJsonString(ret, this, level);
 		return ret.data;
-	}
-
-	/**
-		Converts this Json object to a std.json.JSONValue object
-	 */
-	JSONValue toJSONValue()
-	const @safe {
-		final switch (type) {
-			case Json.Type.undefined:
-			case Json.Type.null_:
-				return JSONValue(null);
-			case Json.Type.bool_:
-				return JSONValue(get!bool);
-			case Json.Type.int_:
-				return JSONValue(get!long);
-			case Json.Type.bigInt:
-				auto bi = get!BigInt;
-				if (bi > long.max)
-					return JSONValue((() @trusted => cast(ulong)get!BigInt)());
-				else
-					return JSONValue((() @trusted => cast(long)get!BigInt)());
-			case Json.Type.float_:
-				return JSONValue(get!double);
-			case Json.Type.string:
-				return JSONValue(get!string);
-			case Json.Type.array:
-				JSONValue[] ret;
-				foreach (ref const Json e; byValue)
-					ret ~= e.toJSONValue;
-				return JSONValue(ret);
-			case Json.Type.object:
-				JSONValue[string] ret;
-				foreach (string k, ref const Json e; byKeyValue) {
-					if( e.type == Json.Type.undefined ) continue;
-					ret[k] = e.toJSONValue;
-				}
-				return JSONValue(ret);
-		}
-	}
-
-	/**
-		Converts a std.json.JSONValue object to a vibe Json object.
-	 */
-	static Json fromJSONValue(in JSONValue value)
-	@safe {
-		final switch (value.type) {
-			case JSON_TYPE.NULL:
-				return Json(null);
-			case JSON_TYPE.OBJECT:
-				return (() @trusted {
-					Json[string] ret;
-					foreach (string k, ref const JSONValue v; value.object)
-						ret[k] = Json.fromJSONValue(v);
-					return Json(ret);
-				})();
-			case JSON_TYPE.ARRAY:
-				return (() @trusted => Json(value.array.map!(a => Json.fromJSONValue(a)).array))();
-			case JSON_TYPE.STRING:
-				return Json(value.str);
-			case JSON_TYPE.INTEGER:
-				return Json(value.integer);
-			case JSON_TYPE.UINTEGER:
-				return Json(BigInt(value.uinteger));
-			case JSON_TYPE.FLOAT:
-				return Json(value.floating);
-			case JSON_TYPE.TRUE:
-				return Json(true);
-			case JSON_TYPE.FALSE:
-				return Json(false);
-		}
 	}
 
 	private void checkType(TYPES...)(string op = null)
@@ -1751,7 +1751,7 @@ struct JsonSerializer {
 		if (!is(T == Json))
 	{
 		static if (is(T == JSONValue)) {
-			m_current = Json.fromJSONValue(value);
+			m_current = Json(value);
 		} else static if (isJsonSerializable!T) {
 			static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
 				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
@@ -1797,7 +1797,7 @@ struct JsonSerializer {
 	T readValue(Traits, T)()
 	@safe {
 		static if (is(T == Json)) return m_current;
-		else static if (is(T == JSONValue)) return m_current.toJSONValue;
+		else static if (is(T == JSONValue)) return cast(JSONValue)m_current;
 		else static if (isJsonSerializable!T) {
 			static if (!__traits(compiles, () @safe { return T.fromJson(m_current); } ()))
 				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".fromJson() with @safe.");
@@ -1884,7 +1884,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				m_range.put('"');
 			}
 			else static if (is(T == Json)) m_range.writeJsonString(value);
-			else static if (is(T == JSONValue)) m_range.writeJsonString(() @trusted { return Json.fromJSONValue(value); } ());
+			else static if (is(T == JSONValue)) m_range.writeJsonString(Json(value));
 			else static if (isJsonSerializable!T) {
 				static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
 					pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
@@ -2020,7 +2020,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 			else static if (is(T == string)) return m_range.skipJsonString(&m_line);
 			else static if (is(T == Json)) return m_range.parseJson(&m_line);
-			else static if (is(T == JSONValue)) return m_range.parseJson(&m_line).toJSONValue;
+			else static if (is(T == JSONValue)) return cast(JSONValue)m_range.parseJson(&m_line);
 			else static if (isJsonSerializable!T) {
 				static if (!__traits(compiles, () @safe { return T.fromJson(Json.init); } ()))
 					pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".fromJson() with @safe.");
@@ -2607,13 +2607,18 @@ private auto trustedRange(R)(R range)
 	auto a = parseJsonString(astr);
 
 	// test JSONValue -> Json conversion
-	assert(Json.fromJSONValue(a.toJSONValue) == a);
+	assert(Json(cast(JSONValue)a) == a);
 
 	// test Json -> JSONValue conversion
-	auto v = a.toJSONValue;
+	auto v = cast(JSONValue)a;
 	assert(deserializeJson!JSONValue(serializeToJson(v)) == v);
 
 	// test JSON strint <-> JSONValue serialization
 	assert(deserializeJson!JSONValue(astr) == v);
 	assert(parseJsonString(serializeToJsonString(v)) == a);
+
+	// test using std.conv for the conversion
+	import std.conv : to;
+	assert(a.to!JSONValue.to!Json == a);
+	assert(to!Json(to!JSONValue(a)) == a);
 }
