@@ -19,7 +19,7 @@ d:
   # this way the overall test time gets cut down (GDC/LDC are a lot
   # slower tham DMD, so they should be started early), while still
   # catching most DMD version related build failures early
-  - dmd-2.078.0
+  - dmd-2.078.3
   - dmd-2.073.2
   - ldc-1.7.0
   - ldc-1.6.0
