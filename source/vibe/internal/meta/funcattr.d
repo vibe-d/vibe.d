@@ -96,9 +96,9 @@ unittest
 	Returns:
 		internal attribute struct that embeds supplied information
 */
-auto after(alias Function)()
+auto after(alias Hook)()
 {
-	return OutputAttribute!Function();
+	return OutputAttribute!Hook();
 }
 
 ///
