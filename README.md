@@ -42,6 +42,8 @@ Download this file as `hello.d` and run it with [DUB](https://github.com/dlang/d
 
 (or `chmod +x` and execute it: `./hello.d`)
 
+Alternatively, you can quickstart with examples directly on [![Open on run.dlang.io](https://img.shields.io/badge/run.dlang.io-open-blue.svg)](https://run.dlang.io/is/qTsfv6).
+
 Support
 -------
 
