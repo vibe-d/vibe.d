@@ -1727,12 +1727,15 @@ unittest {
 	}
 
 	const u = UUID("318d7a61-e41b-494e-90d3-0a99f5531bfe");
-	auto s = `{"v":"318d7a61-e41b-494e-90d3-0a99f5531bfe"}`;
+	const s = `{"v":"318d7a61-e41b-494e-90d3-0a99f5531bfe"}`;
 	auto j = Json(["v": Json(u)]);
 
 	const v = V(u);
 
 	assert(serializeToJson(v) == j);
+
+	j = Json.emptyObject;
+	j["v"] = u;
 	assert(deserializeJson!V(j).v == u);
 
 	assert(serializeToJsonString(v) == s);
