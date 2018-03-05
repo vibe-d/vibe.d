@@ -21,6 +21,7 @@ The deprecation phase of the legacy "vibe-d:core" module starts with this releas
 - Added `RestInterfaceSettings.errorHandler` to enable customization of error responses - [pull #2072][issue2072]
 - Reworked MongoDB cursor support to properly support aggregation on 3.6 servers (by Jan Jurzitza aka WebFreak001) - [issue #1718][issue1718], [issue #2036][issue2036], [pull #2037][issue2037]
 - Changed the MongoDB code to default to SCRAM-SHA-1 authentication (by Sebastian Wilzbach) - [issue #1967][issue1967], [pull #2027][issue2027]
+- Made `remove` and `exists` available from the various `Redis...` container types (by Geoffrey-A) - [pull #2026][issue2026]
 - Now uses `arc4random_buf` instead of "/dev/urandom" on systems that support it with a secure hash function (by Nathan Sashihara) - [pull #2063][issue2063]
 - Added conversion functions for `Json` <-> `std.json.JSONValue` (by Jan Jurzitza aka WebFreak001) - [issue #1465][issue1465], [pull #1904][issue1904], [pull #2085][issue2085]
 
@@ -31,7 +32,7 @@ The deprecation phase of the legacy "vibe-d:core" module starts with this releas
 - Fixed `DictionaryList` to work with class/interface types (by H. S. Teoh aka quickfur) - [issue #2004][issue2004], [pull #2005][issue2005]
 - Fixed compilation of types with `@system` getters/setters in the serialization module - [issue #1991][issue1991], [issue #1941][issue1941], [pull #2001][issue2001]
 - Fixed compilation of methods with unsafe return types in the REST interface generator (by Martin Nowak) - [pull #2035][issue2035]
-- Fixed a connection leakage in `vibe.inet.urltransfer` (by Martin Nowak) - [pull #2050][issue2ß5ß]
+- Fixed a connection leakage in `vibe.inet.urltransfer` (by Martin Nowak) - [pull #2050][issue2050]
 - Fixed parsing the host part of `file://` URLs - [issue #2048][issue2048], [pull #2049][issue2049]
 - Fixed handling of `https+unix://` URLs in the HTTP client (by Les De Ridder) - [pull #2070][issue2070]
 - Fixed the HTTP proxy mode to default to "reverse" (regression in 0.8.2) - [pull #2056][issue2056]
@@ -53,6 +54,7 @@ The deprecation phase of the legacy "vibe-d:core" module starts with this releas
 [issue2004]: https://github.com/vibe-d/vibe.d/issues/2004
 [issue2005]: https://github.com/vibe-d/vibe.d/issues/2005
 [issue2013]: https://github.com/vibe-d/vibe.d/issues/2013
+[issue2026]: https://github.com/vibe-d/vibe.d/issues/2026
 [issue2027]: https://github.com/vibe-d/vibe.d/issues/2027
 [issue2028]: https://github.com/vibe-d/vibe.d/issues/2028
 [issue2031]: https://github.com/vibe-d/vibe.d/issues/2031
@@ -62,6 +64,7 @@ The deprecation phase of the legacy "vibe-d:core" module starts with this releas
 [issue2043]: https://github.com/vibe-d/vibe.d/issues/2043
 [issue2048]: https://github.com/vibe-d/vibe.d/issues/2048
 [issue2049]: https://github.com/vibe-d/vibe.d/issues/2049
+[issue2050]: https://github.com/vibe-d/vibe.d/issues/2050
 [issue2056]: https://github.com/vibe-d/vibe.d/issues/2056
 [issue2063]: https://github.com/vibe-d/vibe.d/issues/2063
 [issue2070]: https://github.com/vibe-d/vibe.d/issues/2070
@@ -72,7 +75,6 @@ The deprecation phase of the legacy "vibe-d:core" module starts with this releas
 [issue2080]: https://github.com/vibe-d/vibe.d/issues/2080
 [issue2082]: https://github.com/vibe-d/vibe.d/issues/2082
 [issue2085]: https://github.com/vibe-d/vibe.d/issues/2085
-[issue2ß5ß]: https://github.com/vibe-d/vibe.d/issues/2ß5ß
 
 
 v0.8.2 - 2017-12-11
