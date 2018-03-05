@@ -199,8 +199,6 @@ struct Json {
 	/// ditto
 	this(string v) @trusted { m_type = Type.string; m_string = v; }
 	/// ditto
-	this(UUID v) { this(v.toString()); }
-	/// ditto
 	this(Json[] v) @trusted { m_type = Type.array; m_array = v; }
 	/// ditto
 	this(Json[string] v) @trusted { m_type = Type.object; m_object = v; }
