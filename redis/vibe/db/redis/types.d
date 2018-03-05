@@ -371,8 +371,10 @@ struct RedisHash(T = string) {
 
 	this(RedisDatabase db, string key) { value = RedisValue(db, key); }
 
+	bool remove() { return value.remove(); }
 	size_t remove(scope string[] fields...) { return cast(size_t)m_db.hdel(m_key, fields); }
 	bool exists(string field) { return m_db.hexists(m_key, field); }
+	bool exists() { return value.exists; }
 
 	void opIndexAssign(T value, string field) { m_db.hset(m_key, field, value.toRedis()); }
 	T opIndex(string field) { return m_db.hget!string(m_key, field).fromRedis!T(); }
@@ -549,7 +551,7 @@ struct RedisSet(T = string) {
 
 	long insert(ARGS...)(ARGS args) { return m_db.sadd(m_key, args); }
 	long remove(T value) { return m_db.srem(m_key, value.toRedis()); }
-	void remove()() { value.remove(); }
+	bool remove() { return value.remove(); }
 	string pop() { return m_db.spop!string(m_key); }
 	long length() { return m_db.scard(m_key); }
 
@@ -601,6 +603,7 @@ struct RedisZSet(T = string) {
 
 	long insert(ARGS...)(ARGS args) { return m_db.zadd(m_key, args); }
 	long remove(ARGS...)(ARGS members) { return m_db.zrem(m_key, members); }
+	bool remove() { return value.remove(); }
 	long length() { return m_db.zcard(m_key); }
 
 	long count(string INT = "[]")(double min, double max)
