@@ -501,7 +501,7 @@ struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 
 		@property bool empty() const { return m_length == 0; }
 
-		@property inout(T) front() inout { assert(!empty); return m_buffer[m_start]; }
+		@property ref inout(T) front() inout { assert(!empty); return m_buffer[m_start]; }
 
 		void popFront()
 		{
@@ -564,6 +564,13 @@ unittest {
 	assert(buf.front == 3); buf.popFront();
 	assert(buf.front == 5); buf.popFront();
 	assert(buf.empty);
+
+	buf.put(1);
+	assert(buf.front == 1);
+	buf.front = 2;
+	assert(buf.front == 2);
+	buf[].front = 3;
+	assert(buf.front == 3);
 }
 
 
