@@ -692,7 +692,7 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 	import std.typecons;
 	import vibe.data.serialization;
 
-	static if (isDynamicArray!T && !isSomeString!T) {
+	static if (isDynamicArray!T && !(isSomeString!T || is(T: string))) {
 		alias EL = typeof(T.init[0]);
 		static assert(!is(EL == bool),
 			"Boolean arrays are not allowed, because their length cannot " ~
