@@ -323,7 +323,10 @@ struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 		/// Resets the capacity to zero and explicitly frees the memory for the buffer.
 		void dispose()
 		{
-			delete m_buffer;
+			static if (__VERSION__ >= 2079) {
+				import core.memory : __delete;
+				__delete(m_buffer);
+			} else mixin("delete m_buffer;");
 			m_buffer = null;
 			m_start = m_fill = 0;
 		}

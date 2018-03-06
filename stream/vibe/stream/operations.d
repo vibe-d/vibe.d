@@ -463,7 +463,12 @@ private void readUntilGeneric(R, InputStream)(InputStream stream, ref R dst, in 
 	size_t nmatched = 0;
 	Buffer* bufferobj;
 	bufferobj = new Buffer;
-	scope (exit) () @trusted { delete bufferobj; } ();
+	scope (exit) () @trusted {
+		static if (__VERSION__ >= 2079) {
+			import core.memory : __delete;
+			__delete(bufferobj);
+		} else mixin("delete bufferobj;");
+	} ();
 	auto buf = bufferobj.bytes[];
 
 	ulong bytes_read = 0;

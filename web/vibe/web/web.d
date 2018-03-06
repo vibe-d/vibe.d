@@ -706,7 +706,7 @@ unittest {
 */
 NestedNameStyleAttribute nestedNameStyle(NestedNameStyle style)
 {
-	import vibe.web.common : onlyAsUda;
+	import vibe.internal.meta.uda : onlyAsUda;
 	if (!__ctfe) assert(false, onlyAsUda!__FUNCTION__);
 	return NestedNameStyleAttribute(style);
 }
