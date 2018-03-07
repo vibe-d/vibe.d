@@ -10,6 +10,7 @@ shared static this()
 	settings.port = 0;
 	settings.bindAddresses = ["127.0.0.1"];
 	immutable serverAddr = listenHTTP(settings, handleWebSockets((scope ws) {
+		assert(ws.connected); // issue #2104
 		assert(ws.receiveText() == "foo");
 		ws.send("hello");
 		assert(ws.receiveText() == "bar");
@@ -20,6 +21,7 @@ shared static this()
 		scope(exit) exitEventLoop(true);
 
 		connectWebSocket(URL("http://" ~ serverAddr.toString), (scope ws) {
+			assert(ws.connected);
 			ws.send("foo");
 			assert(ws.receiveText() == "hello");
 			ws.send("bar");
