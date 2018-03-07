@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.8.3 - 2018-02-
+v0.8.3 - 2018-03-08
 -------------------
 
 The deprecation phase of the legacy "vibe-d:core" module starts with this release by defaulting to the new "vibe-core" package. Additionally, DMD 2.079.0 is supported and some notable improvements have been made to the HTTP implementation, as well as other parts of the library.
@@ -9,7 +9,7 @@ The deprecation phase of the legacy "vibe-d:core" module starts with this releas
 ### Features and improvements ###
 
 - The "vibe-core" package is now used by default - the "libevent"/"win32"/"libasync" configurations can still be used to continue using the legacy vibe-d:core package, but beware that it will be removed by the end of the year
-- Compiles on DMD 2.073.2 up to 2.078.3
+- Compiles on DMD 2.073.2 up to 2.079.0 and LDC 1.3.0 up to 1.8.0
 - HTTP sub system
     - `URLRouter` has been refactored to avoid fragment the heap during the initialization phase, which can cut process memory usage dramatically - [issue #1359][issue1359], [pull #2043][issue2043]
     - Added `WebSocketCloseReason ` and improved close reason handling (by Andrew Benton) - [pull #1990][issue1990]
