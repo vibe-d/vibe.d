@@ -282,8 +282,8 @@ template FuncAttributes(alias Func)
 mixin template CloneFunction(alias Func, string body_, bool keepUDA = false, string identifier = __traits(identifier, Func))
 {
 	// Template mixin: everything has to be self-contained.
-	import std.string : format, variadicFunctionStyle, Variadic;
-	import std.traits : ReturnType;
+	import std.format : format;
+	import std.traits : ReturnType, variadicFunctionStyle, Variadic;
 	import std.typetuple : TypeTuple;
 	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
 	// Sadly this is not possible:
@@ -368,8 +368,8 @@ unittest
 mixin template CloneFunctionDecl(alias Func, bool keepUDA = true, string identifier = __traits(identifier, Func))
 {
 	// Template mixin: everything has to be self-contained.
-	import std.string : format, variadicFunctionStyle, Variadic;
-	import std.traits : ReturnType;
+	import std.format : format;
+	import std.traits : ReturnType, variadicFunctionStyle, Variadic;
 	import std.typetuple : TypeTuple;
 	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
 

@@ -1861,7 +1861,8 @@ private {
 	T fromRestString(T)(string value)
 	{
 		import std.conv : ConvException;
-		import vibe.web.common : HTTPStatusException, HTTPStatus;
+		import vibe.http.common : HTTPStatusException;
+		import vibe.http.status : HTTPStatus;
 		try {
 			static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
 			else static if (is(T == bool)) return value == "1" || value.to!T;
@@ -1880,7 +1881,8 @@ private {
 
 	// Converting from invalid JSON string to aggregate should throw bad request
 	unittest {
-		import vibe.web.common : HTTPStatusException, HTTPStatus;
+		import vibe.http.common : HTTPStatusException;
+		import vibe.http.status : HTTPStatus;
 
 		void assertHTTPStatus(E)(lazy E expression, HTTPStatus expectedStatus,
 			string file = __FILE__, size_t line = __LINE__)
