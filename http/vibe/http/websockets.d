@@ -381,6 +381,7 @@ HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @syst
  *   if(sock.connected)
  *     sock.close(WebSocketCloseReason.policyViolation, "timeout");
  * }
+ * ---
  */
 enum WebSocketCloseReason : short
 {
