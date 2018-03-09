@@ -46,6 +46,49 @@ interface RandomNumberStream : InputStream {
 	alias read = InputStream.read;
 }
 
+version(linux)
+	enum bool LinuxMaybeHasGetrandom = __traits(compiles, {import mir.linux._asm.unistd : NR_getrandom;});
+else
+	enum bool LinuxMaybeHasGetrandom = false;
+
+static if (LinuxMaybeHasGetrandom)
+{
+	// getrandom was introduced in Linux 3.17
+    private enum GET_RANDOM {
+        UNINITIALIZED,
+        NOT_AVAILABLE,
+        AVAILABLE,
+    }
+	private __gshared GET_RANDOM hasGetRandom = GET_RANDOM.UNINITIALIZED;
+	private import core.sys.posix.sys.utsname : utsname;
+	// druntime might not be properly annotated
+	private extern(C) int uname(scope utsname* __name) @nogc nothrow;
+	// checks whether the Linux kernel supports getRandom by looking at the
+	// reported version
+	private bool initHasGetRandom() @nogc @trusted nothrow
+	{
+		import core.stdc.string : strtok;
+		import core.stdc.stdlib : atoi;
+
+		utsname uts;
+		uname(&uts);
+		char* p = uts.release.ptr;
+
+		// poor man's version check
+		auto token = strtok(p, ".");
+		int major = atoi(token);
+		if (major > 3) return true;
+
+		if (major == 3)
+		{
+			token = strtok(p, ".");
+			if (atoi(token) >= 17) return true;
+		}
+
+		return false;
+	}
+	private extern(C) int syscall(size_t ident, size_t n, size_t arg1, size_t arg2) @nogc nothrow;
+}
 
 version (OSX)
     version = secure_arc4random;//AES
@@ -64,7 +107,8 @@ extern(C) @nogc nothrow private @system
 
 	It uses the "CryptGenRandom" function for Windows; the "arc4random_buf"
 	function (not based on RC4 but on a modern and cryptographically secure
-	cipher) for macOS/OpenBSD/NetBSD; and "/dev/urandom" for other Posix platforms.
+	cipher) for macOS/OpenBSD/NetBSD; the "getrandom" syscall for Linux 3.17
+	and later; and "/dev/urandom" for other Posix platforms.
 	It's recommended to combine the output use additional processing generated random numbers
 	via provided functions for systems where security matters.
 
@@ -90,7 +134,7 @@ final class SystemRNG : RandomNumberStream {
 	}
 	else version(Posix)
 	{
-		import core.stdc.errno : errno;
+		import core.stdc.errno : errno, EINTR;
 		import core.stdc.stdio : FILE, _IONBF, fopen, fclose, fread, setvbuf;
 
 		//cryptographic file stream
@@ -118,6 +162,20 @@ final class SystemRNG : RandomNumberStream {
 		}
 		else version(Posix)
 		{
+			version (linux) static if (LinuxMaybeHasGetrandom)
+			{
+				import core.atomic : atomicLoad, atomicStore;
+				auto p = atomicLoad(*cast(const shared GET_RANDOM*) &hasGetRandom);
+				if (p == GET_RANDOM.UNINITIALIZED)
+				{
+					p = initHasGetRandom() ? GET_RANDOM.AVAILABLE
+						: GET_RANDOM.NOT_AVAILABLE;
+					// Benign race condition.
+					atomicStore(*cast(shared GET_RANDOM*) &hasGetRandom, p);
+				}
+				if (p == GET_RANDOM.AVAILABLE)
+					return;
+			}
 			//open file
 			m_file = fopen("/dev/urandom", "rb");
 			enforce!CryptoException(m_file !is null, "Failed to open /dev/urandom");
@@ -140,6 +198,10 @@ final class SystemRNG : RandomNumberStream {
 		}
 		else version (Posix)
 		{
+			version (linux) static if (LinuxMaybeHasGetrandom)
+			{
+				if (m_file is null) return;
+			}
 			fclose(m_file);
 		}
 	}
@@ -170,6 +232,37 @@ final class SystemRNG : RandomNumberStream {
 		}
 		else version (Posix)
 		{
+			version (linux) static if (LinuxMaybeHasGetrandom)
+			{
+				if (hasGetRandom == GET_RANDOM.AVAILABLE)
+				{
+					/*
+						http://man7.org/linux/man-pages/man2/getrandom.2.html
+						If the urandom source has been initialized, reads of up to 256 bytes
+						will always return as many bytes as requested and will not be
+						interrupted by signals.  No such guarantees apply for larger buffer
+						sizes.
+					*/
+					import mir.linux._asm.unistd : NR_getrandom;
+					size_t len = buffer.length;
+					size_t ptr = cast(size_t) buffer.ptr;
+					while (len > 0)
+					{
+						auto res = syscall(NR_getrandom, ptr, len, 0);
+						if (res >= 0)
+						{
+							len -= res;
+							ptr += res;
+						}
+						else if (errno != EINTR)
+						{
+							throw new CryptoException(
+								text("Failed to read next random number: ", errno));
+						}
+					}
+					return buffer.length;
+				}
+			}
 			enforce!CryptoException(fread(buffer.ptr, buffer.length, 1, m_file) == 1,
 				text("Failed to read next random number: ", errno));
 		}
