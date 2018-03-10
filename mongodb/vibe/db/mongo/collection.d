@@ -295,7 +295,10 @@ struct MongoCollection {
 				either be given as separate parameters, or as a single array
 				parameter.
 
-		Returns: An array of documents returned by the pipeline
+		Returns:
+			Returns the list of documents aggregated by the pipeline. The return
+			value is either a single `Bson` array value or a `MongoCursor`
+			(input range) of the requested document type.
 
 		Throws: Exception if a DB communication error occured
 
