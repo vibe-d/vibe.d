@@ -502,7 +502,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 						alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[j]));
 						alias STraits = SubTraits!(Traits, TM, TA);
 						ser.beginWriteArrayEntry!STraits(fcount);
-						static if (TMS.length == 1)
+						static if (!isBuiltinTuple!(T, mname))
 							ser.serializeValue!(TM, TA)(safeGetMember!mname(value));
 						else
 							ser.serializeValue!(TM, TA)(tuple(__traits(getMember, value, mname))[j]);
@@ -522,7 +522,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					alias TM = TypeTuple!(typeof(__traits(getMember, TU, mname)));
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 					enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
-					static if (TM.length == 1) {
+					static if (!isBuiltinTuple!(T, mname)) {
 						auto vt = safeGetMember!mname(value);
 					} else {
 						auto vt = tuple!TM(__traits(getMember, value, mname));
@@ -756,7 +756,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 									if (ser.tryReadNull!STraits()) return;
 								set[i] = true;
 								ser.beginReadArrayEntry!STraits(i);
-								static if (MT.length == 1) {
+								static if (!isBuiltinTuple!(T, mname)) {
 									safeSetMember!mname(ret, ser.deserializeValue!(TMTI, TMTIA));
 								} else {
 									__traits(getMember, ret, mname)[msindex] = ser.deserializeValue!(TMTI, TMTIA);
@@ -784,7 +784,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 										if (ser.tryReadNull!STraits()) return;
 									set[i] = true;
 									ser.beginReadDictionaryEntry!STraits(fname);
-									static if (TM.length == 1) {
+									static if (!isBuiltinTuple!(T, mname)) {
 										safeSetMember!mname(ret, ser.deserializeValue!(TM, TA));
 									} else {
 										__traits(getMember, ret, mname) = ser.deserializeValue!(Tuple!TM, TA);
@@ -1187,6 +1187,15 @@ private template ChainedPolicyImpl(alias Primary, alias Fallback)
 		}
 	}
 	alias ChainedPolicyImpl = Pol;
+}
+
+private template isBuiltinTuple(T, string member)
+{
+    alias TM = AliasSeq!(typeof(__traits(getMember, T.init, member)));
+    static if (TM.length > 1) enum isBuiltinTuple = true;
+    else static if (is(typeof(__traits(getMember, T.init, member)) == TM[0]))
+        enum isBuiltinTuple = false;
+    else enum isBuiltinTuple = true; // single-element tuple
 }
 
 // heuristically determines @safe'ty of the serializer by testing readValue and writeValue for type int
@@ -1939,4 +1948,22 @@ unittest { // issue 1991 - @system property getters/setters does not compile
 	auto a1 = new A;
 	auto b = serialize!TestSerializer(a1);
 	auto a2 = deserialize!(TestSerializer, A)(b);
+}
+
+unittest { // issue #2110 - single-element tuples
+	static struct F { int field; }
+
+	{
+		static struct S { typeof(F.init.tupleof) fields; }
+		auto b = serialize!TestSerializer(S(42));
+		auto a = deserialize!(TestSerializer, S)(b);
+		assert(a.fields[0] == 42);
+	}
+
+	{
+		static struct T { @asArray typeof(F.init.tupleof) fields; }
+		auto b = serialize!TestSerializer(T(42));
+		auto a = deserialize!(TestSerializer, T)(b);
+		assert(a.fields[0] == 42);
+	}
 }
