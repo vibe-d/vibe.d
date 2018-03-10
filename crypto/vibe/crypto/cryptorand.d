@@ -90,6 +90,8 @@ static if (LinuxMaybeHasGetrandom)
 	private extern(C) int syscall(size_t ident, size_t n, size_t arg1, size_t arg2) @nogc nothrow;
 }
 
+version (CRuntime_Bionic)
+    version = secure_arc4random;//ChaCha20
 version (OSX)
     version = secure_arc4random;//AES
 version (OpenBSD)
