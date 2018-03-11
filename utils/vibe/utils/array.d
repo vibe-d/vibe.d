@@ -358,8 +358,8 @@ struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 		m_start = 0;
 	}
 
-	void put()(T itm) { assert(m_fill < m_buffer.length); m_buffer[mod(m_start + m_fill++)] = itm; }
-	void put(TC : T)(TC[] itms)
+	void putBack()(T itm) { assert(m_fill < m_buffer.length); m_buffer[mod(m_start + m_fill++)] = itm; }
+	void putBack(TC : T)(TC[] itms)
 	{
 		if( !itms.length ) return;
 		assert(m_fill+itms.length <= m_buffer.length);
@@ -373,7 +373,18 @@ struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 		}
 		m_fill += itms.length;
 	}
-	void putN(size_t n) { assert(m_fill+n <= m_buffer.length); m_fill += n; }
+	void putBackN(size_t n) { assert(m_fill+n <= m_buffer.length); m_fill += n; }
+
+	alias put = putBack;
+	alias putN = putBackN;
+
+	void putFront(T itm)
+	{
+		assert(m_fill < m_buffer.length);
+		m_start = mod(m_start + m_buffer.length - 1);
+		m_fill++;
+		m_buffer[m_start] = itm;
+	}
 
 	void popFront() { assert(!empty); m_start = mod(m_start+1); m_fill--; }
 	void popFrontN(size_t n) { assert(length >= n); m_start = mod(m_start + n); m_fill -= n; }
@@ -518,6 +529,8 @@ struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 }
 
 unittest {
+	import std.range : only;
+
 	static assert(isInputRange!(FixedRingBuffer!int) && isOutputRange!(FixedRingBuffer!int, int));
 
 	FixedRingBuffer!(int, 5) buf;
@@ -574,6 +587,10 @@ unittest {
 	assert(buf.front == 2);
 	buf[].front = 3;
 	assert(buf.front == 3);
+
+	buf.putFront(4);
+	assert(buf.length == 2);
+	assert(buf[].equal(only(4, 3)));
 }
 
 
