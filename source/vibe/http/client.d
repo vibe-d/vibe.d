@@ -617,7 +617,6 @@ final class HTTPClient {
 		req.headers["User-Agent"] = m_userAgent;
 		if (m_settings.proxyURL.host !is null){
 			req.headers["Proxy-Connection"] = "keep-alive";
-			*close_conn = false; // req.headers.get("Proxy-Connection", "keep-alive") != "keep-alive";
 			if (confirmed_proxy_auth)
 			{
 				import std.base64;
@@ -628,11 +627,18 @@ final class HTTPClient {
 		}
 		else {
 			req.headers["Connection"] = "keep-alive";
-			*close_conn = false; // req.headers.get("Connection", "keep-alive") != "keep-alive";
 		}
 		req.headers["Accept-Encoding"] = "gzip, deflate";
 		req.headers["Host"] = m_server;
 		requester(req);
+
+		if (req.httpVersion == HTTPVersion.HTTP_1_0)
+			*close_conn = true;
+		else  if (m_settings.proxyURL.host !is null)
+			*close_conn = req.headers.get("Proxy-Connection", "keep-alive") != "keep-alive";
+		else
+			*close_conn = req.headers.get("Connection", "keep-alive") != "keep-alive";
+
 		req.finalize();
 
 		return req.method != HTTPMethod.HEAD;
