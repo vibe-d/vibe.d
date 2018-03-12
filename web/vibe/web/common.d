@@ -692,7 +692,7 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 	import std.typecons;
 	import vibe.data.serialization;
 
-	static if (isDynamicArray!T && !isSomeString!T) {
+	static if (isDynamicArray!T && !isSomeString!(OriginalType!T)) {
 		alias EL = typeof(T.init[0]);
 		static assert(!is(EL == bool),
 			"Boolean arrays are not allowed, because their length cannot " ~
@@ -802,6 +802,9 @@ package void setVoid(T, U)(ref T dst, U value)
 unittest {
 	static assert(!__traits(compiles, { bool[] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
 	static assert(__traits(compiles, { bool[2] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
+
+	enum Test: string {	a = "AAA", b="BBB" }
+	static assert(__traits(compiles, { Test barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
 }
 
 private string getArrayFieldName(T)(NestedNameStyle style, string prefix, T index)
