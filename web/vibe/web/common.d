@@ -802,7 +802,7 @@ package void setVoid(T, U)(ref T dst, U value)
 unittest {
 	static assert(!__traits(compiles, { bool[] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
 	static assert(__traits(compiles, { bool[2] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
-	
+
 	enum Test: string {	a = "AAA", b="BBB" }
 	static assert(__traits(compiles, { Test barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
 }
