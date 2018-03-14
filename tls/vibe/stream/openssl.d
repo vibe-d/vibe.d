@@ -241,7 +241,9 @@ final class OpenSSLStream : TLSStream {
 
 	@property ulong leastSize()
 	{
-		checkSSLRet(() @trusted { return SSL_peek(m_tls, m_peekBuffer.ptr, 1); } (), "Reading from TLS stream");
+		auto ret = () @trusted { return SSL_peek(m_tls, m_peekBuffer.ptr, 1); } ();
+		if (ret != 0) // zero means the connection got closed
+			checkSSLRet(ret, "Peeking TLS stream");
 		return () @trusted { return SSL_pending(m_tls); } ();
 	}
 
