@@ -153,7 +153,7 @@ struct Session {
 /**
 	Interface for a basic session store.
 
-	A sesseion store is responsible for storing the id and the associated key/value pairs of a
+	A session store is responsible for storing the id and the associated key/value pairs of a
 	session.
 */
 interface SessionStore {
