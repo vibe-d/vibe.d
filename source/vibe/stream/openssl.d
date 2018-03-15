@@ -898,7 +898,7 @@ private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_w
 	}
 
 	X509_NAME* name = X509_get_subject_name(cert);
-	int i;
+	int i = -1;
 	while ((i = X509_NAME_get_index_by_NID(name, cnid, i)) >= 0) {
 		X509_NAME_ENTRY* ne = X509_NAME_get_entry(name, i);
 		ASN1_STRING* str = X509_NAME_ENTRY_get_data(ne);
