@@ -110,7 +110,7 @@ void download()(string url, string filename)
 }
 
 /// ditto
-void download()(URL url, Path filename)
+void download()(URL url, NativePath filename)
 {
 	download(url.toString(), filename.toNativeString());
 }
