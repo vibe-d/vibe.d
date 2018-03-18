@@ -32,6 +32,7 @@ import deimos.openssl.bio;
 import deimos.openssl.err;
 import deimos.openssl.rand;
 import deimos.openssl.ssl;
+import deimos.openssl.stack;
 import deimos.openssl.x509v3;
 
 version (VibePragmaLib) {
@@ -45,6 +46,62 @@ version(VibeForceALPN) enum alpn_forced = true;
 else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
+// openssl 1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
+version (VibeUseOpenSSL11) {
+	extern(C) const(SSL_METHOD)* TLS_client_method();
+	alias SSLv23_client_method = TLS_client_method;
+
+	extern(C) const(SSL_METHOD)* TLS_server_method();
+	alias SSLv23_server_method = TLS_server_method;
+
+	// this does nothing in > openssl 1.1.0
+	void SSL_load_error_strings() {}
+
+	extern(C)  int OPENSSL_init_ssl(ulong opts, const void* settings);
+
+	// # define SSL_library_init() OPENSSL_init_ssl(0, NULL)
+	int SSL_library_init() {
+		return OPENSSL_init_ssl(0, null);
+	}
+
+	//#  define CRYPTO_num_locks()            (1)
+	int CRYPTO_num_locks() {
+		return 1;
+	}
+
+	void CRYPTO_set_id_callback(T)(T t) {
+	}
+
+	void CRYPTO_set_locking_callback(T)(T t) {
+	}
+
+	// #define SSL_get_ex_new_index(l, p, newf, dupf, freef) \
+	//    CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL, l, p, newf, dupf, freef)
+
+	extern(C) int CRYPTO_get_ex_new_index(int class_index, long argl, void *argp,
+	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
+	                            CRYPTO_EX_free *free_func);
+
+	int SSL_get_ex_new_index(long argl, void *argp,
+	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
+	                            CRYPTO_EX_free *free_func) {
+		// # define CRYPTO_EX_INDEX_SSL              0
+		return CRYPTO_get_ex_new_index(0, argl, argp, new_func, dup_func,
+				free_func);
+	}
+
+	extern(C) BIGNUM* BN_get_rfc3526_prime_2048(BIGNUM *bn);
+
+	alias get_rfc3526_prime_2048 = BN_get_rfc3526_prime_2048;
+
+	// #  define sk_num OPENSSL_sk_num
+	extern(C) int OPENSSL_sk_num(const void *);
+	extern(C) int sk_num(const(_STACK)* p) { return OPENSSL_sk_num(p); }
+
+	// #  define sk_value OPENSSL_sk_value
+	extern(C) void *OPENSSL_sk_value(const void *, int);
+	extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
+}
 
 /**
 	Creates an SSL/TLS tunnel within an existing stream.
@@ -60,8 +117,8 @@ final class OpenSSLStream : TLSStream {
 		SSLState m_tls;
 		BIO* m_bio;
 		ubyte[64] m_peekBuffer;
-		Exception[] m_exceptions;
-		TLSCertificateInformation m_peerCertificate;
+		TLSCertificateInformation m_peerCertificateInfo;
+		X509* m_peerCertificate;
 	}
 
 	this(Stream underlying, OpenSSLContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init, string[] alpn = null)
@@ -113,14 +170,13 @@ final class OpenSSLStream : TLSStream {
 			// ensure that the SSL tunnel gets terminated when an error happens during verification
 			scope (failure) SSL_shutdown(m_tls);
 
-			if (auto peer = SSL_get_peer_certificate(m_tls)) {
-				scope(exit) X509_free(peer);
-
-				readPeerCertInfo(peer);
+			m_peerCertificate = SSL_get_peer_certificate(m_tls);
+			if (m_peerCertificate) {
+				readPeerCertInfo();
 				auto result = SSL_get_verify_result(m_tls);
 				if (result == X509_V_OK && (ctx.peerValidationMode & TLSPeerValidationMode.checkPeer)) {
-					if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
-						version(Windows) import std.c.windows.winsock;
+					if (!verifyCertName(m_peerCertificate, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
+						version(Windows) import core.sys.windows.winsock2;
 						else import core.sys.posix.netinet.in_;
 
 						logDiagnostic("TLS peer name '%s' couldn't be verified, trying IP address.", vdata.peerName);
@@ -138,7 +194,7 @@ final class OpenSSLStream : TLSStream {
 								break;
 						}
 
-						if (!verifyCertName(peer, GENERAL_NAME.GEN_IPADD, addr[0 .. addrlen])) {
+						if (!verifyCertName(m_peerCertificate, GENERAL_NAME.GEN_IPADD, addr[0 .. addrlen])) {
 							logDiagnostic("Error validating TLS peer address");
 							result = X509_V_ERR_APPLICATION_VERIFICATION;
 						}
@@ -148,31 +204,29 @@ final class OpenSSLStream : TLSStream {
 				enforce(result == X509_V_OK, "Peer failed the certificate validation: "~to!string(result));
 			} //else enforce(ctx.verifyMode < requireCert);
 		}
-
-		checkExceptions();
 	}
 
 	/** Read certificate info into the clientInformation field */
-	private void readPeerCertInfo(X509 *cert)
+	private void readPeerCertInfo()
 	{
-		X509_NAME* name = X509_get_subject_name(cert);
+		X509_NAME* name = X509_get_subject_name(m_peerCertificate);
 
 		int c = X509_NAME_entry_count(name);
 		foreach (i; 0 .. c) {
 			X509_NAME_ENTRY *e = X509_NAME_get_entry(name, i);
-
 			ASN1_OBJECT *obj = X509_NAME_ENTRY_get_object(e);
 			ASN1_STRING *val = X509_NAME_ENTRY_get_data(e);
 
 			auto longName = OBJ_nid2ln(OBJ_obj2nid(obj)).to!string;
-			auto valStr = cast(string)val.data[0 .. val.length];
+			auto valStr = cast(string)val.data[0 .. val.length]; // FIXME: .idup?
 
-			m_peerCertificate.subjectName.addField(longName, valStr);
+			m_peerCertificateInfo.subjectName.addField(longName, valStr);
 		}
 	}
 
 	~this()
 	{
+		if (m_peerCertificate) X509_free(m_peerCertificate);
 		if (m_tls) SSL_free(m_tls);
 	}
 
@@ -183,8 +237,9 @@ final class OpenSSLStream : TLSStream {
 
 	@property ulong leastSize()
 	{
-		SSL_peek(m_tls, m_peekBuffer.ptr, 1);
-		checkExceptions();
+		auto ret = SSL_peek(m_tls, m_peekBuffer.ptr, 1);
+		if (ret != 0) // zero means the connection got closed
+			checkSSLRet(ret, "Peeking TLS stream");
 		return SSL_pending(m_tls);
 	}
 
@@ -195,14 +250,13 @@ final class OpenSSLStream : TLSStream {
 
 	const(ubyte)[] peek()
 	{
-		auto ret = SSL_peek(m_tls, m_peekBuffer.ptr, m_peekBuffer.length);
-		checkExceptions();
+		auto ret = checkSSLRet(SSL_peek(m_tls, m_peekBuffer.ptr, m_peekBuffer.length), "Peeking TLS stream");
 		return ret > 0 ? m_peekBuffer[0 .. ret] : null;
 	}
 
-	void read(ubyte[] dst)
+	void read(scope ubyte[] dst)
 	{
-		while( dst.length > 0 ){
+		while (dst.length > 0) {
 			int readlen = min(dst.length, int.max);
 			auto ret = checkSSLRet(SSL_read(m_tls, dst.ptr, readlen), "Reading from TLS stream");
 			//logTrace("SSL read %d/%d", ret, dst.length);
@@ -210,10 +264,13 @@ final class OpenSSLStream : TLSStream {
 		}
 	}
 
+	alias read = Stream.read;
+
 	void write(in ubyte[] bytes_)
 	{
 		const(ubyte)[] bytes = bytes_;
-		while( bytes.length > 0 ){
+
+		while (bytes.length > 0) {
 			int writelen = min(bytes.length, int.max);
 			auto ret = checkSSLRet(SSL_write(m_tls, bytes.ptr, writelen), "Writing to TLS stream");
 			//logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
@@ -237,8 +294,6 @@ final class OpenSSLStream : TLSStream {
 		SSL_free(m_tls);
 
 		m_tls = null;
-
-		checkExceptions();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
@@ -248,7 +303,6 @@ final class OpenSSLStream : TLSStream {
 
 	private int checkSSLRet(int ret, string what)
 	{
-		checkExceptions();
 		if (ret > 0) return ret;
 
 		string desc;
@@ -274,7 +328,9 @@ final class OpenSSLStream : TLSStream {
 		char[120] ebuf;
 		while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
 			ERR_error_string(eret, ebuf.ptr);
-			logDiagnostic("%s error at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
+			logDebug("%s error at %s:%d: %s (%s)", what,
+				to!string(file), line, to!string(ebuf.ptr),
+				flags & ERR_TXT_STRING ? to!string(data) : "-");
 		}
 
 		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
@@ -297,23 +353,21 @@ final class OpenSSLStream : TLSStream {
 			ERR_error_string_n(eret, ebuf.ptr, ebuf.length);
 			estr = ebuf.ptr.to!string;
 			// throw the last error code as an exception
+			logDebug("OpenSSL error at %s:%d: %s (%s)",
+				file.to!string, line, estr,
+				flags & ERR_TXT_STRING ? to!string(data) : "-");
 			if (!ERR_peek_error()) break;
-			logDiagnostic("OpenSSL error at %s:%d: %s (%s)", file.to!string, line, estr, flags & ERR_TXT_STRING ? to!string(data) : "-");
 		}
 
 		throw new Exception(format("%s: %s (%s)", message, estr, eret));
 	}
 
-	private void checkExceptions()
+	@property TLSCertificateInformation peerCertificate()
 	{
-		if( m_exceptions.length > 0 ){
-			foreach( e; m_exceptions )
-				logDiagnostic("Exception occured on SSL source stream: %s", e.toString());
-			throw m_exceptions[0];
-		}
+		return m_peerCertificateInfo;
 	}
 
-	@property TLSCertificateInformation peerCertificate()
+	@property X509* peerCertificateX509()
 	{
 		return m_peerCertificate;
 	}
@@ -470,7 +524,7 @@ final class OpenSSLContext : TLSContext {
 	@property TLSContextKind kind() const { return m_kind; }
 
 	/// Callback function invoked by server to choose alpn
-	@property void alpnCallback(string delegate(string[]) alpn_chooser)
+	@property void alpnCallback(TLSALPNCallback alpn_chooser)
 	{
 		logDebug("Choosing ALPN callback");
 		m_alpnCallback = alpn_chooser;
@@ -481,7 +535,7 @@ final class OpenSSLContext : TLSContext {
 	}
 
 	/// Get the current ALPN callback function
-	@property string delegate(string[]) alpnCallback() const { return m_alpnCallback; }
+	@property TLSALPNCallback alpnCallback() const { return m_alpnCallback; }
 
 	/// Invoked by client to offer alpn
 	void setClientALPN(string[] alpn_list)
@@ -769,8 +823,8 @@ final class OpenSSLContext : TLSContext {
 					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
 					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
 					case X509_V_ERR_CERT_UNTRUSTED:
-						assert(ctx.current_cert !is null);
-						X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, buf.length);
+						assert(err_cert !is null);
+						X509_NAME_oneline(X509_get_issuer_name(err_cert), buf.ptr, buf.length);
 						buf[$-1] = 0;
 						logDebug("SSL cert not trusted or unknown issuer: %s", buf.ptr.to!string);
 						if (!(vdata.validationMode & TLSPeerValidationMode.checkTrust)) {
@@ -955,8 +1009,10 @@ private nothrow extern(C)
 	import core.stdc.config;
 
 
-	int chooser(SSL* ssl, const(char)** output, ubyte* outlen, const(char) *input, uint inlen, void* arg) {
-		logDebug("Got chooser input: %s", input[0 .. inlen]);
+	int chooser(SSL* ssl, const(char)** output, ubyte* outlen, const(char) *input_, uint inlen, void* arg) {
+		const(char)[] input = input_[0 .. inlen];
+
+		logDebug("Got chooser input: %s", input);
 		OpenSSLContext ctx = cast(OpenSSLContext) arg;
 		import vibe.utils.array : AllocAppender, AppenderResetMode;
 		size_t i;
@@ -966,7 +1022,7 @@ private nothrow extern(C)
 		{
 			len = cast(size_t) input[i];
 			++i;
-			ubyte[] proto = cast(ubyte[]) input[i .. i+len];
+			auto proto = input[i .. i+len];
 			i += len;
 			alpn_list ~= cast(string)proto;
 		}
@@ -980,19 +1036,20 @@ private nothrow extern(C)
 			{
 				len = input[i];
 				++i;
-				ubyte[] proto = cast(ubyte[]) input[i .. i+len];
+				auto proto = input[i .. i+len];
 				i += len;
-				if (cast(string) proto == alpn) {
-					*output = cast(const(char)*)proto.ptr;
+				if (proto == alpn) {
+					*output = &proto[0];
 					*outlen = cast(ubyte) proto.length;
 				}
 			}
 		}
 
 		if (!output) {
-			logError("None of the proposed ALPN were selected: %s / falling back on HTTP/1.1", input[0 .. inlen]);
-			*output = cast(const(char)*)("http/1.1".ptr);
-			*outlen = cast(ubyte)("http/1.1".length);
+			logError("None of the proposed ALPN were selected: %s / falling back on HTTP/1.1", input);
+			enum hdr = "http/1.1";
+			*output = &hdr[0];
+			*outlen = cast(ubyte)hdr.length;
 		}
 
 		return 0;
@@ -1049,8 +1106,8 @@ private nothrow extern(C)
 		try {
 			outlen = min(outlen, stream.m_stream.leastSize);
 			stream.m_stream.read(cast(ubyte[])outb[0 .. outlen]);
-		} catch(Exception e){
-			stream.m_exceptions ~= e;
+		} catch (Exception e) {
+			setSSLError("Error reading from underlying stream", e.msg);
 			return -1;
 		}
 		return outlen;
@@ -1061,8 +1118,8 @@ private nothrow extern(C)
 		auto stream = cast(OpenSSLStream)b.ptr;
 		try {
 			stream.m_stream.write(inb[0 .. inlen]);
-		} catch(Exception e){
-			stream.m_exceptions ~= e;
+		} catch (Exception e) {
+			setSSLError("Error writing to underlying stream", e.msg);
 			return -1;
 		}
 		return inlen;
@@ -1081,10 +1138,10 @@ private nothrow extern(C)
 				break;
 			case BIO_CTRL_PENDING:
 				try {
-					auto sz = stream.m_stream.leastSize;
+					auto sz = stream.m_stream.leastSize; // FIXME: .peek.length should be sufficient here
 					return sz <= c_long.max ? cast(c_long)sz : c_long.max;
 				} catch( Exception e ){
-					stream.m_exceptions ~= e;
+					setSSLError("Error reading from underlying stream", e.msg);
 					return -1;
 				}
 			case BIO_CTRL_WPENDING: return 0;
@@ -1103,6 +1160,13 @@ private nothrow extern(C)
 	{
 		return onBioWrite(b, s, cast(int)strlen(s));
 	}
+}
+
+private void setSSLError(string msg, string submsg, int line = __LINE__, string file = __FILE__)
+@trusted nothrow {
+	import std.string : toStringz;
+	ERR_put_error(ERR_LIB_USER, 0, 1, file.toStringz, line);
+	ERR_add_error_data(3, msg.toStringz, ": ".ptr, submsg.toStringz);
 }
 
 private BIO_METHOD s_bio_methods = {
