@@ -489,20 +489,25 @@ private struct MatchTree(T) {
 	import std.array : array;
 
 	private {
+		alias NodeIndex = uint;
+		alias TerminalTagIndex = uint;
+		alias TerminalIndex = ushort;
+		alias VarIndex = ushort;
+
 		struct Node {
-			size_t terminalsStart; // slice into m_terminalTags
-			size_t terminalsEnd;
-			uint[ubyte.max+1] edges = uint.max; // character -> index into m_nodes
+			TerminalTagIndex terminalsStart; // slice into m_terminalTags
+			TerminalTagIndex terminalsEnd;
+			NodeIndex[ubyte.max+1] edges = NodeIndex.max; // character -> index into m_nodes
 		}
 		struct TerminalTag {
-			size_t index; // index into m_terminals array
-			size_t var; // index into Terminal.varNames/varValues or size_t.max
+			TerminalIndex index; // index into m_terminals array
+			VarIndex var = VarIndex.max; // index into Terminal.varNames/varValues or VarIndex.max
 		}
 		struct Terminal {
 			string pattern;
 			T data;
 			string[] varNames;
-			size_t[size_t] varMap; // maps node index to variable index
+			VarIndex[NodeIndex] varMap;
 		}
 		Node[] m_nodes; // all nodes as a single array
 		TerminalTag[] m_terminalTags;
@@ -516,6 +521,7 @@ private struct MatchTree(T) {
 
 	void addTerminal(string pattern, T data)
 	{
+		assert(m_terminals.length < TerminalIndex.max, "Attempt to register too many routes.");
 		m_terminals ~= Terminal(pattern, data, null, null);
 		m_upToDate = false;
 	}
@@ -542,7 +548,7 @@ private struct MatchTree(T) {
 		logInfo("Nodes:");
 		foreach (i, n; m_nodes) {
 			logInfo("  %s %s", i, m_terminalTags[n.terminalsStart .. n.terminalsEnd]
-				.map!(t => format("T%s%s", t.index, t.var != size_t.max ? "("~m_terminals[t.index].varNames[t.var]~")" : "")).join(" "));
+				.map!(t => format("T%s%s", t.index, t.var != VarIndex.max ? "("~m_terminals[t.index].varNames[t.var]~")" : "")).join(" "));
 			//logInfo("  %s %s-%s", i, n.terminalsStart, n.terminalsEnd);
 
 
@@ -562,23 +568,23 @@ private struct MatchTree(T) {
 				else logInfo("    %s-%s -> %s", mapChar(from), mapChar(to), node);
 			}
 
-			uint last_to = uint.max;
+			auto last_to = NodeIndex.max;
 			ubyte last_ch = 0;
 			foreach (ch, e; n.edges)
 				if (e != last_to) {
-					if (last_to != uint.max)
+					if (last_to != NodeIndex.max)
 						printRange(last_to, last_ch, cast(ubyte)(ch-1));
 					last_ch = cast(ubyte)ch;
 					last_to = e;
 				}
-			if (last_to != uint.max)
+			if (last_to != NodeIndex.max)
 				printRange(last_to, last_ch, ubyte.max);
 		}
 	}
 
 	private bool doMatch(string text, scope bool delegate(size_t terminal, scope string[] vars) del)
 	const {
-		string[maxRouteParameters] vars_buf = void;
+		string[maxRouteParameters] vars_buf;// = void;
 
 		import std.algorithm : canFind;
 
@@ -606,54 +612,55 @@ private struct MatchTree(T) {
 		// follow the path through the match graph
 		foreach (i, char ch; text) {
 			auto nidx = n.edges[cast(size_t)ch];
-			if (nidx == uint.max) return null;
+			if (nidx == NodeIndex.max) return null;
 			n = &m_nodes[nidx];
 		}
 
 		// finally, find a matching terminal node
 		auto nidx = n.edges[TerminalChar];
-		if (nidx == uint.max) return null;
+		if (nidx == NodeIndex.max) return null;
 		n = &m_nodes[nidx];
 		return n;
 	}
 
 	private void matchVars(string[] dst, in Terminal* term, string text)
 	const {
-		auto nidx = 0;
-		size_t activevar = size_t.max;
+		NodeIndex nidx = 0;
+		VarIndex activevar = VarIndex.max;
 		size_t activevarstart;
 
 		dst[] = null;
 
 		// folow the path throgh the match graph
 		foreach (i, char ch; text) {
-			auto var = term.varMap.get(nidx, size_t.max);
+			auto var = term.varMap.get(nidx, VarIndex.max);
 
 			// detect end of variable
-			if (var != activevar && activevar != size_t.max) {
+			if (var != activevar && activevar != VarIndex.max) {
 				dst[activevar] = text[activevarstart .. i-1];
-				activevar = size_t.max;
+				activevar = VarIndex.max;
 			}
 
 			// detect beginning of variable
-			if (var != size_t.max && activevar == size_t.max) {
+			if (var != VarIndex.max && activevar == VarIndex.max) {
 				activevar = var;
 				activevarstart = i;
 			}
 
 			nidx = m_nodes[nidx].edges[cast(ubyte)ch];
-			assert(nidx != uint.max);
+			assert(nidx != NodeIndex.max);
 		}
 
 		// terminate any active varible with the end of the input string or with the last character
-		auto var = term.varMap.get(nidx, size_t.max);
-		if (activevar != size_t.max) dst[activevar] = text[activevarstart .. (var == activevar ? $ : $-1)];
+		auto var = term.varMap.get(nidx, VarIndex.max);
+		if (activevar != VarIndex.max) dst[activevar] = text[activevarstart .. (var == activevar ? $ : $-1)];
 	}
 
 	private void rebuildGraph()
 	{
 		import std.array : appender;
-		
+		import std.conv : to;
+
 		if (m_upToDate) return;
 		m_upToDate = true;
 
@@ -663,50 +670,56 @@ private struct MatchTree(T) {
 		if (!m_terminals.length) return;
 
 		MatchGraphBuilder builder;
-		foreach (i, ref t; m_terminals)
-			t.varNames = builder.insert(t.pattern, i);
+		foreach (i, ref t; m_terminals) {
+			t.varNames = builder.insert(t.pattern, i.to!TerminalIndex);
+			assert(t.varNames.length <= VarIndex.max, "Too many variables in route.");
+		}
 		//builder.print();
 		builder.disambiguate();
 
-		auto nodemap = new uint[builder.m_nodes.length];
-		nodemap[] = uint.max;
+		auto nodemap = new NodeIndex[builder.m_nodes.length];
+		nodemap[] = NodeIndex.max;
 
 		auto nodes = appender!(Node[]);
 		nodes.reserve(1024);
+		auto termtags = appender!(TerminalTag[]);
+		termtags.reserve(1024);
 
-		uint process(size_t n)
+		NodeIndex process(NodeIndex n)
 		{
 			import std.algorithm : canFind;
 
-			if (nodemap[n] != uint.max) return nodemap[n];
-			auto nmidx = cast(uint)nodes.data.length;
+			if (nodemap[n] != NodeIndex.max) return nodemap[n];
+			auto nmidx = cast(NodeIndex)nodes.data.length;
 			nodemap[n] = nmidx;
 			nodes.put(Node.init);
 
 			Node nn;
-			nn.terminalsStart = m_terminalTags.length;
+			nn.terminalsStart = termtags.data.length.to!TerminalTagIndex;
 			foreach (t; builder.m_nodes[n].terminals) {
-				auto var = t.var.length ? m_terminals[t.index].varNames.countUntil(t.var) : size_t.max;
-				assert(!m_terminalTags[nn.terminalsStart .. $].canFind!(u => u.index == t.index && u.var == var));
-				m_terminalTags ~= TerminalTag(t.index, var);
-				if (var != size_t.max)
+				auto var = cast(VarIndex)t.var;
+				assert(!termtags.data[nn.terminalsStart .. $].canFind!(u => u.index == t.index && u.var == var));
+				termtags ~= TerminalTag(cast(TerminalIndex)t.index, var);
+				if (var != VarIndex.max)
 					m_terminals[t.index].varMap[nmidx] = var;
 			}
-			nn.terminalsEnd = m_terminalTags.length;
+			nn.terminalsEnd = termtags.data.length.to!TerminalTagIndex;
 			foreach (ch, targets; builder.m_nodes[n].edges)
-				foreach (to; targets)
+				foreach (to; builder.m_edgeEntries.getItems(targets))
 					nn.edges[ch] = process(to);
 
 			nodes.data[nmidx] = nn;
 
 			return nmidx;
 		}
-		assert(builder.m_nodes[0].edges['^'].length == 1, "Graph must be disambiguated before purging.");
-		process(builder.m_nodes[0].edges['^'][0]);
+		assert(builder.m_edgeEntries.hasLength(builder.m_nodes[0].edges['^'], 1),
+			"Graph must be disambiguated before purging.");
+		process(builder.m_edgeEntries.getItems(builder.m_nodes[0].edges['^']).front);
 
 		m_nodes = nodes.data;
+		m_terminalTags = termtags.data;
 
-		logDebug("Match tree has %s(%s) nodes, %s terminals", m_nodes.length, builder.m_nodes.length, m_terminals.length);
+		logDebug("Match tree has %s (of %s in the builder) nodes, %s terminals", m_nodes.length, builder.m_nodes.length, m_terminals.length);
 	}
 }
 
@@ -787,26 +800,33 @@ unittest {
 
 
 private struct MatchGraphBuilder {
+	import std.container.array : Array;
 	import std.array : array;
 	import std.algorithm : filter;
 	import std.string : format;
 
+	alias NodeIndex = uint;
+	alias TerminalIndex = ushort;
+	alias VarIndex = ushort;
+	alias NodeSet = LinkedSetBacking!NodeIndex.Handle;
+
 	private {
 		enum TerminalChar = 0;
 		struct TerminalTag {
-			size_t index;
-			string var;
-			bool opEquals(in ref TerminalTag other) const { return index == other.index && var == other.var; }
+			TerminalIndex index;
+			VarIndex var = VarIndex.max;
 		}
 		struct Node {
-			size_t idx;
-			TerminalTag[] terminals;
-			size_t[][ubyte.max+1] edges;
+			Array!TerminalTag terminals;
+			NodeSet[ubyte.max+1] edges;
 		}
-		Node[] m_nodes;
+		Array!Node m_nodes;
+		LinkedSetBacking!NodeIndex m_edgeEntries;
 	}
 
-	string[] insert(string pattern, size_t terminal)
+	@disable this(this);
+
+	string[] insert(string pattern, TerminalIndex terminal)
 	{
 		import std.algorithm : canFind;
 
@@ -816,7 +836,7 @@ private struct MatchGraphBuilder {
 
 		// create start node and connect to zero node
 		auto nidx = addNode();
-		addEdge(0, nidx, '^', terminal, null);
+		addEdge(0, nidx, '^', terminal);
 
 		while (pattern.length) {
 			auto ch = pattern[0];
@@ -826,28 +846,29 @@ private struct MatchGraphBuilder {
 
 				foreach (v; ubyte.min .. ubyte.max+1) {
 					if (v == TerminalChar) continue;
-					addEdge(nidx, nidx, cast(ubyte)v, terminal, null);
+					addEdge(nidx, nidx, cast(ubyte)v, terminal);
 				}
 			} else if (ch == ':') {
 				pattern = pattern[1 .. $];
 				auto name = skipPathNode(pattern);
 				assert(name.length > 0, "Missing placeholder name: "~full_pattern);
 				assert(!vars.canFind(name), "Duplicate placeholder name ':"~name~"': '"~full_pattern~"'");
+				auto varidx = cast(VarIndex)vars.length;
 				vars ~= name;
 				assert(!pattern.length || (pattern[0] != '*' && pattern[0] != ':'),
 					"Cannot have two placeholders directly follow each other.");
 
 				foreach (v; ubyte.min .. ubyte.max+1) {
 					if (v == TerminalChar || v == '/') continue;
-					addEdge(nidx, nidx, cast(ubyte)v, terminal, name);
+					addEdge(nidx, nidx, cast(ubyte)v, terminal, varidx);
 				}
 			} else {
-				nidx = addEdge(nidx, ch, terminal, null);
+				nidx = addEdge(nidx, ch, terminal);
 				pattern = pattern[1 .. $];
 			}
 		}
 
-		addEdge(nidx, TerminalChar, terminal, null);
+		addEdge(nidx, TerminalChar, terminal);
 		return vars;
 	}
 
@@ -856,13 +877,14 @@ private struct MatchGraphBuilder {
 		import std.algorithm : map, sum;
 		import std.array : appender, join;
 
-//logInfo("Disambiguate");
+		//logInfo("Disambiguate with %s initial nodes", m_nodes.length);
 		if (!m_nodes.length) return;
 
 		import vibe.utils.hashmap;
-		HashMap!(size_t[], size_t) combined_nodes;
-		auto visited = new bool[m_nodes.length * 2];
-		Stack!size_t node_stack;
+		HashMap!(size_t, NodeIndex) combined_nodes;
+		Array!bool visited;
+		visited.length = m_nodes.length * 2;
+		Stack!NodeIndex node_stack;
 		node_stack.reserve(m_nodes.length);
 		node_stack.push(0);
 		while (!node_stack.empty) {
@@ -870,56 +892,60 @@ private struct MatchGraphBuilder {
 
 			while (n >= visited.length) visited.length = visited.length * 2;
 			if (visited[n]) continue;
-//logInfo("Disambiguate %s", n);
+			//logInfo("Disambiguate %s (stack=%s)", n, node_stack.fill);
 			visited[n] = true;
 
-			foreach (ch_; ubyte.min .. ubyte.max+1) {
-				ubyte ch = cast(ubyte)ch_;
-				auto chnodes = m_nodes[n].edges[ch_];
+			foreach (ch; ubyte.min .. ubyte.max+1) {
+				auto chnodes = m_nodes[n].edges[ch];
+				size_t chhash = m_edgeEntries.getHash(chnodes);
 
 				// handle trivial cases
-				if (chnodes.length <= 1) continue;
+				if (m_edgeEntries.hasMaxLength(chnodes, 1))
+					continue;
 
 				// generate combined state for ambiguous edges
-				if (auto pn = chnodes in combined_nodes) { m_nodes[n].edges[ch] = singleNodeArray(*pn); continue; }
+				if (auto pn = () @trusted { return chhash in combined_nodes; } ()) {
+					m_nodes[n].edges[ch] = m_edgeEntries.create(*pn);
+					assert(m_edgeEntries.hasLength(m_nodes[n].edges[ch], 1));
+					continue;
+				}
 
 				// for new combinations, create a new node
-				size_t ncomb = addNode();
-				combined_nodes[chnodes] = ncomb;
-
-				// allocate memory for all edges combined
-				size_t total_edge_count = 0;
-				foreach (chn; chnodes) {
-					Node* cn = &m_nodes[chn];
-					foreach (edges; cn.edges)
-						total_edge_count +=edges.length;
-				}
-				auto mem = new size_t[total_edge_count];
+				NodeIndex ncomb = addNode();
+				combined_nodes[chhash] = ncomb;
 
 				// write all edges
 				size_t idx = 0;
 				foreach (to_ch; ubyte.min .. ubyte.max+1) {
-					size_t start = idx;
-					foreach (chn; chnodes) {
-						auto edges = m_nodes[chn].edges[to_ch];
-						mem[idx .. idx + edges.length] = edges;
-						idx += edges.length;
-					}
-					m_nodes[ncomb].edges[to_ch] = mem[start .. idx];
+					auto e = &m_nodes[ncomb].edges[to_ch];
+					foreach (chn; m_edgeEntries.getItems(chnodes))
+						m_edgeEntries.insert(e, m_edgeEntries.getItems(m_nodes[chn].edges[to_ch]));
 				}
 
 				// add terminal indices
-				foreach (chn; chnodes) addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
+				foreach (chn; m_edgeEntries.getItems(chnodes))
+					foreach (t; m_nodes[chn].terminals)
+						addTerminal(ncomb, t.index, t.var);
 				foreach (i; 1 .. m_nodes[ncomb].terminals.length)
 					assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
-				
-				m_nodes[n].edges[ch] = singleNodeArray(ncomb);
+
+				m_nodes[n].edges[ch] = m_edgeEntries.create(ncomb);
+				assert(m_edgeEntries.hasLength(m_nodes[n].edges[ch], 1));
 			}
 
 			// process nodes recursively
-			foreach (ch; ubyte.min .. ubyte.max+1)
-				node_stack.push(m_nodes[n].edges[ch]);
+			foreach (ch; ubyte.min .. ubyte.max+1) {
+				// should only have single out-edges now
+				assert(m_edgeEntries.hasMaxLength(m_nodes[n].edges[ch], 1));
+				foreach (e; m_edgeEntries.getItems(m_nodes[n].edges[ch]))
+					node_stack.push(e);
+			}
 		}
+
+		import std.algorithm.sorting : sort;
+		foreach (ref n; m_nodes)
+			n.terminals[].sort!((a, b) => a.index < b.index)();
+
 		debug logDebug("Disambiguate done: %s nodes, %s max stack size", m_nodes.length, node_stack.maxSize);
 	}
 
@@ -931,45 +957,68 @@ private struct MatchGraphBuilder {
 		import std.string : format;
 
 		logInfo("Nodes:");
-		foreach (i, n; m_nodes) {
+		size_t i = 0;
+		foreach (n; m_nodes) {
 			string mapChar(ubyte ch) {
 				if (ch == TerminalChar) return "$";
 				if (ch >= '0' && ch <= '9') return to!string(cast(dchar)ch);
 				if (ch >= 'a' && ch <= 'z') return to!string(cast(dchar)ch);
 				if (ch >= 'A' && ch <= 'Z') return to!string(cast(dchar)ch);
+				if (ch == '^') return "^";
 				if (ch == '/') return "/";
-				return ch.to!string;
+				return format("$%s", ch);
 			}
-			logInfo("  %s %s", i, n.terminals.map!(t => format("T%s%s", t.index, t.var.length ? "("~t.var~")" : "")).join(" "));
-			foreach (ch, tnodes; n.edges)
-				foreach (tn; tnodes)
-					logInfo("    %s -> %s", mapChar(cast(ubyte)ch), tn);
+			logInfo("  %s: %s", i, n.terminals[].map!(t => t.var != VarIndex.max ? format("T%s(%s)", t.index, t.var) : format("T%s", t.index)).join(" "));
+			ubyte first_char;
+			size_t list_hash;
+			NodeSet list;
+
+			void printEdges(ubyte last_char) {
+				if (!list.empty) {
+					string targets;
+					foreach (tn; m_edgeEntries.getItems(list))
+						targets ~= format(" %s", tn);
+					if (targets.length > 0)
+						logInfo("    [%s ... %s] -> %s", mapChar(first_char), mapChar(last_char), targets);
+				}
+			}
+			foreach (ch, tnodes; n.edges) {
+				auto h = m_edgeEntries.getHash(tnodes);
+				if (h != list_hash) {
+					printEdges(cast(ubyte)(ch-1));
+					list_hash = h;
+					list = tnodes;
+					first_char = cast(ubyte)ch;
+				}
+			}
+			printEdges(ubyte.max);
+			i++;
 		}
 	}
 
-	private void addEdge(size_t from, size_t to, ubyte ch, size_t terminal, string var)
-	{
-		auto e = &m_nodes[from].edges[ch];
-		if (!(*e).length) *e = singleNodeArray(to);
-		else *e ~= to;
+	private void addEdge(NodeIndex from, NodeIndex to, ubyte ch, TerminalIndex terminal, VarIndex var = VarIndex.max)
+	@trusted {
+		m_edgeEntries.insert(&m_nodes[from].edges[ch], to);
 		addTerminal(to, terminal, var);
 	}
 
-	private size_t addEdge(size_t from, ubyte ch, size_t terminal, string var)
+	private NodeIndex addEdge(NodeIndex from, ubyte ch, TerminalIndex terminal, VarIndex var = VarIndex.max)
 	{
 		import std.algorithm : canFind;
 		import std.string : format;
-		assert(!m_nodes[from].edges[ch].length > 0, format("%s is in %s", ch, m_nodes[from].edges));
+		if (!m_nodes[from].edges[ch].empty)
+			assert(false, format("%s is in %s", ch, m_nodes[from].edges[]));
 		auto nidx = addNode();
 		addEdge(from, nidx, ch, terminal, var);
 		return nidx;
 	}
 
-	private void addTerminal(size_t node, size_t terminal, string var)
+	private void addTerminal(NodeIndex node, TerminalIndex terminal, VarIndex var)
 	{
 		foreach (ref t; m_nodes[node].terminals) {
 			if (t.index == terminal) {
-				assert(t.var.length == 0 || t.var == var, "Ambiguous route var match!? '"~t.var~"' vs. '"~var~"'");
+				if (t.var != VarIndex.max && t.var != var)
+					assert(false, format("Ambiguous route var match!? %s vs %s", t.var, var));
 				t.var = var;
 				return;
 			}
@@ -977,28 +1026,146 @@ private struct MatchGraphBuilder {
 		m_nodes[node].terminals ~= TerminalTag(terminal, var);
 	}
 
-	private size_t addNode()
+	private NodeIndex addNode()
 	{
-		auto idx = m_nodes.length;
-		m_nodes ~= Node(idx, null, null);
+		assert(m_nodes.length <= 1_000_000_000, "More than 1B nodes in tree!?");
+		auto idx = cast(NodeIndex)m_nodes.length;
+		m_nodes ~= Node.init;
 		return idx;
 	}
+}
 
-	private size_t[] singleNodeArray(size_t node)
-	{
-		return (&m_nodes[node].idx)[0 .. 1];
+struct LinkedSetBacking(T) {
+	import std.container.array : Array;
+	import std.range : isInputRange;
+
+	static struct Handle {
+		uint index = uint.max;
+		@property bool empty() const { return index == uint.max; }
 	}
 
-	private static addToArray(T)(ref T[] arr, T[] elems) { foreach (e; elems) addToArray(arr, e); }
-	private static addToArray(T)(ref T[] arr, T elem)
-	{
-		import std.algorithm : canFind;
-		if (!arr.canFind(elem)) arr ~= elem;
+	private {
+		static struct Entry {
+			uint next;
+			T value;
+		}
+
+		Array!Entry m_storage;
+
+		static struct Range {
+			private {
+				Array!Entry* backing;
+				uint index;
+			}
+
+			@property bool empty() const { return index == uint.max; }
+			@property ref const(T) front() const { return (*backing)[index].value; }
+
+			void popFront()
+			{
+				index = (*backing)[index].next;
+			}
+		}
 	}
+
+	@property Handle emptySet() { return Handle.init; }
+
+	Handle create(scope T[] items...)
+	{
+		Handle ret;
+		foreach (i; items)
+			ret.index = createNode(i, ret.index);
+		return ret;
+	}
+
+	void insert(Handle* h, T value)
+	{
+		/*foreach (c; getItems(*h))
+			if (value == c)
+				return;*/
+		h.index = createNode(value, h.index);
+	}
+
+	void insert(R)(Handle* h, R items)
+		if (isInputRange!R)
+	{
+		foreach (itm; items)
+			insert(h, itm);
+	}
+
+	size_t getHash(Handle sh)
+	const {
+		// NOTE: the returned hash is order independent, to avoid bogus
+		//       mismatches when comparing lists of different order
+		size_t ret = 0x72d2da6c;
+		while (sh != Handle.init) {
+			ret ^= (hashOf(m_storage[sh.index].value) ^ 0xb1bdfb8d) * 0x5dbf04a4;
+			sh.index = m_storage[sh.index].next;
+		}
+		return ret;
+	}
+
+	auto getItems(Handle sh) { return Range(&m_storage, sh.index); }
+	auto getItems(Handle sh) const { return Range(&(cast()this).m_storage, sh.index); }
+
+	bool hasMaxLength(Handle sh, size_t l)
+	const {
+		uint idx = sh.index;
+		do {
+			if (idx == uint.max) return true;
+			idx = m_storage[idx].next;
+		} while (l-- > 0);
+		return false;
+	}
+
+	bool hasLength(Handle sh, size_t l)
+	const {
+		uint idx = sh.index;
+		while (l-- > 0) {
+			if (idx == uint.max) return false;
+			idx = m_storage[idx].next;
+		}
+		return idx == uint.max;
+	}
+
+	private uint createNode(ref T val, uint next)
+	{
+		auto id = cast(uint)m_storage.length;
+		m_storage ~= Entry(next, val);
+		return id;
+	}
+}
+
+unittest {
+	import std.algorithm.comparison : equal;
+
+	LinkedSetBacking!int b;
+	auto s = b.emptySet;
+	assert(s.empty);
+	assert(b.getItems(s).empty);
+	s = b.create(3, 5, 7);
+	assert(b.getItems(s).equal([7, 5, 3]));
+	assert(!b.hasLength(s, 2));
+	assert(b.hasLength(s, 3));
+	assert(!b.hasLength(s, 4));
+	assert(!b.hasMaxLength(s, 2));
+	assert(b.hasMaxLength(s, 3));
+	assert(b.hasMaxLength(s, 4));
+
+	auto h = b.getHash(s);
+	assert(h != b.getHash(b.emptySet));
+	s = b.create(5, 3, 7);
+	assert(b.getHash(s) == h);
+
+	b.insert(&s, 11);
+	assert(b.hasLength(s, 4));
+	assert(b.getHash(s) != h);
 }
 
 private struct Stack(E)
 {
+	import std.range : isInputRange;
+
 	private {
 		E[] m_storage;
 		size_t m_fill;
@@ -1006,6 +1173,8 @@ private struct Stack(E)
 	}
 
 	@property bool empty() const { return m_fill == 0; }
+
+	@property size_t fill() const { return m_fill; }
 
 	debug @property size_t maxSize() const { return m_maxFill; }
 
@@ -1026,7 +1195,8 @@ private struct Stack(E)
 		debug if (m_fill > m_maxFill) m_maxFill = m_fill;
 	}
 
-	void push(E[] els)
+	void push(R)(R els)
+		if (isInputRange!R)
 	{
 		reserve(els.length);
 		foreach (el; els)
