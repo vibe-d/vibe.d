@@ -48,6 +48,8 @@ matrix:
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
   allow_failures:
     - d: dmd-beta
+    - d: dmd-2.072.2 # incompatible dub version
+    - d: ldc-1.1.1 # buggy dub version
     - d: ldc-1.3.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: dmd-2.068.2
