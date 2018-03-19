@@ -10,15 +10,15 @@ shared static this()
 {
 	auto s1 = new HTTPServerSettings;
 	s1.options &= ~HTTPServerOption.errorStackTraces;
-	s1.bindAddresses = ["::1"];
+	s1.bindAddresses = ["127.0.0.1"];
 	s1.port = 11388;
 	listenHTTP(s1, &handler);
 
 	runTask({
 		scope (failure) assert(false);
 
-		auto conn = connectTCP("::1", 11388);
-		conn.write("GET / HTTP/1.1\r\nHost: [::1]\r\n\r\n");
+		auto conn = connectTCP("127.0.0.1", 11388);
+		conn.write("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
 		string res = cast(string)conn.readLine();
 		assert(res == "HTTP/1.1 200 OK", res);
 		while (conn.readLine().length > 0) {}
@@ -36,7 +36,7 @@ shared static this()
 		assert(!conn.connected && conn.empty);
 		logInfo("1.1 without Host header OK.");
 
-		conn = connectTCP("::1", 11388);
+		conn = connectTCP("127.0.0.1", 11388);
 		conn.write("GET / HTTP/1.0\r\n\r\n");
 		res = cast(string)conn.readLine();
 		assert(res == "HTTP/1.0 200 OK", res);
