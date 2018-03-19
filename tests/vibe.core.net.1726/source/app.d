@@ -6,7 +6,7 @@ import vibe.core.log;
 shared static this()
 {
 	bool done = false;
-	auto buf = new ubyte[512*1024*1024];
+	auto buf = new ubyte[256*1024*1024];
 
 	listenTCP(11375,(conn) {
 		bool read_ex = false;
@@ -37,7 +37,7 @@ shared static this()
 		assert(read_ex, "No read exception thrown");
 		assert(write_ex, "No write exception thrown");
 		exitEventLoop();
-	});
+	}, "127.0.0.1");
 
 	runTask({
 		try {
