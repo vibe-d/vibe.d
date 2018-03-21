@@ -378,10 +378,8 @@ final class HTTPClient {
 				catch (Exception e) logDebug("Failed to finalize connection stream when closing HTTP client connection: %s", e.msg);
 				m_conn.close();
 			}
-			if (m_useTLS) {
-				() @trusted { return destroy(m_stream); } ();
-				m_stream = InterfaceProxy!Stream.init;
-			}
+			if (m_useTLS) () @trusted { return destroy(m_stream); } ();
+			m_stream = InterfaceProxy!Stream.init;
 			() @trusted { return destroy(m_conn); } ();
 			m_conn = TCPConnection.init;
 		}
