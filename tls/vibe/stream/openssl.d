@@ -316,6 +316,7 @@ final class OpenSSLStream : TLSStream {
 		} ();
 
 		m_tls = null;
+		m_stream = InterfaceProxy!Stream.init;
 	}
 
 	private int checkSSLRet(int ret, string what)
