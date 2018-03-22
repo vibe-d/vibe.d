@@ -2510,12 +2510,14 @@ package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(T.i
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message = "JSON exception")
 {
-	enforceEx!JSONException(cond, message, file, line);
+	import vibe.internal.exception : enforce;
+	enforce!JSONException(cond, message, file, line);
 }
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int err_line)
 {
-	enforceEx!JSONException(cond, format("%s(%s): Error: %s", err_file, err_line+1, message), file, line);
+	import vibe.internal.exception : enforce;
+	enforce!JSONException(cond, format("%s(%s): Error: %s", err_file, err_line+1, message), file, line);
 }
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int* err_line)
