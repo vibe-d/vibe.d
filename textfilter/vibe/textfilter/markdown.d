@@ -1351,3 +1351,8 @@ private struct Link {
 	assert(filterMarkdown("[foo](javascript&#58;bar)", MarkdownFlags.forumDefault) ==
 		"<p><a href=\"javascript&amp;#58;bar\">foo</a>\n</p>\n");
 }
+
+@safe unittest { // issue #2132 - table with more columns in body goes out of array bounds
+	assert(filterMarkdown("| a | b |\n|--------|--------|\n|   c    | d  | e |", MarkdownFlags.tables) ==
+		"<table>\n<tr><th>a</th><th>b</th></tr>\n<tr><td>c</td><td>d</td><td>e</td></tr>\n</table>\n");
+}
