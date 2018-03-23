@@ -473,6 +473,9 @@ pure @safe {
 		return true;
 	}
 
+	if (lines.empty)
+		return [""]; // return value is used in variables that don't get bounds checks on the first element, so we should return at least one
+
 	string[] ret;
 
 	while(true){
@@ -529,7 +532,8 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 				dst.put('>');
 				dst.writeMarkdownEscaped(col, links, settings);
 				dst.put("</th>");
-				i++;
+				if (i + 1 < block.columns.length)
+					i++;
 			}
 			dst.put("</tr>\n");
 			foreach (ln; block.text[1 .. $]) {
@@ -541,7 +545,8 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 					dst.put('>');
 					dst.writeMarkdownEscaped(col, links, settings);
 					dst.put("</td>");
-					i++;
+					if (i + 1 < block.columns.length)
+						i++;
 				}
 				dst.put("</tr>\n");
 			}
