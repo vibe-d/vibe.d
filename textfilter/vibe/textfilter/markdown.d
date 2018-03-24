@@ -473,6 +473,9 @@ pure @safe {
 		return true;
 	}
 
+	if (lines.empty)
+		return [""]; // return value is used in variables that don't get bounds checks on the first element, so we should return at least one
+
 	string[] ret;
 
 	while(true){
@@ -529,7 +532,8 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 				dst.put('>');
 				dst.writeMarkdownEscaped(col, links, settings);
 				dst.put("</th>");
-				i++;
+				if (i + 1 < block.columns.length)
+					i++;
 			}
 			dst.put("</tr>\n");
 			foreach (ln; block.text[1 .. $]) {
@@ -541,7 +545,8 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 					dst.put('>');
 					dst.writeMarkdownEscaped(col, links, settings);
 					dst.put("</td>");
-					i++;
+					if (i + 1 < block.columns.length)
+						i++;
 				}
 				dst.put("</tr>\n");
 			}
@@ -1345,4 +1350,9 @@ private struct Link {
 		"<p><a href=\"&quot;&gt;&lt;script&gt;&lt;/script&gt;&lt;span foo=&quot;\">foo</a>\n</p>\n");
 	assert(filterMarkdown("[foo](javascript&#58;bar)", MarkdownFlags.forumDefault) ==
 		"<p><a href=\"javascript&amp;#58;bar\">foo</a>\n</p>\n");
+}
+
+@safe unittest { // issue #2132 - table with more columns in body goes out of array bounds
+	assert(filterMarkdown("| a | b |\n|--------|--------|\n|   c    | d  | e |", MarkdownFlags.tables) ==
+		"<table>\n<tr><th>a</th><th>b</th></tr>\n<tr><td>c</td><td>d</td><td>e</td></tr>\n</table>\n");
 }
