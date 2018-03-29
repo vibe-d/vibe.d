@@ -374,13 +374,14 @@ struct Json {
 			m_object.remove("");
 		}
 		m_object[key] = Json.init;
+		auto nv = key in m_object;
 		assert(m_object !is null);
-		assert(key in m_object, "Failed to insert key '"~key~"' into AA!?");
-		m_object[key].m_type = Type.undefined; // DMDBUG: AAs are teh $H1T!!!11
-		assert(m_object[key].type == Type.undefined);
-		m_object[key].m_string = key;
-		version (VibeJsonFieldNames) m_object[key].m_name = format("%s.%s", m_name, key);
-		return m_object[key];
+		assert(nv !is null, "Failed to insert key '"~key~"' into AA!?");
+		nv.m_type = Type.undefined;
+		assert(nv.type == Type.undefined);
+		nv.m_string = key;
+		version (VibeJsonFieldNames) nv.m_name = format("%s.%s", m_name, key);
+		return *nv;
 	}
 
 	///
