@@ -220,7 +220,7 @@
 		To see how to implement the client side in detail, jump to
 		the `RestInterfaceClient` documentation.
 
-	Copyright: © 2012-2017 RejectedSoftware e.K.
+	Copyright: © 2012-2018 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Михаил Страшун, Mathias 'Geod24' Lang
 */
@@ -229,6 +229,7 @@ module vibe.web.rest;
 public import vibe.web.common;
 
 import vibe.core.log;
+import vibe.core.stream : InputStream;
 import vibe.http.router : URLRouter;
 import vibe.http.client : HTTPClientSettings;
 import vibe.http.common : HTTPMethod;
@@ -599,10 +600,13 @@ class RestInterfaceClient(I) : I
 		// LDC 0.15.x, so we are using a pointer here:
 		RestInterface!I* m_intf;
 		RequestFilter m_requestFilter;
+		RequestBodyFilter m_requestBodyFilter;
 		staticMap!(RestInterfaceClient, Info.SubInterfaceTypes) m_subInterfaces;
 	}
 
 	alias RequestFilter = void delegate(HTTPClientRequest req) @safe;
+
+	alias RequestBodyFilter = void delegate(HTTPClientRequest req, scope InputStream body_contents) @safe;
 
 	/**
 		Creates a new REST client implementation of $(D I).
@@ -648,6 +652,21 @@ class RestInterfaceClient(I) : I
 	final @property void requestFilter(void delegate(HTTPClientRequest req) v)
 	{
 		this.requestFilter = cast(RequestFilter)v;
+	}
+
+	/** Optional request filter with access to the request body.
+
+		This callback allows to modify the request headers depending on the
+		contents of the body.
+	*/
+	final @property void requestBodyFilter(RequestBodyFilter del)
+	{
+		m_requestBodyFilter = del;
+	}
+	/// ditto
+	final @property RequestBodyFilter requestBodyFilter()
+	{
+		return m_requestBodyFilter;
 	}
 
 	//pragma(msg, "restinterface:");
@@ -703,7 +722,8 @@ class RestInterfaceClient(I) : I
 
 			auto httpsettings = m_intf.settings.httpClientSettings;
 
-			return .request(URL(m_intf.baseURL), m_requestFilter, verb, path,
+			return .request(URL(m_intf.baseURL), m_requestFilter,
+				m_requestBodyFilter, verb, path,
 				hdrs, query, body_, reqReturnHdrs, optReturnHdrs, httpsettings);
 		}
 	}
@@ -1624,7 +1644,7 @@ private string generateRestClientMethods(I)()
 
 		ret ~= q{
 				mixin CloneFunction!(Info.RouteFunctions[%1$s], q{
-					return executeClientMethod!(I, %1$s%2$s)(*m_intf, m_requestFilter);
+					return executeClientMethod!(I, %1$s%2$s)(*m_intf, m_requestFilter, m_requestBodyFilter);
 				});
 			}.format(i, pnames);
 	}
@@ -1634,7 +1654,8 @@ private string generateRestClientMethods(I)()
 
 
 private auto executeClientMethod(I, size_t ridx, ARGS...)
-	(in ref RestInterface!I intf, void delegate(HTTPClientRequest) @safe request_filter)
+	(in ref RestInterface!I intf, scope void delegate(HTTPClientRequest) @safe request_filter,
+		scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter)
 {
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.textfilter.urlencode : filterURLEncode, urlEncode;
@@ -1738,7 +1759,9 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		}
 	}
 
-	auto jret = request(URL(intf.baseURL), request_filter, sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs, intf.settings.httpClientSettings);
+	auto jret = request(URL(intf.baseURL), request_filter, request_body_filter,
+		sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs,
+		intf.settings.httpClientSettings);
 
 	static if (!is(RT == void))
 		return deserializeJson!RT(jret);
@@ -1774,10 +1797,11 @@ import vibe.http.client : HTTPClientRequest;
  *     The Json object returned by the request
  */
 private Json request(URL base_url,
-	void delegate(HTTPClientRequest) @safe request_filter, HTTPMethod verb,
-	string path, in ref InetHeaderMap hdrs, string query, string body_,
-	ref InetHeaderMap reqReturnHdrs, ref InetHeaderMap optReturnHdrs,
-	in HTTPClientSettings http_settings)
+	scope void delegate(HTTPClientRequest) @safe request_filter,
+	scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter,
+	HTTPMethod verb, string path, in ref InetHeaderMap hdrs, string query,
+	string body_, ref InetHeaderMap reqReturnHdrs,
+	ref InetHeaderMap optReturnHdrs, in HTTPClientSettings http_settings)
 @safe {
 	import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
 	import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
@@ -1794,7 +1818,13 @@ private Json request(URL base_url,
 		foreach (k, v; hdrs)
 			req.headers[k] = v;
 
-		if (request_filter) () @trusted { request_filter(req); } ();
+		if (request_body_filter) {
+			import vibe.stream.memory : createMemoryStream;
+			scope str = createMemoryStream(() @trusted { return cast(ubyte[])body_; } (), false);
+			request_body_filter(req, str);
+		}
+
+		if (request_filter) request_filter(req);
 
 		if (body_ != "")
 			req.writeBody(cast(const(ubyte)[])body_, hdrs.get("Content-Type", "application/json"));
