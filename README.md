@@ -210,15 +210,15 @@ Optionally, run `./setup-freebsd.sh` to create a user/group pair for privilege l
 Switching between OpenSSL versions
 ----------------------------------
 
-By default, vibe.d is built against OpenSSL 1.0.x. On systems that use the newer
-1.1.x branch, this can be overridden on the DUB command line using
-`--override-config vibe-d:tls/openssl-1.1`. Alternatively, the same can be done
+By default, vibe.d is built against OpenSSL 1.1.x. On systems that use the older
+1.0.x branch, this can be overridden on the DUB command line using
+`--override-config vibe-d:tls/openssl-1.0`. Alternatively, the same can be done
 using a sub configuration directive in the package recipe:
 
 SDL syntax:
 ```
 dependency "vibe-d:tls" version="~>0.8.2"
-subConfiguration "vibe-d:tls" "openssl-1.1"
+subConfiguration "vibe-d:tls" "openssl-1.0"
 ```
 
 JSON syntax:
