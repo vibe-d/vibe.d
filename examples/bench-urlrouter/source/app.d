@@ -2,7 +2,10 @@ import vibe.core.log;
 import vibe.http.router;
 import vibe.http.server;
 import vibe.inet.url;
-import std.datetime;
+static if (__VERSION__ >= 2076)
+	import std.datetime.stopwatch;
+else
+	import std.datetime;
 import std.string : format;
 
 
@@ -18,7 +21,10 @@ Duration runTimed(scope void delegate() del)
 	sw.start();
 	del();
 	sw.stop();
-	return cast(Duration)sw.peek;
+	static if (__VERSION__ >= 2076)
+		return sw.peek;
+	else
+		return cast(Duration) sw.peek;
 }
 
 void main()
