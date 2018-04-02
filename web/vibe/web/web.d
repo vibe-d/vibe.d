@@ -1032,7 +1032,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			} else static if (is(RET : const(char)[])) {
 				res.writeBody(ret);
 			} else {
-				static assert(is(RET == void), M~": Only `InputStream`, `const(ubyte[])`, `Json`, const(char)[]` and `void` are supported as return types for route methods.");
+				static assert(is(RET == void), M~": Only `InputStream`, `const(ubyte[])`, `Json`, `const(char)[]` and `void` are supported as return types for route methods.");
 			}
 		}
 	} catch (Exception ex) {
