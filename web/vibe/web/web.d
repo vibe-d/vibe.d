@@ -138,6 +138,15 @@ import std.encoding : sanitize;
 		case it will be used as an additional prefix to the one in
 		`WebInterfaceSettings.urlPrefix`.
 
+	Supported return types:
+		$(UL
+			$(LI $(D vibe.data.json.Json))
+			$(LI $(D const(char)[]))
+			$(LI $(D void))
+			$(LI $(D const(ubyte)[]))
+			$(LI $(D vibe.core.stream.InputStream))
+		)
+
 	Params:
 		router = The HTTP router to register to
 		instance = Class instance to use for the web interface mapping
@@ -1026,8 +1035,10 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				} else {
 					res.writeBody(ret);
 				}
+			} else static if (is(RET : const(char)[])) {
+				res.writeBody(ret);
 			} else {
-				static assert(is(RET == void), M~": Only InputStream, Json and void are supported as return types for route methods.");
+				static assert(is(RET == void), M~": Only `InputStream`, `const(ubyte[])`, `Json`, `const(char)[]` and `void` are supported as return types for route methods.");
 			}
 		}
 	} catch (Exception ex) {
