@@ -29,6 +29,7 @@ import std.format;
 import std.range : isOutputRange;
 import std.string;
 import std.typecons;
+import std.uni: asLowerCase;
 
 
 enum HTTPVersion {
@@ -259,10 +260,10 @@ class HTTPRequest {
 		auto ph = "connection" in headers;
 		switch(httpVersion) {
 			case HTTPVersion.HTTP_1_0:
-				if (ph && toLower(*ph) == "keep-alive") return true;
+				if (ph && asLowerCase(*ph).equal("keep-alive")) return true;
 				return false;
 			case HTTPVersion.HTTP_1_1:
-				if (ph && toLower(*ph) != "keep-alive") return false;
+				if (ph && !(asLowerCase(*ph).equal("keep-alive"))) return false;
 				return true;
 			default:
 				return false;

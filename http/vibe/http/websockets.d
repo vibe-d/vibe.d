@@ -40,6 +40,7 @@ import vibe.core.connectionpool;
 import vibe.utils.array;
 
 import core.time;
+import std.algorithm: equal, splitter;
 import std.array;
 import std.base64;
 import std.conv;
@@ -51,6 +52,7 @@ import std.functional;
 import std.uuid;
 import std.base64;
 import std.digest.sha;
+import std.uni: asLowerCase;
 import vibe.crypto.cryptorand;
 
 @safe:
@@ -203,9 +205,9 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	auto isUpgrade = false;
 
 	if( pConnection ) {
-		auto connectionTypes = split(*pConnection, ",");
+		auto connectionTypes = splitter(*pConnection, ",");
 		foreach( t ; connectionTypes ) {
-			if( t.strip().toLower() == "upgrade" ) {
+			if( t.strip().asLowerCase().equal("upgrade") ) {
 				isUpgrade = true;
 				break;
 			}
@@ -282,9 +284,9 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 		auto isUpgrade = false;
 
 		if( pConnection ) {
-			auto connectionTypes = split(*pConnection, ",");
+			auto connectionTypes = splitter(*pConnection, ",");
 			foreach( t ; connectionTypes ) {
-				if( t.strip().toLower() == "upgrade" ) {
+				if( t.strip().asLowerCase().equal("upgrade") ) {
 					isUpgrade = true;
 					break;
 				}
