@@ -60,6 +60,10 @@ matrix:
 before_install:
   - pyenv global system 3.6
   - pip3 install 'meson>=0.44.1'
+  # Use the dub-updating fork of the installer script until https://github.com/dlang/installer/pull/301 is merged
+  - wget https://raw.githubusercontent.com/wilzbach/installer-dub/master/script/install.sh -O ~/dlang/install.dub.sh
+  - . $(bash ~/dlang/install.dub.sh -a dub)
+  - dub --version
 
 install:
   - mkdir .ntmp
