@@ -7,7 +7,8 @@ more specialized needs, there are also many compatible
 [DUB packages](http://code.dlang.org/?sort=updated&category=library.vibed)
 available.
 
-Visit the website at <http://vibed.org/> for more information.
+Visit the website at <http://vibed.org/> for more information and 
+[documentation](https://vibed.org/docs).
 
 [![DUB Package](https://img.shields.io/dub/v/vibe-d.svg)](https://code.dlang.org/packages/vibe-d)
 [![Posix Build Status](https://travis-ci.org/vibe-d/vibe.d.svg?branch=master)](https://travis-ci.org/vibe-d/vibe.d)
