@@ -643,6 +643,11 @@ struct RedisZSet(T = string) {
 	// see http://redis.io/commands/zrangebyscore
 	//RedisReply zrevRangeByScore(string key, double min, double max, bool withScores=false);
 
+	auto rangeByLex(T = string)(string min = "-", string max = "+", long offset = 0, long count = -1)
+	{
+		return m_db.zrangeByLex!T(m_key, min, max, offset, count);
+	}
+
 	// TODO:
 	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
