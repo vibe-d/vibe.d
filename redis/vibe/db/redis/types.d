@@ -620,6 +620,8 @@ struct RedisZSet(T = string) {
 	long getRank(string member) { return m_db.zrank(m_key, member); }
 	long getReverseRank(string member) { return m_db.zrevRank(m_key, member); }
 
+	long countByLex(string min, string max) { return m_db.zlexCount(m_key, min, max); }
+
 	//TODO: zinterstore
 
 	//RedisReply zrange(string key, long start, long end, bool withScores=false);

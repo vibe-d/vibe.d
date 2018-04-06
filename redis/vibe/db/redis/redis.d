@@ -501,6 +501,8 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGE", key, start, end);
 	}
 
+	long zlexCount(string key, string min = "-", string max = "+") { return request!long("ZLEXCOUNT", key, min, max); }
+
 	/// When all the elements in a sorted set are inserted with the same score, in order to force lexicographical ordering,
 	/// this command returns all the elements in the sorted set at key with a value between min and max.
 	RedisReply!T zrangeByLex(T = string)(string key, string min = "-", string max = "+", long offset = 0, long count = -1)
