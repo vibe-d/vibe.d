@@ -152,7 +152,11 @@ struct Path {
 	@property bool absolute() const { return m_absolute; }
 
 	/// Forward compatibility property for vibe-code
-	@property immutable(PathEntry)[] bySegment() const { return nodes; }
+	@property immutable(PathEntry)[] bySegment()
+	const {
+		if (m_absolute) return PathEntry("") ~ nodes;
+		else return nodes;
+	}
 
 	/// Resolves all '.' and '..' path entries as far as possible.
 	void normalize()
@@ -436,6 +440,24 @@ unittest
 		auto winpath = "C:\\windows\\test\\";
 		auto winpathp = Path(winpath);
 		assert(winpathp.toNativeString() == winpath);
+	}
+}
+
+
+unittest {
+	import std.algorithm.comparison : equal;
+	import std.range : only;
+
+	assert(Path("/foo/").bySegment.equal(
+		only(Path.Segment(""), Path.Segment("foo"))
+	));
+	assert(Path("foo/").bySegment.equal(
+		only(Path.Segment("foo"))
+	));
+	version (Windows) {
+		assert(Path("C:\\foo\\").bySegment.equal(
+			only(Path.Segment(""), Path.Segment("C:"), Path.Segment("foo"))
+		));
 	}
 }
 
