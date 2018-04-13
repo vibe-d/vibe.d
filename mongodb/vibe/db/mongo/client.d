@@ -64,7 +64,7 @@ final class MongoClient {
 				ret.connect();
 				return ret;
 			},
-			settings.max_connections
+			settings.maxConnections
 		);
 
 		// force a connection to cause an exception for wrong URLs
@@ -78,7 +78,7 @@ final class MongoClient {
 				ret.connect();
 				return ret;
 			},
-			settings.max_connections
+			settings.maxConnections
 		);
 
 		// force a connection to cause an exception for wrong URLs
