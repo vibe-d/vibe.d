@@ -1,6 +1,41 @@
 ﻿Changelog
 =========
 
+v0.7.33 - 2018-05-
+--------------------
+
+Being the final public release on the 0.7.x branch, this version on DMD 2.068.2 up to DMD 2.079.0 and LDC 1.8.0. It includes some major fixes and improvements backported from the 0.8.x branch. Since this marks the last 0.7.x release, all code depending on it should now be upgraded to 0.8.3 or later.
+
+### Improvements ###
+
+- (Backported) MongoDB errors by the server are now reported as part of thrown exceptions - [pull #2126][issue2126], [pull #1951][issue1952]
+- (Backported) Fixes and large memory usage improvement for `URLRouter` - [pull #2128][issue2128], [issue #1359][issue1359], [pull #2043][issue2043]
+
+### Bug fixes ###
+
+- Fixed OpenSSL bogus peer certificate validation failures (by Márcio Martins) - [pull #2121][issue2121]
+- (Backported) Fixed leaked HTTP connections in `vibe.inet.urltransfer.download` - [pull #2126][issue2126], [pull #2050][issue2050]
+- (Backported) Fixed closing of HTTP client connections with "Connection: close" set in the response callback - [pull #2126][issue2126], [pull #2112][issue2112]
+- (Backported) Fixed various issues in the OpenSSL code - [pull #2127][issue2127], [#1651][issue1651], [#1748][issue1748], [#1758][issue1758], [#1759][issue1759], [#1921][issue1921], [#1981][issue1981], [#2117][issue2117]
+
+[issue1359]: https://github.com/vibe-d/vibe.d/issues/1359
+[issue1651]: https://github.com/vibe-d/vibe.d/issues/1651
+[issue1748]: https://github.com/vibe-d/vibe.d/issues/1748
+[issue1758]: https://github.com/vibe-d/vibe.d/issues/1758
+[issue1759]: https://github.com/vibe-d/vibe.d/issues/1759
+[issue1921]: https://github.com/vibe-d/vibe.d/issues/1921
+[issue1952]: https://github.com/vibe-d/vibe.d/issues/1952
+[issue1981]: https://github.com/vibe-d/vibe.d/issues/1981
+[issue2043]: https://github.com/vibe-d/vibe.d/issues/2043
+[issue2050]: https://github.com/vibe-d/vibe.d/issues/2050
+[issue2112]: https://github.com/vibe-d/vibe.d/issues/2112
+[issue2117]: https://github.com/vibe-d/vibe.d/issues/2117
+[issue2121]: https://github.com/vibe-d/vibe.d/issues/2121
+[issue2126]: https://github.com/vibe-d/vibe.d/issues/2126
+[issue2127]: https://github.com/vibe-d/vibe.d/issues/2127
+[issue2128]: https://github.com/vibe-d/vibe.d/issues/2128
+
+
 v0.7.32 - 2017-09-04
 --------------------
 
