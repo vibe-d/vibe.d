@@ -242,7 +242,7 @@ struct MongoCollection {
 		foreach (string key, value; bopt)
 			cmd[key] = value;
 		auto ret = database.runCommand(cmd);
-		enforce(ret["ok"].get!double != 0, "findAndModifyExt failed.");
+		enforce(ret["ok"].get!double != 0, "findAndModifyExt failed: "~ret["errmsg"].opt!string);
 		return ret["value"];
 	}
 
@@ -276,7 +276,7 @@ struct MongoCollection {
 		cmd.count = m_name;
 		cmd.query = query;
 		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].opt!double == 1 || reply["ok"].opt!int == 1, "Count command failed.");
+		enforce(reply["ok"].opt!double == 1 || reply["ok"].opt!int == 1, "Count command failed: "~reply["errmsg"].opt!string);
 		switch (reply["n"].type) with (Bson.Type) {
 			default: assert(false, "Unsupported data type in BSON reply for COUNT");
 			case double_: return cast(ulong)reply["n"].get!double; // v2.x
@@ -318,7 +318,7 @@ struct MongoCollection {
 			cmd.pipeline = pipeline[0];
 		else cmd.pipeline.args = pipeline;
 		auto ret = database.runCommand(cmd);
-		enforce(ret["ok"].get!double == 1, "Aggregate command failed.");
+		enforce(ret["ok"].get!double == 1, "Aggregate command failed: "~ret["errmsg"].opt!string);
 		return ret["result"];
 	}
 
@@ -466,7 +466,7 @@ struct MongoCollection {
 		cmd.dropIndexes = m_name;
 		cmd.index = name;
 		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "dropIndex command failed.");
+		enforce(reply["ok"].get!double == 1, "dropIndex command failed: "~reply["errmsg"].opt!string);
 	}
 
 	void drop() {
@@ -477,7 +477,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.drop = m_name;
 		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "drop command failed.");
+		enforce(reply["ok"].get!double == 1, "drop command failed: "~reply["errmsg"].opt!string);
 	}
 }
 
