@@ -943,8 +943,14 @@ private struct MatchGraphBuilder {
 		}
 
 		import std.algorithm.sorting : sort;
-		foreach (ref n; m_nodes)
-			n.terminals[].sort!((a, b) => a.index < b.index)();
+		foreach (ref n; m_nodes) {
+			static if (__VERSION__ <= 2068) { // work around compile error
+				if (n.terminals.length) {
+					(&n.terminals[0])[0 .. n.terminals.length]
+						.sort!((a, b) => a.index < b.index)();
+				}
+			} else n.terminals[].sort!((a, b) => a.index < b.index)();
+		}
 
 		debug logDebug("Disambiguate done: %s nodes, %s max stack size", m_nodes.length, node_stack.maxSize);
 	}
