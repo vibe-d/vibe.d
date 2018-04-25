@@ -523,7 +523,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 		return cast(T) deserializeValue!(Unqual!T, ATTRIBUTES)(ser);
 	}
 
-	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) if(isMutable!T) 
+	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) if(isMutable!T)
 	{
 		import std.typecons : BitFlags, Nullable;
 
@@ -1285,7 +1285,8 @@ unittest { // basic serialization behavior
 	test(12.0f, "V(f)(12)");
 	assert(serialize!TestSerializer(null) ==  "null");
 	test(["hello", "world"], "A(AAya)[2][AE(Aya,0)(V(Aya)(hello))AE(Aya,0)AE(Aya,1)(V(Aya)(world))AE(Aya,1)]A(AAya)");
-	test(["hello": "world"], "D(HAyaAya){DE(Aya,hello)(V(Aya)(world))DE(Aya,hello)}D(HAyaAya)");
+	string mangleOfAA = (string[string]).mangleof;
+	test(["hello": "world"], "D(" ~ mangleOfAA ~ "){DE(Aya,hello)(V(Aya)(world))DE(Aya,hello)}D(" ~ mangleOfAA ~ ")");
 	test(cast(int*)null, "null");
 	int i = 42;
 	test(&i, "V(i)(42)");
@@ -1438,14 +1439,14 @@ unittest // Make sure serializing through properties still works
 unittest // Immutable data deserialization
 {
 	import vibe.data.json;
-	
+
 	static struct S {
 		int a;
 	}
 	static class C {
 		immutable(S)[] arr;
 	}
-	
+
 	auto c = new C;
 	c.arr ~= S(10);
 	auto d = c.serializeToJson().deserializeJson!(immutable C);
@@ -1559,7 +1560,7 @@ unittest {
 	auto ser_red = "V(Aya)(red)";
 	assert(serializeWithPolicy!(TestSerializer, P)(E.RED) == ser_red, serializeWithPolicy!(TestSerializer, P)(E.RED));
 	assert(deserializeWithPolicy!(TestSerializer, P, E)(ser_red) == E.RED);
-	
+
 	import vibe.data.json : Json, JsonSerializer;
 	assert(serializeWithPolicy!(JsonSerializer, P)(E.RED) == Json("red"));
 }
