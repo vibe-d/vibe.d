@@ -79,24 +79,10 @@ final class ThreadedFileStream : FileStream {
 
 	this(Path path, FileMode mode)
 	{
-		auto pathstr = path.toNativeString();
-		final switch(mode){
-			case FileMode.read:
-				m_fileDescriptor = open(pathstr.toStringz(), O_RDONLY|O_BINARY);
-				break;
-			case FileMode.readWrite:
-				m_fileDescriptor = open(pathstr.toStringz(), O_RDWR|O_BINARY);
-				break;
-			case FileMode.createTrunc:
-				m_fileDescriptor = open(pathstr.toStringz(), O_RDWR|O_CREAT|O_TRUNC|O_BINARY, octal!644);
-				break;
-			case FileMode.append:
-				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
-				break;
-		}
-		if( m_fileDescriptor < 0 )
+		m_fileDescriptor = openFile(path, mode);
+		if (m_fileDescriptor < 0)
 			//throw new Exception(format("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
-			throw new Exception("Failed to open file '"~pathstr~"'.");
+			throw new Exception("Failed to open file '"~path.toString()~"'.");
 
 		this(m_fileDescriptor, path, mode);
 	}
@@ -215,6 +201,17 @@ final class ThreadedFileStream : FileStream {
 	void finalize()
 	{
 		flush();
+	}
+
+	private int openFile(Path path, FileMode mode)
+	{
+		auto pathstr = path.toNativeString().toStringz();
+		final switch (mode) {
+			case FileMode.read: return open(pathstr, O_RDONLY|O_BINARY);
+			case FileMode.readWrite: return open(pathstr, O_RDWR|O_BINARY);
+			case FileMode.createTrunc: return open(pathstr, O_RDWR|O_CREAT|O_TRUNC|O_BINARY, octal!644);
+			case FileMode.append: return open(pathstr, O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
+		}
 	}
 }
 
