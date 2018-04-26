@@ -47,7 +47,7 @@ pkgc.generate(name: 'vibe-utils',
               libraries: vibe_utils_lib,
               subdirs: 'd/vibe',
               version: project_version,
-              requires: ['allocator'],
+              requires: ['stdx-allocator'],
               description: 'Low level utility functionality of Vibe.'
 )
 

@@ -58,7 +58,7 @@ endif
 # we need to search for this dependency after setting global compiler flags, because
 # it may pull in a subproject after which setting global flags is not allowed anymore
 diet_dep = dependency('diet', fallback: ['diet', 'diet_dep'])
-allocator_dep = subproject('allocator').get_variable('allocator_dep')
+allocator_dep = dependency('stdx-allocator', fallback: ['stdx-allocator', 'allocator_dep'])
 
 # directory where the external dependencies are included from.
 # Meson will search for this dir in both build_root and source_root
