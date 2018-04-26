@@ -7,7 +7,8 @@
 */
 module vibe.core.drivers.utils;
 
-import std.exception;
+import vibe.internal.exception : enforce;
+import std.exception : ErrnoException;
 
 version (Windows) {
 	import core.sys.windows.windows;
@@ -51,5 +52,5 @@ static if (!is(typeof(SO_REUSEPORT))) {
 
 T socketEnforce(T)(T value, lazy string msg = null, string file = __FILE__, size_t line = __LINE__)
 @trusted {
-	return enforceEx!SystemSocketException(value, msg, file, line);
+	return enforce!SystemSocketException(value, msg, file, line);
 }

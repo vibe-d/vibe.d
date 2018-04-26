@@ -38,6 +38,7 @@ import vibe.http.server;
 import vibe.http.client;
 import vibe.core.connectionpool;
 import vibe.utils.array;
+static import vibe.internal.exception;
 
 import core.time;
 import std.algorithm: equal, splitter;
@@ -678,7 +679,7 @@ final class WebSocket {
 	void send(scope void delegate(scope OutgoingWebSocketMessage) @safe sender, FrameOpcode frameOpcode)
 	{
 		m_writeMutex.performLocked!({
-			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
+			vibe.internal.exception.enforce!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
 			/*scope*/auto message = new OutgoingWebSocketMessage(m_conn, frameOpcode, m_rng);
 			scope(exit) message.finalize();
 			sender(message);
@@ -735,7 +736,7 @@ final class WebSocket {
 	{
 		ubyte[] ret;
 		receive((scope message){
-			enforceEx!WebSocketException(!strict || message.frameOpcode == FrameOpcode.binary,
+			vibe.internal.exception.enforce!WebSocketException(!strict || message.frameOpcode == FrameOpcode.binary,
 				"Expected a binary message, got "~message.frameOpcode.to!string());
 			ret = message.readAll();
 		});
@@ -746,7 +747,7 @@ final class WebSocket {
 	{
 		string ret;
 		receive((scope message){
-			enforceEx!WebSocketException(!strict || message.frameOpcode == FrameOpcode.text,
+			vibe.internal.exception.enforce!WebSocketException(!strict || message.frameOpcode == FrameOpcode.text,
 				"Expected a text message, got "~message.frameOpcode.to!string());
 			ret = message.readAllUTF8();
 		});
@@ -761,7 +762,7 @@ final class WebSocket {
 	{
 		m_readMutex.performLocked!({
 			while (!m_nextMessage) {
-				enforceEx!WebSocketException(connected, "Connection closed while reading message.");
+				vibe.internal.exception.enforce!WebSocketException(connected, "Connection closed while reading message.");
 				m_readCondition.wait();
 			}
 			receiver(m_nextMessage);
@@ -979,8 +980,8 @@ final class IncomingWebSocketMessage : InputStream {
 		size_t nread = 0;
 
 		while (dst.length > 0) {
-			enforceEx!WebSocketException(!empty , "cannot read from empty stream");
-			enforceEx!WebSocketException(leastSize > 0, "no data available" );
+			vibe.internal.exception.enforce!WebSocketException(!empty , "cannot read from empty stream");
+			vibe.internal.exception.enforce!WebSocketException(leastSize > 0, "no data available" );
 
 			import std.algorithm : min;
 			auto sz = cast(size_t)min(leastSize, dst.length);
@@ -1121,7 +1122,7 @@ private struct Frame {
 			// RFC 6455, 5.2, 'Payload length': If 127, the following 8 bytes
 			// interpreted as a 64-bit unsigned integer (the most significant
 			// bit MUST be 0)
-			enforceEx!WebSocketException(!(length >> 63),
+			vibe.internal.exception.enforce!WebSocketException(!(length >> 63),
 				"Received length has a non-zero most significant bit");
 
 		}
@@ -1138,7 +1139,7 @@ private struct Frame {
 		// Read payload
 		// TODO: Provide a way to limit the size read, easy
 		// DOS for server code here (rejectedsoftware/vibe.d#1496).
-		enforceEx!WebSocketException(length <= size_t.max);
+		vibe.internal.exception.enforce!WebSocketException(length <= size_t.max);
 		frame.payload = new ubyte[](cast(size_t)length);
 		stream.read(frame.payload);
 
