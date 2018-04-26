@@ -60,10 +60,12 @@ final class MongoClient {
 		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
 
 		m_connections = new ConnectionPool!MongoConnection(() @safe {
-			auto ret = new MongoConnection(settings);
-			ret.connect();
-			return ret;
-		});
+				auto ret = new MongoConnection(settings);
+				ret.connect();
+				return ret;
+			},
+			settings.maxConnections
+		);
 
 		// force a connection to cause an exception for wrong URLs
 		lockConnection();
@@ -72,10 +74,12 @@ final class MongoClient {
 	package this(MongoClientSettings settings)
 	{
 		m_connections = new ConnectionPool!MongoConnection({
-			auto ret = new MongoConnection(settings);
-			ret.connect();
-			return ret;
-		});
+				auto ret = new MongoConnection(settings);
+				ret.connect();
+				return ret;
+			},
+			settings.maxConnections
+		);
 
 		// force a connection to cause an exception for wrong URLs
 		lockConnection();

@@ -321,6 +321,7 @@ class MongoClientSettings
 
 	string username;
 	string digest;
+	uint maxConnections = uint.max;
 	MongoHost[] hosts;
 	string database;
 	QueryFlags defQueryFlags = QueryFlags.None;
