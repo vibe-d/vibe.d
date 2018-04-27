@@ -620,6 +620,8 @@ struct RedisZSet(T = string) {
 	long getRank(string member) { return m_db.zrank(m_key, member); }
 	long getReverseRank(string member) { return m_db.zrevRank(m_key, member); }
 
+	long countByLex(string min, string max) { return m_db.zlexCount(m_key, min, max); }
+
 	//TODO: zinterstore
 
 	//RedisReply zrange(string key, long start, long end, bool withScores=false);
@@ -640,6 +642,11 @@ struct RedisZSet(T = string) {
 	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
 	//RedisReply zrevRangeByScore(string key, double min, double max, bool withScores=false);
+
+	auto rangeByLex(T = string)(string min = "-", string max = "+", long offset = 0, long count = -1)
+	{
+		return m_db.zrangeByLex!T(m_key, min, max, offset, count);
+	}
 
 	// TODO:
 	// supports only inclusive intervals
