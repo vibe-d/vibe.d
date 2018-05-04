@@ -9,9 +9,9 @@ struct RangeCounter {
 	this(long* _captureLength) { length = _captureLength; }
 
 	void put(char ch) { (*length)++; }
-	void put(string str) { *length += str.length; }
+	void put(in char[] str) { *length += str.length; }
 	void put(dchar ch) { *length += codeLength!char(ch); }
-	void put(dstring str) { foreach (ch; str) put(ch); }
+	void put(in dchar[] str) { foreach (ch; str) put(ch); }
 }
 
 @safe unittest {
