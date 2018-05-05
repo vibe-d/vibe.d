@@ -25,8 +25,8 @@ coverage:
     # Learn more at https://codecov.io/docs#yaml_default_commit_status
     project: off
     patch:
-        default:
-            threshold: 5
-    changes: false
+      default:
+        informational: true
+    changes: off
 
 comment: false
