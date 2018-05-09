@@ -199,11 +199,12 @@ struct Json {
 	/// ditto
 	this(string v) @trusted { m_type = Type.string; m_string = v; }
 	/// ditto
-	this(UUID v) { this(v.toString()); }
-	/// ditto
 	this(Json[] v) @trusted { m_type = Type.array; m_array = v; }
 	/// ditto
 	this(Json[string] v) @trusted { m_type = Type.object; m_object = v; }
+
+	// used internally for UUID serialization support
+	private this(UUID v) { this(v.toString()); }
 
 	/**
 		Converts a std.json.JSONValue object to a vibe Json object.
@@ -280,8 +281,6 @@ struct Json {
 	/// ditto
 	string opAssign(string v) { runDestructors(); m_type = Type.string; m_string = v; return v; }
 	/// ditto
-	UUID opAssign(UUID v) { opAssign(v.toString()); return v; }
-	/// ditto
 	Json[] opAssign(Json[] v) {
 		runDestructors();
 		m_type = Type.array;
@@ -301,6 +300,9 @@ struct Json {
 		version (VibeJsonFieldNames) { foreach (key, ref av; m_object) av.m_name = format("%s.%s", m_name, key); }
 		return v;
 	}
+
+	// used internally for UUID serialization support
+	private UUID opAssign(UUID v) { opAssign(v.toString()); return v; }
 
 	/**
 		Allows removal of values from Type.Object Json objects.
