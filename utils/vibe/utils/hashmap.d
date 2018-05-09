@@ -241,8 +241,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	private void grow(size_t amount)
 	@trusted {
 		try {
-				static if (__VERSION__ < 2074) auto palloc = m_allocator.parent;
-				else auto palloc = m_allocator._parent;
+			auto palloc = m_allocator._parent;
 			if (!palloc) {
 				try m_allocator = typeof(m_allocator)(AW(vibeThreadAllocator()));
 				catch (Exception e) assert(false, e.msg);
