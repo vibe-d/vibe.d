@@ -1773,6 +1773,10 @@ struct JsonSerializer {
 		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
 		foreach (string key, value; m_current.get!(Json[string])) {
+			if (value.type == Json.Type.undefined) {
+				continue;
+			}
+
 			m_current = value;
 			field_handler(key);
 		}
@@ -1832,6 +1836,15 @@ struct JsonSerializer {
 	bool tryReadNull(Traits)() { return m_current.type == Json.Type.null_; }
 }
 
+unittest {
+	struct T {
+		@optional string a;
+	}
+
+	auto obj = Json.emptyObject;
+	obj["a"] = Json.undefined;
+	assert(obj.deserializeJson!T.a == "");
+}
 
 /**
 	Serializer for a range based plain JSON string representation.
