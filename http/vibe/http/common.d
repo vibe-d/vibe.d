@@ -486,7 +486,7 @@ final class ChunkedOutputStream : OutputStream {
 	}
 
 	deprecated("Use createChunkedOutputStream() instead.")
-	this(OutputStream stream, IAllocator alloc = theAllocator())
+	this(OutputStream stream, IAllocator alloc = vibeThreadAllocator())
 	{
 		this(interfaceProxy!OutputStream(stream), alloc, true);
 	}
