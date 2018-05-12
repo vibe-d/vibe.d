@@ -1362,6 +1362,9 @@ unittest
 
 	bson = Bson([Bson(uuid)]);
 	assert(bson.deserializeBson!(UUID[]) == [uuid]);
+
+	bson = [uuid].serializeToBson();
+	assert(bson.deserializeBson!(UUID[]) == [uuid]);
 }
 
 /**
@@ -1454,6 +1457,7 @@ struct BsonSerializer {
 		else static if (is(T : int) && isIntegral!T) { m_dst.put(toBsonData(cast(int)value)); }
 		else static if (is(T : long) && isIntegral!T) { m_dst.put(toBsonData(value)); }
 		else static if (is(T : double) && isFloatingPoint!T) { m_dst.put(toBsonData(cast(double)value)); }
+		else static if (is(T == UUID)) { m_dst.put(Bson(value).data); }
 		else static if (isBsonSerializable!T) {
 			static if (!__traits(compiles, () @safe { return value.toBson(); } ()))
 				pragma(msg, "Non-@safe toBson/fromBson methods are deprecated - annotate "~T.stringof~".toBson() with @safe.");
