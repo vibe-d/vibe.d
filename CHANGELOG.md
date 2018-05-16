@@ -24,7 +24,7 @@ Being the final public release on the 0.7.x branch, this version on DMD 2.068.2 
 [issue1758]: https://github.com/vibe-d/vibe.d/issues/1758
 [issue1759]: https://github.com/vibe-d/vibe.d/issues/1759
 [issue1921]: https://github.com/vibe-d/vibe.d/issues/1921
-[issue1952]: https://github.com/vibe-d/vibe.d/issues/1951
+[issue1951]: https://github.com/vibe-d/vibe.d/issues/1951
 [issue1981]: https://github.com/vibe-d/vibe.d/issues/1981
 [issue2043]: https://github.com/vibe-d/vibe.d/issues/2043
 [issue2050]: https://github.com/vibe-d/vibe.d/issues/2050
