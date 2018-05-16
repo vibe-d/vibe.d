@@ -4,7 +4,7 @@
 v0.7.33 - 2018-05-
 --------------------
 
-Being the final public release on the 0.7.x branch, this version on DMD 2.068.2 up to DMD 2.079.0 and LDC 1.8.0. It includes some major fixes and improvements backported from the 0.8.x branch. Since this marks the last 0.7.x release, all code depending on it should now be upgraded to 0.8.3 or later.
+Being the final public release on the 0.7.x branch, this version on DMD 2.068.2 up to DMD 2.080.0 and LDC 1.9.0. It includes some major fixes and improvements backported from the 0.8.x branch. Since this marks the last 0.7.x release, all code depending on it should now be upgraded to 0.8.3 or later.
 
 ### Improvements ###
 
