@@ -13,6 +13,22 @@ Visit the website at <http://vibed.org/> for more information.
 [![Windows Build Status](https://ci.appveyor.com/api/projects/status/cp2kxg70h54pga9d/branch/0.7.x?svg=true)](https://ci.appveyor.com/project/s-ludwig/vibe-d/branch/0.7.x)
 
 
+End of life notice
+------------------
+
+The 0.7.x branch of vibe.d is no longer actively developed or supported. The
+latest version 0.7.34 is the last official release. Any existing code should
+upgrade to 0.8.x. To ease the transition, it is recommended to upgrade to 0.8.1
+first and then to the latest release.
+
+Note that starting with 0.8.3, the default event loop implementation is
+[vibe-core](https://github.com/vibe-d/vibe-core). If you encounter any issues,
+you can [switch back to the classic libevent driver](http://vibed.org/blog/posts/vibe-release-0.8.3#switching-back-to-the-classic-vibe-d-core)
+for now. Please be sure to open a [bug report on GitHub](https://github.com/vibe-d/vibe-core/issues/new)
+in this case, as the libevent (and win32) driver are planned to be removed by
+the end of this year.
+
+
 Support
 -------
 
