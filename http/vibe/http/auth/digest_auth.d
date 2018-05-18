@@ -78,10 +78,10 @@ private bool checkDigest(scope HTTPServerRequest req, DigestAuthInfo info, scope
 			auto kv = split(param, "=");
 			switch (kv[0].strip().toLower()) {
 				default: break;
-				case "realm": realm = kv[1][1..$-1]; break;
-				case "username": username = kv[1][1..$-1]; break;
+				case "realm": realm = param.stripLeft()[7..$-1]; break;
+				case "username": username = param.stripLeft()[10..$-1]; break;
 				case "nonce": nonce = kv[1][1..$-1]; break;
-				case "uri": uri = kv[1][1..$-1]; break;
+				case "uri": uri = param.stripLeft()[5..$-1]; break;
 				case "response": response = kv[1][1..$-1]; break;
 				case "algorithm": algorithm = kv[1][1..$-1]; break;
 			}
