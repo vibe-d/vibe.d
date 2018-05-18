@@ -1891,6 +1891,7 @@ private {
 	T fromRestString(T)(string value)
 	{
 		import std.conv : ConvException;
+		import std.uuid : UUID, UUIDParsingException;
 		import vibe.http.common : HTTPStatusException;
 		import vibe.http.status : HTTPStatus;
 		try {
@@ -1901,10 +1902,13 @@ private {
 			else static if (is(string : T)) return value;
 			else static if (__traits(compiles, T.fromISOExtString("hello"))) return T.fromISOExtString(value);
 			else static if (__traits(compiles, T.fromString("hello"))) return T.fromString(value);
+			else static if (is(T == UUID)) return UUID(value);
 			else return deserializeJson!T(parseJson(value));
 		} catch (ConvException e) {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		} catch (JSONException e) {
+			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
+		} catch (UUIDParsingException e) {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		}
 	}
