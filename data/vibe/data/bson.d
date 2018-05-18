@@ -1352,6 +1352,20 @@ unittest { // issue #793
 	assert(bson[0].type == Bson.Type.string && bson[0].get!string == "t");
 }
 
+unittest
+{
+	UUID uuid = UUID("35399104-fbc9-4c08-bbaf-65a5efe6f5f2");
+
+	auto bson = Bson(uuid);
+	assert(bson.get!UUID == uuid);
+	assert(bson.deserializeBson!UUID == uuid);
+
+	bson = Bson([Bson(uuid)]);
+	assert(bson.deserializeBson!(UUID[]) == [uuid]);
+
+	bson = [uuid].serializeToBson();
+	assert(bson.deserializeBson!(UUID[]) == [uuid]);
+}
 
 /**
 	Serializes to an in-memory BSON representation.
@@ -1443,6 +1457,7 @@ struct BsonSerializer {
 		else static if (is(T : int) && isIntegral!T) { m_dst.put(toBsonData(cast(int)value)); }
 		else static if (is(T : long) && isIntegral!T) { m_dst.put(toBsonData(value)); }
 		else static if (is(T : double) && isFloatingPoint!T) { m_dst.put(toBsonData(cast(double)value)); }
+		else static if (is(T == UUID)) { m_dst.put(Bson(value).data); }
 		else static if (isBsonSerializable!T) {
 			static if (!__traits(compiles, () @safe { return value.toBson(); } ()))
 				pragma(msg, "Non-@safe toBson/fromBson methods are deprecated - annotate "~T.stringof~".toBson() with @safe.");
@@ -1578,6 +1593,7 @@ struct BsonSerializer {
 		else static if (isFloatingPoint!T && is(T : double)) tp = Bson.Type.double_;
 		else static if (isBsonSerializable!T) tp = value.toBson().type; // FIXME: this is highly inefficient
 		else static if (isJsonSerializable!T) tp = jsonTypeToBsonType(value.toJson().type); // FIXME: this is highly inefficient
+		else static if (is(T == UUID)) tp = Bson.Type.binData;
 		else static if (is(T : const(ubyte)[])) tp = Bson.Type.binData;
 		else static if (accept_ao && isArray!T) tp = Bson.Type.array;
 		else static if (accept_ao && isAssociativeArray!T) tp = Bson.Type.object;
