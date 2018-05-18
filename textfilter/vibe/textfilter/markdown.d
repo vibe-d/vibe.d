@@ -1090,19 +1090,55 @@ pure @safe {
 
 private bool parseAutoLink(ref string str, ref string url)
 pure @safe {
+	import std.algorithm.searching : all;
+	import std.ascii : isAlphaNum;
+
 	string pstr = str;
-	if( pstr.length < 3 ) return false;
-	if( pstr[0] != '<' ) return false;
+	if (pstr.length < 3) return false;
+	if (pstr[0] != '<') return false;
 	pstr = pstr[1 .. $];
 	auto cidx = pstr.indexOf('>');
-	if( cidx < 0 ) return false;
+	if (cidx < 0) return false;
+
 	url = pstr[0 .. cidx];
-	if( anyOf(url, " \t") ) return false;
-	if( !anyOf(url, ":@") ) return false;
+	if (url.anyOf(" \t")) return false;
+	auto atidx = url.indexOf('@');
+	auto colonidx = url.indexOf(':');
+	if (atidx < 0 && colonidx < 0) return false;
+
 	str = pstr[cidx+1 .. $];
-	if( url.indexOf('@') > 0 ) url = "mailto:"~url;
+	if (atidx < 0) return true;
+	if (colonidx < 0 || colonidx > atidx ||
+		!url[0 .. colonidx].all!(ch => ch.isAlphaNum))
+			url = "mailto:" ~ url;
 	return true;
 }
+
+unittest {
+	void test(bool expected, string str, string url)
+	{
+		string strcpy = str;
+		string outurl;
+		if (!expected) {
+			assert(!parseAutoLink(strcpy, outurl));
+			assert(outurl.length == 0);
+			assert(strcpy == str);
+		} else {
+			assert(parseAutoLink(strcpy, outurl));
+			assert(outurl == url);
+			assert(strcpy.length == 0);
+		}
+	}
+
+	test(true, "<http://foo/>", "http://foo/");
+	test(false, "<http://foo/", null);
+	test(true, "<mailto:foo@bar>", "mailto:foo@bar");
+	test(true, "<foo@bar>", "mailto:foo@bar");
+	test(true, "<proto:foo@bar>", "proto:foo@bar");
+	test(true, "<proto:foo@bar:123>", "proto:foo@bar:123");
+	test(true, "<\"foo:bar\"@baz>", "mailto:\"foo:bar\"@baz");
+}
+
 
 private LinkRef[string] scanForReferences(ref string[] lines)
 pure @safe {
