@@ -6,7 +6,7 @@ project('Vibe.d', 'd',
 )
 
 project_soversion      = '0'
-project_version_suffix = '~beta1'
+project_version_suffix = '~rc1'
 project_version        = meson.project_version()
 project_version_full   = project_version + project_version_suffix
 
