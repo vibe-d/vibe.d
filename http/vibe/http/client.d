@@ -1119,7 +1119,12 @@ final class HTTPClientResponse : HTTPResponse {
 	private @property isKeepAliveResponse()
 	const {
 		string conn;
-		if (this.httpVersion == HTTPVersion.HTTP_1_0) conn = this.headers.get("Connection", "close");
+		if (this.httpVersion == HTTPVersion.HTTP_1_0) {
+			// Workaround for non-standard-conformant servers - for example see #1780
+			auto pcl = "Content-Length" in this.headers;
+			if (pcl) conn = this.headers.get("Connection", "close");
+			else return false; // can't use keepalive when no content length is set
+		}
 		else conn = this.headers.get("Connection", "keep-alive");
 		return icmp(conn, "close") != 0;
 	}
