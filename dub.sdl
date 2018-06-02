@@ -34,6 +34,7 @@ sourceFiles "source/vibe/d.d" "source/vibe/vibe.d"
 x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
 	"--ex" "vibe.core.drivers." "--ex" "vibe.internal." "--ex" "vibe.web.internal."\
 	"--ex" "diet.internal" "--ex" "stdx." "--ex" "eventcore.internal." "--ex" "eventcore.drivers."
+	"--ex" "mir."
 
 configuration "vibe-core" {
 	subConfiguration "vibe-d:core" "vibe-core"
