@@ -1,0 +1,13 @@
+name "cmdline_mode"
+description "Virtual dependency to set version flag indicating whether command-line arguments should be parsed"
+targetType "library"
+sourcePaths "."
+importPaths "."
+
+// default
+configuration "parse" {
+}
+
+configuration "dont_parse" {
+    versions "VibeDisableCommandLineParsing"
+}
