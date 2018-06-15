@@ -33,6 +33,7 @@ import vibe.utils.string;
 
 import core.atomic;
 import core.vararg;
+import diet.traits : SafeFilterCallback, dietTraits;
 import std.algorithm : canFind;
 import std.array;
 import std.conv;
@@ -339,99 +340,96 @@ void setVibeDistHost(string host, ushort port)
 	compileHTMLDietFile!(template_file, ALIASES, DefaultDietFilters)(output);
 }
 
-version (Have_diet_ng)
-{
-	import diet.traits;
 
-	/**
-		Provides the default `css`, `javascript`, `markdown` and `htmlescape` filters
-	 */
-	@dietTraits
-	struct DefaultDietFilters {
-		import diet.html : HTMLOutputStyle;
-		import std.string : splitLines;
+/**
+	Provides the default `css`, `javascript`, `markdown` and `htmlescape` filters
+ */
+@dietTraits
+struct DefaultDietFilters {
+	import diet.html : HTMLOutputStyle;
+	import diet.traits : SafeFilterCallback;
+	import std.string : splitLines;
 
-		version (VibeOutputCompactHTML) enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.compact;
-		else enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.pretty;
+	version (VibeOutputCompactHTML) enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.compact;
+	else enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.pretty;
 
-		static string filterCss(I)(I text, size_t indent = 0)
-		{
-			auto lines = splitLines(text);
+	static string filterCss(I)(I text, size_t indent = 0)
+	{
+		auto lines = splitLines(text);
 
-			string indent_string = "\n";
-			while (indent-- > 0) indent_string ~= '\t';
+		string indent_string = "\n";
+		while (indent-- > 0) indent_string ~= '\t';
 
-			string ret = indent_string~"<style type=\"text/css\"><!--";
-			indent_string = indent_string ~ '\t';
-			foreach (ln; lines) ret ~= indent_string ~ ln;
-			indent_string = indent_string[0 .. $-1];
-			ret ~= indent_string ~ "--></style>";
+		string ret = indent_string~"<style type=\"text/css\"><!--";
+		indent_string = indent_string ~ '\t';
+		foreach (ln; lines) ret ~= indent_string ~ ln;
+		indent_string = indent_string[0 .. $-1];
+		ret ~= indent_string ~ "--></style>";
 
-			return ret;
-		}
-
-
-		static string filterJavascript(I)(I text, size_t indent = 0)
-		{
-			auto lines = splitLines(text);
-
-			string indent_string = "\n";
-			while (indent-- > 0) indent_string ~= '\t';
-
-			string ret = indent_string~"<script type=\"application/javascript\">";
-			ret ~= indent_string~'\t' ~ "//<![CDATA[";
-			foreach (ln; lines) ret ~= indent_string ~ '\t' ~ ln;
-			ret ~= indent_string ~ '\t' ~ "//]]>" ~ indent_string ~ "</script>";
-
-			return ret;
-		}
-
-		static string filterMarkdown(I)(I text)
-		{
-			import vibe.textfilter.markdown : markdown = filterMarkdown;
-			// TODO: indent
-			return markdown(text);
-		}
-
-		static string filterHtmlescape(I)(I text)
-		{
-			import vibe.textfilter.html : htmlEscape;
-			// TODO: indent
-			return htmlEscape(text);
-		}
-
-		static this()
-		{
-			filters["css"] = (input, scope output) { output(filterCss(input)); };
-			filters["javascript"] = (input, scope output) { output(filterJavascript(input)); };
-			filters["markdown"] = (input, scope output) { output(filterMarkdown(() @trusted { return cast(string)input; } ())); };
-			filters["htmlescape"] = (input, scope output) { output(filterHtmlescape(input)); };
-		}
-
-		static SafeFilterCallback[string] filters;
+		return ret;
 	}
 
 
-	unittest {
-		static string compile(string diet)() {
-			import std.array : appender;
-			import std.string : strip;
-			import diet.html : compileHTMLDietString;
-			auto dst = appender!string;
-			dst.compileHTMLDietString!(diet, DefaultDietFilters);
-			return strip(cast(string)(dst.data));
-		}
+	static string filterJavascript(I)(I text, size_t indent = 0)
+	{
+		auto lines = splitLines(text);
 
-		assert(compile!":css .test" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
-		assert(compile!":javascript test();" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
-		assert(compile!":markdown **test**" == "<p><strong>test</strong>\n</p>");
-		assert(compile!":htmlescape <test>" == "&lt;test&gt;");
-		assert(compile!":css !{\".test\"}" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
-		assert(compile!":javascript !{\"test();\"}" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
-		assert(compile!":markdown !{\"**test**\"}" == "<p><strong>test</strong>\n</p>");
-		assert(compile!":htmlescape !{\"<test>\"}" == "&lt;test&gt;");
-		assert(compile!":javascript\n\ttest();" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
+		string indent_string = "\n";
+		while (indent-- > 0) indent_string ~= '\t';
+
+		string ret = indent_string~"<script type=\"application/javascript\">";
+		ret ~= indent_string~'\t' ~ "//<![CDATA[";
+		foreach (ln; lines) ret ~= indent_string ~ '\t' ~ ln;
+		ret ~= indent_string ~ '\t' ~ "//]]>" ~ indent_string ~ "</script>";
+
+		return ret;
 	}
+
+	static string filterMarkdown(I)(I text)
+	{
+		import vibe.textfilter.markdown : markdown = filterMarkdown;
+		// TODO: indent
+		return markdown(text);
+	}
+
+	static string filterHtmlescape(I)(I text)
+	{
+		import vibe.textfilter.html : htmlEscape;
+		// TODO: indent
+		return htmlEscape(text);
+	}
+
+	static this()
+	{
+		filters["css"] = (input, scope output) { output(filterCss(input)); };
+		filters["javascript"] = (input, scope output) { output(filterJavascript(input)); };
+		filters["markdown"] = (input, scope output) { output(filterMarkdown(() @trusted { return cast(string)input; } ())); };
+		filters["htmlescape"] = (input, scope output) { output(filterHtmlescape(input)); };
+	}
+
+	static SafeFilterCallback[string] filters;
+}
+
+
+unittest {
+	static string compile(string diet)() {
+		import std.array : appender;
+		import std.string : strip;
+		import diet.html : compileHTMLDietString;
+		auto dst = appender!string;
+		dst.compileHTMLDietString!(diet, DefaultDietFilters);
+		return strip(cast(string)(dst.data));
+	}
+
+	assert(compile!":css .test" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
+	assert(compile!":javascript test();" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
+	assert(compile!":markdown **test**" == "<p><strong>test</strong>\n</p>");
+	assert(compile!":htmlescape <test>" == "&lt;test&gt;");
+	assert(compile!":css !{\".test\"}" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
+	assert(compile!":javascript !{\"test();\"}" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
+	assert(compile!":markdown !{\"**test**\"}" == "<p><strong>test</strong>\n</p>");
+	assert(compile!":htmlescape !{\"<test>\"}" == "&lt;test&gt;");
+	assert(compile!":javascript\n\ttest();" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
 }
 
 
