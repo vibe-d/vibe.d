@@ -203,7 +203,7 @@ struct URL {
 	@property void host(string v) { m_host = v; }
 
 	/// The port part of the URL (optional)
-	@property ushort port() const { return m_port; }
+	@property ushort port() const { return m_port ? m_port : defaultPort(m_schema); }
 	/// ditto
 	@property port(ushort v) { m_port = v; }
 
@@ -382,6 +382,7 @@ unittest {
 	assert(url.schema == "https", url.schema);
 	assert(url.host == "www.example.net", url.host);
 	assert(url.path == InetPath("/index.html"), url.path.toString());
+	assert(url.port == 443);
 	assert(url.toString == urlstr);
 
 	urlstr = "http://jo.doe:password@sub.www.example.net:4711/sub2/index.html?query#anchor";
@@ -401,6 +402,7 @@ unittest { // issue #1044
 	URL url = URL.parse("http://example.com/p?query#anchor");
 	assert(url.schema == "http");
 	assert(url.host == "example.com");
+	assert(url.port == 80);
 	assert(url.queryString == "query");
 	assert(url.anchor == "anchor");
 	assert(url.pathString == "/p");
@@ -452,6 +454,7 @@ unittest {
 
 unittest {
 	assert(URL("file:///test").pathString == "/test");
+	assert(URL("file:///test").port == 0);
 	assert(URL("file:///test").path.toString() == "/test");
 	assert(URL("file://test").host == "test");
 	assert(URL("file://test").pathString() == "");
