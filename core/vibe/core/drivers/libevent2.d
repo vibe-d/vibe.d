@@ -693,7 +693,20 @@ struct ThreadSlot {
 	ArraySet!Task tasks;
 }
 /// private
-alias ThreadSlotMap = HashMap!(Thread, ThreadSlot);
+struct ThreadSlotMapTraits {
+	enum Thread clearValue = null;
+	// This relies on no subclass of Thread overriding opEquals or toHash.
+	static bool equals(in Thread a, in Thread b)
+	@nogc nothrow pure @safe {
+		return a is b;
+	}
+	static size_t hashOf(in Thread a)
+	@nogc nothrow pure @trusted {
+		return cast(size_t) cast(const void*) a;
+	}
+}
+/// private
+alias ThreadSlotMap = HashMap!(Thread, ThreadSlot, ThreadSlotMapTraits);
 
 final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 @safe:

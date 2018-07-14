@@ -15,15 +15,42 @@ import std.traits;
 
 struct DefaultHashMapTraits(Key) {
 	enum clearValue = Key.init;
-	static bool equals(in Key a, in Key b)
+
+	static if (__traits(isFinalClass, Key) && __traits(compiles,
+			{static assert(&Object.opEquals is &Key.opEquals);}))
 	{
-		static if (is(Key == class)) return a is b;
-		else return a == b;
+		// Equality check for final class with default identity-based opEquals.
+		static bool equals(scope const Key a, scope const Key b)
+			@nogc nothrow pure @safe { return a is b; }
 	}
+	else static if (is(Key == class)
+		&& is(typeof(((const Key* a, const Key* b) => (*a).opEquals(*b))(null, null)) : bool))
+	{
+		// Equality check for class with const opEquals.
+		static auto equals(const Key a, const Key b) { return a == b; }
+	}
+	else static if (is(Key == class) || is(Key == interface))
+	{
+		// Equality check for interface or class with non-const opEquals.
+		static auto equals(Key a, Key b) { return a == b; }
+	}
+	else
+	{
+		// Default equality check.
+		// Second parameter is non-ref so it can be enum `clearValue`.
+		static auto equals(in ref Key a, in Key b) { return a == b; }
+	}
+
 	static size_t hashOf(in ref Key k)
 	@safe {
-		static if (is(Key == class) && &Unqual!Key.init.toHash is &Object.init.toHash)
-			return () @trusted { return cast(size_t)cast(void*)k; } ();
+		static if (__traits(isFinalClass, Key) &&
+				// Need to use __traits(compiles, ...) to avoid compilation
+				// failure if there are multiple overloads of toHash.
+				__traits(compiles, {static assert(&Object.toHash is &Key.toHash);}))
+		{
+			const addr = (() @trusted => cast(size_t) cast(const void*) k)();
+			return addr ^ (addr >>> 4);
+		}
 		else static if (__traits(compiles, Key.init.toHash()))
 			return () @trusted { return (cast(Key)k).toHash(); } ();
 		else static if (__traits(compiles, Key.init.toHashShared()))
@@ -141,7 +168,14 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		return m_table[idx].value;
 	}
 
+	private enum canConstEquals = is(typeof(
+		((const Key a, const Key b) => Traits.equals(a, b))(Key.init, Key.init)) : bool);
+
+	private enum canConstHash = is(typeof(
+		((const Key a) => Traits.hashOf(a))(Key.init)) : size_t);
+
 	static if (!is(typeof({ Value v; const(Value) vc; v = vc; }))) {
+		static if (canConstEquals && canConstHash)
 		const(Value) get(Key key, lazy const(Value) default_value = Value.init)
 		{
 			auto idx = findIndex(key);
@@ -172,18 +206,40 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		m_table[i].value = value;
 	}
 
-	ref inout(Value) opIndex(Key key)
-	inout {
+	private enum _opIndex = q{
 		auto idx = findIndex(key);
 		assert (idx != size_t.max, "Accessing non-existent key.");
 		return m_table[idx].value;
-	}
+	};
 
-	inout(Value)* opBinaryRight(string op)(Key key)
-	inout if (op == "in") {
+	private enum _opBinaryRight = q{
 		auto idx = findIndex(key);
 		if (idx == size_t.max) return null;
 		return &m_table[idx].value;
+	};
+
+	static if (canConstEquals && canConstHash)
+	{
+		ref inout(Value) opIndex(Key key)
+		inout {
+			mixin(_opIndex);
+		}
+
+		inout(Value)* opBinaryRight(string op)(Key key)
+		inout if (op == "in") {
+			mixin(_opBinaryRight);
+		}
+	}
+	else
+	{
+		ref Value opIndex(Key key) {
+			mixin(_opIndex);
+		}
+
+		Value* opBinaryRight(string op)(Key key)
+		if (op == "in") {
+			mixin(_opBinaryRight);
+		}
 	}
 
 	int opApply(DG)(scope DG del) if (isOpApplyDg!(DG, Key, Value))
@@ -204,17 +260,18 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	auto byKey() { return bySlot.map!(e => e.key); }
-	auto byKey() const { return bySlot.map!(e => e.key); }
 	auto byValue() { return bySlot.map!(e => e.value); }
-	auto byValue() const { return bySlot.map!(e => e.value); }
 	auto byKeyValue() { import std.typecons : Tuple; return bySlot.map!(e => Tuple!(Key, "key", Value, "value")(e.key, e.value)); }
-	auto byKeyValue() const { import std.typecons : Tuple; return bySlot.map!(e => Tuple!(const(Key), "key", const(Value), "value")(e.key, e.value)); }
-
 	private auto bySlot() { return m_table[].filter!(e => !Traits.equals(e.key, Traits.clearValue)); }
-	private auto bySlot() const { return m_table[].filter!(e => !Traits.equals(e.key, Traits.clearValue)); }
 
-	private size_t findIndex(Key key)
-	const {
+	static if (canConstEquals) {
+		auto byKey() const { return bySlot.map!(e => e.key); }
+		auto byValue() const { return bySlot.map!(e => e.value); }
+		auto byKeyValue() const { import std.typecons : Tuple; return bySlot.map!(e => Tuple!(const(Key), "key", const(Value), "value")(e.key, e.value)); }
+		private auto bySlot() const { return m_table[].filter!(e => !Traits.equals(e.key, Traits.clearValue)); }
+	}
+
+	private enum _findIndex = q{
 		if (m_length == 0) return size_t.max;
 		size_t start = Traits.hashOf(key) & (m_table.length-1);
 		auto i = start;
@@ -224,10 +281,9 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 			if (i == start) return size_t.max;
 		}
 		return i;
-	}
+	};
 
-	private size_t findInsertIndex(Key key)
-	const {
+	private enum _findInsertIndex = q{
 		auto hash = Traits.hashOf(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
@@ -236,6 +292,15 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 			assert (i != target, "No free bucket found, HashMap full!?");
 		}
 		return i;
+	};
+
+	static if (canConstHash && canConstEquals) {
+		private size_t findIndex(Key key) const { mixin(_findIndex); }
+		private size_t findInsertIndex(Key key) const { mixin(_findInsertIndex); }
+	}
+	else {
+		private size_t findIndex(Key key) { mixin (_findIndex); }
+		private size_t findInsertIndex(Key key) { mixin(_findInsertIndex); }
 	}
 
 	private void grow(size_t amount)
@@ -440,6 +505,34 @@ unittest { // test for proper use of constructor/post-blit/destructor
 	}
 
 	assert(Test.constructedCounter == 0);
+}
+
+unittest { // Test class with override opEquals/opHash works as key.
+	static final class Int {
+		@nogc nothrow pure @safe:
+		immutable int value;
+		this(int a) { this.value = a; }
+		override size_t toHash() const { return value; }
+		static if (__VERSION__ >= 2075) {
+			override bool opEquals(const Object rhs) const {
+				auto o = cast(const Int) rhs;
+				return o !is null && value == o.value;
+			}
+		}
+		else {
+			override bool opEquals(Object rhs) const {
+				return opEquals(cast(const Int) rhs);
+			}
+			bool opEquals(const Object rhs) const {
+				auto o = cast(const Int) rhs;
+				return o !is null && value == o.value;
+			}
+		}
+	}
+
+	HashMap!(Int, float) map;
+	map.opIndexAssign(3.14f, new Int(3));
+	assert(map.get(new Int(3)) == 3.14f);
 }
 
 private template UnConst(T) {
