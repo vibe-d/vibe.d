@@ -754,12 +754,28 @@ struct Bson {
 	///
 	bool opEquals(ref const Bson other) const {
 		if( m_type != other.m_type ) return false;
-		return m_data == other.m_data;
+		if (m_type != Type.object)
+			return m_data == other.m_data;
+
+		if (m_data == other.m_data)
+			return true;
+		// Similar objects can have a different key order, but they must have a same length
+		if (m_data.length != other.m_data.length)
+			return false;
+
+		foreach (k, ref v; this.byKeyValue)
+		{
+			if (other[k] != v)
+				return false;
+		}
+
+		return true;
 	}
 	/// ditto
 	bool opEquals(const Bson other) const {
 		if( m_type != other.m_type ) return false;
-		return m_data == other.m_data;
+
+		return opEquals(other);
 	}
 
 	private void checkType(in Type[] valid_types...)
