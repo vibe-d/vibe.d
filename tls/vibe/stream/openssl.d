@@ -36,6 +36,22 @@ import deimos.openssl.ssl;
 import deimos.openssl.stack;
 import deimos.openssl.x509v3;
 
+// auto-detect OpenSSL 1.1.0
+version (VibeUseOpenSSL11)
+	enum OPENSSL_VERSION = "1.1.0";
+else version (VibeUseOldOpenSSL)
+	enum OPENSSL_VERSION = "0.9.0";
+else version (Botan)
+	enum OPENSSL_VERSION = "0.0.0";
+else
+{
+	// Only use the openssl_version file if it has been generated
+	static if (__traits(compiles, {import openssl_version; }))
+		mixin("import openssl_version;");
+	else
+		enum OPENSSL_VERSION = "0.0.0";
+}
+
 version (VibePragmaLib) {
 	pragma(lib, "ssl");
 	version (Windows) pragma(lib, "eay");
@@ -48,7 +64,7 @@ else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
 // openssl/1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
-version (VibeUseOpenSSL11) {
+static if (OPENSSL_VERSION.startsWith("1.1")) {
 	extern(C) const(SSL_METHOD)* TLS_client_method();
 	alias SSLv23_client_method = TLS_client_method;
 
@@ -204,7 +220,7 @@ final class OpenSSLStream : TLSStream {
 			m_tls = null;
 		}
 
-		version (VibeUseOpenSSL11) {
+		static if (OPENSSL_VERSION.startsWith("1.1")) {
 			if (!s_bio_methods) initBioMethods();
 
 			m_bio = () @trusted { return BIO_new(s_bio_methods); } ();
@@ -577,7 +593,7 @@ final class OpenSSLContext : TLSContext {
 		const(SSL_METHOD)* method;
 		c_long veroptions = SSL_OP_NO_SSLv2;
 		c_long options = SSL_OP_NO_COMPRESSION;
-		version (VibeUseOpenSSL11) {}
+		static if (OPENSSL_VERSION.startsWith("1.1")) {}
 		else
 			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
 		int minver = TLS1_VERSION;
@@ -618,7 +634,7 @@ final class OpenSSLContext : TLSContext {
 			enforceSSL(0, "Failed to create SSL context");
 			assert(false);
 		}
-		version (VibeUseOpenSSL11) {
+		static if (OPENSSL_VERSION.startsWith("1.1")) {
 			() @trusted { return SSL_CTX_set_min_proto_version(m_ctx, minver); }()
 				.enforceSSL("Failed setting minimum protocol version");
 			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options); }();
@@ -1343,7 +1359,7 @@ private void setSSLError(string msg, string submsg, int line = __LINE__, string 
 	ERR_add_error_data(3, msg.toStringz, ": ".ptr, submsg.toStringz);
 }
 
-version (VibeUseOpenSSL11) {
+static if (OPENSSL_VERSION.startsWith("1.1")) {
 	private BIO_METHOD* s_bio_methods;
 
 	private void initBioMethods()
