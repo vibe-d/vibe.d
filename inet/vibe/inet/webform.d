@@ -540,6 +540,7 @@ unittest
 	import vibe.utils.dictionarylist : DictionaryList;
 	import vibe.data.json : Json;
 	import vibe.data.bson : Bson;
+	import std.algorithm.sorting : sort;
 
 	string[string] aaMap;
 	DictionaryList!string dlMap;
@@ -580,11 +581,9 @@ unittest
 	bsonMap["complex"] = "╤╳/=$$\"'1!2()'\"";
 	bsonMap["╤╳"] = "1";
 
-	assert(urlEncode(aaMap) == "complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&unicode=%E2%95%A4%E2%95%B3&spaces=1%202%203%204%20a%20b%20c%20d&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1" ||
-		   urlEncode(aaMap) == "slashes=1%2F2%2F3%2F4%2F5&spaces=1%202%203%204%20a%20b%20c%20d&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1&unicode=%E2%95%A4%E2%95%B3&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22");
+	assert(urlEncode(aaMap).split('&').sort().join("&") == "%E2%95%A4%E2%95%B3=1&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&spaces=1%202%203%204%20a%20b%20c%20d&unicode=%E2%95%A4%E2%95%B3");
 	assert(urlEncode(dlMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1%202%203%204%20a%20b%20c%20d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
-	assert(urlEncode(jsonMap) == "%E2%95%A4%E2%95%B3=1&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&unicode=%E2%95%A4%E2%95%B3&spaces=1%202%203%204%20a%20b%20c%20d&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&slashes=1%2F2%2F3%2F4%2F5" ||
-		   urlEncode(jsonMap) == "slashes=1%2F2%2F3%2F4%2F5&spaces=1%202%203%204%20a%20b%20c%20d&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1&unicode=%E2%95%A4%E2%95%B3&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22");
+	assert(urlEncode(jsonMap).split('&').sort().join("&") == "%E2%95%A4%E2%95%B3=1&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&spaces=1%202%203%204%20a%20b%20c%20d&unicode=%E2%95%A4%E2%95%B3");
 	assert(urlEncode(bsonMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1%202%203%204%20a%20b%20c%20d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
 	{
 		FormFields aaFields;
@@ -604,11 +603,9 @@ unittest
 		assert(urlEncode(bsonMap) == urlEncode(bsonFields));
 	}
 
-	assert(formEncode(aaMap) == "complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&unicode=%E2%95%A4%E2%95%B3&spaces=1+2+3+4+a+b+c+d&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1" ||
-		   formEncode(aaMap) == "slashes=1%2F2%2F3%2F4%2F5&spaces=1+2+3+4+a+b+c+d&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1&unicode=%E2%95%A4%E2%95%B3&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22");
+	assert(formEncode(aaMap).split('&').sort().join("&") == "%E2%95%A4%E2%95%B3=1&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&spaces=1+2+3+4+a+b+c+d&unicode=%E2%95%A4%E2%95%B3");
 	assert(formEncode(dlMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1+2+3+4+a+b+c+d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
-	assert(formEncode(jsonMap) == "%E2%95%A4%E2%95%B3=1&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&unicode=%E2%95%A4%E2%95%B3&spaces=1+2+3+4+a+b+c+d&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&slashes=1%2F2%2F3%2F4%2F5" ||
-		   formEncode(jsonMap) == "slashes=1%2F2%2F3%2F4%2F5&spaces=1+2+3+4+a+b+c+d&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1&unicode=%E2%95%A4%E2%95%B3&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22");
+	assert(formEncode(jsonMap).split('&').sort().join("&") == "%E2%95%A4%E2%95%B3=1&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&spaces=1+2+3+4+a+b+c+d&unicode=%E2%95%A4%E2%95%B3");
 	assert(formEncode(bsonMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1+2+3+4+a+b+c+d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
 
 	{
