@@ -268,6 +268,16 @@ class HTTPClientSettings {
 		Note that this overrides a callback set with `HTTPClient.setTLSContextSetup`.
 	*/
 	void delegate(TLSContext ctx) @safe nothrow tlsContextSetup;
+
+	@property HTTPClientSettings dup()
+	const @safe {
+		auto ret = new HTTPClientSettings;
+		ret.proxyURL = this.proxyURL;
+		ret.networkInterface = this.networkInterface;
+		ret.dnsAddressFamily = this.dnsAddressFamily;
+		ret.tlsContextSetup = this.tlsContextSetup;
+		return ret;
+	}
 }
 
 ///
