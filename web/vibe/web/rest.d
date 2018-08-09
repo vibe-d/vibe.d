@@ -819,6 +819,10 @@ class RestInterfaceSettings {
 		ret.methodStyle = this.methodStyle;
 		ret.stripTrailingUnderscore = this.stripTrailingUnderscore;
 		ret.allowedOrigins = this.allowedOrigins.dup;
+		ret.errorHandler = this.errorHandler;
+		if (this.httpClientSettings) {
+			ret.httpClientSettings = this.httpClientSettings.dup;
+		}
 		return ret;
 	}
 }
