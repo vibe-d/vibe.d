@@ -533,6 +533,14 @@ WebParamAttribute bodyParam(string identifier)
 	return WebParamAttribute(ParameterKind.body_, identifier, "");
 }
 
+WebParamAttribute wholeBodyParam(string identifier) @safe
+{
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.wholeBody, identifier, "");
+}
+
 /**
  * Declare that a parameter will be transmitted to the API through the headers.
  *
@@ -686,7 +694,12 @@ package enum ParamResult {
 }
 
 // NOTE: dst is assumed to be uninitialized
-package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string fieldname, bool required, NestedNameStyle style, ref ParamError err)
+package ParamResult readFormParamRec(T)(scope HTTPServerRequest req,
+													 ref T dst, string fieldname,
+													 bool required,
+													 NestedNameStyle style,
+													 ref ParamError err,
+													 bool wholeBodyParam)
 {
 	import std.traits;
 	import std.typecons;
@@ -701,7 +714,8 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 		dst = T.init;
 		while (true) {
 			EL el = void;
-			auto r = readFormParamRec(req, el, style.getArrayFieldName(fieldname, idx), false, style, err);
+			const nestedArrayFieldName = style.getArrayFieldName(fieldname, idx, wholeBodyParam);
+			auto r = readFormParamRec(req, el, nestedArrayFieldName, false, style, err, false);
 			if (r == ParamResult.error) return r;
 			if (r == ParamResult.skipped) break;
 			dst ~= el;
@@ -709,13 +723,14 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 		}
 	} else static if (isStaticArray!T) {
 		foreach (i; 0 .. T.length) {
-			auto r = readFormParamRec(req, dst[i], style.getArrayFieldName(fieldname, i), true, style, err);
+			const nestedArrayFieldName = style.getArrayFieldName(fieldname, i, wholeBodyParam);
+			auto r = readFormParamRec(req, dst[i], nestedArrayFieldName, true, style, err, false);
 			if (r == ParamResult.error) return r;
 			assert(r != ParamResult.skipped); break;
 		}
 	} else static if (isNullable!T) {
 		typeof(dst.get()) el = void;
-		auto r = readFormParamRec(req, el, fieldname, false, style, err);
+		auto r = readFormParamRec(req, el, fieldname, false, style, err, false);
 		final switch (r) {
 			case ParamResult.ok: dst.setVoid(el); break;
 			case ParamResult.skipped: dst.setVoid(T.init); break;
@@ -727,7 +742,8 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 		!is(typeof(T.fromISOExtString(string.init))))
 	{
 		foreach (m; __traits(allMembers, T)) {
-			auto r = readFormParamRec(req, __traits(getMember, dst, m), style.getMemberFieldName(fieldname, m), required, style, err);
+			const nestedMemberFieldName = style.getMemberFieldName(fieldname, m, wholeBodyParam);
+			auto r = readFormParamRec(req, __traits(getMember, dst, m), nestedMemberFieldName, required, style, err, false);
 			if (r != ParamResult.ok)
 				return r; // FIXME: in case of errors the struct will be only partially initialized! All previous fields should be deinitialized first.
 		}
@@ -800,25 +816,31 @@ package void setVoid(T, U)(ref T dst, U value)
 }
 
 unittest {
-	static assert(!__traits(compiles, { bool[] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
-	static assert(__traits(compiles, { bool[2] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
+	static assert(!__traits(compiles, { bool[] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err, false); }));
+	static assert(__traits(compiles, { bool[2] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err, false); }));
 
 	enum Test: string {	a = "AAA", b="BBB" }
-	static assert(__traits(compiles, { Test barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
+	static assert(__traits(compiles, { Test barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err, false); }));
 }
 
-private string getArrayFieldName(T)(NestedNameStyle style, string prefix, T index)
+private string getArrayFieldName(T)(NestedNameStyle style, string prefix, T index, bool wholeBodyParam)
 {
 	import std.format : format;
+
+	if (wholeBodyParam) return format("%s", index);
+
 	final switch (style) {
 		case NestedNameStyle.underscore: return format("%s_%s", prefix, index);
 		case NestedNameStyle.d: return format("%s[%s]", prefix, index);
 	}
 }
 
-private string getMemberFieldName(NestedNameStyle style, string prefix, string member)
+private string getMemberFieldName(NestedNameStyle style, string prefix, string member, bool wholeBodyParam)
 @safe {
 	import std.format : format;
+
+	if (wholeBodyParam) return format("%s", member);
+
 	final switch (style) {
 		case NestedNameStyle.underscore: return format("%s_%s", prefix, member);
 		case NestedNameStyle.d: return format("%s.%s", prefix, member);
