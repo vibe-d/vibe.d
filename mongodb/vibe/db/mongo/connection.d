@@ -18,11 +18,12 @@ import vibe.stream.tls;
 
 import std.algorithm : map, splitter;
 import std.array;
-import std.range;
 import std.conv;
-import std.exception;
-import std.string;
 import std.digest.md;
+import std.exception;
+import std.range;
+import std.string;
+import std.typecons;
 
 
 private struct _MongoErrorDescription
@@ -127,6 +128,7 @@ final class MongoConnection {
 		ulong m_bytesRead;
 		int m_msgid = 1;
 		StreamOutputRange!(InterfaceProxy!Stream) m_outRange;
+		ServerDescription m_description;
 	}
 
 	enum ushort defaultPort = MongoClientSettings.defaultPort;
@@ -181,6 +183,56 @@ final class MongoConnection {
 			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
 		}
 
+		if (m_settings.nextgen) {
+			import os = std.system;
+			import compiler = std.compiler;
+			string platform = compiler.name ~ " "
+				~ compiler.version_major.to!string ~ "." ~ compiler.version_minor.to!string;
+			// TODO: add support for os.version
+
+			version (X86_64)
+				string arch = "x86_64 ";
+			else version (X86)
+				string arch = "x86 ";
+			else version (AArch64)
+				string arch = "aarch64 ";
+			else version (ARM_HardFloat)
+				string arch = "armhf ";
+			else version (ARM)
+				string arch = "arm ";
+			else version (PPC64)
+				string arch = "ppc64 ";
+			else version (PPC)
+				string arch = "ppc ";
+			else
+				string arch = "unknown ";
+
+			Bson handshake = Bson.emptyObject;
+			handshake["isMaster"] = Bson(1);
+			handshake["client"] = Bson([
+				"driver": Bson(["name": Bson("vibe.db.mongo"), "version": Bson("0.8.4")]),
+				"os": Bson(["type": Bson(os.os.to!string), "architecture": Bson(arch ~ os.endian.to!string)]),
+				"platform": Bson(platform)
+			]);
+
+			if (m_settings.appname.length) {
+				if (m_settings.appname.length > 128)
+					throw new MongoAuthException("The application name may not be larger than 128 bytes");
+				handshake["appname"] = Bson(m_settings.appname);
+			}
+
+			query!Bson("$external.$cmd", QueryFlags.none, 0, -1, handshake, Bson(null),
+				(cursor, flags, first_doc, num_docs) {
+					if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
+						throw new MongoDriverException("Authentication handshake failed.");
+				},
+				(idx, ref doc) {
+					if (doc["ok"].get!double != 1.0)
+						throw new MongoAuthException("Authentication failed.");
+					m_description = deserializeBson!ServerDescription(doc);
+				});
+		}
+
 		m_bytesRead = 0;
 		if(m_settings.digest != string.init)
 		{
@@ -225,6 +277,7 @@ final class MongoConnection {
 
 	@property bool connected() const { return m_conn && m_conn.connected; }
 
+	@property const(ServerDescription) description() const { return m_description; }
 
 	void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
 	{
@@ -626,4 +679,52 @@ private int sendLength(ARGS...)(ARGS args)
 	}
 	else if (ARGS.length == 0) return 0;
 	else return sendLength(args[0 .. $/2]) + sendLength(args[$/2 .. $]);
+}
+
+struct ServerDescription
+{
+	enum ServerType
+	{
+		unknown,
+		standalone,
+		mongos,
+		possiblePrimary,
+		RSPrimary,
+		RSSecondary,
+		RSArbiter,
+		RSOther,
+		RSGhost
+	}
+
+@optional:
+	string address;
+	string error;
+	// we are supposed to (MUST) log this value but I can't find what type this is and my server doesn't send it to me anyway...
+	//??? roundTripTime;
+	Nullable!BsonDate lastWriteDate;
+	Nullable!BsonObjectID opTime;
+	ServerType type = ServerType.unknown;
+	WireVersion minWireVersion, maxWireVersion;
+	string me;
+	string[] hosts, passives, arbiters;
+	string[string] tags;
+	string setName;
+	Nullable!int setVersion;
+	Nullable!BsonObjectID electionId;
+	string primary;
+	string lastUpdateTime = "infinity ago";
+	Nullable!int logicalSessionTimeoutMinutes;
+}
+
+enum WireVersion : int
+{
+	old,
+	v26,
+	v26_2,
+	v30,
+	v32,
+	v34,
+	v36,
+	v40,
+	v42
 }
