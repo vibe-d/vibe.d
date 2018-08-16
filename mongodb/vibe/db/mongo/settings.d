@@ -157,7 +157,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 			switch( option.toLower() ){
 				default: logWarn("Unknown MongoDB option %s", option); break;
-				case "appname": cfg.appname = value; break;
+				case "appname": cfg.appName = value; break;
 				case "slaveok": bool v; if( setBool(v) && v ) cfg.defQueryFlags |= QueryFlags.SlaveOk; break;
 				case "replicaset": cfg.replicaSet = value; warnNotImplemented(); break;
 				case "safe": setBool(cfg.safe); break;
@@ -343,9 +343,9 @@ class MongoClientSettings
 	string sslCAFile;
 	MongoAuthMechanism authMechanism;
 	/// Flag to send handshake to MongoDB servers to identify capabilities. May not work on old MongoDB versions.
-	bool nextgen = true;
-	/// Application name for the connection information when connected. Requires nextgen to be true.
-	string appname;
+	bool nextGen = true;
+	/// Application name for the connection information when connected. Requires nextGen to be true.
+	string appName;
 
 	static string makeDigest(string username, string password)
 	@safe {

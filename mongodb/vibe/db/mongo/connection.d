@@ -183,52 +183,34 @@ final class MongoConnection {
 			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
 		}
 
-		if (m_settings.nextgen) {
+		if (m_settings.nextGen) {
 			import os = std.system;
 			import compiler = std.compiler;
 			string platform = compiler.name ~ " "
 				~ compiler.version_major.to!string ~ "." ~ compiler.version_minor.to!string;
 			// TODO: add support for os.version
 
-			version (X86_64)
-				string arch = "x86_64 ";
-			else version (X86)
-				string arch = "x86 ";
-			else version (AArch64)
-				string arch = "aarch64 ";
-			else version (ARM_HardFloat)
-				string arch = "armhf ";
-			else version (ARM)
-				string arch = "arm ";
-			else version (PPC64)
-				string arch = "ppc64 ";
-			else version (PPC)
-				string arch = "ppc ";
-			else
-				string arch = "unknown ";
-
 			Bson handshake = Bson.emptyObject;
 			handshake["isMaster"] = Bson(1);
 			handshake["client"] = Bson([
-				"driver": Bson(["name": Bson("vibe.db.mongo"), "version": Bson("0.8.4")]),
-				"os": Bson(["type": Bson(os.os.to!string), "architecture": Bson(arch ~ os.endian.to!string)]),
+				"driver": Bson(["name": Bson("vibe.db.mongo"), "version": Bson("0.1.0")]),
+				"os": Bson(["type": Bson(os.os.to!string), "architecture": Bson(hostArchitecture)]),
 				"platform": Bson(platform)
 			]);
 
-			if (m_settings.appname.length) {
-				if (m_settings.appname.length > 128)
-					throw new MongoAuthException("The application name may not be larger than 128 bytes");
-				handshake["appname"] = Bson(m_settings.appname);
+			if (m_settings.appName.length) {
+				enforce!MongoAuthException(m_settings.appName.length <= 128,
+					"The application name may not be larger than 128 bytes");
+				handshake["application"] = Bson(["name": Bson(m_settings.appName)]);
 			}
 
 			query!Bson("$external.$cmd", QueryFlags.none, 0, -1, handshake, Bson(null),
 				(cursor, flags, first_doc, num_docs) {
-					if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-						throw new MongoDriverException("Authentication handshake failed.");
+					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure) && num_docs == 1,
+						"Authentication handshake failed.");
 				},
 				(idx, ref doc) {
-					if (doc["ok"].get!double != 1.0)
-						throw new MongoAuthException("Authentication failed.");
+					enforce!MongoAuthException(doc["ok"].get!double == 1.0, "Authentication failed.");
 					m_description = deserializeBson!ServerDescription(doc);
 				});
 		}
@@ -699,8 +681,7 @@ struct ServerDescription
 @optional:
 	string address;
 	string error;
-	// we are supposed to (MUST) log this value but I can't find what type this is and my server doesn't send it to me anyway...
-	//??? roundTripTime;
+	float roundTripTime = 0;
 	Nullable!BsonDate lastWriteDate;
 	Nullable!BsonObjectID opTime;
 	ServerType type = ServerType.unknown;
@@ -728,3 +709,29 @@ enum WireVersion : int
 	v40,
 	v42
 }
+
+private string getHostArchitecture()
+{
+	import os = std.system;
+
+	version (X86_64)
+		string arch = "x86_64 ";
+	else version (X86)
+		string arch = "x86 ";
+	else version (AArch64)
+		string arch = "aarch64 ";
+	else version (ARM_HardFloat)
+		string arch = "armhf ";
+	else version (ARM)
+		string arch = "arm ";
+	else version (PPC64)
+		string arch = "ppc64 ";
+	else version (PPC)
+		string arch = "ppc ";
+	else
+		string arch = "unknown ";
+
+	return arch ~ os.endian.to!string;
+}
+
+private static immutable hostArchitecture = getHostArchitecture;
