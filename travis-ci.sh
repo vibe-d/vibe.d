@@ -52,13 +52,43 @@ fi
 
 if [[ $PARTS =~ (^|,)tests(,|$) ]]; then
     for ex in `\ls -1 tests/`; do
-        if [ -r tests/$ex/dub.json ] || [ -r tests/$ex/dub.sdl ]; then
+        if [ -r tests/$ex/run.sh ]; then
+            echo "[INFO] Running test $ex"
+            (cd tests/$ex && ./run.sh)
+        elif [ -r tests/$ex/dub.json ] || [ -r tests/$ex/dub.sdl ]; then
             if [ $ex == "vibe.http.client.2080" ]; then
                 echo "[WARNING] Skipping test $ex due to TravisCI incompatibility".
             else
                 echo "[INFO] Running test $ex"
                 (cd tests/$ex && dub --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS && dub clean)
             fi
+        fi
+    done
+fi
+
+# MongoDB tests starting dummy server which can be analyzed exactly
+if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
+    mongod --version
+
+    for ex in $(\ls -1 tests/mongodb); do
+        if [ -r tests/mongodb/$ex/run.sh ]; then
+            echo "[INFO] Running mongo test $ex"
+            (cd tests/mongodb/$ex && DUB_INVOKE="dub --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS" ./run.sh)
+        elif [ -r tests/mongodb/$ex/dub.json ] || [ -r tests/mongodb/$ex/dub.sdl ]; then
+            MONGOPORT=22824
+            rm -f tests/mongodb/log.txt
+            rm -rf tests/mongodb/$ex/db
+            mkdir -p tests/mongodb/$ex/db
+            MONGOPID=$(mongod --logpath tests/mongodb/log.txt --bind_ip 127.0.0.1 --port $MONGOPORT --dbpath tests/mongodb/$ex/db --fork | grep -Po 'forked process: \K\d+')
+
+            echo "[INFO] Running mongo test $ex"
+            (cd tests/mongodb/$ex && dub --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS -- $MONGOPORT && dub clean && mongodump --port=$MONGOPORT)
+
+            if [ -r tests/mongodb/$ex/test.sh ]; then
+                (cd tests/mongodb/$ex && ./tests/mongodb/$ex/test.sh)
+            fi
+
+            kill $MONGOPID
         fi
     done
 fi

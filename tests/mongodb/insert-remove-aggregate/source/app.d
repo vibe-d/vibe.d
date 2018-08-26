@@ -15,19 +15,9 @@ struct DBTestEntry
 	string key1, key2;
 }
 
-void runTest()
+void runTest(ushort port)
 {
-	MongoClient client;
-	try client = connectMongoDB("127.0.0.1");
-	catch (Exception e) {
-		logInfo("Failed to connect to local MongoDB server. Skipping test.");
-		Throwable th = e;
-		while (th) {
-			logDiagnostic("Error: %s", th.toString().sanitize);
-			th = th.next;
-		}
-		return;
-	}
+	MongoClient client = connectMongoDB("127.0.0.1", port);
 
 	auto coll = client.getCollection("test.collection");
 	assert(coll.database.getLastError().code < 0);
@@ -95,11 +85,12 @@ void runTest()
 	assert(coll.distinct!string("b", ["a": "first"]).equal(["foo", "bar"]));
 }
 
-int main()
+int main(string[] args)
 {
 	int ret = 0;
+	ushort port = args.length > 1 ? args[1].to!ushort : MongoClientSettings.defaultPort;
 	runTask({
-		try runTest();
+		try runTest(port);
 		finally exitEventLoop(true);
 	});
 	runEventLoop();
