@@ -398,7 +398,7 @@ final class OpenSSLStream : TLSStream {
 			char[32] data;
 			uint datalen;
 
-			() @trusted { SSL_get0_alpn_selected(m_ssl, cast(const char*) data.ptr, &datalen); } ();
+			() @trusted { SSL_get0_alpn_selected(m_tls, cast(const char*) data.ptr, &datalen); } ();
 			logDebug("alpn selected: ", data.to!string);
 			if (datalen > 0)
 				return data[0..datalen].idup;
@@ -426,10 +426,12 @@ final class OpenSSLStream : TLSStream {
 		}
 		assert(i == len);
 
-		static if (haveALPN)
-			SSL_set_alpn_protos(m_ssl, cast(const char*) alpn.ptr, cast(uint) len);
 
-		() @trusted { vibeThreadAllocator.dispose(alpn); } ();
+		() @trusted {
+            static if (haveALPN)
+                SSL_set_alpn_protos(m_tls, cast(const char*) alpn.ptr, cast(uint) len);
+            vibeThreadAllocator.dispose(alpn);
+        } ();
 	}
 }
 
@@ -553,7 +555,9 @@ final class OpenSSLContext : TLSContext {
 		m_alpnCallback = alpn_chooser;
 		static if (haveALPN) {
 			logDebug("Call select cb");
-			SSL_CTX_set_alpn_select_cb(m_ctx, &chooser, cast(void*)this);
+            () @trusted {
+			    SSL_CTX_set_alpn_select_cb(m_ctx, &chooser, cast(void*)this);
+            } ();
 		}
 	}
 
@@ -570,20 +574,27 @@ final class OpenSSLContext : TLSContext {
 			size_t len;
 			foreach (string alpn_value; alpn_list)
 				len += alpn_value.length + 1;
-			alpn = allocArray!ubyte(manualAllocator(), len);
+            () @trusted {
+			    alpn = allocArray!ubyte(manualAllocator(), len);
+            } ();
 
 			size_t i;
 			foreach (string alpn_value; alpn_list)
 			{
-				alpn[i++] = cast(ubyte)alpn_value.length;
-				alpn[i .. i+alpn_value.length] = cast(ubyte[])alpn_value;
+                () @trusted {
+                    alpn[i++] = cast(ubyte)alpn_value.length;
+                    alpn[i .. i+alpn_value.length] = cast(ubyte[])alpn_value;
+                } ();
+
 				i += alpn_value.length;
 			}
 			assert(i == len);
 
-			SSL_CTX_set_alpn_protos(m_ctx, cast(const char*) alpn.ptr, cast(uint) len);
+            () @trusted {
+			    SSL_CTX_set_alpn_protos(m_ctx, cast(const char*) alpn.ptr, cast(uint) len);
+			    freeArray(manualAllocator(), alpn);
+            } ();
 
-			freeArray(manualAllocator(), alpn);
 		}
 	}
 
@@ -1039,7 +1050,6 @@ private nothrow @safe extern(C)
 	int chooser(SSL* ssl, const(char)** output, ubyte* outlen, const(char) *input_, uint inlen, void* arg) {
 		const(char)[] input = () @trusted { return input_[0 .. inlen]; } ();
 
-		logDebug("Got chooser input: %s", input);
 		OpenSSLContext ctx = () @trusted { return cast(OpenSSLContext) arg; } ();
 		import vibe.utils.array : AllocAppender, AppenderResetMode;
 		size_t i;
