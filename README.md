@@ -246,3 +246,7 @@ used in analogy to the above to build against the OpenSSL 0.9.8 branch.
 
 Finally, there is a "botan" configuration for using the D port of the Botan
 library.
+
+Minimum requirements
+--------------------
+RAM: 4096 MB
