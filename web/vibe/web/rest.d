@@ -470,7 +470,7 @@ HTTPServerRequestDelegate serveRestJSClient(I)(RestInterfaceSettings settings)
 	if (is(I == interface))
 {
 	import std.digest.md : md5Of;
-	import std.digest.digest : toHexString;
+	import std.digest : toHexString;
 	import std.array : appender;
 
 	auto app = appender!string();
