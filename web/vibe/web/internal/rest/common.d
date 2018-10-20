@@ -116,10 +116,7 @@ import std.traits : hasUDA;
 		import vibe.internal.meta.uda : findFirstUDA;
 
 		this.settings = settings ? settings.dup : new RestInterfaceSettings;
-		if (is_client) {
-			assert(this.settings.baseURL != URL.init,
-				"RESTful clients need to have a valid RestInterfaceSettings.baseURL set.");
-		} else if (this.settings.baseURL == URL.init) {
+		if (this.settings.baseURL == URL.init && !is_client) {
 			// use a valid dummy base URL to be able to construct sub-URLs
 			// for nested interfaces
 			this.settings.baseURL = URL("http://localhost/");
@@ -135,9 +132,14 @@ import std.traits : hasUDA;
 				this.basePath = concatURL(this.basePath, uda.value.data);
 			}
 		}
-		URL bu = this.settings.baseURL;
-		bu.pathString = this.basePath;
-		this.baseURL = bu.toString();
+
+		if (this.settings.baseURL != URL.init)
+		{
+			URL bu = this.settings.baseURL;
+			bu.pathString = this.basePath;
+			this.baseURL = bu.toString();
+		}
+		else this.baseURL = this.basePath;
 
 		computeRoutes();
 		computeSubInterfaces();
