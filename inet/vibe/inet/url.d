@@ -293,10 +293,13 @@ struct URL {
 	const {
 		import std.format;
 		auto dst = appender!string();
-		dst.put(schema);
-		dst.put(":");
-		if (isDoubleSlashSchema(schema))
-			dst.put("//");
+		if (schema.length)
+		{
+			dst.put(schema);
+			dst.put(":");
+			if (isDoubleSlashSchema(schema))
+				dst.put("//");
+		}
 		if (m_username.length || m_password.length) {
 			dst.put(username);
 			dst.put(':');

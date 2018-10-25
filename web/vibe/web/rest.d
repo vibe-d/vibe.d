@@ -505,6 +505,12 @@ HTTPServerRequestDelegate serveRestJSClient(I)(string base_url)
 	settings.baseURL = URL(base_url);
 	return serveRestJSClient!I(settings);
 }
+/// ditto
+HTTPServerRequestDelegate serveRestJSClient(I)()
+{
+	auto settings = new RestInterfaceSettings;
+	return serveRestJSClient!I(settings);
+}
 
 ///
 unittest {
@@ -524,6 +530,7 @@ unittest {
 		router.get("/myapi.js", serveRestJSClient!MyAPI(restsettings));
 		//router.get("/myapi.js", serveRestJSClient!MyAPI(URL("http://api.example.org/")));
 		//router.get("/myapi.js", serveRestJSClient!MyAPI("http://api.example.org/"));
+		//router.get("/myapi.js", serveRestJSClient!MyAPI()); // if want to request to self server
 		//router.get("/", staticTemplate!"index.dt");
 
 		listenHTTP(new HTTPServerSettings, router);
