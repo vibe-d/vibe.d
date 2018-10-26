@@ -51,17 +51,23 @@ Support
 Vibe.d aims to support at least the 3 latest minor releases of D.
 At the moment, the following compilers are supported and tested:
 
-- DMD 2.080.0
+- DMD 2.082.0
+- DMD 2.081.2
+- DMD 2.080.1
 - DMD 2.079.1
 - DMD 2.078.3
 - DMD 2.077.1
 - DMD 2.076.1
-- DMD 2.075.1
-- DMD 2.074.1
+- LDC 1.11.0 (FE: 2.081.2)
+- LDC 1.10.0 (FE: 2.080.1)
 - LDC 1.9.0 (FE: 2.079.1)
 - LDC 1.8.0 (FE: 2.078.3)
 - LDC 1.7.0 (FE: 2.077.1)
 - LDC 1.6.0 (FE: 2.076.1)
+
+Up to 0.8.4:
+- DMD 2.075.1
+- DMD 2.074.1
 - LDC 1.5.0 (FE: 2.075.1)
 - LDC 1.4.0 (FE: 2.074.1)
 
