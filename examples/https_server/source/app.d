@@ -1,4 +1,4 @@
-import vibe.appmain;
+import vibe.core.core : runApplication;
 import vibe.http.server;
 import vibe.stream.tls;
 
@@ -7,7 +7,7 @@ void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	res.writeBody(cast(ubyte[])"Hello, World!", "text/plain");
 }
 
-shared static this()
+void main()
 {
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
@@ -16,5 +16,8 @@ shared static this()
 	settings.tlsContext.useCertificateChainFile("server.crt");
 	settings.tlsContext.usePrivateKeyFile("server.key");
 
-	listenHTTP(settings, &handleRequest);
+	auto l = listenHTTP(settings, &handleRequest);
+	scope (exit) l.stopListening();
+
+	runApplication();
 }

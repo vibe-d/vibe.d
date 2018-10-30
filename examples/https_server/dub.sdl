@@ -1,0 +1,3 @@
+name "https-server-example"
+description "Uses the HTTPS protocol for serving requests."
+dependency "vibe-d:http" path="../../"

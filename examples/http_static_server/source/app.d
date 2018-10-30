@@ -1,4 +1,4 @@
-import vibe.appmain;
+import vibe.core.core : runApplication;
 import vibe.http.fileserver;
 import vibe.http.router;
 import vibe.http.server;
@@ -8,7 +8,7 @@ void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	res.redirect("/index.html");
 }
 
-shared static this()
+void main()
 {
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
@@ -21,5 +21,8 @@ shared static this()
 	router.get("/gzip/*", serveStaticFiles("./public/", fileServerSettings));
 	router.get("*", serveStaticFiles("./public/",));
 
-	listenHTTP(settings, router);
+	auto l = listenHTTP(settings, router);
+	scope (exit) l.stopListening();
+
+	runApplication();
 }

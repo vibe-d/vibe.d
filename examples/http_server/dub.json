@@ -1,8 +1,0 @@
-{
-	"name": "http-server-example",
-	"description": "A minimal HTTP server.",
-	"dependencies": {
-		"vibe-d:http": {"path": "../../"}
-	},
-	"versions": ["VibeDefaultMain"]
-}
