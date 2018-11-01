@@ -6,7 +6,7 @@
 	"dependencies": {
 		"vibe-d": "~>0.8.2"
 	},
-	"description": "A simple demostration on force https",
+	"description": "A simple demonstration on force https",
 	"copyright": "Not copyrighted",
 	"license": "proprietary"
 }
