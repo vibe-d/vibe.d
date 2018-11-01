@@ -1,0 +1,14 @@
+.dub
+docs.json
+__dummy.html
+docs/
+force_https.so
+force_https.dylib
+force_https.dll
+force_https.a
+force_https.lib
+force_https-test-*
+*.exe
+*.o
+*.obj
+*.lst
