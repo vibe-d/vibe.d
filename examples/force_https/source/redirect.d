@@ -1,4 +1,3 @@
-// Libs needed for MVC
 import vibe.d;
 import std.stdio;
 
