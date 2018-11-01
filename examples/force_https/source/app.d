@@ -1,6 +1,6 @@
-// Libs needed for MVC & redirect
 import vibe.d;
 import std.stdio;
+// redirect.d
 import redirect;
 
 // Function to render index page
