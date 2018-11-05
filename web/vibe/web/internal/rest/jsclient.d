@@ -102,27 +102,21 @@ class JSRestClientSettings
 		// url assembly
 		fout.put("var url = ");
 		if (route.pathHasPlaceholders) {
-			// extract the server part of the URL
 			auto burl = URL(intf.baseURL);
-			burl.pathString = "/";
-
-			// if url not empty
-			if (intf.baseURL != intf.basePath) {
+			if (burl.host.length) {
+				// extract the server part of the URL
+				burl.pathString = "/";
 				fout.serializeToJson(burl.toString()[0 .. $-1]);
-				// and then assemble the full path piece-wise
-				foreach (p; route.fullPathParts) {
-					fout.put(" + ");
-					fmtParam(fout, p);
-				}
-			} else {
-				if (route.fullPathParts.length)
-				{
-					fmtParam(fout, route.fullPathParts[0]);
-					foreach (p; route.fullPathParts[1..$]) {
-						fout.put(" + ");
-						fmtParam(fout, p);
-					}
-				}
+				fout.put(" + ");
+			}
+			// and then assemble the full path piece-wise
+
+			// if route.pathHasPlaceholders no need to check route.fullPathParts.length
+			// because it fills in module vibe.web.internal.rest.common at 208 line only
+			fmtParam(fout, route.fullPathParts[0]);
+			foreach (p; route.fullPathParts[1..$]) {
+				fout.put(" + ");
+				fmtParam(fout, p);
 			}
 		} else {
 			fout.formattedWrite(`"%s"`, concatURL(intf.baseURL, route.pattern));
