@@ -1249,7 +1249,7 @@ private nothrow @safe extern(C)
 		BIO_set_init(b, 0);
 		//b.num = -1;
 		BIO_set_data(b, null);
-		BIO_clear_flags(b, int.max);
+		BIO_clear_flags(b, ~0);
 		return 1;
 	}
 
@@ -1259,7 +1259,7 @@ private nothrow @safe extern(C)
 		if(BIO_get_shutdown(b)){
 			//if( b.init && b.ptr ) b.ptr.stream.free();
 			BIO_set_init(b, 0);
-			BIO_clear_flags(b, int.max);
+			BIO_clear_flags(b, ~0);
 			BIO_set_data(b, null);
 		}
 		return 1;
