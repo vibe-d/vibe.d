@@ -31,7 +31,5 @@ function setText(text)
 
 function getBaseURL()
 {
-	var href = window.location.href.substring(7); // strip "http://"
-	var idx = href.indexOf("/");
-	return "ws://" + href.substring(0, idx);
+	return "ws://" + window.location.host;
 }
