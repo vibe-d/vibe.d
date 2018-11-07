@@ -47,8 +47,7 @@ env:
 matrix:
   include:
     - d: dmd
-      # https://issues.dlang.org/show_bug.cgi?id=13742
-      env: DFLAGS="-cov -version=VibedSetCoverageMerge" DUB_BUILD_MODE="singleFile"
+      env: DFLAGS="-cov -version=VibedSetCoverageMerge"
   exclude:
     - d: ldc-1.2.0
       env: VIBED_DRIVER=libasync PARTS=builds,unittests
