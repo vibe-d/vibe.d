@@ -1393,6 +1393,38 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			}
 		}
 
+		void handleCors()
+		{
+			import std.algorithm : any;
+			import std.uni : sicmp;
+
+			if (req.method == HTTPMethod.OPTIONS)
+				return;
+			auto origin = "Origin" in req.headers;
+			if (origin is null)
+				return;
+
+			if (settings.allowedOrigins.length != 0 &&
+				!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
+				return;
+
+			res.headers["Access-Control-Allow-Origin"] = *origin;
+			res.headers["Access-Control-Allow-Credentials"] = "true";
+		}
+
+		static if (is(T: WebController)) {
+			try {
+				if (!inst.runMiddlewares(req, res)) {
+					handleCors();
+					return;
+				}
+			}
+			catch (Exception e) {
+				handleException(e, HTTPStatus.unauthorized);
+				return;
+			}
+		}
+
 		static if (isAuthenticated!(T, Func)) {
 			typeof(handleAuthentication!Func(inst, req, res)) auth_info;
 
@@ -1464,24 +1496,6 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			}
 		}
 
-		void handleCors()
-		{
-			import std.algorithm : any;
-			import std.uni : sicmp;
-
-			if (req.method == HTTPMethod.OPTIONS)
-				return;
-			auto origin = "Origin" in req.headers;
-			if (origin is null)
-				return;
-
-			if (settings.allowedOrigins.length != 0 &&
-				!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
-				return;
-
-			res.headers["Access-Control-Allow-Origin"] = *origin;
-			res.headers["Access-Control-Allow-Credentials"] = "true";
-		}
 		// Anti copy-paste
 		void returnHeaders()
 		{

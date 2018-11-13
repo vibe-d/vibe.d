@@ -458,6 +458,58 @@ class RestException : HTTPStatusException {
 	@property const(Json) jsonResult() const { return m_jsonResult; }
 }
 
+/**
+	Middlewares are executed in the middle after the incoming request.
+	It can produces an output which could be the final output or it could
+	return null and run the next middleware until the cycle is completed,
+	meaning we can have more than one middleware and they will execute in
+	the order they are registered.
+*/
+interface IMiddleware
+{
+	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
+
+	/**
+		Run middleware on incomming HTTP request.
+		Returns: False if we have to stop processing and returns current response.
+	*/
+	bool run(HTTPServerRequest req, HTTPServerResponse res) @safe;
+}
+
+/**
+	Base class for rest or web implementation class.
+	It add middleware support.
+*/
+class WebController
+{
+	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
+
+private:
+	IMiddleware[] _middlewares;
+
+public:
+	@noRoute
+	void registerMiddleware(IMiddleware middleware) @safe
+	{
+		_middlewares ~= middleware;
+	}
+
+	@noRoute
+	bool runMiddlewares(HTTPServerRequest req, HTTPServerResponse res) @safe
+	{
+		import vibe.core.log : logDebug;
+		import std.conv : to;
+
+		foreach(mid; _middlewares) {
+			if (!mid.run(req, res)) {
+				logDebug((to!Object(mid)).classinfo.name ~ "middleware aborted request processing");
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
 /// private
 package struct ContentTypeAttribute
 {

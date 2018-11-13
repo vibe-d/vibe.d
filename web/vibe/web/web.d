@@ -897,6 +897,21 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	s_requestContext = createRequestContext!overload(req, res);
 	enum hasAuth = isAuthenticated!(C, overload);
 
+	static if (is(C: WebController)) {
+		try {
+			if (!instance.runMiddlewares(req, res))
+				return;
+		}
+		catch (Exception ex) {
+			import vibe.core.log;
+			logDebug("Web handler %s has thrown: %s", M, ex);
+			static if (erruda.found && ERROR.length == 0) {
+				auto err = erruda.value.getError(ex, null);
+				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+			} else throw ex;
+		}
+	}
+
 	static if (hasAuth) {
 		auto auth_info = handleAuthentication!overload(instance, req, res);
 		if (res.headerWritten) return;
