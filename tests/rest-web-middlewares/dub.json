@@ -1,0 +1,7 @@
+﻿{
+	"name": "tests",
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	},
+	"versions": ["VibeDefaultMain"]
+}
