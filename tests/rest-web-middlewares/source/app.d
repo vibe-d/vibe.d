@@ -17,9 +17,15 @@ import std.typecons : Nullable;
 import core.time;
 
 
-interface Test1API
+interface ITest1API
 {
 	string getSomeInfo();
+}
+
+interface ITest3API
+{
+	@path("noContent")
+	void getNoContent();
 }
 
 abstract class BaseMiddleware : IMiddleware
@@ -75,7 +81,7 @@ final class TestContext
 	string[] runList;
 }
 
-class Test1 : WebController, Test1API
+class Test1 : WebController, ITest1API
 {
 	this(TestContext testCtx)
 	{
@@ -84,15 +90,14 @@ class Test1 : WebController, Test1API
 		registerMiddleware(new FooMiddleware(testCtx));
 	}
 
-	override: // usage of this handy D feature is highly recommended
-		string getSomeInfo()
-		{
-			return "Some Info!";
-		}
+	override string getSomeInfo()
+	{
+		return "Some Info!";
+	}
 }
 
 @path("web")
-class Test2 : WebController, Test1API
+class Test2 : WebController, ITest1API
 {
 	this(TestContext testCtx)
 	{
@@ -101,9 +106,17 @@ class Test2 : WebController, Test1API
 		registerMiddleware(new FooMiddleware(testCtx));
 	}
 
-	string getSomeInfo()
+	override string getSomeInfo()
 	{
 		return "Some Info!";
+	}
+}
+
+class Test3 : WebController, ITest3API
+{
+	override void getNoContent()
+	{
+		this.response.statusCode = 204;
 	}
 }
 
@@ -115,7 +128,7 @@ void runTests(string url, TestContext ctx)
 	// Test1
 	{
 		ctx.runList = [];
-		auto api = new RestInterfaceClient!Test1API(url);
+		auto api = new RestInterfaceClient!ITest1API(url);
 
 		assertThrown!RestException(api.getSomeInfo());
 		assert(ctx.runList == [LogIpMiddleware.stringof, IpBanMiddleware.stringof]);
@@ -123,10 +136,22 @@ void runTests(string url, TestContext ctx)
 	// Test2
 	{
 		ctx.runList = [];
-		auto api = new RestInterfaceClient!Test1API(url ~ "/web");
+		auto api = new RestInterfaceClient!ITest1API(url ~ "/web");
 
 		assertThrown!RestException(api.getSomeInfo());
 		assert(ctx.runList == [LogIpMiddleware.stringof, IpBanMiddleware.stringof]);
+	}
+	// Test3
+	{
+		import vibe.http.client;
+
+		requestHTTP(url ~ "/noContent",
+			(scope req) {
+				req.method = HTTPMethod.GET;
+			},
+			(scope res) {
+				assert(res.statusCode is 204);
+			});
 	}
 }
 
@@ -138,6 +163,7 @@ shared static this()
 
 	router.registerRestInterface(new Test1(testCtx));
 	router.registerWebInterface(new Test2(testCtx));
+	router.registerRestInterface(new Test3());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 0;

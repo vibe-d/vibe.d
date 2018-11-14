@@ -1413,6 +1413,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 		}
 
 		static if (is(T: WebController)) {
+			inst.response = res;
+			scope(exit) inst.response = null; // static if (no new scope)
+
 			try {
 				if (!inst.runMiddlewares(req, res)) {
 					handleCors();

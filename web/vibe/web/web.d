@@ -898,6 +898,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	enum hasAuth = isAuthenticated!(C, overload);
 
 	static if (is(C: WebController)) {
+		instance.response = res;
+		scope(exit) instance.response = null; // static if (no new scope)
+
 		try {
 			if (!instance.runMiddlewares(req, res))
 				return;

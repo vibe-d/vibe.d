@@ -486,8 +486,16 @@ class WebController
 
 private:
 	IMiddleware[] _middlewares;
+	HTTPServerResponse _response;
+
+protected:
+	@noRoute
+	@property HTTPServerResponse response() @safe { return _response; }
 
 public:
+	@noRoute
+	@property response(HTTPServerResponse res) @safe { _response = res; }
+
 	@noRoute
 	void registerMiddleware(IMiddleware middleware) @safe
 	{
