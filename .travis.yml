@@ -24,19 +24,19 @@ d:
   # this way the overall test time gets cut down (GDC/LDC are a lot
   # slower tham DMD, so they should be started early), while still
   # catching most DMD version related build failures early
-  - dmd-2.080.0
-  - dmd-2.074.1
+  - dmd-2.082.0
+  - dmd-2.081.2
+  - ldc-1.11.0
+  - ldc-1.10.0
   - ldc-1.9.0
   - ldc-1.8.0
   - ldc-1.7.0
   - ldc-1.6.0
-  - ldc-1.5.0
-  - ldc-1.4.0
+  - dmd-2.080.1
   - dmd-2.079.1
   - dmd-2.078.3
   - dmd-2.077.1
   - dmd-2.076.1
-  - dmd-2.075.1
   - dmd-beta
 
 env:
@@ -47,8 +47,7 @@ env:
 matrix:
   include:
     - d: dmd
-      # https://issues.dlang.org/show_bug.cgi?id=13742
-      env: DFLAGS="-cov -version=VibedSetCoverageMerge" DUB_BUILD_MODE="singleFile"
+      env: DFLAGS="-cov -version=VibedSetCoverageMerge"
   exclude:
     - d: ldc-1.2.0
       env: VIBED_DRIVER=libasync PARTS=builds,unittests
@@ -59,7 +58,7 @@ matrix:
 
 before_install:
   - pyenv global system 3.6
-  - pip3 install 'meson>=0.44.1'
+  - pip3 install 'meson==0.47.2' # pinned until the meson#4248 fix is released
   # Use the dub-updating fork of the installer script until https://github.com/dlang/installer/pull/301 is merged
   - wget https://raw.githubusercontent.com/wilzbach/installer-dub/master/script/install.sh -O ~/dlang/install.dub.sh
   - . $(bash ~/dlang/install.dub.sh -a dub)

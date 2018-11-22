@@ -36,6 +36,11 @@ class JSRestClientSettings
 /*package(vibe.web.web)*/ void generateInterface(TImpl, R)(ref R output, RestInterfaceSettings settings,
 		JSRestClientSettings jsgenset, bool parent)
 {
+	static void fmtParam(F)(ref F f, ref const PathPart p)
+	{
+		if (!p.isParameter) f.serializeToJson(p.text);
+		else f.formattedWrite("toRestString(%s)", p.text);
+	}
 	// TODO: handle attributed parameters and filter out internal parameters that have no path placeholder assigned to them
 
 	import std.format : formattedWrite;
@@ -97,15 +102,21 @@ class JSRestClientSettings
 		// url assembly
 		fout.put("var url = ");
 		if (route.pathHasPlaceholders) {
-			// extract the server part of the URL
 			auto burl = URL(intf.baseURL);
-			burl.pathString = "/";
-			fout.serializeToJson(burl.toString()[0 .. $-1]);
-			// and then assemble the full path piece-wise
-			foreach (p; route.fullPathParts) {
+			if (burl.host.length) {
+				// extract the server part of the URL
+				burl.pathString = "/";
+				fout.serializeToJson(burl.toString()[0 .. $-1]);
 				fout.put(" + ");
-				if (!p.isParameter) fout.serializeToJson(p.text);
-				else fout.formattedWrite("toRestString(%s)", p.text);
+			}
+			// and then assemble the full path piece-wise
+
+			// if route.pathHasPlaceholders no need to check route.fullPathParts.length
+			// because it fills in module vibe.web.internal.rest.common at 208 line only
+			fmtParam(fout, route.fullPathParts[0]);
+			foreach (p; route.fullPathParts[1..$]) {
+				fout.put(" + ");
+				fmtParam(fout, p);
 			}
 		} else {
 			fout.formattedWrite(`"%s"`, concatURL(intf.baseURL, route.pattern));

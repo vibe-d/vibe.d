@@ -425,7 +425,7 @@ struct Bson {
 		else static if( is(T == BsonDate) ){ checkType(Type.date); return BsonDate(fromBsonData!long(m_data)); }
 		else static if( is(T == BsonRegex) ){
 			checkType(Type.regex);
-			auto d = m_data;
+			auto d = m_data[0 .. $];
 			auto expr = skipCString(d);
 			auto options = skipCString(d);
 			return BsonRegex(expr, options);
@@ -1366,6 +1366,14 @@ unittest { // issue #793
 	//assert(bson.get!string == "test");
 	assert(bson.type == Bson.Type.array);
 	assert(bson[0].type == Bson.Type.string && bson[0].get!string == "t");
+}
+
+@safe unittest { // issue #2212
+	auto bsonRegex = Bson(BsonRegex(".*", "i"));
+	auto parsedRegex = bsonRegex.get!BsonRegex;
+	assert(bsonRegex.type == Bson.Type.regex);
+	assert(parsedRegex.expression == ".*");
+	assert(parsedRegex.options == "i");
 }
 
 unittest
