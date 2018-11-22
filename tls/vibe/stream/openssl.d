@@ -47,7 +47,7 @@ version(VibeForceALPN) enum alpn_forced = true;
 else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
-// openssl 1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
+// openssl/1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
 version (VibeUseOpenSSL11) {
 	extern(C) const(SSL_METHOD)* TLS_client_method();
 	alias SSLv23_client_method = TLS_client_method;
@@ -395,14 +395,17 @@ final class OpenSSLStream : TLSStream {
 	const {
 		static if (!haveALPN) assert(false, "OpenSSL support not compiled with ALPN enabled. Use VibeForceALPN.");
 		else {
-			char[32] data;
+			// modified since C functions expects a NULL pointer
+			const(ubyte)* data = null;
 			uint datalen;
+			string ret;
 
-			() @trusted { SSL_get0_alpn_selected(m_tls, cast(const char*) data.ptr, &datalen); } ();
-			logDebug("alpn selected: ", data.to!string);
-			if (datalen > 0)
-				return data[0..datalen].idup;
-			else return null;
+			() @trusted {
+				SSL_get0_alpn_selected(m_tls, &data, &datalen);
+				ret = cast(string)data[0 .. datalen].idup;
+			} ();
+			logDebug("alpn selected: ", ret);
+			return  ret;
 		}
 	}
 
@@ -456,6 +459,7 @@ final class OpenSSLContext : TLSContext {
 		TLSServerNameCallback m_sniCallback;
 		TLSALPNCallback m_alpnCallback;
 	}
+
 
 	this(TLSContextKind kind, TLSVersion ver = TLSVersion.any)
 	{
@@ -1224,6 +1228,6 @@ static if (haveALPN) {
 	void SSL_CTX_set_alpn_select_cb(SSL_CTX *ctx, ALPNCallback cb, void *arg);
 	int SSL_set_alpn_protos(SSL *ssl, const char *data, uint len);
 	int SSL_CTX_set_alpn_protos(SSL_CTX *ctx, const char* protos, uint protos_len);
-	void SSL_get0_alpn_selected(const SSL *ssl, const char* data, uint *len);
+	void SSL_get0_alpn_selected(const SSL *ssl, const ubyte** data, uint *len);
 }
 const(ssl_method_st)* TLSv1_2_server_method();
