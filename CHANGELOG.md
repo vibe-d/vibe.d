@@ -1,8 +1,43 @@
 ﻿Changelog
 =========
 
+v0.8.5 - 2018-
+-------------------
+
+### Features and improvements ###
+
+- Compiles on DMD 2.076.1 up to 2.082.0 and LDC 1.11.0
+- Added support for OpenSSL 1.1.1 (by Jan Jurzitza WebFreak001) - [issue #2214][issue2214], [pull #2226][issue2226]
+- `URL.port` now returns the value of `defaultPort`, if no explicit port was specified (by Szabo Bogdan aka gedaiu) - [pull #2176][issue2176]
+- Changed `Bson.opEquals` to yield true for objects with the same fields but different field order (by Igor Stepanov) - [pull #2183][issue2183]
+- Added an overload of `serveRestJSClient` that uses server-relative URIs (by Oleg B. aka deviator) - [issue #2222][issue2222], [pull #2223][issue2223]
+- `vibe.utils.hashmap.HashMap` now supports singleton allocators without an object wrapper - [pull #2236][issue2236]
+
+### Bug fixes ###
+
+- Fixed `RestInterfaceSettings.dup` to properly duplicate the `httpClientSettings` field (by Vitali Karabitski aka vitalka200)- [pull #2197][issue2197]
+- Fixed a compile error in `Bson.get!BsonRegex` (by Tuukka Kurtti aka Soletek) - [pull #2224][issue2224]
+- Fixed host name string conversion for `SyslogLogger` (by Tomáš Chaloupka) - [pull #2220][issue2220]
+- Fixed invalid ALPN string conversion in `OpenSSLStream` (by Francesco Galla) - [issue #2235][issue2235], [pull #2235][issue2235]
+
+[issue2214]: https://github.com/vibe-d/vibe.d/issues/2214
+[issue2226]: https://github.com/vibe-d/vibe.d/issues/2226
+[issue2176]: https://github.com/vibe-d/vibe.d/issues/2176
+[issue2183]: https://github.com/vibe-d/vibe.d/issues/2183
+[issue2222]: https://github.com/vibe-d/vibe.d/issues/2222
+[issue2223]: https://github.com/vibe-d/vibe.d/issues/2223
+[issue2197]: https://github.com/vibe-d/vibe.d/issues/2197
+[issue2224]: https://github.com/vibe-d/vibe.d/issues/2224
+[issue2220]: https://github.com/vibe-d/vibe.d/issues/2220
+[issue2235]: https://github.com/vibe-d/vibe.d/issues/2235
+[issue2235]: https://github.com/vibe-d/vibe.d/issues/2235
+[issue2236]: https://github.com/vibe-d/vibe.d/issues/2236
+
+
 v0.8.4 - 2018-06-02
 -------------------
+
+Small release with official support for DMD 2.080.0 and LDC 1.9.0, which contains a number of fixes and improvements. 
 
 ### Features and improvements ###
 
