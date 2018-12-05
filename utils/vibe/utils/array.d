@@ -280,7 +280,7 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 
 	void put(ArrayType arr)
 	{
-		m_data[m_fill .. m_fill+arr.length] = (cast(ElemType[])arr)[];
+		m_data[m_fill .. m_fill+arr.length] = arr[];
 		m_fill += arr.length;
 	}
 
