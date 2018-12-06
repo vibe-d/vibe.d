@@ -40,7 +40,7 @@ d:
   - dmd-beta
 
 env:
-  - VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests,meson
+  - VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests #,meson
   - VIBED_DRIVER=vibe-core PARTS=builds,unittests,examples,tests
   - VIBED_DRIVER=libasync PARTS=builds,unittests
 
@@ -56,21 +56,21 @@ matrix:
     - d: ldc-1.3.0
       env: VIBED_DRIVER=libasync PARTS=builds,unittests
 
-before_install:
-  - pyenv global system 3.6
-  - pip3 install 'meson==0.47.2' # pinned until the meson#4248 fix is released
-  # Use the dub-updating fork of the installer script until https://github.com/dlang/installer/pull/301 is merged
-  - wget https://raw.githubusercontent.com/wilzbach/installer-dub/master/script/install.sh -O ~/dlang/install.dub.sh
-  - . $(bash ~/dlang/install.dub.sh -a dub)
-  - dub --version
-
-install:
-  - mkdir .ntmp
-  - curl -L https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -o .ntmp/ninja-linux.zip
-  - unzip .ntmp/ninja-linux.zip -d .ntmp
-
-before_script:
-  - export PATH=$PATH:$PWD/.ntmp
+#before_install:
+#  - pyenv global system 3.6
+#  - pip3 install 'meson==0.47.2' # pinned until the meson#4248 fix is released
+#  # Use the dub-updating fork of the installer script until https://github.com/dlang/installer/pull/301 is merged
+#  - wget https://raw.githubusercontent.com/wilzbach/installer-dub/master/script/install.sh -O ~/dlang/install.dub.sh
+#  - . $(bash ~/dlang/install.dub.sh -a dub)
+#  - dub --version
+#
+#install:
+#  - mkdir .ntmp
+#  - curl -L https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -o .ntmp/ninja-linux.zip
+#  - unzip .ntmp/ninja-linux.zip -d .ntmp
+#
+#before_script:
+#  - export PATH=$PATH:$PWD/.ntmp
 
 script: ./travis-ci.sh
 after_success:
