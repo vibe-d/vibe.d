@@ -47,7 +47,7 @@ env:
 matrix:
   include:
     - d: dmd
-      env: DFLAGS="-cov -version=VibedSetCoverageMerge"
+      env: DFLAGS="-cov -version=VibedSetCoverageMerge" PARTS=unittests,tests
   exclude:
     - d: ldc-1.2.0
       env: VIBED_DRIVER=libasync PARTS=builds,unittests
