@@ -338,7 +338,8 @@ final class OpenSSLStream : TLSStream {
 	size_t read(scope ubyte[] dst, IOMode mode)
 	{
 		size_t nbytes = 0;
-		if(m_tls == null) return 0;
+		if(m_tls == null)
+			throw new Exception("Reading from closed stream");
 
 		while (dst.length > 0) {
 			int readlen = min(dst.length, int.max);
