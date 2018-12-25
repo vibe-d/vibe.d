@@ -362,7 +362,7 @@ struct QuotedPrintable {
 		for( size_t i = 0; i < input.length; i++ ){
 			if( input[i] == '=' ){
 				import std.utf : UTFException;
-				if (input.length - i <= 2) throw new UTFException("");								
+				if (input.length - i <= 2) throw new UTFException("");
 				auto code = input[i+1 .. i+3];
 				i += 2;
 				if( code != cast(const(ubyte)[])"\r\n" )
