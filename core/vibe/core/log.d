@@ -246,7 +246,9 @@ final class FileLogger : Logger {
 	/// The log format used by the FileLogger
 	enum Format {
 		plain,      /// Output only the plain log message
+		level,		/// Prefix "[loglevel]"
 		thread,     /// Prefix "[thread-id:fiber-id loglevel]"
+		timeLevel,  /// Prefix "[timestamp loglevel]"
 		threadTime  /// Prefix "[thread-id:fiber-id timestamp loglevel]"
 	}
 
@@ -292,7 +294,16 @@ final class FileLogger : Logger {
 
 		final switch (fmt) {
 			case Format.plain: break;
+			case Format.level: m_curFile.writef("[%s] ", pref); break;
 			case Format.thread: m_curFile.writef("[%08X:%08X %s] ", msg.threadID, msg.fiberID, pref); break;
+			case Format.timeLevel:
+				auto tm = msg.time;
+				static if (is(typeof(tm.fracSecs))) auto msecs = tm.fracSecs.total!"msecs";
+				else auto msecs = tm.fracSec.msecs;
+				m_curFile.writef("[%d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
+					tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, msecs,
+					pref);
+				break;
 			case Format.threadTime:
 				auto tm = msg.time;
 				static if (is(typeof(tm.fracSecs))) auto msecs = tm.fracSecs.total!"msecs";
@@ -315,6 +326,21 @@ final class FileLogger : Logger {
 		m_curFile.writeln();
 		m_curFile.flush();
 	}
+}
+
+unittest
+{
+	logError("Default");
+	setLogFormat(FileLogger.Format.plain);
+	logError("Plain");
+	setLogFormat(FileLogger.Format.level);
+	logError("Level");
+	setLogFormat(FileLogger.Format.thread);
+	logError("Thread");
+	setLogFormat(FileLogger.Format.timeLevel);
+	logError("TimeLevel");
+	setLogFormat(FileLogger.Format.threadTime);
+	logError("ThreadTime");
 }
 
 /**
