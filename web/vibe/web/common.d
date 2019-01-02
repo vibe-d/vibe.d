@@ -623,7 +623,8 @@ enum MethodStyle
 /// Speficies how D fields are mapped to form field names
 enum NestedNameStyle {
 	underscore, /// Use underscores to separate fields and array indices
-	d           /// Use native D style and separate fields by dots and put array indices into brackets
+	d,          /// Use native D style and separate fields by dots and put array indices into brackets
+	dAppend     /// Use native D style and separate fields by dots, assume array names will be 'arr[]', and appended as they occur
 }
 
 
@@ -697,15 +698,53 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 		static assert(!is(EL == bool),
 			"Boolean arrays are not allowed, because their length cannot " ~
 			"be uniquely determined. Use a static array instead.");
-		size_t idx = 0;
 		dst = T.init;
-		while (true) {
-			EL el = void;
-			auto r = readFormParamRec(req, el, style.getArrayFieldName(fieldname, idx), false, style, err);
-			if (r == ParamResult.error) return r;
-			if (r == ParamResult.skipped) break;
-			dst ~= el;
-			idx++;
+		if(style == NestedNameStyle.dAppend)
+		{
+			// Use the dictionary's mechanism to do this, don't recurse the
+			// normal way. Only allow basic types to be sent this way.
+			static if(!is(typeof(webConvTo("", dst[0], err))))
+			{
+				throw new Exception("Cannot process array of type " ~ T.stringof ~ " in dAppend style. Use d style or underscore style instead.");
+			}
+			else
+			{
+				import std.stdio;
+				void processParam(const(string) val) @trusted
+				{
+					EL elem = void;
+					if(!val.webConvTo(elem, err))
+						// this is annoying, but no other flow control exists.
+						throw new Exception("");
+					dst ~= elem;
+				}
+				try
+				{
+					auto fname = style.getArrayFieldName(fieldname, 0);
+					req.form.getAll(fname, &processParam);
+					// Is this right? Should we process elements in both query
+					// and form?
+					if(!dst.length)
+						req.query.getAll(fname, &processParam);
+				}
+				catch(Exception e)
+				{
+					err.field = fieldname;
+					return ParamResult.error;
+				}
+			}
+		}
+		else
+		{
+			size_t idx = 0;
+			while (true) {
+				EL el = void;
+				auto r = readFormParamRec(req, el, style.getArrayFieldName(fieldname, idx), false, style, err);
+				if (r == ParamResult.error) return r;
+				if (r == ParamResult.skipped) break;
+				dst ~= el;
+				idx++;
+			}
 		}
 	} else static if (isStaticArray!T) {
 		foreach (i; 0 .. T.length) {
@@ -813,6 +852,7 @@ private string getArrayFieldName(T)(NestedNameStyle style, string prefix, T inde
 	final switch (style) {
 		case NestedNameStyle.underscore: return format("%s_%s", prefix, index);
 		case NestedNameStyle.d: return format("%s[%s]", prefix, index);
+		case NestedNameStyle.dAppend: return format("%s[]", prefix);
 	}
 }
 
@@ -821,6 +861,6 @@ private string getMemberFieldName(NestedNameStyle style, string prefix, string m
 	import std.format : format;
 	final switch (style) {
 		case NestedNameStyle.underscore: return format("%s_%s", prefix, member);
-		case NestedNameStyle.d: return format("%s.%s", prefix, member);
+		case NestedNameStyle.d, NestedNameStyle.dAppend: return format("%s.%s", prefix, member);
 	}
 }
