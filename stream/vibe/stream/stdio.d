@@ -48,6 +48,8 @@ class StdFileStream : ConnectionStream {
 		}
 	}
 
+	@property std.stdio.File stdFile() { return m_file; }
+
 	override @property bool empty() { enforceReadable(); return m_readPipe.empty; }
 
 	override @property ulong leastSize()
