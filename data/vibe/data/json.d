@@ -328,9 +328,10 @@ struct Json {
 			case Type.float_: return Json(m_float);
 			case Type.string: return Json(m_string);
 			case Type.array:
-				auto ret = Json.emptyArray;
+				Json[] ret;
 				foreach (v; this.byValue) ret ~= v.clone();
-				return ret;
+
+				return Json(ret);
 			case Type.object:
 				auto ret = Json.emptyObject;
 				foreach (name, v; this.byKeyValue) ret[name] = v.clone();
@@ -2109,6 +2110,16 @@ struct JsonStringSerializer(R, bool pretty = false)
 			return true;
 		}
 	}
+}
+
+/// Cloning JSON arrays
+unittest
+{
+	Json value = Json([ Json([ Json.emptyArray ]), Json.emptyArray ]).clone;
+
+	assert(value.length == 2);
+	assert(value[0].length == 1);
+	assert(value[0][0].length == 0);
 }
 
 unittest
