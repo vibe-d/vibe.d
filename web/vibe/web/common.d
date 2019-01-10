@@ -482,14 +482,18 @@ package struct PathAttribute
 /// private
 package struct NoRouteAttribute {}
 
-/// Private struct describing the origin of a parameter (Query, Header, Body).
-package struct WebParamAttribute {
+/**
+ * This struct contains a mapping between the name used by HTTP (field)
+ * and the parameter (identifier) name of the function.
+ */
+public struct WebParamAttribute {
 	import vibe.web.internal.rest.common : ParameterKind;
 
+	/// The type of the WebParamAttribute
 	ParameterKind origin;
-	/// Parameter name
+	/// Parameter name (function parameter name).
 	string identifier;
-	/// The meaning of this field depends on the origin.
+	/// The meaning of this field depends on the origin. (HTTP request name)
 	string field;
 }
 
