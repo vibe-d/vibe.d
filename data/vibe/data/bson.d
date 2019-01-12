@@ -1054,11 +1054,17 @@ struct BsonDate {
 	*/
 	string toString() const { return toSysTime().toISOExtString(); }
 
-	/* Converts to a SysTime.
+	/* Converts to a SysTime using UTC timezone.
 	*/
 	SysTime toSysTime() const {
+		return toSysTime(UTC());
+	}
+
+	/* Converts to a SysTime with a given timezone.
+	*/
+	SysTime toSysTime(immutable TimeZone tz) const {
 		auto zero = unixTimeToStdTime(0);
-		return SysTime(zero + m_time * 10_000L, UTC());
+		return SysTime(zero + m_time * 10_000L, tz);
 	}
 
 	/** Allows relational and equality comparisons.
