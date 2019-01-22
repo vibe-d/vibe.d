@@ -4,7 +4,7 @@ import vibe.http.router;
 import vibe.http.server;
 import std.functional : toDelegate;
 
-string digestPassword(string realm, string user)
+string digestPassword(string realm, string user) @safe
 {
 	if (realm == "Site Realm" && user == "admin")
 		return createDigestPassword(realm, user, "secret");
