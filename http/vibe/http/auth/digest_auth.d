@@ -132,7 +132,7 @@ HTTPServerRequestDelegate performDigestAuth(DigestAuthInfo info, scope DigestHas
 /// Scheduled for deprecation - use a `@safe` callback instead.
 HTTPServerRequestDelegate performDigestAuth(DigestAuthInfo info, scope string delegate(string, string) @system pwhash)
 @system {
-	return performDigestAuth(info, (r, u) @trusted => pwhash(r, u));
+	return performDigestAuth(info, cast(DigestHashCallback) pwhash);
 }
 
 /**
