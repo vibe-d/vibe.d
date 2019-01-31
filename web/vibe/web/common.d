@@ -623,8 +623,7 @@ enum MethodStyle
 /// Speficies how D fields are mapped to form field names
 enum NestedNameStyle {
 	underscore, /// Use underscores to separate fields and array indices
-	d,          /// Use native D style and separate fields by dots and put array indices into brackets
-	dAppend     /// Use native D style and separate fields by dots, assume array names will be 'arr[]', and appended as they occur
+	d           /// Use native D style and separate fields by dots and put array indices into brackets
 }
 
 
@@ -686,72 +685,174 @@ package enum ParamResult {
 	error
 }
 
+// maximum array index in the parameter fields.
+private enum MAX_ARR_INDEX = 0xffff;
+
+// handle the actual data inside the parameter
+private ParamResult processFormParam(T)(scope string data, string fieldname, ref T dst, ref ParamError err)
+{
+	static if(is(T == bool))
+	{
+		// getting here means the item is present, set to true.
+		dst = true;
+		return ParamResult.ok;
+	}
+	else
+	{
+		if (!(*pv).webConvTo(dst, err)) {
+			err.field = fieldname;
+			return ParamResult.error;
+		}
+		return ParamResult.ok;
+	}
+}
+
 // NOTE: dst is assumed to be uninitialized
 package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string fieldname, bool required, NestedNameStyle style, ref ParamError err)
 {
 	import std.traits;
 	import std.typecons;
 	import vibe.data.serialization;
+	import std.algorithm : startsWith;
 
-	static if (isDynamicArray!T && !isSomeString!(OriginalType!T)) {
+	static if (isStaticArray!T || (isDynamicArray!T && !isSomeString!(OriginalType!T))) {
 		alias EL = typeof(T.init[0]);
+		enum isSimpleElement = !(isDynamicArray!EL && !isSomeString!(OriginalType!EL)) &&
+			!isStaticArray!EL &&
+			!(is(T == struct) &&
+					!is(typeof(T.fromString(string.init))) &&
+					!is(typeof(T.fromStringValidate(string.init, null))) &&
+					!is(typeof(T.fromISOExtString(string.init))));
+
 		static assert(!is(EL == bool),
 			"Boolean arrays are not allowed, because their length cannot " ~
 			"be uniquely determined. Use a static array instead.");
-		dst = T.init;
-		if(style == NestedNameStyle.dAppend)
+		// array to check for duplicates
+		static if(isStaticArray!T)
 		{
-			// Use the dictionary's mechanism to do this, don't recurse the
-			// normal way. Only allow basic types to be sent this way.
-			static if(!is(typeof(webConvTo("", dst[0], err))))
-			{
-				throw new Exception("Cannot process array of type " ~ T.stringof ~ " in dAppend style. Use d style or underscore style instead.");
-			}
-			else
-			{
-				import std.stdio;
-				void processParam(const(string) val) @trusted
-				{
-					EL elem = void;
-					if(!val.webConvTo(elem, err))
-						// this is annoying, but no other flow control exists.
-						throw new Exception("");
-					dst ~= elem;
-				}
-				try
-				{
-					auto fname = style.getArrayFieldName(fieldname, 0);
-					req.form.getAll(fname, &processParam);
-					// Is this right? Should we process elements in both query
-					// and form?
-					if(!dst.length)
-						req.query.getAll(fname, &processParam);
-				}
-				catch(Exception e)
-				{
-					err.field = fieldname;
-					return ParamResult.error;
-				}
-			}
+			bool[T.length] seen;
 		}
 		else
 		{
-			size_t idx = 0;
-			while (true) {
-				EL el = void;
-				auto r = readFormParamRec(req, el, style.getArrayFieldName(fieldname, idx), false, style, err);
-				if (r == ParamResult.error) return r;
-				if (r == ParamResult.skipped) break;
-				dst ~= el;
-				idx++;
+			dst = T.init;
+			bool[] seen;
+		}
+		// process the items in the order they appear.
+		char indexSep = style == NestedNameStyle.d ? '[' : '_';
+		const minLength = fieldname.length + style == NestedNameStyle.d ? 2 : 1;
+		const indexTrailer = style == NestedNameStyle.d ? "]" : "";
+
+		void processItems(DL)(DL dlist)
+		{
+			foreach(k, v; dlist.byKeyValue)
+			{
+				if(k.length < minLength)
+					// sanity check to prevent out of bounds
+					continue;
+				if(k.startsWith(fieldname) && k[fieldname.length] == indexSep)
+				{
+					// found a potential match
+					string key = k[fieldname.length + 1 .. $];
+					size_t idx;
+					if(key == indexTrailer)
+					{
+						static if(isSimpleElement)
+						{
+							// this is a non-indexed array item. Find an empty slot, or expand the array
+							idx = seen.countUntil(false);
+							static if(isStaticArray!T)
+							{
+								if(idx == size_t.max)
+								{
+									// ignore extras, and we know there are no more matches to come.
+									break;
+								}
+							}
+							else if(idx == size_t.max)
+							{
+								idx = dst.length;
+								dst.length = idx + 1;
+							}
+							seen[idx] = true;
+						}
+						else
+						{
+							// not valid for non-simple elements.
+							continue;
+						}
+					}
+					else
+					{
+						import std.conv;
+						key.parse!size_t(idx);
+						static if(isStaticArray!T)
+						{
+							if(idx > T.length)
+								// keep existing behavior, ignore extras
+								continue;
+						}
+						else if(idx > MAX_ARR_INDEX)
+						{
+							// Getting a big large, we don't want to allow DOS attacks.
+							err.fieldname = k;
+							err.text = "Maximum index exceeded";
+							return ParamResult.error;
+						}
+						else
+						{
+							static if(isSimpleElement)
+							{
+								if(key != indexTrailer)
+									// this can't be a match, simple elements are parsed from
+									// the string, there should be no more to the key.
+									continue;
+							}
+							else
+							{
+								// ensure there's more than just the index trailer
+								if(key.length == indexTrailer.length || !key.startsWith(indexTrailer))
+									// not a valid entry. ignore this entry to preserve existing behavior.
+									continue;
+							}
+
+							static if(!isStaticArray!T)
+							{
+								// check to see if we need to expand the array
+								if(dst.length <= idx)
+								{
+									dst.length = idx + 1;
+									seen.length = idx + 1;
+								}
+							}
+						}
+
+						if(seen[idx])
+						{
+							// don't store it twice
+							continue;
+						}
+						seen[idx] = true;
+					}
+
+					static if(isSimpleElement)
+					{
+						auto result = processFormParam(v, k, dst[idx], err);
+					}
+					else
+					{
+						auto subFieldname = k[0 .. k.length - key.length - indexTrailer.length];
+						auto result = readFormParamRec(req, dst[idx], subFieldname, true, style, err);
+					}
+					if(result != ParamResult.ok)
+						return result;
+				}
 			}
 		}
-	} else static if (isStaticArray!T) {
-		foreach (i; 0 .. T.length) {
-			auto r = readFormParamRec(req, dst[i], style.getArrayFieldName(fieldname, i), true, style, err);
-			if (r == ParamResult.error) return r;
-			assert(r != ParamResult.skipped); break;
-		}
+
+		if(processItems(req.form) == ParamResult.error)
+			return ParamResult.error;
+		if(processItems(req.query) == ParamResult.error)
+			return ParamResult.error;
 	} else static if (isNullable!T) {
 		typeof(dst.get()) el = void;
 		auto r = readFormParamRec(req, el, fieldname, false, style, err);
@@ -852,7 +953,6 @@ private string getArrayFieldName(T)(NestedNameStyle style, string prefix, T inde
 	final switch (style) {
 		case NestedNameStyle.underscore: return format("%s_%s", prefix, index);
 		case NestedNameStyle.d: return format("%s[%s]", prefix, index);
-		case NestedNameStyle.dAppend: return format("%s[]", prefix);
 	}
 }
 
@@ -861,6 +961,6 @@ private string getMemberFieldName(NestedNameStyle style, string prefix, string m
 	import std.format : format;
 	final switch (style) {
 		case NestedNameStyle.underscore: return format("%s_%s", prefix, member);
-		case NestedNameStyle.d, NestedNameStyle.dAppend: return format("%s.%s", prefix, member);
+		case NestedNameStyle.d: return format("%s.%s", prefix, member);
 	}
 }
