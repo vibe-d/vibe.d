@@ -120,8 +120,6 @@ final class Libevent2Driver : EventDriver {
 		event* m_timerEvent;
 		SysTime m_timerTimeout = SysTime.max;
 		TimerQueue!TimerInfo m_timers;
-		DList!AddressInfo m_addressInfoCache;
-		size_t m_addressInfoCacheLength = 0;
 
 		bool m_running = false; // runEventLoop in progress?
 
@@ -292,10 +290,6 @@ final class Libevent2Driver : EventDriver {
 	{
 		assert(m_dnsBase);
 
-		foreach (ai; m_addressInfoCache)
-			if (ai.host == host && ai.family == family && ai.useDNS == use_dns)
-				return ai.address;
-
 		evutil_addrinfo hints;
 		hints.ai_family = family;
 		if (!use_dns) {
@@ -322,9 +316,6 @@ final class Libevent2Driver : EventDriver {
 		logDebug("dnsresolve ret");
 		enforce(msg.err == DNS_ERR_NONE, format("Failed to lookup host '%s': %s", host, () @trusted { return evutil_gai_strerror(msg.err); } ()));
 
-		if (m_addressInfoCacheLength >= 10) m_addressInfoCache.removeFront();
-		else m_addressInfoCacheLength++;
-		m_addressInfoCache.insertBack(AddressInfo(msg.addr, host, family, use_dns));
 		return msg.addr;
 	}
 
