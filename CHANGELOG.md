@@ -1,16 +1,21 @@
 ﻿Changelog
 =========
 
-v0.8.5 - 2018-
+v0.8.5 - 2019-02-
 -------------------
 
 ### Features and improvements ###
 
-- Compiles on DMD 2.076.1 up to 2.082.0 and LDC 1.11.0
-- Added support for OpenSSL 1.1.1 (by Jan Jurzitza WebFreak001) - [issue #2214][issue2214], [pull #2226][issue2226]
+- Compiles on DMD 2.076.1 up to 2.084.0 and LDC 1.13.0
+- Added support for OpenSSL 1.1.1 (by Jan Jurzitza aka WebFreak001) - [issue #2214][issue2214], [pull #2226][issue2226]
 - `URL.port` now returns the value of `defaultPort`, if no explicit port was specified (by Szabo Bogdan aka gedaiu) - [pull #2176][issue2176]
 - Changed `Bson.opEquals` to yield true for objects with the same fields but different field order (by Igor Stepanov) - [pull #2183][issue2183]
+- Removed the DNS lookup cache from the libevent driver (by Márcio Martins) - [pull #2257][issue2257]
 - Added an overload of `serveRestJSClient` that uses server-relative URIs (by Oleg B. aka deviator) - [issue #2222][issue2222], [pull #2223][issue2223]
+- Added `StdFileStream.stdFile` property (by Benjamin Schaaf) - [pull #2248][issue2248]
+- `vibe.web.common.WebParamAttribute` is now public for external introspection purposes (by Robert Schadek) - [pull #2250][issue2250]
+- Added an overload of `BsonDate.toSysTime` taking a time zone (by Jan Jurzitza aka WebFreak001) - [pull #2252][issue2252]
+- Added `MemoryStream.truncate` and enable `seek` to be used to grow the stream size - [pull #2251][issue2251]
 - `vibe.utils.hashmap.HashMap` now supports singleton allocators without an object wrapper - [pull #2236][issue2236]
 
 ### Bug fixes ###
@@ -19,6 +24,9 @@ v0.8.5 - 2018-
 - Fixed a compile error in `Bson.get!BsonRegex` (by Tuukka Kurtti aka Soletek) - [pull #2224][issue2224]
 - Fixed host name string conversion for `SyslogLogger` (by Tomáš Chaloupka) - [pull #2220][issue2220]
 - Fixed invalid ALPN string conversion in `OpenSSLStream` (by Francesco Galla) - [issue #2235][issue2235], [pull #2235][issue2235]
+- Fixed a null pointer access in `OpenSSLStream` if `read` was called after `close` (by Francesco Galla) - [pull #2238][issue2238]
+- Fixed detection of broken quoted-printable encodings (by Adam Williams) - [pull #2237][issue2237]
+- Fixed `Json.clone` for fields of type array (by Szabo Bogdan) - [pull #2249][issue2249]
 
 [issue2214]: https://github.com/vibe-d/vibe.d/issues/2214
 [issue2226]: https://github.com/vibe-d/vibe.d/issues/2226
@@ -32,6 +40,14 @@ v0.8.5 - 2018-
 [issue2235]: https://github.com/vibe-d/vibe.d/issues/2235
 [issue2235]: https://github.com/vibe-d/vibe.d/issues/2235
 [issue2236]: https://github.com/vibe-d/vibe.d/issues/2236
+[issue2237]: https://github.com/vibe-d/vibe.d/issues/2237
+[issue2238]: https://github.com/vibe-d/vibe.d/issues/2238
+[issue2248]: https://github.com/vibe-d/vibe.d/issues/2248
+[issue2249]: https://github.com/vibe-d/vibe.d/issues/2249
+[issue2250]: https://github.com/vibe-d/vibe.d/issues/2250
+[issue2251]: https://github.com/vibe-d/vibe.d/issues/2251
+[issue2252]: https://github.com/vibe-d/vibe.d/issues/2252
+[issue2257]: https://github.com/vibe-d/vibe.d/issues/2257
 
 
 v0.8.4 - 2018-06-02
