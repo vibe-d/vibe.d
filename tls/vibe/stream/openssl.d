@@ -39,6 +39,8 @@ import deimos.openssl.x509v3;
 // auto-detect OpenSSL 1.1.0
 version (VibeUseOpenSSL11)
 	enum OPENSSL_VERSION = "1.1.0";
+version (VibeUseOpenSSL10)
+	enum OPENSSL_VERSION = "1.0.0";
 else version (VibeUseOldOpenSSL)
 	enum OPENSSL_VERSION = "0.9.0";
 else version (Botan)
@@ -49,7 +51,8 @@ else
 	static if (__traits(compiles, {import openssl_version; }))
 		mixin("import openssl_version;");
 	else
-		enum OPENSSL_VERSION = "0.0.0";
+		// try 1.1.0 as softfallback if old other means failed
+		enum OPENSSL_VERSION = "1.1.0";
 }
 
 version (VibePragmaLib) {
@@ -57,7 +60,7 @@ version (VibePragmaLib) {
 	version (Windows) pragma(lib, "eay");
 }
 
-version (VibeUseOldOpenSSL) private enum haveECDH = false;
+static if (OPENSSL_VERSION.startsWith("0.9")) private enum haveECDH = false;
 else private enum haveECDH = OPENSSL_VERSION_NUMBER >= 0x10001000;
 version(VibeForceALPN) enum alpn_forced = true;
 else enum alpn_forced = false;

@@ -19,15 +19,14 @@ configuration "openssl-mscoff" {
 	sourceFiles "../lib/win-amd64/libeay32.lib" "../lib/win-amd64/ssleay32.lib" platform="windows-x86_64"
 }
 
-configuration "openssl-windows" {
-	sourceFiles "../lib/win-i386/eay.lib" "../lib/win-i386/ssl.lib" platform="windows-x86-dmd"
+configuration "openssl" {
 	dependency "openssl" version="~>1.0"
-	platforms "windows"
-}
 
-configuration "openssl-posix" {
-	platforms "posix"
-	sourceFiles "openssl_version.d"
+	// Windows
+	sourceFiles "../lib/win-i386/eay.lib" "../lib/win-i386/ssl.lib" platform="windows-x86-dmd"
+
+	// Posix
+	sourceFiles "openssl_version.d" platform="posix"
 	preBuildCommands `rdmd --eval='
 	auto dir = environment.get("DUB_PACKAGE_DIR");
 	if (dir.buildPath("tls").exists)  {
@@ -42,14 +41,19 @@ configuration "openssl-posix" {
 	} catch (Exception e) { writeln("Warning: ", e); }
 	text("module openssl_version;\nenum OPENSSL_VERSION=\"", opensslVersion, "\";").
 		toFile(dir.buildPath("openssl_version.d"));
-	'`
-	dependency "openssl" version="~>1.0"
+	'` platform="posix"
 }
 
 configuration "openssl-1.1" {
 	platforms "posix"
 	dependency "openssl" version="~>1.0"
 	versions "VibeUseOpenSSL11"
+}
+
+configuration "openssl-1.0" {
+	platforms "posix"
+	dependency "openssl" version="~>1.0"
+	versions "VibeUseOpenSSL10"
 }
 
 configuration "openssl-0.9" {
