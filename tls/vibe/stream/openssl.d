@@ -145,7 +145,7 @@ static if (OPENSSL_VERSION.startsWith("1.1")) {
 
 		alias BIOMethWriteCallback = int function(BIO*, const(char)*, int);
 		alias BIOMethReadCallback = int function(BIO*, const(char)*, int);
-		alias BIOMethCtrlCallback = c_long function(BIO*, int, long, void*);
+		alias BIOMethCtrlCallback = c_long function(BIO*, int, c_long, void*);
 		alias BIOMethCreateCallback = int function(BIO*);
 		alias BIOMethDestroyCallback = int function(BIO*);
 
