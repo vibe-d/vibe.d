@@ -9,21 +9,21 @@ targetType "library"
 sourcePaths "."
 importPaths "."
 
-copyFiles "../lib/win-i386/libeay32.dll" "../lib/win-i386/ssleay32.dll" platform="windows-x86"
-copyFiles "../lib/win-amd64/libeay32.dll" "../lib/win-amd64/ssleay32.dll" platform="windows-x86_64"
+copyFiles "../lib/win-i386/libssl-1_1.dll" "../lib/win-i386/libcrypto-1_1.dll" platform="windows-x86"
+copyFiles "../lib/win-amd64/libssl-1_1-x64.dll" "../lib/win-amd64/libcrypto-1_1-x64.dll" platform="windows-x86_64"
 
 configuration "openssl-mscoff" {
 	platforms "windows-x86_mscoff" "windows-x86_64" "windows-x86-ldc"
 	dependency "openssl" version=">=1.0.0+1.0.0e"
-	sourceFiles "../lib/win-i386-mscoff/libeay32.lib" "../lib/win-i386-mscoff/ssleay32.lib" platform="windows-x86"
-	sourceFiles "../lib/win-amd64/libeay32.lib" "../lib/win-amd64/ssleay32.lib" platform="windows-x86_64"
+	sourceFiles "../lib/win-i386-mscoff/libssl.lib" "../lib/win-i386-mscoff/libcrypto.lib" platform="windows-x86"
+	sourceFiles "../lib/win-amd64/libssl.lib" "../lib/win-amd64/libcrypto.lib" platform="windows-x86_64"
 }
 
 configuration "openssl" {
 	dependency "openssl" version="~>1.0"
 
 	// Windows
-	sourceFiles "../lib/win-i386/eay.lib" "../lib/win-i386/ssl.lib" platform="windows-x86-dmd"
+	sourceFiles "../lib/win-i386/libssl.lib" "../lib/win-i386/libcrypto.lib" platform="windows-x86-dmd"
 
 	// Posix
 	sourceFiles "openssl_version.d" platform="posix"
