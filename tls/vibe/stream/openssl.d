@@ -98,11 +98,11 @@ static if (OPENSSL_VERSION.startsWith("1.1")) {
 	// #define SSL_get_ex_new_index(l, p, newf, dupf, freef) \
 	//    CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL, l, p, newf, dupf, freef)
 
-	extern(C) int CRYPTO_get_ex_new_index(int class_index, long argl, void *argp,
+	extern(C) int CRYPTO_get_ex_new_index(int class_index, c_long argl, void *argp,
 	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
 	                            CRYPTO_EX_free *free_func);
 
-	int SSL_get_ex_new_index(long argl, void *argp,
+	int SSL_get_ex_new_index(c_long argl, void *argp,
 	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
 	                            CRYPTO_EX_free *free_func) {
 		// # define CRYPTO_EX_INDEX_SSL              0
