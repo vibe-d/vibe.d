@@ -36,19 +36,38 @@ import deimos.openssl.ssl;
 import deimos.openssl.stack;
 import deimos.openssl.x509v3;
 
+// auto-detect OpenSSL 1.1.0
+version (VibeUseOpenSSL11)
+	enum OPENSSL_VERSION = "1.1.0";
+version (VibeUseOpenSSL10)
+	enum OPENSSL_VERSION = "1.0.0";
+else version (VibeUseOldOpenSSL)
+	enum OPENSSL_VERSION = "0.9.0";
+else version (Botan)
+	enum OPENSSL_VERSION = "0.0.0";
+else
+{
+	// Only use the openssl_version file if it has been generated
+	static if (__traits(compiles, {import openssl_version; }))
+		mixin("import openssl_version;");
+	else
+		// try 1.1.0 as softfallback if old other means failed
+		enum OPENSSL_VERSION = "1.1.0";
+}
+
 version (VibePragmaLib) {
 	pragma(lib, "ssl");
 	version (Windows) pragma(lib, "eay");
 }
 
-version (VibeUseOldOpenSSL) private enum haveECDH = false;
+static if (OPENSSL_VERSION.startsWith("0.9")) private enum haveECDH = false;
 else private enum haveECDH = OPENSSL_VERSION_NUMBER >= 0x10001000;
 version(VibeForceALPN) enum alpn_forced = true;
 else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
 // openssl/1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
-version (VibeUseOpenSSL11) {
+static if (OPENSSL_VERSION.startsWith("1.1")) {
 	extern(C) const(SSL_METHOD)* TLS_client_method();
 	alias SSLv23_client_method = TLS_client_method;
 
@@ -79,11 +98,11 @@ version (VibeUseOpenSSL11) {
 	// #define SSL_get_ex_new_index(l, p, newf, dupf, freef) \
 	//    CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL, l, p, newf, dupf, freef)
 
-	extern(C) int CRYPTO_get_ex_new_index(int class_index, long argl, void *argp,
+	extern(C) int CRYPTO_get_ex_new_index(int class_index, c_long argl, void *argp,
 	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
 	                            CRYPTO_EX_free *free_func);
 
-	int SSL_get_ex_new_index(long argl, void *argp,
+	int SSL_get_ex_new_index(c_long argl, void *argp,
 	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
 	                            CRYPTO_EX_free *free_func) {
 		// # define CRYPTO_EX_INDEX_SSL              0
@@ -126,7 +145,7 @@ version (VibeUseOpenSSL11) {
 
 		alias BIOMethWriteCallback = int function(BIO*, const(char)*, int);
 		alias BIOMethReadCallback = int function(BIO*, const(char)*, int);
-		alias BIOMethCtrlCallback = c_long function(BIO*, int, long, void*);
+		alias BIOMethCtrlCallback = c_long function(BIO*, int, c_long, void*);
 		alias BIOMethCreateCallback = int function(BIO*);
 		alias BIOMethDestroyCallback = int function(BIO*);
 
@@ -204,7 +223,7 @@ final class OpenSSLStream : TLSStream {
 			m_tls = null;
 		}
 
-		version (VibeUseOpenSSL11) {
+		static if (OPENSSL_VERSION.startsWith("1.1")) {
 			if (!s_bio_methods) initBioMethods();
 
 			m_bio = () @trusted { return BIO_new(s_bio_methods); } ();
@@ -577,7 +596,7 @@ final class OpenSSLContext : TLSContext {
 		const(SSL_METHOD)* method;
 		c_long veroptions = SSL_OP_NO_SSLv2;
 		c_long options = SSL_OP_NO_COMPRESSION;
-		version (VibeUseOpenSSL11) {}
+		static if (OPENSSL_VERSION.startsWith("1.1")) {}
 		else
 			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
 		int minver = TLS1_VERSION;
@@ -618,7 +637,7 @@ final class OpenSSLContext : TLSContext {
 			enforceSSL(0, "Failed to create SSL context");
 			assert(false);
 		}
-		version (VibeUseOpenSSL11) {
+		static if (OPENSSL_VERSION.startsWith("1.1")) {
 			() @trusted { return SSL_CTX_set_min_proto_version(m_ctx, minver); }()
 				.enforceSSL("Failed setting minimum protocol version");
 			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options); }();
@@ -1343,7 +1362,7 @@ private void setSSLError(string msg, string submsg, int line = __LINE__, string 
 	ERR_add_error_data(3, msg.toStringz, ": ".ptr, submsg.toStringz);
 }
 
-version (VibeUseOpenSSL11) {
+static if (OPENSSL_VERSION.startsWith("1.1")) {
 	private BIO_METHOD* s_bio_methods;
 
 	private void initBioMethods()
