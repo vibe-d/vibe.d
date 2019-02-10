@@ -39,7 +39,7 @@ import deimos.openssl.x509v3;
 // auto-detect OpenSSL 1.1.0
 version (VibeUseOpenSSL11)
 	enum OPENSSL_VERSION = "1.1.0";
-version (VibeUseOpenSSL10)
+else version (VibeUseOpenSSL10)
 	enum OPENSSL_VERSION = "1.0.0";
 else version (VibeUseOldOpenSSL)
 	enum OPENSSL_VERSION = "0.9.0";
