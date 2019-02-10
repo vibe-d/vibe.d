@@ -6,6 +6,10 @@ v0.8.5 - 2019-02-
 
 ### Features and improvements ###
 
+- The TLS package was updated to use OpenSSL 1.1.x by default - [pull #2190][issue2190]
+    - Using OpenSSL 1.1.0a on Windows
+    - Auto-detecting the OpenSSL version on Posix systems, falling back to 1.1.x if that fails (by Sebastian Wilzbach) - [issue #2053][issue2053]
+    - The exact version can still be pre-selected using the build configutarion of "vibe-d:tls"
 - Compiles on DMD 2.076.1 up to 2.084.0 and LDC 1.13.0
 - Added support for OpenSSL 1.1.1 (by Jan Jurzitza aka WebFreak001) - [issue #2214][issue2214], [pull #2226][issue2226]
 - `URL.port` now returns the value of `defaultPort`, if no explicit port was specified (by Szabo Bogdan aka gedaiu) - [pull #2176][issue2176]
@@ -28,10 +32,12 @@ v0.8.5 - 2019-02-
 - Fixed detection of broken quoted-printable encodings (by Adam Williams) - [pull #2237][issue2237]
 - Fixed `Json.clone` for fields of type array (by Szabo Bogdan) - [pull #2249][issue2249]
 
+[issue2053]: https://github.com/vibe-d/vibe.d/issues/2053
 [issue2214]: https://github.com/vibe-d/vibe.d/issues/2214
 [issue2226]: https://github.com/vibe-d/vibe.d/issues/2226
 [issue2176]: https://github.com/vibe-d/vibe.d/issues/2176
 [issue2183]: https://github.com/vibe-d/vibe.d/issues/2183
+[issue2190]: https://github.com/vibe-d/vibe.d/issues/2190
 [issue2222]: https://github.com/vibe-d/vibe.d/issues/2222
 [issue2223]: https://github.com/vibe-d/vibe.d/issues/2223
 [issue2197]: https://github.com/vibe-d/vibe.d/issues/2197
