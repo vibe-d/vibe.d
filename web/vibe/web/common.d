@@ -691,7 +691,7 @@ private enum MAX_ARR_INDEX = 0xffff;
 // handle the actual data inside the parameter
 private ParamResult processFormParam(T)(scope string data, string fieldname, ref T dst, ref ParamError err)
 {
-	static if(is(T == bool))
+	static if (is(T == bool))
 	{
 		// getting here means the item is present, set to true.
 		dst = true;
@@ -699,7 +699,7 @@ private ParamResult processFormParam(T)(scope string data, string fieldname, ref
 	}
 	else
 	{
-		if (!(*pv).webConvTo(dst, err)) {
+		if (!data.webConvTo(dst, err)) {
 			err.field = fieldname;
 			return ParamResult.error;
 		}
@@ -724,16 +724,16 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 					!is(typeof(T.fromStringValidate(string.init, null))) &&
 					!is(typeof(T.fromISOExtString(string.init))));
 
-		static assert(!is(EL == bool),
-			"Boolean arrays are not allowed, because their length cannot " ~
-			"be uniquely determined. Use a static array instead.");
-		// array to check for duplicates
-		static if(isStaticArray!T)
+		static if (isStaticArray!T)
 		{
 			bool[T.length] seen;
 		}
 		else
 		{
+			static assert(!is(EL == bool),
+			  "Boolean arrays are not allowed, because their length cannot " ~
+			  "be uniquely determined. Use a static array instead.");
+			// array to check for duplicates
 			dst = T.init;
 			bool[] seen;
 		}
@@ -742,38 +742,38 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 		const minLength = fieldname.length + style == NestedNameStyle.d ? 2 : 1;
 		const indexTrailer = style == NestedNameStyle.d ? "]" : "";
 
-		void processItems(DL)(DL dlist)
+		ParamResult processItems(DL)(DL dlist)
 		{
-			foreach(k, v; dlist.byKeyValue)
+			foreach (k, v; dlist.byKeyValue)
 			{
-				if(k.length < minLength)
+				if (k.length < minLength)
 					// sanity check to prevent out of bounds
 					continue;
-				if(k.startsWith(fieldname) && k[fieldname.length] == indexSep)
+				if (k.startsWith(fieldname) && k[fieldname.length] == indexSep)
 				{
 					// found a potential match
 					string key = k[fieldname.length + 1 .. $];
 					size_t idx;
-					if(key == indexTrailer)
+					if (key == indexTrailer)
 					{
-						static if(isSimpleElement)
+						static if (isSimpleElement)
 						{
 							// this is a non-indexed array item. Find an empty slot, or expand the array
-							idx = seen.countUntil(false);
-							static if(isStaticArray!T)
+							import std.algorithm : countUntil;
+							idx = seen[].countUntil(false);
+							static if (isStaticArray!T)
 							{
-								if(idx == size_t.max)
+								if (idx == size_t.max)
 								{
 									// ignore extras, and we know there are no more matches to come.
 									break;
 								}
 							}
-							else if(idx == size_t.max)
+							else if (idx == size_t.max)
 							{
+								// append to the end.
 								idx = dst.length;
-								dst.length = idx + 1;
 							}
-							seen[idx] = true;
 						}
 						else
 						{
@@ -784,75 +784,87 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 					else
 					{
 						import std.conv;
-						key.parse!size_t(idx);
-						static if(isStaticArray!T)
+						idx = key.parse!size_t;
+						static if (isStaticArray!T)
 						{
-							if(idx > T.length)
+							if (idx >= T.length)
 								// keep existing behavior, ignore extras
 								continue;
 						}
-						else if(idx > MAX_ARR_INDEX)
+						else if (idx > MAX_ARR_INDEX)
 						{
-							// Getting a big large, we don't want to allow DOS attacks.
-							err.fieldname = k;
+							// Getting a bit large, we don't want to allow DOS attacks.
+							err.field = k;
 							err.text = "Maximum index exceeded";
 							return ParamResult.error;
 						}
+						static if (isSimpleElement)
+						{
+							if (key != indexTrailer)
+								// this can't be a match, simple elements are parsed from
+								// the string, there should be no more to the key.
+								continue;
+						}
 						else
 						{
-							static if(isSimpleElement)
-							{
-								if(key != indexTrailer)
-									// this can't be a match, simple elements are parsed from
-									// the string, there should be no more to the key.
-									continue;
-							}
-							else
-							{
-								// ensure there's more than just the index trailer
-								if(key.length == indexTrailer.length || !key.startsWith(indexTrailer))
-									// not a valid entry. ignore this entry to preserve existing behavior.
-									continue;
-							}
-
-							static if(!isStaticArray!T)
-							{
-								// check to see if we need to expand the array
-								if(dst.length <= idx)
-								{
-									dst.length = idx + 1;
-									seen.length = idx + 1;
-								}
-							}
+							// ensure there's more than just the index trailer
+							if (key.length == indexTrailer.length || !key.startsWith(indexTrailer))
+								// not a valid entry. ignore this entry to preserve existing behavior.
+								continue;
 						}
-
-						if(seen[idx])
-						{
-							// don't store it twice
-							continue;
-						}
-						seen[idx] = true;
 					}
 
-					static if(isSimpleElement)
+					static if (!isStaticArray!T)
+					{
+						// check to see if we need to expand the array
+						if (dst.length <= idx)
+						{
+							dst.length = idx + 1;
+							seen.length = idx + 1;
+						}
+					}
+
+					if (seen[idx])
+					{
+						// don't store it twice
+						continue;
+					}
+					seen[idx] = true;
+
+					static if (isSimpleElement)
 					{
 						auto result = processFormParam(v, k, dst[idx], err);
 					}
 					else
 					{
-						auto subFieldname = k[0 .. k.length - key.length - indexTrailer.length];
+						auto subFieldname = k[0 .. $ - key.length + indexTrailer.length];
 						auto result = readFormParamRec(req, dst[idx], subFieldname, true, style, err);
 					}
-					if(result != ParamResult.ok)
+					if (result != ParamResult.ok)
 						return result;
 				}
 			}
+
+			return ParamResult.ok;
 		}
 
-		if(processItems(req.form) == ParamResult.error)
+		if (processItems(req.form) == ParamResult.error)
 			return ParamResult.error;
-		if(processItems(req.query) == ParamResult.error)
+		if (processItems(req.query) == ParamResult.error)
 			return ParamResult.error;
+
+		// make sure all static array items have been seen
+		static if (isStaticArray!T)
+		{
+			import std.algorithm : countUntil;
+			auto notSeen = seen[].countUntil(false);
+			if (notSeen != -1)
+			{
+				err.field = style.getArrayFieldName(fieldname, notSeen);
+				err.text = "Missing form field.";
+				return ParamResult.error;
+			}
+		}
 	} else static if (isNullable!T) {
 		typeof(dst.get()) el = void;
 		auto r = readFormParamRec(req, el, fieldname, false, style, err);
@@ -891,6 +903,47 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 	else return ParamResult.skipped;
 
 	return ParamResult.ok;
+}
+
+// test new array mechanisms
+unittest {
+	import vibe.http.server;
+	import vibe.inet.url;
+
+	auto req = createTestHTTPServerRequest(URL("http://localhost/route?arr_0=1&arr_2=2&arr_=3"));
+	int[] arr;
+	ParamError err;
+	auto result = req.readFormParamRec(arr, "arr", false, NestedNameStyle.underscore, err);
+	assert(result == ParamResult.ok);
+	assert(arr == [1,3,2]);
+
+	// try with static array
+	int[3] staticarr;
+	result = req.readFormParamRec(staticarr, "arr", false, NestedNameStyle.underscore, err);
+	assert(result == ParamResult.ok);
+	assert(staticarr == [1,3,2]);
+
+	// d style
+	req = createTestHTTPServerRequest(URL("http://localhost/route?arr[2]=1&arr[0]=2&arr[]=3"));
+	result = req.readFormParamRec(arr, "arr", false, NestedNameStyle.d, err);
+	assert(result == ParamResult.ok);
+	assert(arr == [2,3,1]);
+
+	result = req.readFormParamRec(staticarr, "arr", false, NestedNameStyle.d, err);
+	assert(result == ParamResult.ok);
+	assert(staticarr == [2,3,1]);
+
+	// try nested arrays
+	req = createTestHTTPServerRequest(URL("http://localhost/route?arr[2][]=1&arr[0][]=2&arr[1][]=3&arr[0][]=4"));
+	int[][] arr2;
+	result = req.readFormParamRec(arr2, "arr", false, NestedNameStyle.d, err);
+	assert(result == ParamResult.ok);
+	assert(arr2 == [[2,4],[3],[1]]);
+
+	int[][2] staticarr2;
+	result = req.readFormParamRec(staticarr2, "arr", false, NestedNameStyle.d, err);
+	assert(result == ParamResult.ok);
+	assert(staticarr2 == [[2,4],[3]]);
 }
 
 package bool webConvTo(T)(string str, ref T dst, ref ParamError err)

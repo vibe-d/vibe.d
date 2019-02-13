@@ -47,9 +47,11 @@ bool parseFormData(ref FormFields fields, ref FilePartFormFields files, string c
 		default:
 			return false;
 		case "application/x-www-form-urlencoded":
+			assert(!!body_reader);
 			parseURLEncodedForm(body_reader.readAllUTF8(), fields);
 			break;
 		case "multipart/form-data":
+			assert(!!body_reader);
 			parseMultiPartForm(fields, files, content_type, body_reader, max_line_length);
 			break;
 	}
