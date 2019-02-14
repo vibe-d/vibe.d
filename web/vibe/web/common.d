@@ -472,9 +472,12 @@ package struct MethodAttribute
 	alias data this;
 }
 
-/// private
-package struct PathAttribute
+/**
+ * This struct contains the name of a route specified by the `path` function.
+ */
+struct PathAttribute
 {
+	/// The specified path
 	string data;
 	alias data this;
 }
