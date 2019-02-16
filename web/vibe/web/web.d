@@ -882,6 +882,17 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	import vibe.data.json;
 	import vibe.internal.meta.funcattr;
 	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.web.internal.rest.common : ParameterKind;
+
+	alias wpas = getUDAs!(overload, WebParamAttribute);
+	enum SelectBodyParams(alias wpa) = wpa.origin == ParameterKind.body_;
+	enum bodyParams = Filter!(SelectBodyParams, wpas);
+	enum SelectWholeBodyParams(alias wpa) = wpa.origin == ParameterKind.wholeBody;
+	enum wholeBodyParams = Filter!(SelectWholeBodyParams, wpas);
+
+	static assert(wholeBodyParams.length <= 1, "Multiple whole-body parameters defined for "~overload.stringof~".");
+	static assert(wholeBodyParams.length == 0 || bodyParams.length == 0,
+		"Normal body parameters and a whole-body parameter defined at the same time for "~overload.stringof~".");
 
 	alias RET = ReturnType!overload;
 	alias PARAMS = ParameterTypeTuple!overload;
@@ -937,9 +948,11 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				else static if (!isNullable!PT) enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
 			} else static if (is(PT == bool)) {
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
-			} else {
+			} else static if (wholeBodyParams.length == 0 ||
+									(wholeBodyParams.length == 1 && wholeBodyParams[0].identifier == param_names[i])) {
 				enum has_default = !is(default_values[i] == void);
-				ParamResult pres = readFormParamRec(req, params[i], param_names[i], !has_default, nested_style, err);
+				const ParamResult pres =
+					readFormParamRec(req, params[i], param_names[i], !has_default, nested_style, err, wholeBodyParams.length == 1);
 				static if (has_default) {
 					if (pres == ParamResult.skipped)
 						params[i].setVoid(default_values[i]);
