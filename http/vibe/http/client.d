@@ -563,7 +563,11 @@ final class HTTPClient {
 		scope(exit) m_requesting = false;
 
 		if (!m_conn || !m_conn.connected) {
-			if (m_conn) m_conn.close(); // make sure all resources are freed
+			if (m_conn) {
+				m_conn.close(); // make sure all resources are freed
+				m_conn = TCPConnection.init;
+			}
+
 			if (m_settings.proxyURL.host !is null){
 
 				enum AddressType {
@@ -640,6 +644,7 @@ final class HTTPClient {
 				try m_tlsStream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
 				catch (Exception e) {
 					m_conn.close();
+					m_conn = TCPConnection.init;
 					throw e;
 				}
 				m_stream = m_tlsStream;
@@ -1106,8 +1111,6 @@ final class HTTPClientResponse : HTTPResponse {
 		enforce(!new_protocol.length || !icmp(*resNewProto, new_protocol),
 			"Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
 		auto stream = createConnectionProxyStream!(typeof(m_client.m_stream), typeof(m_client.m_conn))(m_client.m_stream, m_client.m_conn);
-		m_client.m_responding = false;
-		m_client = null;
 		m_closeConn = true; // cannot reuse connection for further requests!
 		return stream;
 	}
@@ -1119,9 +1122,8 @@ final class HTTPClientResponse : HTTPResponse {
 		enforce(resNewProto, "Server did not send an Upgrade header");
 		enforce(!new_protocol.length || !icmp(*resNewProto, new_protocol),
 			"Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
-		scope stream = createConnectionProxyStream(m_client.m_stream, m_client.m_conn);
-		m_client.m_responding = false;
-		m_client = null;
+		auto stream = createConnectionProxyStream(m_client.m_stream, m_client.m_conn);
+		scope (exit) () @trusted { destroy(stream); } ();
 		m_closeConn = true;
 		del(stream);
 	}
