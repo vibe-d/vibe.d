@@ -39,8 +39,10 @@ configuration "openssl" {
 			opensslVersion = res.splitter(" ").dropOne.front.filter!(not!(std.uni.isAlpha)).text;
 		}
 	} catch (Exception e) { writeln("Warning: ", e); }
-	text("module openssl_version;\nenum OPENSSL_VERSION=\"", opensslVersion, "\";").
-		toFile(dir.buildPath("openssl_version.d"));
+	auto data = text("module openssl_version;\nenum OPENSSL_VERSION=\"", opensslVersion, "\";");
+	auto output = dir.buildPath("openssl_version.d");
+	if (!output.exists || output.readText.strip != data.strip)
+		data.toFile(output);
 	'` platform="posix"
 }
 
