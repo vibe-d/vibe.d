@@ -1995,7 +1995,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 	import vibe.core.core : runWorkerTaskDist;
 	import std.algorithm : canFind, find;
 
-	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort)
+	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort, bool is_tls)
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
@@ -2014,7 +2014,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 			if (listen_info.bindPort == 0)
 				listen_info.m_bindPort = ret.bindAddress.port;
 
-			auto proto = listen_info.tlsContext ? "https" : "http";
+			auto proto = is_tls ? "https" : "http";
 			auto urladdr = listen_info.bindAddress;
 			if (urladdr.canFind(':')) urladdr = "["~urladdr~"]";
 			logInfo("Listening for requests on %s://%s:%s/", proto, urladdr, listen_info.bindPort);
@@ -2036,7 +2036,10 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 		if (!l.empty) linfo = l.front;
 		else {
 			auto li = new HTTPServerContext(addr, settings.port);
-			if (auto tcp_lst = doListen(li, (settings.options & HTTPServerOptionImpl.distribute) != 0, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
+			if (auto tcp_lst = doListen(li,
+					(settings.options & HTTPServerOptionImpl.distribute) != 0,
+					(settings.options & HTTPServerOption.reusePort) != 0,
+					settings.tlsContext !is null)) // DMD BUG 2043
 			{
 				li.m_listener = tcp_lst;
 				s_listeners ~= li;
