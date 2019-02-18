@@ -42,11 +42,9 @@ void test(bool tls)
 		} catch (Exception e) {
 			assert(false, "Web sockets failed: "~e.msg);
 		}
-    });
+	}).join();
 
-    runApplication();
-
-    listener.stopListening();
+	listener.stopListening();
 }
 
 void main()
