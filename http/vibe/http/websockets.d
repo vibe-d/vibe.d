@@ -716,8 +716,6 @@ final class WebSocket {
 					m_serverResponse.finalize();
 					m_serverResponse = HTTPServerResponse.init;
 				}
-				if (m_conn && m_conn.connected)
-					m_conn.close();
 			});
 
 			m_reader.join();
