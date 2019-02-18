@@ -705,20 +705,20 @@ final class WebSocket {
 		}
 		if (m_pingTimer) m_pingTimer.stop();
 
+
 		if (Task.getThis() == m_ownerTask) {
-			if (m_conn && m_conn.connected) {
-				m_writeMutex.performLocked!({
-					if (m_clientResponse) {
-						m_clientResponse.disconnect();
-						m_clientResponse = HTTPClientResponse.init;
-					}
-					if (m_serverResponse) {
-						m_serverResponse.finalize();
-						m_serverResponse = HTTPServerResponse.init;
-					}
-				});
-				m_conn.close();
-			}
+			m_writeMutex.performLocked!({
+				if (m_clientResponse) {
+					m_clientResponse.disconnect();
+					m_clientResponse = HTTPClientResponse.init;
+				}
+				if (m_serverResponse) {
+					m_serverResponse.finalize();
+					m_serverResponse = HTTPServerResponse.init;
+				}
+				if (m_conn && m_conn.connected)
+					m_conn.close();
+			});
 
 			m_reader.join();
 
