@@ -1172,6 +1172,7 @@ final class HTTPServerResponse : HTTPResponse {
 		bool m_headerWritten = false;
 		bool m_isHeadResponse = false;
 		bool m_tls;
+		bool m_requiresConnectionClose;
 		SysTime m_timeFinalized;
 	}
 
@@ -1510,6 +1511,7 @@ final class HTTPServerResponse : HTTPResponse {
 		statusCode = HTTPStatus.SwitchingProtocols;
 		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
+		m_requiresConnectionClose = true;
 		return createConnectionProxyStream(m_conn, m_rawConnection);
 	}
 	/// ditto
@@ -1518,13 +1520,12 @@ final class HTTPServerResponse : HTTPResponse {
 		statusCode = HTTPStatus.SwitchingProtocols;
 		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
+		m_requiresConnectionClose = true;
 		() @trusted {
 			auto conn = createConnectionProxyStreamFL(m_conn, m_rawConnection);
 			del(conn);
 		} ();
 		finalize();
-		if (m_rawConnection && m_rawConnection.connected)
-			m_rawConnection.close(); // connection not reusable after a protocol upgrade
 	}
 
 	/** Special method for handling CONNECT proxy tunnel
@@ -1545,7 +1546,6 @@ final class HTTPServerResponse : HTTPResponse {
 			del(conn);
 		} ();
 		finalize();
-		m_rawConnection.close(); // connection not reusable after a protocol upgrade
 	}
 
 	/** Sets the specified cookie value.
@@ -1665,8 +1665,9 @@ final class HTTPServerResponse : HTTPResponse {
 			catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
 			if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!long) {
 				logDebug("HTTP response only written partially before finalization. Terminating connection.");
-				m_rawConnection.close();
+				m_requiresConnectionClose = true;
 			}
+
 			m_rawConnection = InterfaceProxy!ConnectionStream.init;
 		}
 
@@ -1994,7 +1995,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 	import vibe.core.core : runWorkerTaskDist;
 	import std.algorithm : canFind, find;
 
-	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort)
+	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort, bool is_tls)
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
@@ -2013,7 +2014,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 			if (listen_info.bindPort == 0)
 				listen_info.m_bindPort = ret.bindAddress.port;
 
-			auto proto = listen_info.tlsContext ? "https" : "http";
+			auto proto = is_tls ? "https" : "http";
 			auto urladdr = listen_info.bindAddress;
 			if (urladdr.canFind(':')) urladdr = "["~urladdr~"]";
 			logInfo("Listening for requests on %s://%s:%s/", proto, urladdr, listen_info.bindPort);
@@ -2035,7 +2036,10 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 		if (!l.empty) linfo = l.front;
 		else {
 			auto li = new HTTPServerContext(addr, settings.port);
-			if (auto tcp_lst = doListen(li, (settings.options & HTTPServerOptionImpl.distribute) != 0, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
+			if (auto tcp_lst = doListen(li,
+					(settings.options & HTTPServerOptionImpl.distribute) != 0,
+					(settings.options & HTTPServerOption.reusePort) != 0,
+					settings.tlsContext !is null)) // DMD BUG 2043
 			{
 				li.m_listener = tcp_lst;
 				s_listeners ~= li;
@@ -2267,7 +2271,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		if (!parsed || res.headerWritten || !cast(Exception)e) keep_alive = false;
 	}
 
-	if (tcp_connection.connected) {
+	if (tcp_connection.connected && keep_alive) {
 		if (req.bodyReader && !req.bodyReader.empty) {
 			req.bodyReader.pipe(nullSink);
 			logTrace("dropped body");
@@ -2276,6 +2280,9 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 
 	// finalize (e.g. for chunked encoding)
 	res.finalize();
+
+	if (res.m_requiresConnectionClose)
+		keep_alive = false;
 
 	foreach (k, v ; req._files) {
 		if (existsFile(v.tempPath)) {

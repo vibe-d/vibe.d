@@ -222,7 +222,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 
 	@property ulong leastSize()
 	{
-		if (!m_ctx || !m_ctx.event) return 0;
+		if (!m_ctx || !m_ctx.event || m_ctx.shutdown) return 0;
 		if (m_readBuffer.length) {
 			checkReader();
 			return m_readBuffer.length;
