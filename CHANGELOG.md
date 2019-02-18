@@ -12,14 +12,16 @@ v0.8.5 - 2019-02-
     - The exact version can still be pre-selected using the build configutarion of "vibe-d:tls"
 - Compiles on DMD 2.076.1 up to 2.084.0 and LDC 1.13.0
 - Added support for OpenSSL 1.1.1 (by Jan Jurzitza aka WebFreak001) - [issue #2214][issue2214], [pull #2226][issue2226]
+- Fixed concurrent outgoing WebSocket connections and a socket descriptor leak - [issue #2169][issue2169], [pull #2265][issue2265]
 - `URL.port` now returns the value of `defaultPort`, if no explicit port was specified (by Szabo Bogdan aka gedaiu) - [pull #2176][issue2176]
 - Changed `Bson.opEquals` to yield true for objects with the same fields but different field order (by Igor Stepanov) - [pull #2183][issue2183]
 - Removed the DNS lookup cache from the libevent driver (by Márcio Martins) - [pull #2257][issue2257]
 - Added an overload of `serveRestJSClient` that uses server-relative URIs (by Oleg B. aka deviator) - [issue #2222][issue2222], [pull #2223][issue2223]
 - Added `StdFileStream.stdFile` property (by Benjamin Schaaf) - [pull #2248][issue2248]
-- `vibe.web.common.WebParamAttribute` is now public for external introspection purposes (by Robert Schadek) - [pull #2250][issue2250]
+- `vibe.web.common.WebParamAttribute` and `PathAttribute` are now public for external introspection purposes (by Robert Schadek) - [pull #2250][issue2250], [pull #2263][issue2263]
 - Added an overload of `BsonDate.toSysTime` taking a time zone (by Jan Jurzitza aka WebFreak001) - [pull #2252][issue2252]
 - Added `MemoryStream.truncate` and enable `seek` to be used to grow the stream size - [pull #2251][issue2251]
+- Array parameters for the web interface generator can now be sent as form parameters without explicit index (by Steven Schveighoffer) - [pull #2247][issue2247]
 - `vibe.utils.hashmap.HashMap` now supports singleton allocators without an object wrapper - [pull #2236][issue2236]
 
 ### Bug fixes ###
@@ -33,11 +35,12 @@ v0.8.5 - 2019-02-
 - Fixed `Json.clone` for fields of type array (by Szabo Bogdan) - [pull #2249][issue2249]
 
 [issue2053]: https://github.com/vibe-d/vibe.d/issues/2053
-[issue2214]: https://github.com/vibe-d/vibe.d/issues/2214
-[issue2226]: https://github.com/vibe-d/vibe.d/issues/2226
+[issue2169]: https://github.com/vibe-d/vibe.d/issues/2169
 [issue2176]: https://github.com/vibe-d/vibe.d/issues/2176
 [issue2183]: https://github.com/vibe-d/vibe.d/issues/2183
 [issue2190]: https://github.com/vibe-d/vibe.d/issues/2190
+[issue2214]: https://github.com/vibe-d/vibe.d/issues/2214
+[issue2226]: https://github.com/vibe-d/vibe.d/issues/2226
 [issue2222]: https://github.com/vibe-d/vibe.d/issues/2222
 [issue2223]: https://github.com/vibe-d/vibe.d/issues/2223
 [issue2197]: https://github.com/vibe-d/vibe.d/issues/2197
@@ -48,12 +51,15 @@ v0.8.5 - 2019-02-
 [issue2236]: https://github.com/vibe-d/vibe.d/issues/2236
 [issue2237]: https://github.com/vibe-d/vibe.d/issues/2237
 [issue2238]: https://github.com/vibe-d/vibe.d/issues/2238
+[issue2247]: https://github.com/vibe-d/vibe.d/issues/2247
 [issue2248]: https://github.com/vibe-d/vibe.d/issues/2248
 [issue2249]: https://github.com/vibe-d/vibe.d/issues/2249
 [issue2250]: https://github.com/vibe-d/vibe.d/issues/2250
 [issue2251]: https://github.com/vibe-d/vibe.d/issues/2251
 [issue2252]: https://github.com/vibe-d/vibe.d/issues/2252
 [issue2257]: https://github.com/vibe-d/vibe.d/issues/2257
+[issue2263]: https://github.com/vibe-d/vibe.d/issues/2263
+[issue2265]: https://github.com/vibe-d/vibe.d/issues/2265
 
 
 v0.8.4 - 2018-06-02
