@@ -746,7 +746,7 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 		}
 		// process the items in the order they appear.
 		char indexSep = style == NestedNameStyle.d ? '[' : '_';
-		const minLength = fieldname.length + style == NestedNameStyle.d ? 2 : 1;
+		const minLength = fieldname.length + (style == NestedNameStyle.d ? 2 : 1);
 		const indexTrailer = style == NestedNameStyle.d ? "]" : "";
 
 		ParamResult processItems(DL)(DL dlist)
@@ -951,6 +951,12 @@ unittest {
 	result = req.readFormParamRec(staticarr2, "arr", false, NestedNameStyle.d, err);
 	assert(result == ParamResult.ok);
 	assert(staticarr2 == [[2,4],[3]]);
+
+	// bug with key length
+	req = createTestHTTPServerRequest(URL("http://localhost/route?arr=1"));
+	result = req.readFormParamRec(arr, "arr", false, NestedNameStyle.d, err);
+	assert(result == ParamResult.ok);
+	assert(arr.length == 0);
 }
 
 package bool webConvTo(T)(string str, ref T dst, ref ParamError err)

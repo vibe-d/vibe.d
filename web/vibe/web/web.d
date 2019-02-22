@@ -142,12 +142,14 @@ import std.encoding : sanitize;
 
 		$(D @before), $(D @after), $(D @errorDisplay),
 		$(D @vibe.web.common.method), $(D @vibe.web.common.path),
-		$(D @vibe.web.common.contentType),
-		$(D @nestedNameStyle)
+		$(D @vibe.web.common.contentType)
 
 		The `@path` attribute can also be applied to the class itself, in which
 		case it will be used as an additional prefix to the one in
 		`WebInterfaceSettings.urlPrefix`.
+
+		The $(D @nestedNameStyle) attribute can be applied only to the class
+		itself. Applying it to a method is not supported at this time.
 
 	Supported return types:
 		$(UL
@@ -728,7 +730,8 @@ unittest {
 	}
 }
 
-/** Determines how nested D fields/array entries are mapped to form field names.
+/** Determines how nested D fields/array entries are mapped to form field
+ * names. Note that this attribute only works if applied to the class.
 */
 NestedNameStyleAttribute nestedNameStyle(NestedNameStyle style)
 {
