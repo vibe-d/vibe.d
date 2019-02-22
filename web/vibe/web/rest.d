@@ -1381,15 +1381,33 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 
 			if (settings.errorHandler) {
 				settings.errorHandler(req, res, RestErrorInformation(e, default_status));
-			} else if (auto se = cast(HTTPStatusException)e) {
-				res.writeJsonBody(["statusMessage": se.msg], se.status);
-			} else debug {
-				res.writeJsonBody(
-					[ "statusMessage": e.msg, "statusDebugMessage": () @trusted { return sanitizeUTF8(cast(ubyte[])e.toString()); } () ],
-					HTTPStatus.internalServerError
-				);
 			} else {
-				res.writeJsonBody(["statusMessage": e.msg], default_status);
+				import std.algorithm : among;
+				debug string debugMsg;
+
+				if (auto se = cast(HTTPStatusException)e)
+					res.statusCode = se.status;
+				else debug {
+					res.statusCode = HTTPStatus.internalServerError;
+					debugMsg = () @trusted { return sanitizeUTF8(cast(ubyte[])e.toString()); }();
+				}
+				else
+					res.statusCode = default_status;
+
+				// All 1xx(informational), 204 (no content), and 304 (not modified) responses MUST NOT include a message-body.
+				// See: https://tools.ietf.org/html/rfc2616#section-4.3
+				if (res.statusCode < 200 || res.statusCode.among(204, 304)) {
+					res.writeVoidBody();
+					return;
+				}
+
+				debug {
+					if (debugMsg) {
+						res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": debugMsg]);
+						return;
+					}
+				}
+				res.writeJsonBody(["statusMessage": e.msg]);
 			}
 		}
 
