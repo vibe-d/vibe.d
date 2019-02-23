@@ -26,8 +26,7 @@ configuration "openssl" {
 	sourceFiles "../lib/win-i386/libssl.lib" "../lib/win-i386/libcrypto.lib" platform="windows-x86-dmd"
 
 	// Posix
-	sourceFiles "openssl_version.d" platform="posix"
-	preBuildCommands `rdmd --eval='
+	preGenerateCommands `rdmd --eval='
 	auto dir = environment.get("DUB_PACKAGE_DIR");
 	if (dir.buildPath("tls").exists)  {
 		dir = dir.buildPath("tls");
