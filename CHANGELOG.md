@@ -9,7 +9,7 @@ v0.8.5 - 2019-02-
 - The TLS package was updated to use OpenSSL 1.1.x by default - [pull #2190][issue2190]
     - Using OpenSSL 1.1.0a on Windows
     - Auto-detecting the OpenSSL version on Posix systems, falling back to 1.1.x if that fails (by Sebastian Wilzbach) - [issue #2053][issue2053]
-    - The exact version can still be pre-selected using the build configutarion of "vibe-d:tls"
+    - The exact version can still be pre-selected using the build configuration of "vibe-d:tls"
 - Compiles on DMD 2.076.1 up to 2.084.0 and LDC 1.13.0
 - Added support for OpenSSL 1.1.1 (by Jan Jurzitza aka WebFreak001) - [issue #2214][issue2214], [pull #2226][issue2226]
 - Fixed concurrent outgoing WebSocket connections and a socket descriptor leak - [issue #2169][issue2169], [pull #2265][issue2265]
@@ -33,6 +33,7 @@ v0.8.5 - 2019-02-
 - Fixed a null pointer access in `OpenSSLStream` if `read` was called after `close` (by Francesco Galla) - [pull #2238][issue2238]
 - Fixed detection of broken quoted-printable encodings (by Adam Williams) - [pull #2237][issue2237]
 - Fixed `Json.clone` for fields of type array (by Szabo Bogdan) - [pull #2249][issue2249]
+- Fixed erroenous writing of a response body for certain status codes in the REST interface generator (by Tomáš Chaloupka) - [issue #2268][issue2268], [pull #2269][issue2269]
 
 [issue2053]: https://github.com/vibe-d/vibe.d/issues/2053
 [issue2169]: https://github.com/vibe-d/vibe.d/issues/2169
@@ -60,6 +61,8 @@ v0.8.5 - 2019-02-
 [issue2257]: https://github.com/vibe-d/vibe.d/issues/2257
 [issue2263]: https://github.com/vibe-d/vibe.d/issues/2263
 [issue2265]: https://github.com/vibe-d/vibe.d/issues/2265
+[issue2268]: https://github.com/vibe-d/vibe.d/issues/2268
+[issue2269]: https://github.com/vibe-d/vibe.d/issues/2269
 
 
 v0.8.4 - 2018-06-02
