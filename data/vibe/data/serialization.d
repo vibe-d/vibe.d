@@ -542,7 +542,12 @@ private template serializeValueImpl(Serializer, alias Policy) {
 						} else static if (is(typeof(vt) == class)) {
 							if (vt is null) continue;
 						} else {
-							if (vt == typeof(vt).init) continue;
+							// workaround for unsafe opEquals
+							static if (!isSafeSerializer!Serializer || __traits(compiles, () @safe { return vt == typeof(vt).init; }())) {
+								if (vt == typeof(vt).init) continue;
+							} else {
+								if (() @trusted { return vt == typeof(vt).init; }()) continue;
+							}
 						}
 					}
 					alias STraits = SubTraits!(Traits, typeof(vt), TA);
