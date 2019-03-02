@@ -1199,11 +1199,15 @@ private template isBuiltinTuple(T, string member)
 }
 
 // heuristically determines @safe'ty of the serializer by testing readValue and writeValue for type int
-private enum isSafeSerializer(S) = __traits(compiles, (S s) @safe {
+private template isSafeSerializer(S)
+{
 	alias T = Traits!(int, DefaultPolicy);
-	s.writeValue!T(42);
-	s.readValue!(T, int)();
-});
+	static if (__traits(hasMember, S, "writeValue"))
+		enum isSafeSerializer = __traits(compiles, (S s) @safe { s.writeValue!T(42); });
+	else static if (__traits(hasMember, S, "readValue"))
+		enum isSafeSerializer = __traits(compiles, (S s) @safe { s.readValue!(T, int)(); });
+	else static assert(0, "Serializer without writeValue or readValue is invalid");
+}
 
 private template hasAttribute(T, alias decl) { enum hasAttribute = findFirstUDA!(T, decl).found; }
 
