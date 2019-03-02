@@ -539,6 +539,8 @@ private template serializeValueImpl(Serializer, alias Policy) {
 							if (vt.type == Json.Type.undefined || vt.type == Json.Type.null_ || (vt.type == Json.Type.object && !vt.length)) continue;
 						} else static if (is(typeof(vt) == Bson)) {
 							if (vt.type == Bson.Type.undefined || vt.type == Bson.Type.null_ || (vt.type == Bson.Type.object && !vt.length)) continue;
+						} else static if (is(typeof(vt) == class)) {
+							if (vt is null) continue;
 						} else {
 							if (vt == typeof(vt).init) continue;
 						}
@@ -2069,7 +2071,7 @@ unittest { // issue #2110 - single-element tuples
 	}
 }
 
-unittest {
+@safe unittest {
 	import vibe.data.json;
 	struct Foo {
 		@optional
@@ -2079,7 +2081,7 @@ unittest {
 	assert(serializeToJsonString(f) == "{}");
 }
 
-unittest {
+@safe unittest {
 	import vibe.data.bson;
 	struct Foo {
 		@optional
@@ -2087,4 +2089,16 @@ unittest {
 	}
 	Foo f;
 	assert(serializeToJsonString(f) == "{}");
+}
+
+@safe unittest {
+	import vibe.data.json;
+	class Bar {}
+	struct Foo {
+		@optional Bar bar;
+		Bar baz;
+	}
+	Foo f;
+	f.baz = new Bar();
+	assert(serializeToJsonString(f) == `{"baz":{}}`);
 }
