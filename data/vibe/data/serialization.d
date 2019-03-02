@@ -140,14 +140,14 @@ import std.typetuple;
 
 	See_Also: `vibe.data.json.JsonSerializer`, `vibe.data.json.JsonStringSerializer`, `vibe.data.bson.BsonSerializer`
 */
-auto serialize(Serializer, T, ARGS...)(T value, ARGS args)
+auto serialize(Serializer, T, ARGS...)(auto ref in T value, ARGS args)
 {
 	auto serializer = Serializer(args);
 	serialize(serializer, value);
 	return serializer.getSerializedResult();
 }
 /// ditto
-void serialize(Serializer, T)(ref Serializer serializer, T value)
+void serialize(Serializer, T)(ref Serializer serializer, auto ref in T value)
 {
 	serializeWithPolicy!(Serializer, DefaultPolicy)(serializer, value);
 }
@@ -191,14 +191,14 @@ unittest {
 
 	See_Also: `vibe.data.json.JsonSerializer`, `vibe.data.json.JsonStringSerializer`, `vibe.data.bson.BsonSerializer`
 */
-auto serializeWithPolicy(Serializer, alias Policy, T, ARGS...)(T value, ARGS args)
+auto serializeWithPolicy(Serializer, alias Policy, T, ARGS...)(auto ref in T value, ARGS args)
 {
 	auto serializer = Serializer(args);
 	serializeWithPolicy!(Serializer, Policy)(serializer, value);
 	return serializer.getSerializedResult();
 }
 /// ditto
-void serializeWithPolicy(Serializer, alias Policy, T)(ref Serializer serializer, T value)
+void serializeWithPolicy(Serializer, alias Policy, T)(ref Serializer serializer, auto ref in T value)
 {
 	static if (is(typeof(serializer.beginWriteDocument!T())))
 		serializer.beginWriteDocument!T();
@@ -351,12 +351,12 @@ private template serializeValueImpl(Serializer, alias Policy) {
 
 	// work around https://issues.dlang.org/show_bug.cgi?id=16528
 	static if (isSafeSerializer!Serializer) {
-		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value) @safe { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
+		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, auto ref in T value) @safe { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
 	} else {
-		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value) { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
+		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, auto ref in T value) { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
 	}
 
-	private void serializeValueDeduced(T, ATTRIBUTES...)(ref Serializer ser, T value)
+	private void serializeValueDeduced(T, ATTRIBUTES...)(ref Serializer ser, auto ref in T value)
 	{
 		import std.typecons : BitFlags, Nullable, Tuple, Typedef, TypedefType, tuple;
 
@@ -484,7 +484,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					return;
 				}
 			}
-			static auto safeGetMember(string mname)(ref T val) @safe {
+			static auto safeGetMember(string mname)(ref in T val) @safe {
 				static if (__traits(compiles, __traits(getMember, val, mname))) {
 					return __traits(getMember, val, mname);
 				} else {
@@ -1342,33 +1342,42 @@ version (unittest) {
 	static assert(isSafeSerializer!TestSerializer);
 
 	private struct TestSerializer {
-		import std.array, std.conv, std.string;
+		import std.array, std.conv, std.range, std.string;
 
 		string result;
 
 		enum isSupportedValueType(T) = is(T == string) || is(T == typeof(null)) || is(T == float) || is (T == int);
 
+		template arrayType(T) {
+			static if (isArray!T) alias arrayType = Unqual!(ElementType!T)[];
+			else alias arrayType = Unqual!T;
+		}
+		template dictionaryType(T) {
+			static if (!isAssociativeArray!T) alias dictionaryType = Unqual!T;
+			else alias dictionaryType = Unqual!(ValueType!T)[Unqual!(KeyType!T)];
+		}
+
 		string getSerializedResult() @safe { return result; }
-		void beginWriteDictionary(Traits)() { result ~= "D("~Traits.Type.mangleof~"){"; }
-		void endWriteDictionary(Traits)() { result ~= "}D("~Traits.Type.mangleof~")"; }
-		void beginWriteDictionaryEntry(Traits)(string name) { result ~= "DE("~Traits.Type.mangleof~","~name~")("; }
-		void endWriteDictionaryEntry(Traits)(string name) { result ~= ")DE("~Traits.Type.mangleof~","~name~")"; }
-		void beginWriteArray(Traits)(size_t length) { result ~= "A("~Traits.Type.mangleof~")["~length.to!string~"]["; }
-		void endWriteArray(Traits)() { result ~= "]A("~Traits.Type.mangleof~")"; }
-		void beginWriteArrayEntry(Traits)(size_t i) { result ~= "AE("~Traits.Type.mangleof~","~i.to!string~")("; }
-		void endWriteArrayEntry(Traits)(size_t i) { result ~= ")AE("~Traits.Type.mangleof~","~i.to!string~")"; }
+		void beginWriteDictionary(Traits)() { result ~= "D("~dictionaryType!(Traits.Type).mangleof~"){"; }
+		void endWriteDictionary(Traits)() { result ~= "}D("~dictionaryType!(Traits.Type).mangleof~")"; }
+		void beginWriteDictionaryEntry(Traits)(string name) { result ~= "DE("~(Unqual!(Traits.Type)).mangleof~","~name~")("; }
+		void endWriteDictionaryEntry(Traits)(string name) { result ~= ")DE("~(Unqual!(Traits.Type)).mangleof~","~name~")"; }
+		void beginWriteArray(Traits)(size_t length) { result ~= "A("~arrayType!(Traits.Type).mangleof~")["~length.to!string~"]["; }
+		void endWriteArray(Traits)() { result ~= "]A("~arrayType!(Traits.Type).mangleof~")"; }
+		void beginWriteArrayEntry(Traits)(size_t i) { result ~= "AE("~(Unqual!(Traits.Type)).mangleof~","~i.to!string~")("; }
+		void endWriteArrayEntry(Traits)(size_t i) { result ~= ")AE("~(Unqual!(Traits.Type)).mangleof~","~i.to!string~")"; }
 		void writeValue(Traits, T)(T value) {
 			if (is(T == typeof(null))) result ~= "null";
 			else {
 				assert(isSupportedValueType!T);
-				result ~= "V("~T.mangleof~")("~value.to!string~")";
+				result ~= "V("~(Unqual!T).mangleof~")("~value.to!string~")";
 			}
 		}
 
 		// deserialization
 		void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 		{
-			skip("D("~Traits.Type.mangleof~"){");
+			skip("D("~dictionaryType!(Traits.Type).mangleof~"){");
 			while (result.startsWith("DE(")) {
 				result = result[3 .. $];
 				auto idx = result.indexOf(',');
@@ -1380,7 +1389,7 @@ version (unittest) {
 				entry_callback(n);
 				skip(")DE("~t~","~n~")");
 			}
-			skip("}D("~Traits.Type.mangleof~")");
+			skip("}D("~dictionaryType!(Traits.Type).mangleof~")");
 		}
 
 		void beginReadDictionaryEntry(Traits)(string name) {}
@@ -1388,7 +1397,7 @@ version (unittest) {
 
 		void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 		{
-			skip("A("~Traits.Type.mangleof~")[");
+			skip("A("~arrayType!(Traits.Type).mangleof~")[");
 			auto bidx = result.indexOf("][");
 			assert(bidx > 0);
 			auto cnt = result[0 .. bidx].to!size_t;
@@ -1408,7 +1417,7 @@ version (unittest) {
 				skip(")AE("~t~","~n~")");
 				i++;
 			}
-			skip("]A("~Traits.Type.mangleof~")");
+			skip("]A("~arrayType!(Traits.Type).mangleof~")");
 
 			assert(i == cnt);
 		}
@@ -1418,7 +1427,7 @@ version (unittest) {
 
 		T readValue(Traits, T)()
 		{
-			skip("V("~T.mangleof~")(");
+			skip("V("~(Unqual!T).mangleof~")(");
 			auto idx = result.indexOf(')');
 			assert(idx >= 0);
 			auto ret = result[0 .. idx].to!T;
@@ -1428,7 +1437,7 @@ version (unittest) {
 
 		void skip(string prefix)
 		@safe {
-			assert(result.startsWith(prefix), prefix ~ " vs. " ~result);
+			assert(result.startsWith(prefix), prefix ~ " vs. " ~ result);
 			result = result[prefix.length .. $];
 		}
 
@@ -1445,7 +1454,7 @@ version (unittest) {
 unittest { // basic serialization behavior
 	import std.typecons : Nullable;
 
-	static void test(T)(T value, string expected) {
+	static void test(T)(auto ref in T value, string expected) {
 		assert(serialize!TestSerializer(value) == expected, serialize!TestSerializer(value));
 		static if (isPointer!T) {
 			if (value) assert(*deserialize!(TestSerializer, T)(expected) == *value);
@@ -1453,7 +1462,7 @@ unittest { // basic serialization behavior
 		} else static if (is(T == Nullable!U, U)) {
 			if (value.isNull()) assert(deserialize!(TestSerializer, T)(expected).isNull);
 			else assert(deserialize!(TestSerializer, T)(expected) == value);
-		} else assert(deserialize!(TestSerializer, T)(expected) == value);
+		} else assert(cast(const(T))deserialize!(TestSerializer, T)(expected) == value);
 	}
 
 	test("hello", "V(Aya)(hello)");
@@ -1719,7 +1728,7 @@ unittest // Testing corner case: Variadic template constructors and methods
 		public int i;
 		private int privateJ;
 
-		@property int j() @safe { return privateJ; }
+		@property int j() const @safe { return privateJ; }
 		@property void j(int j) @safe { privateJ = j; }
 	}
 

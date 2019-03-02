@@ -1433,18 +1433,18 @@ Json parseJsonString(string str, string filename = null)
 
 	See_Also: `deserializeJson`, `vibe.data.serialization`
 */
-Json serializeToJson(T)(T value)
+Json serializeToJson(T)(auto ref in T value)
 {
 	return serialize!JsonSerializer(value);
 }
 /// ditto
-void serializeToJson(R, T)(R destination, T value)
+void serializeToJson(R, T)(R destination, auto ref in T value)
 	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
 {
 	serialize!(JsonStringSerializer!R)(value, destination);
 }
 /// ditto
-string serializeToJsonString(T)(T value)
+string serializeToJsonString(T)(auto ref in T value)
 {
 	auto ret = appender!string;
 	serializeToJson(ret, value);
@@ -1477,13 +1477,13 @@ string serializeToJsonString(T)(T value)
 
 	See_also: `serializeToJson`, `vibe.data.serialization`
 */
-void serializeToPrettyJson(R, T)(R destination, T value)
+void serializeToPrettyJson(R, T)(R destination, auto ref in T value)
 	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
 {
 	serialize!(JsonStringSerializer!(R, true))(value, destination);
 }
 /// ditto
-string serializeToPrettyJson(T)(T value)
+string serializeToPrettyJson(T)(auto ref in T value)
 {
 	auto ret = appender!string;
 	serializeToPrettyJson(ret, value);
@@ -1779,7 +1779,7 @@ struct JsonSerializer {
 	void beginWriteArrayEntry(Traits)(size_t) {}
 	void endWriteArrayEntry(Traits)(size_t) { m_compositeStack[$-1].appendArrayElement(m_current); }
 
-	void writeValue(Traits, T)(in T value)
+	void writeValue(Traits, T)(auto ref in T value)
 		if (!is(T == Json))
 	{
 		static if (is(T == JSONValue)) {

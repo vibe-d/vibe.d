@@ -1165,7 +1165,7 @@ struct BsonRegex {
 
 	See_Also: `deserializeBson`
 */
-Bson serializeToBson(T)(T value, ubyte[] buffer = null)
+Bson serializeToBson(T)(auto ref in T value, ubyte[] buffer = null)
 {
 	return serialize!BsonSerializer(value, buffer);
 }
@@ -1466,10 +1466,9 @@ struct BsonSerializer {
 	void beginWriteArrayEntry(Traits)(size_t idx) { m_entryIndex = idx; }
 	void endWriteArrayEntry(Traits)(size_t idx) {}
 
-	// auto ref does't work for DMD 2.064
-	void writeValue(Traits, T)(/*auto ref const*/ in T value) { writeValueH!(T, true)(value); }
+	void writeValue(Traits, T)(auto ref in T value) { writeValueH!(T, true)(value); }
 
-	private void writeValueH(T, bool write_header)(/*auto ref const*/ in T value)
+	private void writeValueH(T, bool write_header)(auto ref in T value)
 	{
 		static if (write_header) writeCompositeEntryHeader(getBsonTypeID(value));
 
@@ -1604,7 +1603,7 @@ struct BsonSerializer {
 		return false;
 	}
 
-	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(/*auto ref const*/ in T value)
+	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(auto ref in T value)
 	@safe {
 		Bson.Type tp;
 		static if (is(T == Bson)) tp = value.type;
