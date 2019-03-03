@@ -1235,13 +1235,13 @@ unittest {
 
 	static struct B { int value; static B fromBson(Bson val) @safe { return B(val.get!int); } Bson toBson() const @safe { return Bson(value); } Json toJson() { return Json(); } }
 	static assert(!isStringSerializable!B && !isJsonSerializable!B && isBsonSerializable!B);
-	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && !isBsonSerializable!(const(B)));
+	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && isBsonSerializable!(const(B)));
 	assert(serializeToBson(const B(123)) == Bson(123));
 	assert(serializeToBson(B(123))       == Bson(123));
 
 	static struct C { int value; static C fromString(string val) @safe { return C(val.to!int); } string toString() const @safe { return value.to!string; } Json toJson() { return Json(); } }
 	static assert(isStringSerializable!C && !isJsonSerializable!C && !isBsonSerializable!C);
-	static assert(!isStringSerializable!(const(C)) && !isJsonSerializable!(const(C)) && !isBsonSerializable!(const(C)));
+	static assert(isStringSerializable!(const(C)) && !isJsonSerializable!(const(C)) && !isBsonSerializable!(const(C)));
 	assert(serializeToBson(const C(123)) == Bson("123"));
 	assert(serializeToBson(C(123))       == Bson("123"));
 
@@ -1254,7 +1254,7 @@ unittest {
 	// test if const(class) is serializable
 	static class E { int value; this(int v) @safe { value = v; } static E fromBson(Bson val) @safe { return new E(val.get!int); } Bson toBson() const @safe { return Bson(value); } Json toJson() { return Json(); } }
 	static assert(!isStringSerializable!E && !isJsonSerializable!E && isBsonSerializable!E);
-	static assert(!isStringSerializable!(const(E)) && !isJsonSerializable!(const(E)) && !isBsonSerializable!(const(E)));
+	static assert(!isStringSerializable!(const(E)) && !isJsonSerializable!(const(E)) && isBsonSerializable!(const(E)));
 	assert(serializeToBson(new const E(123)) == Bson(123));
 	assert(serializeToBson(new E(123))       == Bson(123));
 }
@@ -1780,4 +1780,4 @@ pure @safe {
 }
 
 /// private
-package template isBsonSerializable(T) { enum isBsonSerializable = is(typeof(T.init.toBson()) == Bson) && is(typeof(T.fromBson(Bson())) == T); }
+package template isBsonSerializable(T) { enum isBsonSerializable = is(typeof(Unqual!T.init.toBson()) == Bson) && is(typeof(Unqual!T.fromBson(Bson())) == Unqual!T); }

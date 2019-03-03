@@ -1047,7 +1047,7 @@ unittest {
 */
 template isStringSerializable(T)
 {
-	enum bool isStringSerializable = is(typeof(T.init.toString()) == string) && is(typeof(T.fromString("")) == T);
+	enum bool isStringSerializable = is(typeof(Unqual!T.init.toString()) == string) && is(typeof(Unqual!T.fromString("")) == Unqual!T);
 }
 ///
 unittest {
@@ -1736,7 +1736,7 @@ unittest // Testing corner case: Variadic template constructors and methods
 		public int i;
 		private int privateJ;
 
-		@property int j() const @safe { return privateJ; }
+		@property int j() @safe { return privateJ; }
 		@property void j(int j) @safe { privateJ = j; }
 	}
 

@@ -1794,8 +1794,8 @@ struct JsonSerializer {
 		} else m_current = Json(value);
 	}
 
-	void writeValue(Traits, T)(auto ref T value) if (is(Unqual!T == Json)) { m_current = value; }
-	//void writeValue(Traits, T)(auto ref in T value) if (is(Unqual!T == Json)) { m_current = value.clone; }
+	void writeValue(Traits, T)(auto ref T value) if (is(T == Json)) { m_current = value; }
+	void writeValue(Traits, T)(auto ref T value) if (!is(T == Json) && is(T : const(Json))) { m_current = value.clone; }
 
 	//
 	// deserialization
@@ -1876,6 +1876,12 @@ unittest {
 	auto obj = Json.emptyObject;
 	obj["a"] = Json.undefined;
 	assert(obj.deserializeJson!T.a == "");
+}
+
+unittest {
+	class C { this(Json j) {foo = j;} Json foo; }
+	const C c = new C(Json(42));
+	assert(serializeToJson(c)["foo"].get!int == 42);
 }
 
 /**
