@@ -525,7 +525,8 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					static if (!isBuiltinTuple!(T, mname)) {
 						auto vt = safeGetMember!mname(value);
 					} else {
-						auto vt = tuple!TM(__traits(getMember, value, mname));
+						alias TTM = TypeTuple!(typeof(__traits(getMember, value, mname)));
+						auto vt = tuple!TTM(__traits(getMember, value, mname));
 					}
 					alias STraits = SubTraits!(Traits, typeof(vt), TA);
 					ser.beginWriteDictionaryEntry!STraits(name);
@@ -1342,42 +1343,47 @@ version (unittest) {
 	static assert(isSafeSerializer!TestSerializer);
 
 	private struct TestSerializer {
-		import std.array, std.conv, std.range, std.string;
+		import std.array, std.conv, std.range, std.string, std.typecons;
 
 		string result;
 
 		enum isSupportedValueType(T) = is(T == string) || is(T == typeof(null)) || is(T == float) || is (T == int);
 
-		template arrayType(T) {
-			static if (isArray!T) alias arrayType = Unqual!(ElementType!T)[];
-			else alias arrayType = Unqual!T;
+		template unqualSeq(Specs...)
+		{
+			static if (Specs.length == 0) alias unqualSeq = AliasSeq!();
+			else static if (is(Specs[0])) alias unqualSeq = AliasSeq!(Unqual!(Specs[0]), unqualSeq!(Specs[1 .. $]));
+			else alias unqualSeq = AliasSeq!(Specs[0], unqualSeq!(Specs[1 .. $]));
 		}
-		template dictionaryType(T) {
-			static if (!isAssociativeArray!T) alias dictionaryType = Unqual!T;
-			else alias dictionaryType = Unqual!(ValueType!T)[Unqual!(KeyType!T)];
+
+		template unqualType(T) {
+			static if (isAssociativeArray!T) alias unqualType = Unqual!(ValueType!T)[Unqual!(KeyType!T)];
+			else static if (isTuple!T) alias unqualType = Tuple!(unqualSeq!(TemplateArgsOf!T));
+			else static if (isArray!T && !isSomeString!T) alias unqualType = Unqual!(ElementType!T)[];
+			else alias unqualType = Unqual!T;
 		}
 
 		string getSerializedResult() @safe { return result; }
-		void beginWriteDictionary(Traits)() { result ~= "D("~dictionaryType!(Traits.Type).mangleof~"){"; }
-		void endWriteDictionary(Traits)() { result ~= "}D("~dictionaryType!(Traits.Type).mangleof~")"; }
-		void beginWriteDictionaryEntry(Traits)(string name) { result ~= "DE("~(Unqual!(Traits.Type)).mangleof~","~name~")("; }
-		void endWriteDictionaryEntry(Traits)(string name) { result ~= ")DE("~(Unqual!(Traits.Type)).mangleof~","~name~")"; }
-		void beginWriteArray(Traits)(size_t length) { result ~= "A("~arrayType!(Traits.Type).mangleof~")["~length.to!string~"]["; }
-		void endWriteArray(Traits)() { result ~= "]A("~arrayType!(Traits.Type).mangleof~")"; }
-		void beginWriteArrayEntry(Traits)(size_t i) { result ~= "AE("~(Unqual!(Traits.Type)).mangleof~","~i.to!string~")("; }
-		void endWriteArrayEntry(Traits)(size_t i) { result ~= ")AE("~(Unqual!(Traits.Type)).mangleof~","~i.to!string~")"; }
+		void beginWriteDictionary(Traits)() { result ~= "D("~unqualType!(Traits.Type).mangleof~"){"; }
+		void endWriteDictionary(Traits)() { result ~= "}D("~unqualType!(Traits.Type).mangleof~")"; }
+		void beginWriteDictionaryEntry(Traits)(string name) { result ~= "DE("~unqualType!(Traits.Type).mangleof~","~name~")("; }
+		void endWriteDictionaryEntry(Traits)(string name) { result ~= ")DE("~unqualType!(Traits.Type).mangleof~","~name~")"; }
+		void beginWriteArray(Traits)(size_t length) { result ~= "A("~unqualType!(Traits.Type).mangleof~")["~length.to!string~"]["; }
+		void endWriteArray(Traits)() { result ~= "]A("~unqualType!(Traits.Type).mangleof~")"; }
+		void beginWriteArrayEntry(Traits)(size_t i) { result ~= "AE("~unqualType!(Traits.Type).mangleof~","~i.to!string~")("; }
+		void endWriteArrayEntry(Traits)(size_t i) { result ~= ")AE("~unqualType!(Traits.Type).mangleof~","~i.to!string~")"; }
 		void writeValue(Traits, T)(T value) {
 			if (is(T == typeof(null))) result ~= "null";
 			else {
-				assert(isSupportedValueType!T);
-				result ~= "V("~(Unqual!T).mangleof~")("~value.to!string~")";
+				assert(isSupportedValueType!(unqualType!T));
+				result ~= "V("~(unqualType!T).mangleof~")("~value.to!string~")";
 			}
 		}
 
 		// deserialization
 		void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 		{
-			skip("D("~dictionaryType!(Traits.Type).mangleof~"){");
+			skip("D("~unqualType!(Traits.Type).mangleof~"){");
 			while (result.startsWith("DE(")) {
 				result = result[3 .. $];
 				auto idx = result.indexOf(',');
@@ -1389,7 +1395,7 @@ version (unittest) {
 				entry_callback(n);
 				skip(")DE("~t~","~n~")");
 			}
-			skip("}D("~dictionaryType!(Traits.Type).mangleof~")");
+			skip("}D("~unqualType!(Traits.Type).mangleof~")");
 		}
 
 		void beginReadDictionaryEntry(Traits)(string name) {}
@@ -1397,7 +1403,7 @@ version (unittest) {
 
 		void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 		{
-			skip("A("~arrayType!(Traits.Type).mangleof~")[");
+			skip("A("~unqualType!(Traits.Type).mangleof~")[");
 			auto bidx = result.indexOf("][");
 			assert(bidx > 0);
 			auto cnt = result[0 .. bidx].to!size_t;
@@ -1417,7 +1423,7 @@ version (unittest) {
 				skip(")AE("~t~","~n~")");
 				i++;
 			}
-			skip("]A("~arrayType!(Traits.Type).mangleof~")");
+			skip("]A("~unqualType!(Traits.Type).mangleof~")");
 
 			assert(i == cnt);
 		}
@@ -1427,7 +1433,7 @@ version (unittest) {
 
 		T readValue(Traits, T)()
 		{
-			skip("V("~(Unqual!T).mangleof~")(");
+			skip("V("~unqualType!T.mangleof~")(");
 			auto idx = result.indexOf(')');
 			assert(idx >= 0);
 			auto ret = result[0 .. idx].to!T;

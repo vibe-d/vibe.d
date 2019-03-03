@@ -1712,6 +1712,19 @@ unittest
 	assert(serializeToBson(jsvalue).toJson() == jsvalue);
 }
 
+unittest
+{
+	static struct Pipeline(ARGS...) { @asArray ARGS pipeline; }
+	auto getPipeline(ARGS...)(ARGS args) { return Pipeline!ARGS(args); }
+
+	string[string] a = ["foo":"bar"];
+	int b = 42;
+
+	auto fields = getPipeline(a, b).serializeToBson()["pipeline"].get!(Bson[]);
+	assert(fields[0]["foo"].get!string == "bar");
+	assert(fields[1].get!int == 42);
+}
+
 private string skipCString(ref bdata_t data)
 @safe {
 	auto idx = data.countUntil(0);
