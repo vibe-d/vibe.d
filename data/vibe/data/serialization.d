@@ -140,14 +140,14 @@ import std.typetuple;
 
 	See_Also: `vibe.data.json.JsonSerializer`, `vibe.data.json.JsonStringSerializer`, `vibe.data.bson.BsonSerializer`
 */
-auto serialize(Serializer, T, ARGS...)(auto ref in T value, ARGS args)
+auto serialize(Serializer, T, ARGS...)(auto ref T value, ARGS args)
 {
 	auto serializer = Serializer(args);
 	serialize(serializer, value);
 	return serializer.getSerializedResult();
 }
 /// ditto
-void serialize(Serializer, T)(ref Serializer serializer, auto ref in T value)
+void serialize(Serializer, T)(ref Serializer serializer, auto ref T value)
 {
 	serializeWithPolicy!(Serializer, DefaultPolicy)(serializer, value);
 }
@@ -191,14 +191,14 @@ unittest {
 
 	See_Also: `vibe.data.json.JsonSerializer`, `vibe.data.json.JsonStringSerializer`, `vibe.data.bson.BsonSerializer`
 */
-auto serializeWithPolicy(Serializer, alias Policy, T, ARGS...)(auto ref in T value, ARGS args)
+auto serializeWithPolicy(Serializer, alias Policy, T, ARGS...)(auto ref T value, ARGS args)
 {
 	auto serializer = Serializer(args);
 	serializeWithPolicy!(Serializer, Policy)(serializer, value);
 	return serializer.getSerializedResult();
 }
 /// ditto
-void serializeWithPolicy(Serializer, alias Policy, T)(ref Serializer serializer, auto ref in T value)
+void serializeWithPolicy(Serializer, alias Policy, T)(ref Serializer serializer, auto ref T value)
 {
 	static if (is(typeof(serializer.beginWriteDocument!T())))
 		serializer.beginWriteDocument!T();
@@ -351,12 +351,12 @@ private template serializeValueImpl(Serializer, alias Policy) {
 
 	// work around https://issues.dlang.org/show_bug.cgi?id=16528
 	static if (isSafeSerializer!Serializer) {
-		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, auto ref in T value) @safe { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
+		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, auto ref T value) @safe { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
 	} else {
-		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, auto ref in T value) { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
+		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, auto ref T value) { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
 	}
 
-	private void serializeValueDeduced(T, ATTRIBUTES...)(ref Serializer ser, auto ref in T value)
+	private void serializeValueDeduced(T, ATTRIBUTES...)(ref Serializer ser, auto ref T value)
 	{
 		import std.typecons : BitFlags, Nullable, Tuple, Typedef, TypedefType, tuple;
 
@@ -375,7 +375,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			}
 		} else static if (Serializer.isSupportedValueType!TU) {
 			static if (is(TU == typeof(null))) ser.writeValue!Traits(null);
-			else ser.writeValue!(Traits, TU)(value);
+			else ser.writeValue!(Traits)(value);
 		} else static if (/*isInstanceOf!(Tuple, TU)*/is(T == Tuple!TPS, TPS...)) {
 			import std.algorithm.searching: all;
 			static if (all!"!a.empty"([TU.fieldNames]) &&
@@ -386,7 +386,8 @@ private template serializeValueImpl(Serializer, alias Policy) {
 				} else {
 					ser.beginWriteDictionary!Traits();
 				}
-				foreach (i, TV; TU.Types) {
+				foreach (i, _; T.Types) {
+					alias TV = typeof(value[i]);
 					alias STraits = SubTraits!(Traits, TV);
 					ser.beginWriteDictionaryEntry!STraits(underscoreStrip(TU.fieldNames[i]));
 					ser.serializeValue!(TV, ATTRIBUTES)(value[i]);
@@ -401,7 +402,8 @@ private template serializeValueImpl(Serializer, alias Policy) {
 				ser.serializeValue!(typeof(value[0]), ATTRIBUTES)(value[0]);
 			} else {
 				ser.beginWriteArray!Traits(value.length);
-				foreach (i, TV; T.Types) {
+				foreach (i, _; T.Types) {
+					alias TV = typeof(value[i]);
 					alias STraits = SubTraits!(Traits, TV);
 					ser.beginWriteArrayEntry!STraits(i);
 					ser.serializeValue!(TV, ATTRIBUTES)(value[i]);
@@ -484,7 +486,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					return;
 				}
 			}
-			static auto safeGetMember(string mname)(ref in T val) @safe {
+			static auto safeGetMember(string mname)(ref T val) @safe {
 				static if (__traits(compiles, __traits(getMember, val, mname))) {
 					return __traits(getMember, val, mname);
 				} else {
@@ -1460,7 +1462,7 @@ version (unittest) {
 unittest { // basic serialization behavior
 	import std.typecons : Nullable;
 
-	static void test(T)(auto ref in T value, string expected) {
+	static void test(T)(auto ref T value, string expected) {
 		assert(serialize!TestSerializer(value) == expected, serialize!TestSerializer(value));
 		static if (isPointer!T) {
 			if (value) assert(*deserialize!(TestSerializer, T)(expected) == *value);
@@ -1468,7 +1470,7 @@ unittest { // basic serialization behavior
 		} else static if (is(T == Nullable!U, U)) {
 			if (value.isNull()) assert(deserialize!(TestSerializer, T)(expected).isNull);
 			else assert(deserialize!(TestSerializer, T)(expected) == value);
-		} else assert(cast(const(T))deserialize!(TestSerializer, T)(expected) == value);
+		} else assert(deserialize!(TestSerializer, T)(expected) == value);
 	}
 
 	test("hello", "V(Aya)(hello)");
