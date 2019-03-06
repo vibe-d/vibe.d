@@ -49,7 +49,7 @@ else
 {
 	// Only use the openssl_version file if it has been generated
 	static if (__traits(compiles, {import openssl_version; }))
-		mixin("import openssl_version;");
+		mixin("public import openssl_version : OPENSSL_VERSION;");
 	else
 		// try 1.1.0 as softfallback if old other means failed
 		enum OPENSSL_VERSION = "1.1.0";
