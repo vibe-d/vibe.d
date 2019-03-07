@@ -42,7 +42,7 @@ configuration "openssl" {
 	auto output = dir.buildPath("openssl_version.d");
 	if (!output.exists || output.readText.strip != data.strip)
 		data.toFile(output);
-	'` platform="posix"
+	' || true` platform="posix"
 }
 
 configuration "openssl-1.1" {
