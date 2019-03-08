@@ -572,7 +572,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
 	// work around https://issues.dlang.org/show_bug.cgi?id=16528
-	static if (isSafeSerializer!Serializer) {
+	static if (isSafeDeserializer!Serializer) {
 		T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe { return deserializeValueDeduced!(T, ATTRIBUTES)(ser); }
 	} else {
 		T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) { return deserializeValueDeduced!(T, ATTRIBUTES)(ser); }
@@ -1199,11 +1199,22 @@ private template isBuiltinTuple(T, string member)
 }
 
 // heuristically determines @safe'ty of the serializer by testing readValue and writeValue for type int
-private enum isSafeSerializer(S) = __traits(compiles, (S s) @safe {
+private template isSafeSerializer(S)
+{
 	alias T = Traits!(int, DefaultPolicy);
-	s.writeValue!T(42);
-	s.readValue!(T, int)();
-});
+	static if (__traits(hasMember, S, "writeValue"))
+		enum isSafeSerializer = __traits(compiles, (S s) @safe { s.writeValue!T(42); });
+	else static assert(0, "Serializer is missing required writeValue method");
+}
+
+// heuristically determines @safe'ty of the deserializer by testing readValue and writeValue for type int
+private template isSafeDeserializer(S)
+{
+	alias T = Traits!(int, DefaultPolicy);
+	static if (__traits(hasMember, S, "readValue"))
+		enum isSafeDeserializer = __traits(compiles, (S s) @safe { s.readValue!(T, int)(); });
+	else static assert(0, "Deserializer is missing required readValue method");
+}
 
 private template hasAttribute(T, alias decl) { enum hasAttribute = findFirstUDA!(T, decl).found; }
 
@@ -1340,6 +1351,7 @@ private template getExpandedFieldsData(T, FIELDS...)
 
 version (unittest) {
 	static assert(isSafeSerializer!TestSerializer);
+	static assert(isSafeDeserializer!TestSerializer);
 
 	private struct TestSerializer {
 		import std.array, std.conv, std.string;
