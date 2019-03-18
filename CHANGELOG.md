@@ -10,7 +10,7 @@ v0.8.5 - 2019-03-
     - Using OpenSSL 1.1.0a on Windows
     - Auto-detecting the OpenSSL version on Posix systems, falling back to 1.1.x if that fails (by Sebastian Wilzbach) - [issue #2053][issue2053]
     - The exact version can still be pre-selected using the build configuration of "vibe-d:tls"
-- Compiles on DMD 2.076.1 up to 2.084.0 and LDC 1.13.0
+- Compiles on DMD 2.076.1 up to 2.085.0 and LDC 1.14.0
 - Added support for OpenSSL 1.1.1 (by Jan Jurzitza aka WebFreak001) - [issue #2214][issue2214], [pull #2226][issue2226]
 - `URL.port` now returns the value of `defaultPort`, if no explicit port was specified (by Szabo Bogdan aka gedaiu) - [pull #2176][issue2176]
 - Changed `Bson.opEquals` to yield true for objects with the same fields but different field order (by Igor Stepanov) - [pull #2183][issue2183]
