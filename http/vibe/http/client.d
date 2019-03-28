@@ -216,12 +216,9 @@ unittest {
 */
 auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPClientSettings) settings = null)
 {
-	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
-	static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
-
 	auto sttngs = settings ? settings : defaultSettings;
 
-	if( port == 0 ) port = use_tls ? 443 : 80;
+	if (port == 0) port = use_tls ? 443 : 80;
 	auto ckey = ConnInfo(host, port, use_tls, sttngs.proxyURL.host, sttngs.proxyURL.port, sttngs.networkInterface);
 
 	ConnectionPool!HTTPClient pool;
@@ -244,6 +241,18 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPC
 
 	return pool.lockConnection();
 }
+
+static ~this()
+{
+	foreach (ci; s_connections) {
+		ci[1].removeUnused((conn) {
+			conn.disconnect();
+		});
+	}
+}
+
+private struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
+private static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 
 
 /**************************************************************************************************/
@@ -381,7 +390,7 @@ final class HTTPClient {
 		Before calling this method, be sure that no request is currently being processed.
 	*/
 	void disconnect()
-	{
+	nothrow {
 		if (m_conn) {
 			if (m_conn.connected) {
 				try m_stream.finalize();
