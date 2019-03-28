@@ -15,6 +15,7 @@ import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
 import vibe.utils.array;
+import vibe.utils.dictionarylist;
 import vibe.internal.allocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
@@ -278,6 +279,8 @@ class HTTPRequest {
 class HTTPResponse {
 	@safe:
 
+	protected DictionaryList!Cookie m_cookies;
+
 	public {
 		/// The protocol version of the response - should not be changed
 		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
@@ -295,7 +298,7 @@ class HTTPResponse {
 		InetHeaderMap headers;
 
 		/// All cookies that shall be set on the client for this request
-		Cookie[string] cookies;
+		@property DictionaryList!Cookie cookies() { return m_cookies; }
 	}
 
 	public override string toString()
@@ -619,6 +622,33 @@ FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_s
 	return FreeListRef!ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
 }
 
+/// Parses the cookie from a header field, returning the name of the cookie.
+Tuple!(string, Cookie) parseHTTPCookie(string headerString)
+@safe {
+	auto cookie = new Cookie;
+	auto parts = headerString.splitter(';');
+	auto name = parts.front[0..headerString.indexOf('=')];
+	cookie.m_value = parts.front[name.length+1..$];
+	parts.popFront();
+	foreach(part; parts) {
+		auto idx = part.indexOf('=');
+		if (idx == -1) {
+			idx = part.length;
+		}
+		auto key = part[0..idx].toLower().strip();
+		auto value = part[min(idx+1, $)..$].strip();
+		switch(key) {
+			case "httponly": cookie.m_httpOnly = true; break;
+			case "secure": cookie.m_secure = true; break;
+			case "expires": cookie.m_expires = value; break;
+			case "max-age":	cookie.m_maxAge = value.to!long; break;
+			case "domain": cookie.m_domain = value; break;
+			case "path": cookie.m_path = value; break;
+			default: break;
+		}
+	}
+	return tuple(name, cookie);
+}
 
 final class Cookie {
 	@safe:
@@ -766,6 +796,16 @@ unittest {
 	assertThrown(c.value);
 
 	assertThrown(c.setValue("foo;bar", Cookie.Encoding.raw));
+
+	auto tup = parseHTTPCookie("foo=bar; HttpOnly; Secure; Expires=Wed, 09 Jun 2021 10:18:14 GMT; Max-Age=60000; Domain=foo.com; Path=/users");
+	assert(tup[0] == "foo");
+	assert(tup[1].value == "bar");
+	assert(tup[1].httpOnly == true);
+	assert(tup[1].secure == true);
+	assert(tup[1].expires == "Wed, 09 Jun 2021 10:18:14 GMT");
+	assert(tup[1].maxAge == 60000L);
+	assert(tup[1].domain == "foo.com");
+	assert(tup[1].path == "/users");
 }
 
 
