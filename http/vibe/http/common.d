@@ -30,7 +30,7 @@ import std.format;
 import std.range : isOutputRange;
 import std.string;
 import std.typecons;
-import std.uni: asLowerCase;
+import std.uni: asLowerCase, sicmp;
 
 
 enum HTTPVersion {
@@ -623,29 +623,67 @@ FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_s
 }
 
 /// Parses the cookie from a header field, returning the name of the cookie.
+/// Implements an algorithm equivalent to https://tools.ietf.org/html/rfc6265#section-5.2
 Tuple!(string, Cookie) parseHTTPCookie(string headerString)
 @safe {
+	if (!headerString.length)
+		return typeof(return).init;
+
 	auto cookie = new Cookie;
 	auto parts = headerString.splitter(';');
-	auto name = parts.front[0..headerString.indexOf('=')];
-	cookie.m_value = parts.front[name.length+1..$];
+	auto idx = parts.front.indexOf('=');
+	if (idx == -1)
+		return typeof(return).init;
+
+	auto name = parts.front[0 .. idx].strip();
+	cookie.m_value = parts.front[name.length + 1 .. $].strip();
 	parts.popFront();
+
+	if (!name.length)
+		return typeof(return).init;
+
 	foreach(part; parts) {
-		auto idx = part.indexOf('=');
+		if (!part.length)
+			continue;
+
+		idx = part.indexOf('=');
 		if (idx == -1) {
 			idx = part.length;
 		}
-		auto key = part[0..idx].toLower().strip();
-		auto value = part[min(idx+1, $)..$].strip();
-		switch(key) {
-			case "httponly": cookie.m_httpOnly = true; break;
-			case "secure": cookie.m_secure = true; break;
-			case "expires": cookie.m_expires = value; break;
-			case "max-age":	cookie.m_maxAge = value.to!long; break;
-			case "domain": cookie.m_domain = value; break;
-			case "path": cookie.m_path = value; break;
-			default: break;
+		auto key = part[0 .. idx].strip();
+		auto value = part[min(idx + 1, $) .. $].strip();
+
+		try {
+			if (key.sicmp("httponly") == 0) {
+				cookie.m_httpOnly = true;
+			} else if (key.sicmp("secure") == 0) {
+				cookie.m_secure = true;
+			} else if (key.sicmp("expires") == 0) {
+				// RFC 822 got updated by RFC 1123 (which is to be used) but is valid for this
+				// this parsing is just for validation
+				parseRFC822DateTimeString(value);
+				cookie.m_expires = value;
+			} else if (key.sicmp("max-age") == 0) {
+				if (value.length && value[0] != '-')
+					cookie.m_maxAge = value.to!long;
+			} else if (key.sicmp("domain") == 0) {
+				if (value.length && value[0] == '.')
+					value = value[1 .. $]; // the leading . must be stripped (5.2.3)
+
+				enforce!ConvException(value.all!(a => a >= 32), "Cookie Domain must not contain any control characters");
+				cookie.m_domain = value.toLower; // must be lower (5.2.3)
+			} else if (key.sicmp("path") == 0) {
+				if (value.length && value[0] == '/') {
+					enforce!ConvException(value.all!(a => a >= 32), "Cookie Path must not contain any control characters");
+					cookie.m_path = value;
+				} else {
+					cookie.m_path = null;
+				}
+			} // else extension value...
+		} catch (DateTimeException) {
+		} catch (ConvException) {
 		}
+		// RFC 6265 says to ignore invalid values on all of these fields
 	}
 	return tuple(name, cookie);
 }
@@ -806,6 +844,33 @@ unittest {
 	assert(tup[1].maxAge == 60000L);
 	assert(tup[1].domain == "foo.com");
 	assert(tup[1].path == "/users");
+
+	tup = parseHTTPCookie("SESSIONID=0123456789ABCDEF0123456789ABCDEF; Path=/site; HttpOnly");
+	assert(tup[0] == "SESSIONID");
+	assert(tup[1].value == "0123456789ABCDEF0123456789ABCDEF");
+	assert(tup[1].httpOnly == true);
+	assert(tup[1].secure == false);
+	assert(tup[1].expires == "");
+	assert(tup[1].maxAge == 0);
+	assert(tup[1].domain == "");
+	assert(tup[1].path == "/site");
+
+	tup = parseHTTPCookie("invalid");
+	assert(!tup[0].length);
+
+	tup = parseHTTPCookie("valid=");
+	assert(tup[0] == "valid");
+	assert(tup[1].value == "");
+
+	tup = parseHTTPCookie("valid=;Path=/bar;Path=foo;Expires=14   ; Something   ; Domain=..example.org");
+	assert(tup[0] == "valid");
+	assert(tup[1].value == "");
+	assert(tup[1].httpOnly == false);
+	assert(tup[1].secure == false);
+	assert(tup[1].expires == "");
+	assert(tup[1].maxAge == 0);
+	assert(tup[1].domain == ".example.org"); // spec says you must strip only the first leading dot
+	assert(tup[1].path == "");
 }
 
 

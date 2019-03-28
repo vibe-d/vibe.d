@@ -921,7 +921,8 @@ final class HTTPClientResponse : HTTPResponse {
 		if ("Set-Cookie" in this.headers && m_cookies.length == 0) {
 			foreach(cookieString; this.headers.getAll("Set-Cookie")) {
 				auto cookie = parseHTTPCookie(cookieString);
-				m_cookies[cookie[0]] = cookie[1];
+				if (cookie[0].length)
+					m_cookies[cookie[0]] = cookie[1];
 			}
 		}
 		return m_cookies;
