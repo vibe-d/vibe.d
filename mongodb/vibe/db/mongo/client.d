@@ -85,6 +85,20 @@ final class MongoClient {
 		lockConnection();
 	}
 
+	/** Disconnects all currently unused connections to the server.
+	*/
+	void cleanupConnections()
+	{
+		m_connections.removeUnused((conn) nothrow @safe {
+			try conn.disconnect();
+			catch (Exception e) {
+				logWarn("Error thrown during MongoDB connection close: %s", e.msg);
+				try () @trusted { logDebug("Full error: %s", e.toString()); } ();
+				catch (Exception e) {}
+			}
+		});
+	}
+
 	/**
 		Accesses a collection using an absolute path.
 
