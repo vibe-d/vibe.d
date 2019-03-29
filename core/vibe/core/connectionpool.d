@@ -102,7 +102,56 @@ class ConnectionPool(Connection)
 		auto ret = LockedConnection!Connection(this, conn);
 		return ret;
 	}
+
+
+	/** Removes all currently unlocked connections from the pool.
+
+		Params:
+			disconnect_callback = Gets called for every removed connection to
+				allow closing connections and freeing associated resources.
+	*/
+	void removeUnused(scope void delegate(Connection conn) @safe nothrow disconnect_callback)
+	{
+		Connection[] remaining_conns, removed_conns;
+		foreach (c; m_connections) {
+			if (m_lockCount.get(c, 0) > 0)
+				remaining_conns ~= c;
+			else
+				removed_conns ~= c;
+		}
+
+		m_connections = remaining_conns;
+
+		foreach (c; removed_conns)
+			disconnect_callback(c);
+	}
 }
+
+unittest { // removeUnused
+	class Connection {}
+
+	auto pool = new ConnectionPool!Connection({
+		return new Connection; // perform the connection here
+	});
+
+	auto c1 = pool.lockConnection();
+	auto c1i = c1.__conn;
+
+	auto c2 = pool.lockConnection();
+	auto c2i = c2.__conn;
+
+
+	assert(pool.m_connections == [c1i, c2i]);
+
+	c2 = LockedConnection!Connection.init;
+	pool.removeUnused((c) { assert(c is c2i); });
+	assert(pool.m_connections == [c1i]);
+
+	c1 = LockedConnection!Connection.init;
+	pool.removeUnused((c) { assert(c is c1i); });
+	assert(pool.m_connections == []);
+}
+
 
 struct LockedConnection(Connection) {
 	@safe:

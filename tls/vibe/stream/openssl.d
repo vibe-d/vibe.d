@@ -214,6 +214,10 @@ final class OpenSSLStream : TLSStream {
 
 	this(InterfaceProxy!Stream underlying, OpenSSLContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init, string[] alpn = null)
 	{
+		// sanity check to distinguish any error that might have slipped
+		// somewhere else from errors generated here
+		validateSSLErrors();
+
 		m_stream = underlying;
 		m_state = state;
 		m_tlsCtx = ctx;
@@ -409,8 +413,10 @@ final class OpenSSLStream : TLSStream {
 		logTrace("OpenSSLStream finalize");
 
 		() @trusted {
-			SSL_shutdown(m_tls);
+			auto ret = SSL_shutdown(m_tls);
+			if (ret != 0) checkSSLRet(ret, "SSL_shutdown");
 			SSL_free(m_tls);
+			ERR_clear_error();
 		} ();
 
 		m_tls = null;

@@ -231,6 +231,11 @@ void handleHTTPConnection(TCPConnection connection, HTTPServerContext context)
 		HTTPServerSettings settings;
 		bool keep_alive;
 
+		version(HaveNoTLS) {} else {
+			// handle oderly TLS shutdowns
+			if (tls_stream && tls_stream.empty) break;
+		}
+
 		() @trusted {
 			import vibe.internal.utilallocator: RegionListAllocator;
 
