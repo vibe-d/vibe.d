@@ -392,11 +392,15 @@ final class HTTPClient {
 	void disconnect()
 	nothrow {
 		if (m_conn) {
+			version (Have_vibe_core) {}
+			else scope(failure) assert(false);
+
 			if (m_conn.connected) {
 				try m_stream.finalize();
 				catch (Exception e) logDebug("Failed to finalize connection stream when closing HTTP client connection: %s", e.msg);
 				m_conn.close();
 			}
+
 			if (m_useTLS) () @trusted { return destroy(m_stream); } ();
 			m_stream = InterfaceProxy!Stream.init;
 			() @trusted { return destroy(m_conn); } ();
