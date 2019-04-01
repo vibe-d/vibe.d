@@ -298,7 +298,7 @@ class HTTPResponse {
 		InetHeaderMap headers;
 
 		/// All cookies that shall be set on the client for this request
-		@property DictionaryList!Cookie cookies() { return m_cookies; }
+		@property ref DictionaryList!Cookie cookies() { return m_cookies; }
 	}
 
 	public override string toString()
@@ -624,19 +624,22 @@ FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_s
 
 /// Parses the cookie from a header field, returning the name of the cookie.
 /// Implements an algorithm equivalent to https://tools.ietf.org/html/rfc6265#section-5.2
-Tuple!(string, Cookie) parseHTTPCookie(string headerString)
-@safe {
-	if (!headerString.length)
+/// Returns: the cookie name as return value, populates the dst argument or allocates on the GC for the tuple overload.
+string parseHTTPCookie(string header_string, scope Cookie dst)
+@safe
+in {
+	assert(dst !is null);
+} body {
+	if (!header_string.length)
 		return typeof(return).init;
 
-	auto cookie = new Cookie;
-	auto parts = headerString.splitter(';');
+	auto parts = header_string.splitter(';');
 	auto idx = parts.front.indexOf('=');
 	if (idx == -1)
 		return typeof(return).init;
 
 	auto name = parts.front[0 .. idx].strip();
-	cookie.m_value = parts.front[name.length + 1 .. $].strip();
+	dst.m_value = parts.front[name.length + 1 .. $].strip();
 	parts.popFront();
 
 	if (!name.length)
@@ -655,29 +658,29 @@ Tuple!(string, Cookie) parseHTTPCookie(string headerString)
 
 		try {
 			if (key.sicmp("httponly") == 0) {
-				cookie.m_httpOnly = true;
+				dst.m_httpOnly = true;
 			} else if (key.sicmp("secure") == 0) {
-				cookie.m_secure = true;
+				dst.m_secure = true;
 			} else if (key.sicmp("expires") == 0) {
 				// RFC 822 got updated by RFC 1123 (which is to be used) but is valid for this
 				// this parsing is just for validation
 				parseRFC822DateTimeString(value);
-				cookie.m_expires = value;
+				dst.m_expires = value;
 			} else if (key.sicmp("max-age") == 0) {
 				if (value.length && value[0] != '-')
-					cookie.m_maxAge = value.to!long;
+					dst.m_maxAge = value.to!long;
 			} else if (key.sicmp("domain") == 0) {
 				if (value.length && value[0] == '.')
 					value = value[1 .. $]; // the leading . must be stripped (5.2.3)
 
 				enforce!ConvException(value.all!(a => a >= 32), "Cookie Domain must not contain any control characters");
-				cookie.m_domain = value.toLower; // must be lower (5.2.3)
+				dst.m_domain = value.toLower; // must be lower (5.2.3)
 			} else if (key.sicmp("path") == 0) {
 				if (value.length && value[0] == '/') {
 					enforce!ConvException(value.all!(a => a >= 32), "Cookie Path must not contain any control characters");
-					cookie.m_path = value;
+					dst.m_path = value;
 				} else {
-					cookie.m_path = null;
+					dst.m_path = null;
 				}
 			} // else extension value...
 		} catch (DateTimeException) {
@@ -685,6 +688,14 @@ Tuple!(string, Cookie) parseHTTPCookie(string headerString)
 		}
 		// RFC 6265 says to ignore invalid values on all of these fields
 	}
+	return name;
+}
+
+/// ditto
+Tuple!(string, Cookie) parseHTTPCookie(string header_string)
+@safe {
+	Cookie cookie = new Cookie();
+	auto name = parseHTTPCookie(header_string, cookie);
 	return tuple(name, cookie);
 }
 

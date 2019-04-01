@@ -917,9 +917,9 @@ final class HTTPClientResponse : HTTPResponse {
 
 
 	/// All cookies that shall be set on the client for this request
-	override @property DictionaryList!Cookie cookies() {
+	override @property ref DictionaryList!Cookie cookies() {
 		if ("Set-Cookie" in this.headers && m_cookies.length == 0) {
-			foreach(cookieString; this.headers.getAll("Set-Cookie")) {
+			foreach (cookieString; this.headers.getAll("Set-Cookie")) {
 				auto cookie = parseHTTPCookie(cookieString);
 				if (cookie[0].length)
 					m_cookies[cookie[0]] = cookie[1];
