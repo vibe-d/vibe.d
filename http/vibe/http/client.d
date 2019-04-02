@@ -23,6 +23,7 @@ import vibe.stream.operations;
 import vibe.stream.wrapper : createConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.utils.array;
+import vibe.utils.dictionarylist;
 import vibe.internal.allocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
@@ -927,6 +928,19 @@ final class HTTPClientResponse : HTTPResponse {
 		return m_maxRequests;
 	}
 
+
+	/// All cookies that shall be set on the client for this request
+	override @property ref DictionaryList!Cookie cookies() {
+		if ("Set-Cookie" in this.headers && m_cookies.length == 0) {
+			foreach (cookieString; this.headers.getAll("Set-Cookie")) {
+				auto cookie = parseHTTPCookie(cookieString);
+				if (cookie[0].length)
+					m_cookies[cookie[0]] = cookie[1];
+			}
+		}
+		return m_cookies;
+	}
+
 	/// private
 	this(HTTPClient client, bool has_body, bool close_conn, IAllocator alloc, SysTime connected_time = Clock.currTime(UTC()))
 	{
@@ -960,7 +974,6 @@ final class HTTPClientResponse : HTTPResponse {
 		foreach (k, v; this.headers)
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
-
 		Duration server_timeout;
 		bool has_server_timeout;
 		if (auto pka = "Keep-Alive" in this.headers) {
