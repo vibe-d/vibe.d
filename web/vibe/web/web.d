@@ -787,7 +787,7 @@ class WebInterfaceSettings {
 	variables with the same $(D name) parameter will access the same
 	underlying data.
 */
-struct SessionVar(T, string name) {
+struct SessionVar(T, string name, Session sessionOptions = SessionOption.httpOnly) {
 @safe:
 
 	private {
@@ -808,6 +808,17 @@ struct SessionVar(T, string name) {
 		}
 	}
 
+	///
+	unittest {
+		class MyService {
+			SessionVar!(int, "someInt", SessionOption.secure) m_someInt = 42;
+
+			void index() {
+				assert(m_someInt == 42);
+			}
+		}
+	}
+
 	/** Accesses the current value of the session variable.
 
 		Any access will automatically start a new session and set the
@@ -816,7 +827,7 @@ struct SessionVar(T, string name) {
 	@property const(T) value()
 	{
 		auto ctx = getRequestContext();
-		if (!ctx.req.session) ctx.req.session = ctx.res.startSession();
+		if (!ctx.req.session) ctx.req.session = ctx.res.startSession(sessionOptions);
 
 		if (ctx.req.session.isKeySet(name))
 			return ctx.req.session.get!T(name);
@@ -828,7 +839,7 @@ struct SessionVar(T, string name) {
 	@property void value(T new_value)
 	{
 		auto ctx = getRequestContext();
-		if (!ctx.req.session) ctx.req.session = ctx.res.startSession();
+		if (!ctx.req.session) ctx.req.session = ctx.res.startSession(sessionOptions);
 		ctx.req.session.set(name, new_value);
 	}
 
