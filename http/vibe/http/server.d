@@ -837,7 +837,17 @@ enum SessionOption {
 
 		See_Also: secure, Cookie.secure
 	*/
-	noSecure = 1<<2
+	noSecure = 1<<2,
+
+	/**
+    Instructs the browser to allow sending this cookie along with cross-site requests.
+
+    By default, the protection is `strict`. This flag allows to set it to `lax`.
+    The strict value will prevent the cookie from being sent by the browser
+    to the target site in all cross-site browsing context,
+    even when following a regular link.
+	*/
+	noSameSiteStrict = 1<<3,
 }
 
 
@@ -1596,6 +1606,8 @@ final class HTTPServerResponse : HTTPResponse {
 		auto cookie = setCookie(m_settings.sessionIdCookie, m_session.id, path);
 		cookie.secure = secure;
 		cookie.httpOnly = (options & SessionOption.httpOnly) != 0;
+		cookie.sameSite = (options & SessionOption.noSameSiteStrict) ?
+						  Cookie.SameSite.lax : Cookie.SameSite.strict;
 		return m_session;
 	}
 
