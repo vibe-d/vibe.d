@@ -691,6 +691,9 @@ final class HTTPServerSettings {
 	SessionStore sessionStore;
 	string sessionIdCookie = "vibe.session_id";
 
+	/// Session options to use when initializing a new session.
+	SessionOption sessionOptions = SessionOption.httpOnly;
+
 	///
 	import vibe.core.core : vibeVersionString;
 	string serverString = "vibe.d/" ~ vibeVersionString;
@@ -1580,7 +1583,13 @@ final class HTTPServerResponse : HTTPResponse {
 		creating the server. Depending on this, the session can be persistent
 		or temporary and specific to this server instance.
 	*/
-	Session startSession(string path = "/", SessionOption options = SessionOption.httpOnly)
+	Session startSession(string path = "/")
+	@safe {
+		return startSession(path, m_settings.sessionOptions);
+	}
+
+	/// ditto
+	Session startSession(string path, SessionOption options)
 	@safe {
 		assert(m_settings.sessionStore, "no session store set");
 		assert(!m_session, "Try to start a session, but already started one.");
