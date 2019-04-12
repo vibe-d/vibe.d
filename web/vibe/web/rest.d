@@ -469,23 +469,24 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, string 
 HTTPServerRequestDelegate serveRestJSClient(I)(RestInterfaceSettings settings)
 	if (is(I == interface))
 {
+	import std.datetime.systime : SysTime;
 	import std.digest.md : md5Of;
 	import std.digest : toHexString;
 	import std.array : appender;
 
+	import vibe.http.fileserver : ETag, handleCache;
+
 	auto app = appender!string();
 	generateRestJSClient!I(app, settings);
 	auto hash = app.data.md5Of.toHexString.idup;
+	ETag tag;
+	tag.tag = hash;
 
 	void serve(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		if (auto pv = "If-None-Match" in res.headers) {
-			res.statusCode = HTTPStatus.notModified;
-			res.writeVoidBody();
+		if (handleCache(req, res, tag, SysTime.init, "public"))
 			return;
-		}
 
-		res.headers["Etag"] = hash;
 		res.writeBody(app.data, "application/javascript; charset=UTF-8");
 	}
 

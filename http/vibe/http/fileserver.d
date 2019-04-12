@@ -19,6 +19,7 @@ import vibe.internal.interfaceproxy;
 import std.conv;
 import std.datetime;
 import std.digest.md;
+import std.exception;
 import std.string;
 import std.algorithm;
 
@@ -164,12 +165,12 @@ HTTPServerRequestDelegateS serveStaticFile(string local_path, HTTPFileServerSett
 	When serving a file, certain request headers are supported to avoid sending
 	the file if the client has it already cached. These headers are
 	`"If-Modified-Since"` and `"If-None-Match"`. The client will be delivered
-	with the necessary `"Etag"` (generated from the path, size and last
-	modification time of the file) and `"Last-Modified"` headers.
+	with the necessary `"Etag"` (generated from size and last modification time
+	of the file) and `"Last-Modified"` headers.
 
-	The cache control directives `"Expires"` and `"Cache-Control"` will also be
+	The cache control directives `"Expires"` and/or `"Cache-Control"` will also be
 	emitted if the `HTTPFileServerSettings.maxAge` field is set to a positive
-	duration.
+	duration and/or `HTTPFileServerSettings.cacheControl` has been set.
 
 	Finally, HEAD requests will automatically be handled without reading the
 	actual file contents. Am empty response body is written instead.
@@ -202,6 +203,20 @@ class HTTPFileServerSettings {
 
 	/// Maximum cache age to report to the client (zero by default)
 	Duration maxAge = 0.seconds;
+
+	/** Cache control to control where cache can be saved, if at all, such as
+		proxies, the storage, etc.
+
+		Leave null or empty to not emit any cache control directives other than
+		max-age if maxAge is set.
+
+		Common values include: public for making a shared resource cachable across
+		multiple users or private for a response that should only be cached for a
+		single user.
+
+		See https://developer.mozilla.org/de/docs/Web/HTTP/Headers/Cache-Control
+	*/
+	string cacheControl = null;
 
 	/// General options
 	HTTPFileServerOption options = HTTPFileServerOption.defaults; /// additional options
@@ -282,32 +297,8 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		return;
 	}
 
-	auto lastModified = toRFC822DateTimeString(dirent.timeModified.toUTC());
-	// simple etag generation
-	auto etag = "\"" ~ hexDigest!MD5(pathstr ~ ":" ~ lastModified ~ ":" ~ to!string(dirent.size)).idup ~ "\"";
-
-	res.headers["Last-Modified"] = lastModified;
-	res.headers["Etag"] = etag;
-	if (settings.maxAge > seconds(0)) {
-		auto expireTime = Clock.currTime(UTC()) + settings.maxAge;
-		res.headers["Expires"] = toRFC822DateTimeString(expireTime);
-		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge.total!"seconds");
-	}
-
-	if( auto pv = "If-Modified-Since" in req.headers ) {
-		if( *pv == lastModified ) {
-			res.statusCode = HTTPStatus.NotModified;
-			res.writeVoidBody();
-			return;
-		}
-	}
-
-	if( auto pv = "If-None-Match" in req.headers ) {
-		if ( *pv == etag ) {
-			res.statusCode = HTTPStatus.NotModified;
-			res.writeVoidBody();
-			return;
-		}
+	if (handleCacheFile(req, res, dirent, settings.cacheControl, settings.maxAge)) {
+		return;
 	}
 
 	auto mimetype = res.headers.get("Content-Type", getMimeTypeForFile(pathstr));
@@ -426,4 +417,215 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		else res.writeRawBody(fil);
 		logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
 	}
+}
+
+/**
+	Calls $(D handleCache) with prefilled etag and lastModified value based on a file.
+
+	See_Also: handleCache
+
+	Returns: $(D true) if the cache was already handled and no further response must be sent or $(D false) if a response must be sent.
+*/
+bool handleCacheFile(scope HTTPServerRequest req, scope HTTPServerResponse res,
+		string file, string cache_control = null, Duration max_age = Duration.zero)
+{
+	return handleCacheFile(req, res, NativePath(file), cache_control, max_age);
+}
+
+/// ditto
+bool handleCacheFile(scope HTTPServerRequest req, scope HTTPServerResponse res,
+		NativePath file, string cache_control = null, Duration max_age = Duration.zero)
+{
+	if (!existsFile(file)) {
+		return false;
+	}
+
+	FileInfo ent;
+	try {
+		ent = getFileInfo(file);
+	} catch (Exception) {
+		throw new HTTPStatusException(HTTPStatus.internalServerError,
+				"Failed to get information for the file due to a file system error.");
+	}
+
+	return handleCacheFile(req, res, ent, cache_control, max_age);
+}
+
+/// ditto
+bool handleCacheFile(scope HTTPServerRequest req, scope HTTPServerResponse res,
+		FileInfo dirent, string cache_control = null, Duration max_age = Duration.zero)
+{
+	import std.bitmanip : nativeToLittleEndian;
+	import std.digest.md : MD5, toHexString;
+
+	SysTime lastModified = dirent.timeModified;
+	ETag etag;
+	etag.weak = dirent.isDirectory;
+	MD5 md5;
+	md5.put(lastModified.stdTime.nativeToLittleEndian);
+	md5.put(dirent.size.nativeToLittleEndian);
+	etag.tag = toHexString(md5.finish())[].idup;
+
+	return handleCache(req, res, etag, lastModified, cache_control, max_age);
+}
+
+/**
+	Processes header tags in a request and writes responses given on requested cache status.
+
+	Returns: $(D true) if the cache was already handled and no further response must be sent or $(D false) if a response must be sent.
+*/
+bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag etag,
+		SysTime last_modified, string cache_control = null, Duration max_age = Duration.zero)
+{
+	// https://tools.ietf.org/html/rfc7232#section-4.1
+	// and
+	// https://tools.ietf.org/html/rfc7232#section-6
+	string lastModifiedString;
+	if (last_modified != SysTime.init) {
+		lastModifiedString = toRFC822DateTimeString(last_modified);
+		res.headers["Last-Modified"] = lastModifiedString;
+	}
+
+	if (etag != ETag.init) {
+		res.headers["Etag"] = etag.toString;
+	}
+
+	if (max_age > Duration.zero) {
+		res.headers["Expires"] = toRFC822DateTimeString(Clock.currTime(UTC()) + max_age);
+	}
+
+	if (cache_control.length) {
+		if (max_age > Duration.zero && !cache_control.canFind("max-age=")) {
+			res.headers["Cache-Control"] = cache_control
+				~ ", max-age=" ~ to!string(max_age.total!"seconds");
+		} else {
+			res.headers["Cache-Control"] = cache_control;
+		}
+	} else if (max_age > Duration.zero) {
+		res.headers["Cache-Control"] = "max-age=" ~ to!string(max_age.total!"seconds");
+	}
+
+	// https://tools.ietf.org/html/rfc7232#section-3.1
+	string ifMatch = req.headers.get("If-Match");
+	if (ifMatch.length) {
+		if (!cacheMatch(ifMatch, etag, false)) {
+			res.statusCode = HTTPStatus.preconditionFailed;
+			res.writeVoidBody();
+			return true;
+		}
+	}
+
+	// https://tools.ietf.org/html/rfc7232#section-3.2
+	string ifNoneMatch = req.headers.get("If-None-Match");
+	if (ifNoneMatch.length) {
+		if (cacheMatch(ifNoneMatch, etag, true)) {
+			if (req.method.among!(HTTPMethod.GET, HTTPMethod.HEAD))
+				res.statusCode = HTTPStatus.notModified;
+			else
+				res.statusCode = HTTPStatus.preconditionFailed;
+			res.writeVoidBody();
+			return true;
+		}
+	}
+
+	if (last_modified != SysTime.init) {
+		// https://tools.ietf.org/html/rfc7232#section-3.3
+		string ifModifiedSince = req.headers.get("If-Modified-Since");
+		if (ifModifiedSince.length) {
+			const check = lastModifiedString == ifModifiedSince
+				|| last_modified <= parseRFC822DateTimeString(ifModifiedSince);
+			if (check) {
+				res.statusCode = HTTPStatus.notModified;
+				res.writeVoidBody();
+				return true;
+			}
+		}
+
+		// https://tools.ietf.org/html/rfc7232#section-3.4
+		string ifUnmodifiedSince = req.headers.get("If-Unmodified-Since");
+		if (ifUnmodifiedSince.length) {
+			const check = lastModifiedString != ifUnmodifiedSince
+				|| last_modified > parseRFC822DateTimeString(ifUnmodifiedSince);
+			if (check) {
+				res.statusCode = HTTPStatus.preconditionFailed;
+				res.writeVoidBody();
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/**
+	Represents an Entity-Tag value for use inside HTTP Cache headers.
+
+	Standards: https://tools.ietf.org/html/rfc7232#section-2.3
+*/
+struct ETag
+{
+	bool weak;
+	string tag;
+
+	static ETag parse(string s)
+	{
+		enforce!ConvException(s.endsWith('"'));
+
+		if (s.startsWith(`W/"`)) {
+			ETag ret;
+			ret.weak = true;
+			ret.tag = s[3 .. $ - 1];
+			return ret;
+		} else if (s.startsWith('"')) {
+			ETag ret;
+			ret.tag = s[1 .. $ - 1];
+			return ret;
+		} else {
+			throw new ConvException(`ETag didn't start with W/" nor with " !`);
+		}
+	}
+
+	string toString() const @property
+	{
+		return text(weak ? `W/"` : `"`, tag, '"');
+	}
+}
+
+/**
+	Matches a given match expression with a specific ETag. Can allow or disallow weak ETags and supports multiple tags.
+
+	Standards: https://tools.ietf.org/html/rfc7232#section-2.3.2
+*/
+bool cacheMatch(string match, ETag etag, bool allow_weak)
+{
+	if (match == "*") {
+		return true;
+	}
+
+	if (etag.weak && !allow_weak) {
+		return false;
+	}
+
+	size_t i = match.indexOf('"');
+	while (i != -1) {
+		size_t end = match.indexOf('"', i + 1);
+		if (end == -1) {
+			end = match.length;
+		}
+
+		const check = match[i + 1 .. end];
+		const checkWeak = match[0 .. i].endsWith("W/");
+
+		if (allow_weak || !checkWeak) {
+			if (match[i + 1 .. end] == etag.tag) {
+				return true;
+			}
+		}
+
+		if (!match[end + 1 .. $].stripLeft.startsWith(","))
+			break;
+		i = match.indexOf('"', end + 1);
+	}
+
+	return false;
 }
