@@ -1,8 +1,26 @@
 ﻿Changelog
 =========
 
+v0.8.6 - 2019-
+-------------------
+
+### Features and improvements ###
+
+- Added functionality to portably convert from `URL` to `NativePath` and back - [pull #2285][issue2285]
+- Added `ConnectionPool.removeUnused` to enable closing all unused connections - [issue vibe-core/#101][issue-vibe-core-101], [pull #2287][issue2287]
+    - All keep-alive connections of the global HTTP client pool are now disconnected at thread shutdown
+    - Added `MongoClient.cleanupConnections`
+
+[issue2285]: https://github.com/vibe-d/vibe.d/issues/2285
+[issue2287]: https://github.com/vibe-d/vibe.d/issues/2287
+[issue-vibe-core-101]: https://github.com/vibe-d/vibe-core/issues/101
+
+
 v0.8.5 - 2019-03-24
 -------------------
+
+This release revamps the OpenSSL 1.1 support, new support for index-less form
+array fields, and of course a number of bug fixes as well as smaller additions.
 
 ### Features and improvements ###
 
