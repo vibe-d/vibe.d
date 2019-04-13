@@ -148,7 +148,7 @@ struct ScopedLock(T)
 	*/
 	@property inout(T) unsafeGet() inout nothrow { return m_ref; }
 
-	inout(T) opDot() inout nothrow { return m_ref; }
+	alias unsafeGet this;
 	//pragma(msg, "In ScopedLock!("~T.stringof~")");
 	//pragma(msg, isolatedRefMethods!T());
 //	mixin(isolatedAggregateMethodsString!T());
