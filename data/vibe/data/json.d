@@ -2594,7 +2594,7 @@ private string underscoreStrip(string field_name)
 }
 
 /// private
-package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(Unqual!T.init.toJson()) == Json) && is(typeof(Unqual!T.fromJson(Json())) == Unqual!T); }
+package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(T.init.toJson()) : Json) && is(typeof(T.fromJson(Json())) : T); }
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message = "JSON exception")
 {

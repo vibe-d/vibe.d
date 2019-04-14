@@ -1017,7 +1017,7 @@ unittest {
 */
 template isISOExtStringSerializable(T)
 {
-	enum bool isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) == string) && is(typeof(T.fromISOExtString("")) == T);
+	enum bool isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) : string) && is(typeof(T.fromISOExtString("")) : T);
 }
 ///
 unittest {
@@ -1047,7 +1047,7 @@ unittest {
 */
 template isStringSerializable(T)
 {
-	enum bool isStringSerializable = is(typeof(Unqual!T.init.toString()) == string) && is(typeof(Unqual!T.fromString("")) == Unqual!T);
+	enum bool isStringSerializable = is(typeof(T.init.toString()) : string) && is(typeof(T.fromString("")) : T);
 }
 ///
 unittest {
@@ -1089,7 +1089,7 @@ template DefaultPolicy(T)
 template isPolicySerializable(alias Policy, T)
 {
 	enum bool isPolicySerializable = is(typeof(Policy!T.toRepresentation(T.init))) &&
-		is(typeof(Policy!T.fromRepresentation(Policy!T.toRepresentation(T.init))) == T);
+		is(typeof(Policy!T.fromRepresentation(Policy!T.toRepresentation(T.init))) : T);
 }
 ///
 unittest {

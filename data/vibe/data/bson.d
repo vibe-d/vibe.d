@@ -1780,4 +1780,4 @@ pure @safe {
 }
 
 /// private
-package template isBsonSerializable(T) { enum isBsonSerializable = is(typeof(Unqual!T.init.toBson()) == Bson) && is(typeof(Unqual!T.fromBson(Bson())) == Unqual!T); }
+package template isBsonSerializable(T) { enum isBsonSerializable = is(typeof(T.init.toBson()) : Bson) && is(typeof(T.fromBson(Bson())) : T); }
