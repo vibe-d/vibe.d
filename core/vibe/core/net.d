@@ -464,6 +464,10 @@ enum TCPListenOptions {
 	    Does not affect libasync driver because it is always enabled by libasync.
 	*/
 	reusePort = 1<<2,
+	/// Enable address reuse
+	reuseAddress = 1<<3,
+	///
+	defaults = reuseAddress
 }
 
 private pure nothrow {

@@ -531,7 +531,9 @@ private enum HTTPServerOptionImpl {
 	none                      = 0,
 	errorStackTraces          = 1<<7,
 	reusePort                 = 1<<8,
-	distribute                = 1<<9 // deprecated
+	distribute                = 1<<9, // deprecated
+	reuseAddress              = 1<<10,
+	defaults                  = reuseAddress
 }
 
 // TODO: Should be turned back into an enum once the deprecated symbols can be removed
@@ -585,13 +587,19 @@ struct HTTPServerOption {
 	static enum errorStackTraces          = HTTPServerOptionImpl.errorStackTraces;
 	/// Enable port reuse in `listenTCP()`
 	static enum reusePort                 = HTTPServerOptionImpl.reusePort;
+	/// Enable address reuse in `listenTCP()`
+	static enum reuseAddress              = HTTPServerOptionImpl.reuseAddress;
 
 	/** The default set of options.
 
 		Includes all parsing options, as well as the `errorStackTraces`
 		option if the code is compiled in debug mode.
 	*/
-	static enum defaults = () { debug return HTTPServerOptionImpl.errorStackTraces; else return HTTPServerOptionImpl.none; } ().HTTPServerOption;
+	static enum defaults = () {
+		HTTPServerOptionImpl ops = HTTPServerOptionImpl.defaults;
+		debug ops |= HTTPServerOptionImpl.errorStackTraces;
+		return ops;
+	} ().HTTPServerOption;
 
 	deprecated("None has been renamed to none.")
 	static enum None = none;
@@ -2021,10 +2029,11 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 	import vibe.core.core : runWorkerTaskDist;
 	import std.algorithm : canFind, find;
 
-	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort, bool is_tls)
+	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort, bool reuseAddress, bool is_tls)
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
+			if(reuseAddress) options |= TCPListenOptions.reuseAddress; else options &= ~TCPListenOptions.reuseAddress;
 			if(reusePort) options |= TCPListenOptions.reusePort; else options &= ~TCPListenOptions.reusePort;
 			auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) nothrow @safe {
 					try handleHTTPConnection(conn, listen_info);
@@ -2065,6 +2074,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 			if (auto tcp_lst = doListen(li,
 					(settings.options & HTTPServerOptionImpl.distribute) != 0,
 					(settings.options & HTTPServerOption.reusePort) != 0,
+					(settings.options & HTTPServerOption.reuseAddress) != 0,
 					settings.tlsContext !is null)) // DMD BUG 2043
 			{
 				li.m_listener = tcp_lst;
