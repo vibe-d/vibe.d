@@ -6,6 +6,7 @@ import vibe.core.net;
 import vibe.stream.operations;
 import std.exception;
 import std.string;
+import std.range.primitives : front;
 import core.time;
 
 
