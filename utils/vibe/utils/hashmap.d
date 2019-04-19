@@ -28,6 +28,10 @@ struct DefaultHashMapTraits(Key) {
 			return () @trusted { return (cast(Key)k).toHash(); } ();
 		else static if (__traits(compiles, Key.init.toHashShared()))
 			return k.toHashShared();
+		else static if ((__traits(isScalar, Key) ||
+				(isArray!Key && is(Key : E[], E) && __traits(isScalar, E))) &&
+				is(typeof((in Key x) @nogc nothrow pure @safe => .object.hashOf(x))))
+			return .object.hashOf(k);
 		else {
 			// evil casts to be able to get the most basic operations of
 			// HashMap nothrow and @nogc
