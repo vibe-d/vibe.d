@@ -5,6 +5,7 @@ import vibe.http.client;
 import vibe.http.server;
 import vibe.stream.operations : readAllUTF8;
 import std.algorithm : find;
+import std.range.primitives : front;
 import std.socket : AddressFamily;
 
 shared static this()

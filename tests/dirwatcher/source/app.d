@@ -1,6 +1,8 @@
 import vibe.vibe;
+import core.exception : AssertError;
 import std.file, std.process;
 import std.algorithm : canFind, all;
+import std.path : buildPath;
 import std.typecons : No, Yes;
 
 void runTest()
@@ -10,7 +12,7 @@ void runTest()
 	scope(exit) rmdirRecurse(dir);
 
 	DirectoryWatcher watcher;
-	try watcher = Path(dir).watchDirectory(No.recursive);
+	try watcher = PosixPath(dir).watchDirectory(No.recursive);
 	catch (AssertError e) {
 		logInfo("DirectoryWatcher not yet implemented. Skipping test.");
 		return;
@@ -21,7 +23,7 @@ void runTest()
 	auto foo = dir.buildPath("foo");
 
 	alias Type = DirectoryChangeType;
-	static DirectoryChange dc(Type t, string p) { return DirectoryChange(t, Path(p)); }
+	static DirectoryChange dc(Type t, string p) { return DirectoryChange(t, PosixPath(p)); }
 	void check(DirectoryChange[] expected)
 	{
 		sleep(100.msecs);
@@ -51,7 +53,7 @@ void runTest()
 	write(bar, null);
 	assert(!watcher.readChanges(changes, 100.msecs));
 	remove(bar);
-	watcher = Path(dir).watchDirectory(Yes.recursive);
+	watcher = PosixPath(dir).watchDirectory(Yes.recursive);
 	write(foo, null);
 	sleep(1.seconds);
 	write(foo, [0, 1]);

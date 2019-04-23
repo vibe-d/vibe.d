@@ -6,8 +6,10 @@ import vibe.core.core;
 import vibe.core.log;
 import vibe.db.redis.redis;
 import core.time;
+import std.array : array;
 import std.algorithm : sort, equal;
 import std.exception : assertThrown;
+import std.typecons : tuple;
 
 void runTest()
 {
