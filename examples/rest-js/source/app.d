@@ -1,5 +1,5 @@
 import vibe.web.rest;
-
+import vibe.http.common : HTTPMethod;
 
 // Defines a simple RESTful API
 interface ITest {
