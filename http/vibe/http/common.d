@@ -710,12 +710,19 @@ final class Cookie {
 		long m_maxAge;
 		bool m_secure;
 		bool m_httpOnly;
+		SameSite m_sameSite;
 	}
 
 	enum Encoding {
 		url,
 		raw,
 		none = raw
+	}
+
+	enum SameSite {
+		default_,
+		lax,
+		strict,
 	}
 
 	/// Cookie payload
@@ -768,6 +775,12 @@ final class Cookie {
 	/// ditto
 	@property bool httpOnly() const { return m_httpOnly; }
 
+	/** Prevent cross-site request forgery.
+	*/
+	@property void sameSite(Cookie.SameSite value) { m_sameSite = value; }
+	/// ditto
+	@property Cookie.SameSite sameSite() const { return m_sameSite; }
+
 	/** Sets the "expires" and "max-age" attributes to limit the life time of
 		the cookie.
 	*/
@@ -816,6 +829,12 @@ final class Cookie {
 		if (this.maxAge) dst.formattedWrite("; Max-Age=%s", this.maxAge);
 		if (this.secure) dst.put("; Secure");
 		if (this.httpOnly) dst.put("; HttpOnly");
+		with(Cookie.SameSite)
+		final switch(this.sameSite) {
+			case default_: break;
+			case lax: dst.put("; SameSite=Lax"); break;
+			case strict: dst.put("; SameSite=Strict"); break;
+		}
 	}
 
 	private static void validateValue(string value)
