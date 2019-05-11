@@ -1,6 +1,6 @@
 #!/bin/bash
 MONGOPORT=22824
-rm -f log.txt
+rm -f log.txt*
 rm -rf db
 mkdir -p db/noauth
 mkdir -p db/wcert
@@ -27,7 +27,7 @@ fi
 # Authenticated Test
 
 MONGOPID=$(mongod --logpath log.txt --bind_ip 127.0.0.1 --port $MONGOPORT --noauth --dbpath db/auth --fork | grep -Po 'forked process: \K\d+')
-echo "db.createUser({user:'admin',pwd:'123456',roles:['readWrite','dbAdmin']})" | mongo "mongodb://127.0.0.1:$MONGOPORT/admin"
+echo "db.createUser({user:'admin',pwd:'123456',roles:[{role:'readWrite',db:'unittest'},'dbAdmin'],passwordDigestor:'server'})" | mongo "mongodb://127.0.0.1:$MONGOPORT/admin"
 kill $MONGOPID
 
 while kill -0 $MONGOPID; do 
@@ -37,15 +37,20 @@ done
 MONGOPID=$(mongod --logpath log.txt --bind_ip 127.0.0.1 --port $MONGOPORT --auth --dbpath db/auth --fork | grep -Po 'forked process: \K\d+')
 sleep 1
 
+echo Trying unauthenticated operations on a protected database
 if ! eval $DUB_INVOKE -- $MONGOPORT faildb ; then
 	kill $MONGOPID
 	exit 1
 fi
-if ! eval $DUB_INVOKE -- $MONGOPORT auth admin 123456 ; then
+
+echo Trying wrongly authenticated operations on a protected database
+if ! eval $DUB_INVOKE -- $MONGOPORT failauth auth admin 1234567 ; then
 	kill $MONGOPID
 	exit 1
 fi
-if ! eval $DUB_INVOKE -- $MONGOPORT failauth auth admin 1234567 ; then
+
+echo Trying authenticated operations on a protected database
+if ! eval $DUB_INVOKE -- $MONGOPORT auth admin 123456 ; then
 	kill $MONGOPID
 	exit 1
 fi
