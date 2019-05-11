@@ -15,6 +15,7 @@ import std.digest.sha;
 import std.exception;
 import std.format;
 import std.string;
+import std.traits;
 import std.utf;
 import vibe.crypto.cryptorand;
 
@@ -36,17 +37,22 @@ package struct ScramState
 	private DigestType!SHA1 m_saltedPassword;
 	private string m_authMessage;
 
-	string createInitialRequest(string user)
+	string createInitialRequest(string user, string nonce = null)
 	{
-		ubyte[18] randomBytes;
-		g_rng.read(randomBytes[]);
-		m_nonce = Base64.encode(randomBytes);
+		if (nonce.length) {
+			m_nonce = nonce;
+		} else {
+			ubyte[18] randomBytes;
+			g_rng.read(randomBytes[]);
+			m_nonce = Base64.encode(randomBytes);
+		}
 
 		m_firstMessageBare = format("n=%s,r=%s", escapeUsername(user), m_nonce);
 		return format("n,,%s", m_firstMessageBare);
 	}
 
-	string update(string password, string challenge)
+	// MongoDB drivers require 4096 min iterations https://github.com/mongodb/specifications/blob/59390a7ab2d5c8f9c29b8af1775ff25915c44036/source/auth/auth.rst#scram-sha-1
+	string update(string password, string challenge, int minIterations = 4096)
 	{
 		string serverFirstMessage = challenge;
 
@@ -61,6 +67,9 @@ package struct ScramState
 		if (next.length < 3 || next[1 .. 3] != "i=")
 			throw new Exception("Invalid server challenge format");
 		int iterations = next[3 .. $].to!int();
+
+		if (iterations < minIterations)
+			throw new Exception("Server must request at least " ~ minIterations.to!string ~ " iterations");
 
 		if (serverNonce[0 .. m_nonce.length] != m_nonce)
 			throw new Exception("Invalid server nonce received");
@@ -144,6 +153,8 @@ private DigestType!SHA1 pbkdf2(const ubyte[] password, const ubyte[] salt, int i
 
 	ubyte[4] intBytes = [0, 0, 0, 1];
 	auto last = () @trusted { return hmac!SHA1(salt, intBytes[], password); } ();
+	static assert(isStaticArray!(typeof(last)),
+		"Code is written so that the hash array is expected to be placed on the stack");
 	auto current = last;
 	foreach (i; 1 .. iterations)
 	{
@@ -154,4 +165,20 @@ private DigestType!SHA1 pbkdf2(const ubyte[] password, const ubyte[] salt, int i
 		}
 	}
 	return current;
+}
+
+unittest
+{
+	// https://github.com/mongodb/specifications/blob/59390a7ab2d5c8f9c29b8af1775ff25915c44036/source/auth/auth.rst#id5
+
+	import vibe.db.mongo.settings : MongoClientSettings;
+
+	ScramState state;
+	assert(state.createInitialRequest("user", "fyko+d2lbbFgONRv9qkxdawL") == "n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL");
+	auto last = state.update(MongoClientSettings.makeDigest("user", "pencil"),
+		"r=fyko+d2lbbFgONRv9qkxdawLHo+Vgk7qvUOKUwuWLIWg4l/9SraGMHEE,s=rQ9ZY3MntBeuP3E1TDVC4w==,i=10000");
+	assert(last == "c=biws,r=fyko+d2lbbFgONRv9qkxdawLHo+Vgk7qvUOKUwuWLIWg4l/9SraGMHEE,p=MC2T8BvbmWRckDw8oWl5IVghwCY=",
+		last);
+	last = state.finalize("v=UMWeI25JD1yNYZRMpZ4VHvhZ9e0=");
+	assert(last == "", last);
 }
