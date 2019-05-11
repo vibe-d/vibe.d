@@ -342,9 +342,7 @@ class MongoClientSettings
 	string sslPEMKeyFile;
 	string sslCAFile;
 	MongoAuthMechanism authMechanism;
-	/// Flag to send handshake to MongoDB servers to identify capabilities. May not work on old MongoDB versions.
-	bool nextGen = true;
-	/// Application name for the connection information when connected. Requires nextGen to be true.
+	/// Application name for the connection information when connected.
 	string appName;
 
 	static string makeDigest(string username, string password)

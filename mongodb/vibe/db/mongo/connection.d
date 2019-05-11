@@ -189,35 +189,37 @@ final class MongoConnection {
 		m_allowReconnect = false;
 		scope (exit)
 			m_allowReconnect = true;
-			import os = std.system;
-			import compiler = std.compiler;
-			string platform = compiler.name ~ " "
-				~ compiler.version_major.to!string ~ "." ~ compiler.version_minor.to!string;
-			// TODO: add support for os.version
 
-			Bson handshake = Bson.emptyObject;
-			handshake["isMaster"] = Bson(1);
-			handshake["client"] = Bson([
-				"driver": Bson(["name": Bson("vibe.db.mongo"), "version": Bson("0.1.0")]),
-				"os": Bson(["type": Bson(os.os.to!string), "architecture": Bson(hostArchitecture)]),
-				"platform": Bson(platform)
-			]);
+		Bson handshake = Bson.emptyObject;
+		handshake["isMaster"] = Bson(1);
 
-			if (m_settings.appName.length) {
-				enforce!MongoAuthException(m_settings.appName.length <= 128,
-					"The application name may not be larger than 128 bytes");
-				handshake["application"] = Bson(["name": Bson(m_settings.appName)]);
-			}
+		import os = std.system;
+		import compiler = std.compiler;
+		string platform = compiler.name ~ " "
+			~ compiler.version_major.to!string ~ "." ~ compiler.version_minor.to!string;
+		// TODO: add support for os.version
 
-			query!Bson("$external.$cmd", QueryFlags.none, 0, -1, handshake, Bson(null),
-				(cursor, flags, first_doc, num_docs) {
-					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure) && num_docs == 1,
-						"Authentication handshake failed.");
-				},
-				(idx, ref doc) {
-					enforce!MongoAuthException(doc["ok"].get!double == 1.0, "Authentication failed.");
-					m_description = deserializeBson!ServerDescription(doc);
-				});
+		handshake["client"] = Bson([
+			"driver": Bson(["name": Bson("vibe.db.mongo"), "version": Bson("0.1.0")]),
+			"os": Bson(["type": Bson(os.os.to!string), "architecture": Bson(hostArchitecture)]),
+			"platform": Bson(platform)
+		]);
+
+		if (m_settings.appName.length) {
+			enforce!MongoAuthException(m_settings.appName.length <= 128,
+				"The application name may not be larger than 128 bytes");
+			handshake["client"]["application"] = Bson(["name": Bson(m_settings.appName)]);
+		}
+
+		query!Bson("$external.$cmd", QueryFlags.none, 0, -1, handshake, Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure) && num_docs == 1,
+					"Authentication handshake failed.");
+			},
+			(idx, ref doc) {
+				enforce!MongoAuthException(doc["ok"].get!double == 1.0, "Authentication failed.");
+				m_description = deserializeBson!ServerDescription(doc);
+			});
 
 		m_bytesRead = 0;
 		if(m_settings.digest != string.init)
