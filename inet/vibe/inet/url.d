@@ -116,7 +116,12 @@ struct URL {
 		auto str = url_string;
 		enforce(str.length > 0, "Empty URL.");
 		if( str[0] != '/' ){
-			auto idx = str.indexOfCT(':');
+			size_t idx;
+			if (str[0] == '[') {
+				idx = str.indexOfCT(']') + 1;
+			} else {
+				idx = str.indexOfCT(':');
+			}
 			enforce(idx > 0, "No schema in URL:"~str);
 			m_schema = str[0 .. idx];
 			str = str[idx+1 .. $];
