@@ -13,7 +13,7 @@ mainSourceFile "vibe/appmain.d"
 
 configuration "vibe-core" {
 	targetType "none"
-	dependency "vibe-core" version=">=1.6.3-alpha.1 <2.0.0-0"
+	dependency "vibe-core" version=">=1.6.3-alpha.2 <2.0.0-0"
 }
 
 configuration "win32_mscoff" {
