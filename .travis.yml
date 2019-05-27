@@ -1,5 +1,5 @@
 language: d
-dist: trusty
+dist: xenial
 
 services:
   - mongodb
