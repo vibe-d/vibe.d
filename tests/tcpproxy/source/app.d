@@ -64,7 +64,7 @@ void runTest()
 		// pipe server to client as long as the server connection is alive
 		auto t = runTask!(TCPConnection, TCPConnection)((client, server) {
 			scope (exit) client.close();
-			client.write(server);
+			pipe(server, client);
 			logInfo("Proxy 2 out");
 		}, client, server);
 
@@ -73,7 +73,7 @@ void runTest()
 			server.close();
 			t.join();
 		}
-		server.write(client);
+		pipe(client, server);
 		logInfo("Proxy out");
 	}).find!(l => l.bindAddress.family == AddressFamily.INET).front;
 	scope (exit) l2.stopListening;
