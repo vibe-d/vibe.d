@@ -129,6 +129,7 @@ import std.array : Appender, appender;
 import std.conv : to;
 import std.exception : enforce;
 import std.traits;
+import std.typecons : Flag;
 import std.typetuple;
 
 
@@ -522,14 +523,38 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					alias TM = TypeTuple!(typeof(__traits(getMember, TU, mname)));
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 					enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
-					static if (!isBuiltinTuple!(T, mname)) {
+					static if (!isBuiltinTuple!(T, mname))
 						auto vt = safeGetMember!mname(value);
-					} else {
+					else
 						auto vt = tuple!TM(__traits(getMember, value, mname));
+					enum opt = getPolicyAttribute!(TU, mname, OptionalAttribute, Policy)(OptionalAttribute!DefaultPolicy(OptionalDirection.req)).direction;
+					alias VT = typeof(vt);
+
+					//skip optional attributes from serialization
+					if (opt & OptionalDirection.out_) {
+						import vibe.data.json : Json;
+						import vibe.data.bson : Bson;
+						static if (isInstanceOf!(Nullable, VT)) {
+							if (vt.isNull) continue;
+						} else static if (is(VT == Json)) {
+							if (vt.type == Json.Type.undefined || vt.type == Json.Type.null_ || (vt.type == Json.Type.object && !vt.length)) continue;
+						} else static if (is(VT == Bson)) {
+							if (vt.type == Bson.Type.undefined || vt.type == Bson.Type.null_ || (vt.type == Bson.Type.object && !vt.length)) continue;
+						} else static if (is(VT == class)) {
+							if (vt is null) continue;
+						} else {
+							// workaround for unsafe opEquals
+							static if (!isSafeSerializer!Serializer || __traits(compiles, () @safe { return vt == VT.init; }())) {
+								static if (isFloatingPoint!VT) { if (vt != vt) continue; }
+								else { if (vt == VT.init) continue; }
+							} else {
+								if (() @trusted { return vt == VT.init; }()) continue;
+							}
+						}
 					}
-					alias STraits = SubTraits!(Traits, typeof(vt), TA);
+					alias STraits = SubTraits!(Traits, VT, TA);
 					ser.beginWriteDictionaryEntry!STraits(name);
-					ser.serializeValue!(typeof(vt), TA)(vt);
+					ser.serializeValue!(VT, TA)(vt);
 					ser.endWriteDictionaryEntry!STraits(name);
 				}
 				static if (__traits(compiles, ser.endWriteDictionary!Traits(0))) {
@@ -739,10 +764,10 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			static if (hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
 				size_t idx = 0;
 				ser.readArray!Traits((sz){}, {
-					static if (hasSerializableFields!(T, Policy)) {
+					static if (hasDeserializableFields!(T, Policy)) {
 						switch (idx++) {
 							default: break;
-							foreach (i, FD; getExpandedFieldsData!(T, SerializableFields!(T, Policy))) {
+							foreach (i, FD; getExpandedFieldsData!(T, DeserializableFields!(T, Policy))) {
 								enum mname = FD[0];
 								enum msindex = FD[1];
 								alias MT = TypeTuple!(__traits(getMember, T, mname));
@@ -771,10 +796,10 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				});
 			} else {
 				ser.readDictionary!Traits((name) {
-					static if (hasSerializableFields!(T, Policy)) {
+					static if (hasDeserializableFields!(T, Policy)) {
 						switch (name) {
 							default: break;
-							foreach (i, mname; SerializableFields!(T, Policy)) {
+							foreach (i, mname; DeserializableFields!(T, Policy)) {
 								alias TM = TypeTuple!(typeof(__traits(getMember, T, mname)));
 								alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 								alias STraits = SubTraits!(Traits, TM, TA);
@@ -798,9 +823,15 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 					}
 				});
 			}
-			foreach (i, mname; SerializableFields!(T, Policy))
+
+			foreach (i, mname; DeserializableFields!(T, Policy))
 				static if (!hasPolicyAttribute!(OptionalAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0]))
 					enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"' ("~Policy.stringof~").");
+				else {
+					enum dir = getPolicyAttribute!(T, mname, OptionalAttribute, Policy)(OptionalAttribute!DefaultPolicy(OptionalDirection.req)).direction;
+					enforce(set[i] || ((dir & OptionalDirection.in_) == OptionalDirection.in_),
+						"Missing non-optional field '"~mname~"' of type '"~T.stringof~"' ("~Policy.stringof~").");
+				}
 			return ret;
 		} else static if (isPointer!T) {
 			if (ser.tryReadNull!Traits()) return null;
@@ -848,34 +879,64 @@ unittest {
 
 
 /**
-	Attribute marking a field as optional during deserialization.
+	Attribute marking a field as optional during de/serialization.
+	It is possible to fine tune the direction of attribute:
+		@optional!In - it is optional only during deserialization
+		@optional!Out - it is optional only during serialization
+		@optional!InOut - optional both way - default
 */
-@property OptionalAttribute!Policy optional(alias Policy = DefaultPolicy)()
+@property OptionalAttribute!Policy optional(D = InOut, alias Policy = DefaultPolicy)()
+	if (is(D == In) || is(D == Out) || is(D == InOut))
 {
-	return OptionalAttribute!Policy();
+	static if (is(D == In)) {
+		return OptionalAttribute!Policy(OptionalDirection.in_);
+	}
+	else static if (is(D == Out)) {
+		return OptionalAttribute!Policy(OptionalDirection.out_);
+	}
+	else return OptionalAttribute!Policy(OptionalDirection.inout_);
 }
+
 ///
 unittest {
 	struct Test {
-		// does not need to be present during deserialization
-		@optional int screenSize = 100;
+		@optional int screenSize = 100; // does not need to be present during deserialization and serialization
+		@optional!In int toDeserialize; // does not need to be present during deserialization
+		@optional!Out int toSerialize; // does not need to be present during serialization
+		@optional!InOut int both; // does not need to be present during deserialization and serialization
 	}
 }
 
 
 /**
 	Attribute for marking non-serialized fields.
+	It is possible to fine tune the direction of attribute:
+		@ignore!In - it is ignored only during deserialization
+		@ignore!Out - it is ignored only during serialization
+		@ignore!InOut - ignored both way - default
 */
-@property IgnoreAttribute!Policy ignore(alias Policy = DefaultPolicy)()
+@property IgnoreAttribute!Policy ignore(D = InOut, alias Policy = DefaultPolicy)()
+	if (is(D == In) || is(D == Out) || is(D == InOut))
 {
-	return IgnoreAttribute!Policy();
+	static if (is(D == In)) {
+		return IgnoreAttribute!Policy(IgnoreDirection.in_);
+	}
+	else static if (is(D == Out)) {
+		return IgnoreAttribute!Policy(IgnoreDirection.out_);
+	}
+	else return IgnoreAttribute!Policy(IgnoreDirection.inout_);
 }
+
 ///
 unittest {
 	struct Test {
-		// is neither serialized not deserialized
-		@ignore int screenSize;
+		@ignore int screenSize; // is neither serialized not deserialized
+		@ignore!In int toDeserialize; // is only used when serializing
+		@ignore!Out int toSerialize; // is only used when deserializing
+		@ignore!InOut int both; // is neither serialized not deserialized
 	}
+
+	assert(ignore.direction == IgnoreDirection.inout_);
 }
 ///
 unittest {
@@ -886,7 +947,7 @@ unittest {
 	struct Test {
 		// not (de)serialized for serializeWithPolicy!(Test, CustomPolicy)
 		// but for other policies or when serialized without a policy
-		@ignore!CustomPolicy int screenSize;
+		@ignore!(InOut,CustomPolicy) int screenSize;
 	}
 }
 
@@ -959,12 +1020,29 @@ enum FieldExistence
 	defer
 }
 
+///
+enum OptionalDirection
+{
+	req = 0,
+	in_ = 1 << 0,
+	out_ = 1 << 1,
+	inout_ = in_ | out_
+}
+
+///
+alias IgnoreDirection = OptionalDirection;
+
+/// Aliases to simplify setting the direction of optional attribute
+alias In = Flag!"In";
+alias Out = Flag!"Out";
+alias InOut = Flag!"InOut";
+
 /// User defined attribute (not intended for direct use)
 struct NameAttribute(alias POLICY) { alias Policy = POLICY; string name; }
 /// ditto
-struct OptionalAttribute(alias POLICY) { alias Policy = POLICY; }
+struct OptionalAttribute(alias POLICY) { alias Policy = POLICY; OptionalDirection direction = OptionalDirection.inout_; }
 /// ditto
-struct IgnoreAttribute(alias POLICY) { alias Policy = POLICY; }
+struct IgnoreAttribute(alias POLICY) { alias Policy = POLICY; IgnoreDirection direction = IgnoreDirection.inout_; }
 /// ditto
 struct ByNameAttribute(alias POLICY) { alias Policy = POLICY; }
 /// ditto
@@ -1300,17 +1378,27 @@ private template hasSerializableFields(T, alias POLICY, size_t idx = 0)
 	} else enum hasSerializableFields = false;*/
 }
 
-private template SerializableFields(COMPOSITE, alias POLICY)
+private template hasDeserializableFields(T, alias POLICY, size_t idx = 0)
 {
-	alias SerializableFields = FilterSerializableFields!(COMPOSITE, POLICY, __traits(allMembers, COMPOSITE));
+	enum hasDeserializableFields = DeserializableFields!(T, POLICY).length > 0;
 }
 
-private template FilterSerializableFields(COMPOSITE, alias POLICY, FIELDS...)
+private template SerializableFields(COMPOSITE, alias POLICY)
+{
+	alias SerializableFields = FilterSerializableFields!(true, COMPOSITE, POLICY, __traits(allMembers, COMPOSITE));
+}
+
+private template DeserializableFields(COMPOSITE, alias POLICY)
+{
+	alias DeserializableFields = FilterSerializableFields!(false, COMPOSITE, POLICY, __traits(allMembers, COMPOSITE));
+}
+
+private template FilterSerializableFields(bool toSerialize, COMPOSITE, alias POLICY, FIELDS...)
 {
 	static if (FIELDS.length > 1) {
 		alias FilterSerializableFields = TypeTuple!(
-			FilterSerializableFields!(COMPOSITE, POLICY, FIELDS[0 .. $/2]),
-			FilterSerializableFields!(COMPOSITE, POLICY, FIELDS[$/2 .. $]));
+			FilterSerializableFields!(toSerialize, COMPOSITE, POLICY, FIELDS[0 .. $/2]),
+			FilterSerializableFields!(toSerialize, COMPOSITE, POLICY, FIELDS[$/2 .. $]));
 	} else static if (FIELDS.length == 1) {
 		alias T = COMPOSITE;
 		enum mname = FIELDS[0];
@@ -1319,7 +1407,9 @@ private template FilterSerializableFields(COMPOSITE, alias POLICY, FIELDS...)
 			static if (Tup.length != 1) {
 				alias FilterSerializableFields = TypeTuple!(mname);
 			} else {
-				static if (!hasPolicyAttribute!(IgnoreAttribute, POLICY, __traits(getMember, T, mname)))
+				enum ig = getPolicyAttribute!(T, mname, IgnoreAttribute, POLICY)(IgnoreAttribute!DefaultPolicy(IgnoreDirection.req)).direction;
+				static if ((toSerialize && ((ig & IgnoreDirection.out_) != IgnoreDirection.out_))
+					|| (!toSerialize && ((ig & IgnoreDirection.in_) != IgnoreDirection.in_)))
 				{
 					alias FilterSerializableFields = TypeTuple!(mname);
 				} else alias FilterSerializableFields = TypeTuple!();
@@ -1637,17 +1727,49 @@ unittest { // named tuple serialization
 }
 
 unittest { // testing the various UDAs
+	import std.typecons : Nullable;
+
 	enum E { hello, world }
 	enum Em = E.mangleof;
 	static struct S {
 		@byName E e;
 		@ignore int i;
+		@ignore!In int igin;
+		@ignore!Out int igout;
+		@ignore!InOut int iginout;
 		@optional float f;
+		@optional Nullable!int ni;
+		@optional!In int ii;
+		@optional!Out int io;
+		@optional!InOut int iio;
+		@optional Nullable!float nf;
 	}
 	enum Sm = S.mangleof;
-	auto s = S(E.world, 42, 1.0f);
+	auto s = S(E.world, 42, 5, 4, 3, 1.0f, Nullable!int(1));
+	enum Nm = (Nullable!int).mangleof;
 	assert(serialize!TestSerializer(s) ==
-		"D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(f,f)(V(f)(1))DE(f,f)}D("~Sm~")");
+		"D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(i,igin)(V(i)(5))DE(i,igin)DE(f,f)(V(f)(1))DE(f,f)DE("~Nm~",ni)(V(i)(1))DE("~Nm~",ni)DE(i,ii)(V(i)(0))DE(i,ii)}D("~Sm~")");
+
+	enum s_ser = "D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(i,igout)(V(i)(7))DE(i,igout)DE(f,f)(V(f)(1))DE(f,f)DE("~Nm~",ni)(V(i)(1))DE("~Nm~",ni)DE(i,io)(V(i)(2))DE(i,io)}D("~Sm~")";
+	auto ds = deserialize!(TestSerializer, S)(s_ser);
+	assert(ds.e == s.e);
+	assert(ds.f == s.f);
+	assert(ds.ni == s.ni);
+	assert(ds.ii == 0);
+	assert(ds.io == 2);
+	assert(ds.igout == 7);
+}
+
+unittest { // optional floats
+	static struct Floats {
+		@optional float a;
+		@optional float b;
+	}
+	auto f = Floats(1.2f);
+	enum Sm = Floats.mangleof;
+	enum Fm = float.mangleof;
+	enum f_ser = "D("~Sm~"){DE("~Fm~",a)(V(f)(1.2))DE("~Fm~",a)}D("~Sm~")";
+	assert(serialize!TestSerializer(f) == f_ser);
 }
 
 unittest { // custom serialization support
@@ -1812,8 +1934,8 @@ unittest { // test BitFlags serialization
 
 	struct T {
 		@ignore int a = 5;
-		@ignore!P1 @ignore!P2 int b = 6;
-		@ignore!P1 c = 7;
+		@ignore!(InOut,P1) @ignore!(InOut,P2) int b = 6;
+		@ignore!(InOut,P1) c = 7;
 		int d = 8;
 	}
 
@@ -1978,4 +2100,36 @@ unittest { // issue #2110 - single-element tuples
 		auto a = deserialize!(TestSerializer, T)(b);
 		assert(a.fields[0] == 42);
 	}
+}
+
+@safe unittest {
+	import vibe.data.json;
+	struct Foo {
+		@optional
+		Json bar;
+	}
+	Foo f;
+	assert(serializeToJsonString(f) == "{}");
+}
+
+@safe unittest {
+	import vibe.data.bson;
+	struct Foo {
+		@optional
+		Bson bar;
+	}
+	Foo f;
+	assert(serializeToJsonString(f) == "{}");
+}
+
+@safe unittest {
+	import vibe.data.json;
+	class Bar {}
+	struct Foo {
+		@optional Bar bar;
+		Bar baz;
+	}
+	Foo f;
+	f.baz = new Bar();
+	assert(serializeToJsonString(f) == `{"baz":{}}`);
 }
