@@ -116,7 +116,7 @@ struct URL {
 		auto str = url_string;
 		enforce(str.length > 0, "Empty URL.");
 		if( str[0] != '/' ){
-			auto idx = str.indexOfCT(':');
+			auto idx = str.indexOf(':');
 			enforce(idx > 0, "No schema in URL:"~str);
 			m_schema = str[0 .. idx];
 			str = str[idx+1 .. $];
@@ -129,13 +129,13 @@ struct URL {
 				str = str[2 .. $];
 			}
 
-			auto si = str.indexOfCT('/');
+			auto si = str.indexOf('/');
 			if( si < 0 ) si = str.length;
-			auto ai = str[0 .. si].indexOfCT('@');
+			auto ai = str[0 .. si].indexOf('@');
 			sizediff_t hs = 0;
 			if( ai >= 0 ){
 				hs = ai+1;
-				auto ci = str[0 .. ai].indexOfCT(':');
+				auto ci = str[0 .. ai].indexOf(':');
 				if( ci >= 0 ){
 					m_username = str[0 .. ci];
 					m_password = str[ci+1 .. ai];
@@ -147,7 +147,7 @@ struct URL {
 
 			auto findPort ( string src )
 			{
-				auto pi = src.indexOfCT(':');
+				auto pi = src.indexOf(':');
 				if(pi > 0) {
 					enforce(pi < src.length-1, "Empty port in URL.");
 					m_port = to!ushort(src[pi+1..$]);
@@ -156,9 +156,9 @@ struct URL {
 			}
 
 
-			auto ip6 = m_host.indexOfCT('[');
+			auto ip6 = m_host.indexOf('[');
 			if (ip6 == 0) { // [ must be first char
-				auto pe = m_host.indexOfCT(']');
+				auto pe = m_host.indexOf(']');
 				if (pe > 0) {
 					findPort(m_host[pe..$]);
 					m_host = m_host[1 .. pe];
@@ -295,13 +295,13 @@ struct URL {
 	/// ditto
 	@property void localURI(string str)
 	{
-		auto ai = str.indexOfCT('#');
+		auto ai = str.indexOf('#');
 		if( ai >= 0 ){
 			m_anchor = str[ai+1 .. $];
 			str = str[0 .. ai];
 		} else m_anchor = null;
 
-		auto qi = str.indexOfCT('?');
+		auto qi = str.indexOf('?');
 		if( qi >= 0 ){
 			m_queryString = str[qi+1 .. $];
 			str = str[0 .. qi];
