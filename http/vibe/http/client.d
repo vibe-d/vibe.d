@@ -42,10 +42,7 @@ import std.socket : AddressFamily;
 
 version(Posix)
 {
-	version(VibeLibeventDriver)
-	{
-		version = UnixSocket;
-	}
+	version = UnixSocket;
 }
 
 
