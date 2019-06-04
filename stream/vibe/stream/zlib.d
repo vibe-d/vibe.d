@@ -385,7 +385,7 @@ class ZlibInputStream : InputStream {
 			if (ret == Z_STREAM_END) {
 				m_finished = true;
 				zlibEnforce(() @trusted { return inflateEnd(&m_zstream); }());
-				assert(m_in.empty, "Input expected to be empty at this point.");
+				enforce(m_in.empty, "Extra data after end of compressed input.");
 				return;
 			}
 		}
