@@ -856,7 +856,7 @@ pure @safe {
 	switch(tp){
 		default: assert(false);
 		case LineType.OList: // skip bullets and output using normal escaping
-			auto idx = str.indexOfCT('.');
+			auto idx = str.indexOf('.');
 			assert(idx > 0);
 			return str[idx+1 .. $].stripLeft();
 		case LineType.UList:
@@ -1001,7 +1001,7 @@ pure @safe {
 		cidx = pstr.matchBracket();
 		if( cidx < 1 ) return false;
 		auto inner = pstr[1 .. cidx];
-		immutable qidx = inner.indexOfCT('"');
+		immutable qidx = inner.indexOf('"');
 		import std.ascii : isWhite;
 		if( qidx > 1 && inner[qidx - 1].isWhite()){
 			dst.url = inner[0 .. qidx].stripRight();
@@ -1020,7 +1020,7 @@ pure @safe {
 		if( pstr[0] == ' ' ) pstr = pstr[1 .. $];
 		if( pstr[0] != '[' ) return false;
 		pstr = pstr[1 .. $];
-		cidx = pstr.indexOfCT(']');
+		cidx = pstr.indexOf(']');
 		if( cidx < 0 ) return false;
 		if( cidx == 0 ) refid = dst.text;
 		else refid = pstr[0 .. cidx];
@@ -1163,17 +1163,17 @@ pure @safe {
 
 		string url;
 		if( ln.startsWith("<") ){
-			idx = ln.indexOfCT('>');
+			idx = ln.indexOf('>');
 			if( idx < 0 ) continue;
 			url = ln[1 .. idx];
 			ln = ln[idx+1 .. $];
 		} else {
-			idx = ln.indexOfCT(' ');
+			idx = ln.indexOf(' ');
 			if( idx > 0 ){
 				url = ln[0 .. idx];
 				ln = ln[idx+1 .. $];
 			} else {
-				idx = ln.indexOfCT('\t');
+				idx = ln.indexOf('\t');
 				if( idx < 0 ){
 					url = ln;
 					ln = ln[$ .. $];

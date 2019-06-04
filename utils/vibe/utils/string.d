@@ -68,6 +68,7 @@ bool allOf(const(char)[] str, const(char)[] chars)
 	return true;
 }
 
+deprecated("Will be removed in v0.9.0 - Use `std.string.indexOf`")
 ptrdiff_t indexOfCT(Char)(in Char[] s, dchar c, CaseSensitive cs = CaseSensitive.yes)
 @safe pure {
 	if (__ctfe) {
@@ -84,6 +85,8 @@ ptrdiff_t indexOfCT(Char)(in Char[] s, dchar c, CaseSensitive cs = CaseSensitive
 		return -1;
 	} else return std.string.indexOf(s, c, cs);
 }
+
+deprecated("Will be removed in v0.9.0 - Use `std.string.indexOf`")
 ptrdiff_t indexOfCT(Char)(in Char[] s, in Char[] needle)
 {
 	if (__ctfe) {
