@@ -101,7 +101,6 @@ environment:
 branches:
   only:
     - master
-    - 0.7.x
 skip_tags: true
 
 services:
