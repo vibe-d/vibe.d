@@ -94,27 +94,6 @@ Up to 0.8.1:
 - DMD 2.071.2
 - LDC 1.1.1 (FE: 2.071.2)
 
-Up to 0.8.0:
-- DMD 2.070.2
-- LDC 1.0.0 (FE: 2.070.2)
-
-Up to 0.7.31+:
-- DMD 2.069.2
-
-Up to 0.7.30:
-- DMD 2.068.2
-- LDC 0.17.0-beta.2 (FE: 2.068.2)
-
-Up to 0.7.29:
-- DMD 2.067.1
-- LDC 0.16.1
-
-Up to 0.7.27:
-- DMD 2.066
-- GDC 5.2.0
-- GDC 4.9.2
-- LDC 0.15.1
-
 
 Installation
 ------------
@@ -200,7 +179,7 @@ Additional setup on Linux (generic)
 
 You need to have the following dependencies installed:
 
- - [DMD 2.062 or greater](http://dlang.org/download)
+ - [DMD 2.077.1 or greater](http://dlang.org/download)
  - [libssl](http://www.openssl.org/source/)
  - [libevent 2.0.x](http://libevent.org/) (*)
 
