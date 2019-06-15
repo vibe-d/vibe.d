@@ -17,6 +17,7 @@ import std.conv;
 import std.exception;
 import std.string;
 import std.traits : isInstanceOf;
+import std.ascii : isAlpha;
 
 
 /**
@@ -119,6 +120,9 @@ struct URL {
 			auto idx = str.indexOf(':');
 			enforce(idx > 0, "No schema in URL:"~str);
 			m_schema = str[0 .. idx];
+			enforce(m_schema[0].isAlpha,
+					"Schema must start with an alphabetical char, found: " ~
+					m_schema[0]);
 			str = str[idx+1 .. $];
 			bool requires_host = false;
 
