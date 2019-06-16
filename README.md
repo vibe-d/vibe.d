@@ -7,7 +7,7 @@ more specialized needs, there are also many compatible
 [DUB packages](http://code.dlang.org/?sort=updated&category=library.vibed)
 available.
 
-Visit the website at <http://vibed.org/> for more information and 
+Visit the website at <http://vibed.org/> for more information and
 [documentation](https://vibed.org/docs).
 
 [![DUB Package](https://img.shields.io/dub/v/vibe-d.svg)](https://code.dlang.org/packages/vibe-d)
@@ -51,6 +51,7 @@ Support
 Vibe.d aims to support at least the 5 latest minor releases of D.
 At the moment, the following compilers are supported and tested:
 
+- DMD 2.086.0
 - DMD 2.085.0
 - DMD 2.084.0
 - DMD 2.083.1
@@ -60,7 +61,7 @@ At the moment, the following compilers are supported and tested:
 - DMD 2.079.1
 - DMD 2.078.3
 - DMD 2.077.1
-- DMD 2.076.1
+- LDC 1.15.0 (FE: 2.085.1)
 - LDC 1.14.0 (FE: 2.084.1)
 - LDC 1.13.0 (FE: 2.083.1)
 - LDC 1.12.0 (FE: 2.082.1)
@@ -69,6 +70,10 @@ At the moment, the following compilers are supported and tested:
 - LDC 1.9.0 (FE: 2.079.1)
 - LDC 1.8.0 (FE: 2.078.3)
 - LDC 1.7.0 (FE: 2.077.1)
+
+
+Up to 0.8.6:
+- DMD 2.076.1
 - LDC 1.6.0 (FE: 2.076.1)
 
 Up to 0.8.4:
@@ -88,27 +93,6 @@ Up to 0.8.2:
 Up to 0.8.1:
 - DMD 2.071.2
 - LDC 1.1.1 (FE: 2.071.2)
-
-Up to 0.8.0:
-- DMD 2.070.2
-- LDC 1.0.0 (FE: 2.070.2)
-
-Up to 0.7.31+:
-- DMD 2.069.2
-
-Up to 0.7.30:
-- DMD 2.068.2
-- LDC 0.17.0-beta.2 (FE: 2.068.2)
-
-Up to 0.7.29:
-- DMD 2.067.1
-- LDC 0.16.1
-
-Up to 0.7.27:
-- DMD 2.066
-- GDC 5.2.0
-- GDC 4.9.2
-- LDC 0.15.1
 
 
 Installation
@@ -195,7 +179,7 @@ Additional setup on Linux (generic)
 
 You need to have the following dependencies installed:
 
- - [DMD 2.062 or greater](http://dlang.org/download)
+ - [DMD 2.077.1 or greater](http://dlang.org/download)
  - [libssl](http://www.openssl.org/source/)
  - [libevent 2.0.x](http://libevent.org/) (*)
 
