@@ -521,17 +521,18 @@ struct MongoCollection {
 	/**
 		Returns an array that holds a list of documents that identify and describe the existing indexes on the collection. 
 	*/
-	R getIndexes(T = Bson, R = Bson)() 
+	MongoCursor!R getIndexes(T = Bson, R = Bson)() 
 	@safe {
 		static struct CMD {
 			string listIndexes;
 		}
 
 		CMD cmd;
-		listIndexes = m_name;
+		cmd.listIndexes = m_name;
 
 		auto reply = database.runCommand(cmd);
-		return reply;
+		enforce(reply["ok"].get!double == 1, "getIndexes command failed: "~reply["errmsg"].opt!string);
+		return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
 	}
 
 	/**
