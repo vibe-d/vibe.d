@@ -521,7 +521,8 @@ struct MongoCollection {
 	/**
 		Returns an array that holds a list of documents that identify and describe the existing indexes on the collection. 
 	*/
-	R getIndexes(T = Bson, R = Bson)() {
+	R getIndexes(T = Bson, R = Bson)() 
+	@safe {
 		static struct CMD {
 			string listIndexes;
 		}
