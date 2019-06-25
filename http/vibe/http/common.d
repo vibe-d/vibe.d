@@ -343,7 +343,7 @@ final class MultiPart
 	import vibe.stream.memory : createMemoryStream;
 
 	InetHeaderMap headers;
-	InterfaceProxy!InputStream content;
+	InputStreamProxy content;
 
 	@safe:
 
@@ -364,7 +364,7 @@ final class MultiPart
 		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
 		ret.headers["Content-Type"] = content_type;
-		ret.content = createMemoryStream((() @trusted => cast(ubyte[]) value)(), false);
+		emplace(&ret.content, createMemoryStream(cast(ubyte[]) value.dup, false));
 		return ret;
 	}
 
@@ -373,7 +373,7 @@ final class MultiPart
 		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
 		ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = createMemoryStream(content, false);
+		emplace(&ret.content, createMemoryStream(content, false));
 		return ret;
 	}
 
@@ -388,7 +388,7 @@ final class MultiPart
 		ret.headers["Content-Type"] = type;
 		if (!type.startsWith("text/"))
 			ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = cast(InterfaceProxy!InputStream) openFile(file, FileMode.read);
+		emplace(&ret.content, openFile(file, FileMode.read));
 		return ret;
 	}
 
@@ -400,7 +400,7 @@ final class MultiPart
 		ret.headers["Content-Type"] = content_type;
 		if (binary)
 			ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = stream;
+		emplace(&ret.content, stream);
 		return ret;
 	}
 
@@ -409,7 +409,7 @@ final class MultiPart
 		auto ret = new MultiPart();
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
 		ret.headers["Content-Type"] = content_type;
-		ret.content = createMemoryStream((() @trusted => cast(ubyte[]) content)(), false);
+		emplace(&ret.content, createMemoryStream((() @trusted => cast(ubyte[]) content)(), false));
 		return ret;
 	}
 
@@ -419,7 +419,7 @@ final class MultiPart
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
 		ret.headers["Content-Transfer-Encoding"] = "binary";
 		ret.headers["Content-Type"] = content_type;
-		ret.content = createMemoryStream(content, false);
+		emplace(&ret.content, createMemoryStream(content, false));
 		return ret;
 	}
 
@@ -434,7 +434,7 @@ final class MultiPart
 		ret.headers["Content-Type"] = type;
 		if (!type.startsWith("text/"))
 			ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = cast(InterfaceProxy!InputStream) openFile(file, FileMode.read);
+		emplace(&ret.content, openFile(file, FileMode.read));
 		return ret;
 	}
 
@@ -446,7 +446,7 @@ final class MultiPart
 		ret.headers["Content-Type"] = content_type;
 			if (binary)
 		ret.headers["Content-Transfer-Encoding"] = "binary";
-		ret.content = stream;
+		emplace(&ret.content, stream);
 		return ret;
 	}
 
@@ -470,7 +470,7 @@ final class MultiPart
 		ret.headers["Content-Type"] = "multipart/mixed; boundary=\"" ~ boundary ~ "\"";
 		auto stream = createMemoryOutputStream();
 		multipart.write(boundary, stream);
-		ret.content = createMemoryStream(stream.data, false);
+		emplace(&ret.content, createMemoryStream(stream.data, false));
 		return ret;
 	}
 }
@@ -488,6 +488,8 @@ final class MultiPartBody
 
 	size_t length(string boundary) const
 	{
+		import vibe.stream.memory : MemoryStream;
+
 		if (!parts.length)
 			return 0;
 
@@ -499,11 +501,19 @@ final class MultiPartBody
 			length += 8 + boundary.length; // \r\n * 3 + boundary (+2)
 			foreach (k, v; part.headers)
 				length += 4 + k.length + v.length; // ": \r\n"
-			auto randomStream = cast(const(RandomAccessStream)) part.content;
-			if (randomStream)
+
+			static assert(typeof(part.content).tupleof[1].stringof == "m_intf",
+				"Can't check the interface type of InterfaceProxy because definition changed");
+
+			// check if content is a MemoryStream because then we can compute exact lengths.
+			// with current vibe-core it's not possible to find out the type or even check if it matches one without triggering a fatal assert error, so we access private fields here
+			// TODO: we would preferably want to support all classes implementing RandomAccessStream here, so we might need to traverse the typeinfo
+			if ((() @trusted => cast() part.content.tupleof[1])()._typeInfo() is typeid(MemoryStream)) {
+				auto randomStream = (() @trusted => cast() part.content)().extract!MemoryStream;
 				length += randomStream.size;
-			else
+			} else {
 				return 0; // undetectable
+			}
 		}
 		length += 4;
 		if (epilogue.length)
@@ -548,7 +558,7 @@ final class MultiPartBody
 }
 
 string randomMultipartBoundary()
-@trusted {
+@safe {
 	import std.random : uniform;
 	import std.ascii : digits, letters;
 
