@@ -1433,18 +1433,18 @@ Json parseJsonString(string str, string filename = null)
 
 	See_Also: `deserializeJson`, `vibe.data.serialization`
 */
-Json serializeToJson(T)(T value)
+Json serializeToJson(T)(auto ref T value)
 {
 	return serialize!JsonSerializer(value);
 }
 /// ditto
-void serializeToJson(R, T)(R destination, T value)
+void serializeToJson(R, T)(R destination, auto ref T value)
 	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
 {
 	serialize!(JsonStringSerializer!R)(value, destination);
 }
 /// ditto
-string serializeToJsonString(T)(T value)
+string serializeToJsonString(T)(auto ref T value)
 {
 	auto ret = appender!string;
 	serializeToJson(ret, value);
@@ -1477,13 +1477,13 @@ string serializeToJsonString(T)(T value)
 
 	See_also: `serializeToJson`, `vibe.data.serialization`
 */
-void serializeToPrettyJson(R, T)(R destination, T value)
+void serializeToPrettyJson(R, T)(R destination, auto ref T value)
 	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
 {
 	serialize!(JsonStringSerializer!(R, true))(value, destination);
 }
 /// ditto
-string serializeToPrettyJson(T)(T value)
+string serializeToPrettyJson(T)(auto ref T value)
 {
 	auto ret = appender!string;
 	serializeToPrettyJson(ret, value);
@@ -1752,9 +1752,9 @@ unittest {
 	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToJson, deserializeJson
 */
 struct JsonSerializer {
-	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || is(T == UUID) || isJsonSerializable!T; }
+	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || is(Unqual!T == UUID) || isJsonSerializable!T; }
 
-	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json) || is (T == JSONValue); }
+	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(Unqual!T == Json) || is(Unqual!T == JSONValue); }
 
 	private {
 		Json m_current;
@@ -1779,22 +1779,23 @@ struct JsonSerializer {
 	void beginWriteArrayEntry(Traits)(size_t) {}
 	void endWriteArrayEntry(Traits)(size_t) { m_compositeStack[$-1].appendArrayElement(m_current); }
 
-	void writeValue(Traits, T)(in T value)
-		if (!is(T == Json))
+	void writeValue(Traits, T)(auto ref T value)
+		if (!is(Unqual!T == Json))
 	{
-		static if (is(T == JSONValue)) {
+		alias UT = Unqual!T;
+		static if (is(UT == JSONValue)) {
 			m_current = Json(value);
-		} else static if (isJsonSerializable!T) {
+		} else static if (isJsonSerializable!UT) {
 			static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
-				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
+				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~UT.stringof~".toJson() with @safe.");
 			m_current = () @trusted { return value.toJson(); } ();
-		} else static if (isSomeString!T && !is(T == string)) {
+		} else static if (isSomeString!T && !is(UT == string)) {
 			writeValue!Traits(value.to!string);
 		} else m_current = Json(value);
 	}
 
-	void writeValue(Traits, T)(Json value) if (is(T == Json)) { m_current = value; }
-	void writeValue(Traits, T)(in Json value) if (is(T == Json)) { m_current = value.clone; }
+	void writeValue(Traits, T)(auto ref T value) if (is(T == Json)) { m_current = value; }
+	void writeValue(Traits, T)(auto ref T value) if (!is(T == Json) && is(T : const(Json))) { m_current = value.clone; }
 
 	//
 	// deserialization
@@ -1877,6 +1878,12 @@ unittest {
 	assert(obj.deserializeJson!T.a == "");
 }
 
+unittest {
+	class C { this(Json j) {foo = j;} Json foo; }
+	const C c = new C(Json(42));
+	assert(serializeToJson(c)["foo"].get!int == 42);
+}
+
 /**
 	Serializer for a range based plain JSON string representation.
 
@@ -1890,9 +1897,9 @@ struct JsonStringSerializer(R, bool pretty = false)
 		size_t m_level = 0;
 	}
 
-	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || is(T == UUID) || isJsonSerializable!T; }
+	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || is(Unqual!T == UUID) || isJsonSerializable!T; }
 
-	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json) || is(T == JSONValue); }
+	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!(Unqual!T) || is(Unqual!T == Json) || is(Unqual!T == JSONValue); }
 
 	this(R range)
 	{
@@ -1930,24 +1937,25 @@ struct JsonStringSerializer(R, bool pretty = false)
 
 		void writeValue(Traits, T)(in T value)
 		{
+			alias UT = Unqual!T;
 			static if (is(T == typeof(null))) m_range.put("null");
-			else static if (is(T == bool)) m_range.put(value ? "true" : "false");
-			else static if (is(T : long)) m_range.formattedWrite("%s", value);
-			else static if (is(T == BigInt)) () @trusted { m_range.formattedWrite("%d", value); } ();
-			else static if (is(T : real)) value == value ? m_range.formattedWrite("%.16g", value) : m_range.put("null");
-			else static if (is(T : const(char)[])) {
+			else static if (is(UT == bool)) m_range.put(value ? "true" : "false");
+			else static if (is(UT : long)) m_range.formattedWrite("%s", value);
+			else static if (is(UT == BigInt)) () @trusted { m_range.formattedWrite("%d", value); } ();
+			else static if (is(UT : real)) value == value ? m_range.formattedWrite("%.16g", value) : m_range.put("null");
+			else static if (is(UT : const(char)[])) {
 				m_range.put('"');
 				m_range.jsonEscape(value);
 				m_range.put('"');
 			} else static if (isSomeString!T) writeValue!Traits(value.to!string); // TODO: avoid memory allocation
-			else static if (is(T == UUID)) writeValue!Traits(value.toString());
-			else static if (is(T == Json)) m_range.writeJsonString(value);
-			else static if (is(T == JSONValue)) m_range.writeJsonString(Json(value));
-			else static if (isJsonSerializable!T) {
+			else static if (is(UT == UUID)) writeValue!Traits(value.toString());
+			else static if (is(UT == Json)) m_range.writeJsonString(value);
+			else static if (is(UT == JSONValue)) m_range.writeJsonString(Json(value));
+			else static if (isJsonSerializable!UT) {
 				static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
-					pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
+					pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~UT.stringof~".toJson() with @safe.");
 				m_range.writeJsonString!(R, pretty)(() @trusted { return value.toJson(); } (), m_level);
-			} else static assert(false, "Unsupported type: " ~ T.stringof);
+			} else static assert(false, "Unsupported type: " ~ UT.stringof);
 		}
 
 		private void startComposite()
@@ -2588,7 +2596,7 @@ private string underscoreStrip(string field_name)
 }
 
 /// private
-package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(T.init.toJson()) == Json) && is(typeof(T.fromJson(Json())) == T); }
+package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(T.init.toJson()) : Json) && is(typeof(T.fromJson(Json())) : T); }
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message = "JSON exception")
 {

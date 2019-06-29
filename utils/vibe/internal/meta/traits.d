@@ -149,7 +149,8 @@ template isRWField(T, string M)
 	import std.typetuple;
 
 	static void testAssign()() {
-		T t = *(cast(T*)0);
+		static if (!isCopyable!T) T t; // for structs with disabled copy constructor
+		else T t = *(cast(T*)0);
 		__traits(getMember, t, M) = __traits(getMember, t, M);
 	}
 
@@ -177,7 +178,7 @@ template isRWField(T, string M)
 unittest {
 	import std.algorithm;
 
-	struct S {
+	static struct S {
 		alias a = int; // alias
 		int i; // plain RW field
 		enum j = 42; // manifest constant
@@ -185,6 +186,7 @@ unittest {
 		private int privateJ; // private RW field
 
 		this(Args...)(Args args) {}
+		@disable this(this);
 
 		// read-write property (OK)
 		@property int p1() { return privateJ; }

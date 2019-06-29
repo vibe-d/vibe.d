@@ -72,7 +72,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		return ret;
 	}
 	/// ditto
-	FieldTuple[] toRepresentation() {
+	FieldTuple[] toRepresentation() const {
 		FieldTuple[] ret;
 		foreach (k, ref v; this) ret ~= FieldTuple(k, v);
 		return ret;
