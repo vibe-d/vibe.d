@@ -749,7 +749,6 @@ final class HTTPClientRequest : HTTPRequest {
 	/// ditto
 	void writeBody(InputStream data)
 	{
-		headers["Transfer-Encoding"] = "chunked";
 		data.pipe(bodyWriter);
 		finalize();
 	}
@@ -834,7 +833,8 @@ final class HTTPClientRequest : HTTPRequest {
 
 		assert(!m_headerWritten, "Trying to write request body after body was already written.");
 
-		if ("Content-Length" !in headers && "Transfer-Encoding" !in headers
+		if (httpVersion != HTTPVersion.HTTP_1_0
+			&& "Content-Length" !in headers && "Transfer-Encoding" !in headers
 			&& headers.get("Connection", "") != "close")
 		{
 			headers["Transfer-Encoding"] = "chunked";
