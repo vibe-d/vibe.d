@@ -2248,7 +2248,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 			}
 		}
 
-        // eagerly parse the URL as its lightweight and defacto @nogc
+		// eagerly parse the URL as its lightweight and defacto @nogc
 		auto url = URL.parse(req.requestURI);
 		req.queryString = url.queryString;
 		req.username = url.username;
@@ -2271,7 +2271,9 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		if (settings.serverString.length)
 			res.headers["Server"] = settings.serverString;
 		res.headers["Date"] = formatRFC822DateAlloc(request_allocator, reqtime);
-		if (req.persistent) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
+		if (req.persistent)
+			res.headers["Keep-Alive"] = formatAlloc(
+				request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
 
 		// finished parsing the request
 		parsed = true;
@@ -2294,16 +2296,20 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	} catch (HTTPStatusException err) {
 		if (!res.headerWritten) errorOut(err.status, err.msg, err.debugMessage, err);
 		else logDiagnostic("HTTPSterrorOutatusException while writing the response: %s", err.msg);
-		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURI, () @trusted { return err.toString().sanitize; } ());
+		debug logDebug("Exception while handling request %s %s: %s", req.method,
+					   req.requestURI, () @trusted { return err.toString().sanitize; } ());
 		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
 			keep_alive = false;
 	} catch (UncaughtException e) {
 		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
 		string dbg_msg;
-		if (settings.options & HTTPServerOption.errorStackTraces) dbg_msg = () @trusted { return e.toString().sanitize; } ();
-		if (!res.headerWritten && tcp_connection.connected) errorOut(status, httpStatusText(status), dbg_msg, e);
+		if (settings.options & HTTPServerOption.errorStackTraces)
+			dbg_msg = () @trusted { return e.toString().sanitize; } ();
+		if (!res.headerWritten && tcp_connection.connected)
+			errorOut(status, httpStatusText(status), dbg_msg, e);
 		else logDiagnostic("Error while writing the response: %s", e.msg);
-		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURI, () @trusted { return e.toString().sanitize(); } ());
+		debug logDebug("Exception while handling request %s %s: %s", req.method,
+					   req.requestURI, () @trusted { return e.toString().sanitize(); } ());
 		if (!parsed || res.headerWritten || !cast(Exception)e) keep_alive = false;
 	}
 
