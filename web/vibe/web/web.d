@@ -977,9 +977,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, errnfo);
 				return;
 			} else {
-				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling field '"~err.field~"': "~err.text);
-				hex.debugMessage = err.debugText;
-				throw hex;
+				throw new HTTPStatusException(HTTPStatus.badRequest, "Error handling field '"~err.field~"': "~err.text);
 			}
 		}
 	}
