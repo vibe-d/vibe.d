@@ -2295,7 +2295,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		}
 	} catch (HTTPStatusException err) {
 		if (!res.headerWritten) errorOut(err.status, err.msg, err.debugMessage, err);
-		else logDiagnostic("HTTPSterrorOutatusException while writing the response: %s", err.msg);
+		else logDiagnostic("HTTPStatusException while writing the response: %s", err.msg);
 		debug logDebug("Exception while handling request %s %s: %s", req.method,
 					   req.requestURI, () @trusted { return err.toString().sanitize; } ());
 		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
