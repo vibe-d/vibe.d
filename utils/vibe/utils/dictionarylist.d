@@ -7,7 +7,6 @@
 */
 module vibe.utils.dictionarylist;
 
-import vibe.utils.array : removeFromArrayIdx;
 import vibe.utils.string : icmp2;
 import std.exception : enforce;
 
@@ -148,6 +147,14 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 				removeFromArrayIdx(m_extendedFields, i);
 			else i++;
 		}
+	}
+
+	/// Used by `remove` and `removeAll`
+	private static void removeFromArrayIdx(ref Field[] array, size_t idx)
+	{
+		foreach( j; idx+1 .. array.length)
+			array[j-1] = array[j];
+		array.length = array.length-1;
 	}
 
 	/** Adds a new field to the map.
