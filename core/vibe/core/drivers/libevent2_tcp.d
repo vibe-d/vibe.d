@@ -793,15 +793,4 @@ package nothrow extern(C)
 		}
 	}
 }
-
-/// private
-package void removeFromArray(T)(ref T[] array, T item)
-{
-	foreach( i; 0 .. array.length )
-		if( array[i] is item ){
-			array = array[0 .. i] ~ array[i+1 .. $];
-			return;
-		}
-}
-
 }
