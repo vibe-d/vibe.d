@@ -2142,9 +2142,6 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	@safe {
 		assert(!res.headerWritten);
 
-		// stack traces sometimes contain random bytes - make sure they are replaced
-		debug_msg = sanitizeUTF8(cast(const(ubyte)[])debug_msg);
-
 		res.statusCode = code;
 		if (settings && settings.errorPageHandler) {
 			/*scope*/ auto err = new HTTPServerErrorInfo;
