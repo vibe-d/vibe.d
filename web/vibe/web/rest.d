@@ -1844,7 +1844,7 @@ private Json request(URL base_url,
 
 	auto reqdg = (scope HTTPClientRequest req) {
 		req.method = verb;
-		foreach (k, v; hdrs)
+		foreach (k, v; hdrs.byKeyValue)
 			req.headers[k] = v;
 
 		if (request_body_filter) {
@@ -1873,14 +1873,14 @@ private Json request(URL base_url,
 
 		// Get required headers - Don't throw yet
 		string[] missingKeys;
-		foreach (k, ref v; reqReturnHdrs)
+		foreach (k, ref v; reqReturnHdrs.byKeyValue)
 			if (auto ptr = k in res.headers)
 				v = (*ptr).idup;
 			else
 				missingKeys ~= k;
 
 		// Get optional headers
-		foreach (k, ref v; optReturnHdrs)
+		foreach (k, ref v; optReturnHdrs.byKeyValue)
 			if (auto ptr = k in res.headers)
 				v = (*ptr).idup;
 			else

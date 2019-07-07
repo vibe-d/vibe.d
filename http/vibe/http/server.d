@@ -1737,7 +1737,7 @@ final class HTTPServerResponse : HTTPResponse {
 			this.statusPhrase.length ? this.statusPhrase : httpStatusText(this.statusCode));
 
 		// write all normal headers
-		foreach (k, v; this.headers) {
+		foreach (k, v; this.headers.byKeyValue) {
 			dst.put(k);
 			dst.put(": ");
 			dst.put(v);
@@ -1748,7 +1748,7 @@ final class HTTPServerResponse : HTTPResponse {
 		logTrace("---------------------");
 
 		// write cookies
-		foreach (n, cookie; this.cookies) {
+		foreach (n, cookie; this.cookies.byKeyValue) {
 			dst.put("Set-Cookie: ");
 			cookie.writeString(() @trusted { return &dst; } (), n);
 			dst.put("\r\n");
@@ -2320,7 +2320,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	if (res.m_requiresConnectionClose)
 		keep_alive = false;
 
-	foreach (k, v ; req._files) {
+	foreach (k, v ; req._files.byKeyValue) {
 		if (existsFile(v.tempPath)) {
 			removeFile(v.tempPath);
 			logDebug("Deleted upload tempfile %s", v.tempPath.toString());
@@ -2370,7 +2370,7 @@ private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream 
 	//headers
 	parseRFC5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc, false);
 
-	foreach (k, v; req.headers)
+	foreach (k, v; req.headers.byKeyValue)
 		logTrace("%s: %s", k, v);
 	logTrace("--------------------");
 }

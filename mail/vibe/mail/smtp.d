@@ -211,7 +211,7 @@ void sendMail(in SMTPClientSettings settings, Mail mail)
 
 	conn.write("DATA\r\n");
 	expectStatus(conn, SMTPStatus.startMailInput, "DATA");
-	foreach (name, value; mail.headers) {
+	foreach (name, value; mail.headers.byKeyValue) {
 		conn.write(name~": "~value~"\r\n");
 	}
 	conn.write("\r\n");
