@@ -322,7 +322,7 @@ class HTTPResponse {
 	Throwing this exception from within a request handler will produce a matching error page.
 */
 class HTTPStatusException : Exception {
-	@safe:
+	pure nothrow @safe @nogc:
 
 	private {
 		int m_status;
