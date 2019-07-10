@@ -865,7 +865,7 @@ final class HTTPClientRequest : HTTPRequest {
 		logTrace("HTTP client request:");
 		logTrace("--------------------");
 		logTrace("%s", this);
-		foreach (k, v; headers) {
+		foreach (k, v; headers.byKeyValue) {
 			() @trusted { formattedWrite(&output, "%s: %s\r\n", k, v); } ();
 			logTrace("%s: %s", k, v);
 		}
@@ -968,7 +968,7 @@ final class HTTPClientResponse : HTTPResponse {
 		logTrace("HTTP client response:");
 		logTrace("---------------------");
 		logTrace("%s", this);
-		foreach (k, v; this.headers)
+		foreach (k, v; this.headers.byKeyValue)
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
 		Duration server_timeout;

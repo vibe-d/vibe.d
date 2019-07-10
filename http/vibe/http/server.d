@@ -1737,7 +1737,7 @@ final class HTTPServerResponse : HTTPResponse {
 			this.statusPhrase.length ? this.statusPhrase : httpStatusText(this.statusCode));
 
 		// write all normal headers
-		foreach (k, v; this.headers) {
+		foreach (k, v; this.headers.byKeyValue) {
 			dst.put(k);
 			dst.put(": ");
 			dst.put(v);
@@ -1748,7 +1748,7 @@ final class HTTPServerResponse : HTTPResponse {
 		logTrace("---------------------");
 
 		// write cookies
-		foreach (n, cookie; this.cookies) {
+		foreach (n, cookie; this.cookies.byKeyValue) {
 			dst.put("Set-Cookie: ");
 			cookie.writeString(() @trusted { return &dst; } (), n);
 			dst.put("\r\n");
@@ -2142,9 +2142,6 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	@safe {
 		assert(!res.headerWritten);
 
-		// stack traces sometimes contain random bytes - make sure they are replaced
-		debug_msg = sanitizeUTF8(cast(const(ubyte)[])debug_msg);
-
 		res.statusCode = code;
 		if (settings && settings.errorPageHandler) {
 			/*scope*/ auto err = new HTTPServerErrorInfo;
@@ -2248,7 +2245,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 			}
 		}
 
-        // eagerly parse the URL as its lightweight and defacto @nogc
+		// eagerly parse the URL as its lightweight and defacto @nogc
 		auto url = URL.parse(req.requestURI);
 		req.queryString = url.queryString;
 		req.username = url.username;
@@ -2271,7 +2268,9 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		if (settings.serverString.length)
 			res.headers["Server"] = settings.serverString;
 		res.headers["Date"] = formatRFC822DateAlloc(request_allocator, reqtime);
-		if (req.persistent) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
+		if (req.persistent)
+			res.headers["Keep-Alive"] = formatAlloc(
+				request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
 
 		// finished parsing the request
 		parsed = true;
@@ -2293,17 +2292,21 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		}
 	} catch (HTTPStatusException err) {
 		if (!res.headerWritten) errorOut(err.status, err.msg, err.debugMessage, err);
-		else logDiagnostic("HTTPSterrorOutatusException while writing the response: %s", err.msg);
-		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURI, () @trusted { return err.toString().sanitize; } ());
+		else logDiagnostic("HTTPStatusException while writing the response: %s", err.msg);
+		debug logDebug("Exception while handling request %s %s: %s", req.method,
+					   req.requestURI, () @trusted { return err.toString().sanitize; } ());
 		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
 			keep_alive = false;
 	} catch (UncaughtException e) {
 		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
 		string dbg_msg;
-		if (settings.options & HTTPServerOption.errorStackTraces) dbg_msg = () @trusted { return e.toString().sanitize; } ();
-		if (!res.headerWritten && tcp_connection.connected) errorOut(status, httpStatusText(status), dbg_msg, e);
+		if (settings.options & HTTPServerOption.errorStackTraces)
+			dbg_msg = () @trusted { return e.toString().sanitize; } ();
+		if (!res.headerWritten && tcp_connection.connected)
+			errorOut(status, httpStatusText(status), dbg_msg, e);
 		else logDiagnostic("Error while writing the response: %s", e.msg);
-		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURI, () @trusted { return e.toString().sanitize(); } ());
+		debug logDebug("Exception while handling request %s %s: %s", req.method,
+					   req.requestURI, () @trusted { return e.toString().sanitize(); } ());
 		if (!parsed || res.headerWritten || !cast(Exception)e) keep_alive = false;
 	}
 
@@ -2320,7 +2323,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	if (res.m_requiresConnectionClose)
 		keep_alive = false;
 
-	foreach (k, v ; req._files) {
+	foreach (k, v ; req._files.byKeyValue) {
 		if (existsFile(v.tempPath)) {
 			removeFile(v.tempPath);
 			logDebug("Deleted upload tempfile %s", v.tempPath.toString());
@@ -2370,7 +2373,7 @@ private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream 
 	//headers
 	parseRFC5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc, false);
 
-	foreach (k, v; req.headers)
+	foreach (k, v; req.headers.byKeyValue)
 		logTrace("%s: %s", k, v);
 	logTrace("--------------------");
 }

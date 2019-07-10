@@ -683,7 +683,6 @@ static assert(isNullable!(Nullable!int));
 package struct ParamError {
 	string field;
 	string text;
-	string debugText;
 }
 
 package enum ParamResult {
