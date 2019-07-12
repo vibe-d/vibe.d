@@ -470,17 +470,13 @@ HTTPServerRequestDelegate serveRestJSClient(I)(RestInterfaceSettings settings)
 	if (is(I == interface))
 {
 	import std.datetime.systime : SysTime;
-	import std.digest.md : md5Of;
-	import std.digest : toHexString;
 	import std.array : appender;
 
 	import vibe.http.fileserver : ETag, handleCache;
 
 	auto app = appender!string();
 	generateRestJSClient!I(app, settings);
-	auto hash = app.data.md5Of.toHexString.idup;
-	ETag tag;
-	tag.tag = hash;
+	ETag tag = ETag.md5(false, app.data);
 
 	void serve(HTTPServerRequest req, HTTPServerResponse res)
 	{

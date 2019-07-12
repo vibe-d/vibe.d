@@ -16,12 +16,13 @@ import vibe.inet.mimetypes;
 import vibe.inet.url;
 import vibe.internal.interfaceproxy;
 
+import std.algorithm;
 import std.conv;
 import std.datetime;
 import std.digest.md;
 import std.exception;
+import std.range : popFront, empty, drop;
 import std.string;
-import std.algorithm;
 
 @safe:
 
@@ -459,12 +460,8 @@ bool handleCacheFile(scope HTTPServerRequest req, scope HTTPServerResponse res,
 	import std.digest.md : MD5, toHexString;
 
 	SysTime lastModified = dirent.timeModified;
-	ETag etag;
-	etag.weak = dirent.isDirectory;
-	MD5 md5;
-	md5.put(lastModified.stdTime.nativeToLittleEndian);
-	md5.put(dirent.size.nativeToLittleEndian);
-	etag.tag = toHexString(md5.finish())[].idup;
+	const weak = dirent.isDirectory;
+	auto etag = ETag.md5(weak, lastModified.stdTime.nativeToLittleEndian, dirent.size.nativeToLittleEndian);
 
 	return handleCache(req, res, etag, lastModified, cache_control, max_age);
 }
@@ -502,7 +499,7 @@ bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag
 			res.headers["Cache-Control"] = cache_control;
 		}
 	} else if (max_age > Duration.zero) {
-		res.headers["Cache-Control"] = "max-age=" ~ to!string(max_age.total!"seconds");
+		res.headers["Cache-Control"] = text("max-age=", max_age.total!"seconds");
 	}
 
 	// https://tools.ietf.org/html/rfc7232#section-3.1
@@ -532,8 +529,8 @@ bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag
 		// https://tools.ietf.org/html/rfc7232#section-3.3
 		string ifModifiedSince = req.headers.get("If-Modified-Since");
 		if (ifModifiedSince.length) {
-			const check = lastModifiedString == ifModifiedSince
-				|| last_modified <= parseRFC822DateTimeString(ifModifiedSince);
+			const check = lastModifiedString == ifModifiedSince ||
+				last_modified <= parseRFC822DateTimeString(ifModifiedSince);
 			if (check) {
 				res.statusCode = HTTPStatus.notModified;
 				res.writeVoidBody();
@@ -572,9 +569,7 @@ struct ETag
 		enforce!ConvException(s.endsWith('"'));
 
 		if (s.startsWith(`W/"`)) {
-			ETag ret;
-			ret.weak = true;
-			ret.tag = s[3 .. $ - 1];
+			ETag ret = { weak: true, tag: s[3 .. $ - 1] };
 			return ret;
 		} else if (s.startsWith('"')) {
 			ETag ret;
@@ -589,6 +584,26 @@ struct ETag
 	{
 		return text(weak ? `W/"` : `"`, tag, '"');
 	}
+
+	/**
+		Encodes the bytes with URL Base64 to a human readable string and returns an ETag struct wrapping it.
+	 */
+	static ETag fromBytesBase64URLNoPadding(scope const(ubyte)[] bytes, bool weak = false)
+	{
+		import std.base64 : Base64URLNoPadding;
+
+		return ETag(weak, Base64URLNoPadding.encode(bytes).idup);
+	}
+
+	/**
+		Hashes the input bytes with md5 and returns an URL Base64 encoded representation as ETag.
+	 */
+	static ETag md5(T...)(bool weak, T data)
+	{
+		import std.digest.md : md5Of;
+
+		return fromBytesBase64URLNoPadding(md5Of(data), weak);
+	}
 }
 
 /**
@@ -602,30 +617,56 @@ bool cacheMatch(string match, ETag etag, bool allow_weak)
 		return true;
 	}
 
-	if (etag.weak && !allow_weak) {
+	if ((etag.weak && !allow_weak) || !match.length) {
 		return false;
 	}
 
-	size_t i = match.indexOf('"');
-	while (i != -1) {
-		size_t end = match.indexOf('"', i + 1);
-		if (end == -1) {
-			end = match.length;
-		}
+	auto allBytes = match.representation;
 
-		const check = match[i + 1 .. end];
-		const checkWeak = match[0 .. i].endsWith("W/");
+	for (auto range = allBytes; !range.empty; range.popFront)
+	{
+		auto start = range = range.find('"').drop(1);
+		range = range.find('"');
+		if (range.empty)
+			break;
+
+		const check = start[0 .. &range[0] - &start[0]];
+		const checkWeak = match[0 .. &start[0] - &allBytes[0]].endsWith(`W/"`);
 
 		if (allow_weak || !checkWeak) {
-			if (match[i + 1 .. end] == etag.tag) {
+			if (check == etag.tag) {
 				return true;
 			}
 		}
 
-		if (!match[end + 1 .. $].stripLeft.startsWith(","))
+		if (!(cast(string) range).stripLeft.startsWith(","))
 			break;
-		i = match.indexOf('"', end + 1);
 	}
 
 	return false;
+}
+
+unittest
+{
+	// from RFC 7232 Section 2.3.2
+	// +--------+--------+-------------------+-----------------+
+	// | ETag 1 | ETag 2 | Strong Comparison | Weak Comparison |
+	// +--------+--------+-------------------+-----------------+
+	// | W/"1"  | W/"1"  | no match          | match           |
+	// | W/"1"  | W/"2"  | no match          | no match        |
+	// | W/"1"  | "1"    | no match          | match           |
+	// | "1"    | "1"    | match             | match           |
+	// +--------+--------+-------------------+-----------------+
+
+	assert(!cacheMatch(`W/"1"`, ETag(true, "1"), false));
+	assert( cacheMatch(`W/"1"`, ETag(true, "1"), true));
+
+	assert(!cacheMatch(`W/"1"`, ETag(true, "2"), false));
+	assert(!cacheMatch(`W/"1"`, ETag(true, "2"), true));
+
+	assert(!cacheMatch(`W/"1"`, ETag(false, "1"), false));
+	assert( cacheMatch(`W/"1"`, ETag(false, "1"), true));
+
+	assert(cacheMatch(`"1"`, ETag(false, "1"), false));
+	assert(cacheMatch(`"1"`, ETag(false, "1"), true));
 }
