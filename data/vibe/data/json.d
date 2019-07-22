@@ -76,7 +76,26 @@ import std.conv;
 import std.datetime;
 import std.exception;
 import std.format;
-import std.json : JSONValue, JSON_TYPE;
+static if(__VERSION__ >= 2082)
+{
+	import std.json : JSONValue, JSONType;
+}
+else
+{
+	import std.json : JSONValue, JSON_TYPE;
+	private enum JSONType : byte
+	{
+		null_ = JSON_TYPE.NULL,
+		string = JSON_TYPE.STRING,
+		integer = JSON_TYPE.INTEGER,
+		uinteger = JSON_TYPE.UINTEGER,
+		float_ = JSON_TYPE.FLOAT,
+		array = JSON_TYPE.ARRAY,
+		object = JSON_TYPE.OBJECT,
+		true_ = JSON_TYPE.TRUE,
+		false_ = JSON_TYPE.FALSE,
+	}
+}
 import std.range;
 import std.string;
 import std.traits;
@@ -212,23 +231,23 @@ struct Json {
 	this(in JSONValue value)
 	@safe {
 		final switch (value.type) {
-			case JSON_TYPE.NULL: this = null; break;
-			case JSON_TYPE.OBJECT:
+			case JSONType.null_: this = null; break;
+			case JSONType.object:
 				this = emptyObject;
 				() @trusted {
 					foreach (string k, ref const JSONValue v; value.object)
 						this[k] = Json(v);
 				} ();
 				break;
-			case JSON_TYPE.ARRAY:
+			case JSONType.array:
 				this = (() @trusted => Json(value.array.map!(a => Json(a)).array))();
 				break;
-			case JSON_TYPE.STRING: this = value.str; break;
-			case JSON_TYPE.INTEGER: this = value.integer; break;
-			case JSON_TYPE.UINTEGER: this = BigInt(value.uinteger); break;
-			case JSON_TYPE.FLOAT: this = value.floating; break;
-			case JSON_TYPE.TRUE: this = true; break;
-			case JSON_TYPE.FALSE: this = false; break;
+			case JSONType.string: this = value.str; break;
+			case JSONType.integer: this = value.integer; break;
+			case JSONType.uinteger: this = BigInt(value.uinteger); break;
+			case JSONType.float_: this = value.floating; break;
+			case JSONType.true_: this = true; break;
+			case JSONType.false_: this = false; break;
 		}
 	}
 
