@@ -43,7 +43,7 @@ interface Example1API
 	int postSum(int a, int b);
 
 	/* @property getters are always GET. @property setters are always PUT.
-	 * All supported convention prefixes are documentated : http://vibed.org/api/vibe.web.rest/registerRestInterface
+	 * All supported convention prefixes are documentated : https://vibed.org/api/vibe.web.rest/registerRestInterface
 	 * Rather obvious and thus omitted in this example interface.
 	 */
 	@property string getter();
