@@ -110,28 +110,42 @@ struct URL {
 
 	/** Constructs a URL from its string representation.
 
+		Params:
+		  url_string = the URL to parse
+		  def_schema = the schema to use in the absence of one.
+			E.g. when parsing user input from a web browser,
+			one might want to assume `http`, and `file` for other purposes.
+			If `null` (the default), no schema will throw.
+
 		TODO: additional validation required (e.g. valid host and user names and port)
 	*/
-	this(string url_string)
+	this(string url_string, string def_schema = null)
 	{
 		auto str = url_string;
 		enforce(str.length > 0, "Empty URL.");
 		if( str[0] != '/' ){
 			auto idx = str.indexOf(':');
-			enforce(idx > 0, "No schema in URL:"~str);
-			m_schema = str[0 .. idx];
+			bool requires_host = false;
+
+			if (idx > 0)
+			{
+				m_schema = str[0 .. idx];
+				str = str[idx+1 .. $];
+				if (isDoubleSlashSchema(m_schema)) {
+					// proto://server/path style
+					enforce(str.startsWith("//"), "URL must start with proto://...");
+					requires_host = true;
+					str = str[2 .. $];
+				}
+			}
+			else if (def_schema.length)
+				m_schema = def_schema;
+			else
+				throw new Exception("No schema in URL: " ~ str);
+
 			enforce(m_schema[0].isAlpha,
 					"Schema must start with an alphabetical char, found: " ~
 					m_schema[0]);
-			str = str[idx+1 .. $];
-			bool requires_host = false;
-
-			if (isDoubleSlashSchema(m_schema)) {
-				// proto://server/path style
-				enforce(str.startsWith("//"), "URL must start with proto://...");
-				requires_host = true;
-				str = str[2 .. $];
-			}
 
 			auto si = str.indexOf('/');
 			if( si < 0 ) si = str.length;
@@ -501,6 +515,12 @@ unittest {
 	assert(url.host == "127.0.0.1");
 	assert(url.port == 8080);
 	assert(url.localURI == "/echo");
+}
+
+// Test for default scheme
+unittest {
+	auto url = URL("vibe-d.org", "http");
+	assert(url.toString() == "http://vibe-d.org");
 }
 
 unittest {
