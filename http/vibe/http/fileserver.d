@@ -16,6 +16,7 @@ import vibe.inet.mimetypes;
 import vibe.inet.url;
 import vibe.internal.interfaceproxy;
 
+import std.ascii : isWhite;
 import std.algorithm;
 import std.conv;
 import std.datetime;
@@ -469,6 +470,14 @@ bool handleCacheFile(scope HTTPServerRequest req, scope HTTPServerResponse res,
 /**
 	Processes header tags in a request and writes responses given on requested cache status.
 
+	Params:
+		req = the client request used to determine cache control flow.
+		res = the response to write cache headers to.
+		etag = if set to anything except .init, adds a Etag header to the response and enables handling of If-Match and If-None-Match cache control request headers.
+		last_modified = if set to anything except .init, adds a Last-Modified header to the response and enables handling of If-Modified-Since and If-Unmodified-Since cache control request headers.
+		cache_control = if set, adds or modifies the Cache-Control header in the response to this string. Might get an additional max-age value appended if max_age is set.
+		max_age = optional duration to set the Expires header and Cache-Control max-age part to. (if no existing `max-age=` part is given in the cache_control parameter)
+
 	Returns: $(D true) if the cache was already handled and no further response must be sent or $(D false) if a response must be sent.
 */
 bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag etag,
@@ -511,6 +520,19 @@ bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag
 			return true;
 		}
 	}
+	else if (last_modified != SysTime.init) {
+		// https://tools.ietf.org/html/rfc7232#section-3.4
+		string ifUnmodifiedSince = req.headers.get("If-Unmodified-Since");
+		if (ifUnmodifiedSince.length) {
+			const check = lastModifiedString != ifUnmodifiedSince
+				|| last_modified > parseRFC822DateTimeString(ifUnmodifiedSince);
+			if (check) {
+				res.statusCode = HTTPStatus.preconditionFailed;
+				res.writeVoidBody();
+				return true;
+			}
+		}
+	}
 
 	// https://tools.ietf.org/html/rfc7232#section-3.2
 	string ifNoneMatch = req.headers.get("If-None-Match");
@@ -524,8 +546,7 @@ bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag
 			return true;
 		}
 	}
-
-	if (last_modified != SysTime.init) {
+	else if (last_modified != SysTime.init && req.method.among!(HTTPMethod.GET, HTTPMethod.HEAD)) {
 		// https://tools.ietf.org/html/rfc7232#section-3.3
 		string ifModifiedSince = req.headers.get("If-Modified-Since");
 		if (ifModifiedSince.length) {
@@ -537,19 +558,9 @@ bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag
 				return true;
 			}
 		}
-
-		// https://tools.ietf.org/html/rfc7232#section-3.4
-		string ifUnmodifiedSince = req.headers.get("If-Unmodified-Since");
-		if (ifUnmodifiedSince.length) {
-			const check = lastModifiedString != ifUnmodifiedSince
-				|| last_modified > parseRFC822DateTimeString(ifUnmodifiedSince);
-			if (check) {
-				res.statusCode = HTTPStatus.preconditionFailed;
-				res.writeVoidBody();
-				return true;
-			}
-		}
 	}
+
+	// TODO: support If-Range here
 
 	return false;
 }
@@ -625,21 +636,26 @@ bool cacheMatch(string match, ETag etag, bool allow_weak)
 
 	for (auto range = allBytes; !range.empty; range.popFront)
 	{
-		auto start = range = range.find('"').drop(1);
-		range = range.find('"');
-		if (range.empty)
+		range = range.stripLeft!isWhite;
+		bool isWeak = range.skipOver("W/");
+		if (!range.skipOver('"'))
 			break;
+		auto end = range.countUntil('"');
+		if (end == -1)
+			end = range.length;
 
-		const check = start[0 .. &range[0] - &start[0]];
-		const checkWeak = match[0 .. &start[0] - &allBytes[0]].endsWith(`W/"`);
+		const check = range[0 .. end];
+		range = range[end .. $];
+		range.skipOver('"');
+		range = range.stripLeft!isWhite;
 
-		if (allow_weak || !checkWeak) {
+		if (allow_weak || !isWeak) {
 			if (check == etag.tag) {
 				return true;
 			}
 		}
 
-		if (!(cast(string) range).stripLeft.startsWith(","))
+		if (!range.skipOver(","))
 			break;
 	}
 
@@ -669,4 +685,19 @@ unittest
 
 	assert(cacheMatch(`"1"`, ETag(false, "1"), false));
 	assert(cacheMatch(`"1"`, ETag(false, "1"), true));
+
+	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzy"), false));
+	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzy"), true));
+
+	assert(!cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzz"), false));
+	assert(!cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzz"), true));
+
+	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), false));
+	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), true));
+
+	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "c3piozzzz"), false));
+	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "c3piozzzz"), true));
+
+	assert(!cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, ""), false));
+	assert(!cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, ""), true));
 }
