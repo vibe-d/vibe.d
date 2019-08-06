@@ -285,6 +285,26 @@ unittest {
 	assert(test.text == "Hello");
 }
 
+unittest {
+	import vibe.data.json;
+	import std.exception;
+
+	enum Testable : string {
+		foo = "foo",
+		bar = "bar"
+	}
+
+	void deserializeString(string value) {
+		deserialize!(JsonSerializer, Testable)(Json(value));
+	}
+
+	foreach (string val; ["foo", "bar"]) {
+		assertNotThrown(deserializeString(val));
+	}
+
+	assertThrown!SerializationLogicError(deserializeString("foobar"));
+}
+
 /**
 	Deserializes and returns a serialized value, interpreting values according to `Policy` when possible.
 
@@ -569,6 +589,13 @@ private struct SubTraits(Traits, T, A...)
 	alias ContainerAttributes = Traits.Attributes;
 }
 
+@safe
+class SerializationLogicError : Exception {
+	this(string msg, string file = __FILE__, size_t line = __LINE__) {
+		super(msg, file, line);
+	}
+}
+
 private template deserializeValueImpl(Serializer, alias Policy) {
 	alias _Policy = Policy;
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
@@ -601,7 +628,15 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			static if (hasPolicyAttributeL!(ByNameAttribute, Policy, ATTRIBUTES)) {
 				return ser.deserializeValue!(string, ATTRIBUTES).to!T();
 			} else {
-				return cast(T)ser.deserializeValue!(OriginalType!T);
+				auto value = cast(T)ser.deserializeValue!(OriginalType!T);
+
+				switch (value) {
+					static foreach (enumvalue; EnumMembers!T) {
+						case enumvalue: return value;
+					}
+					default:
+						throw new SerializationLogicError("Unexpected enum value " ~ value.to!string());
+				}
 			}
 		} else static if (Serializer.isSupportedValueType!T) {
 			return ser.readValue!(Traits, T)();

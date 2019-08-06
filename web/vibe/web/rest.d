@@ -230,6 +230,7 @@ public import vibe.web.common;
 
 import vibe.core.log;
 import vibe.core.stream : InputStream;
+import vibe.data.serialization : SerializationLogicError;
 import vibe.http.router : URLRouter;
 import vibe.http.client : HTTPClientSettings;
 import vibe.http.common : HTTPMethod;
@@ -1444,12 +1445,16 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 					} else static if (sparam.kind == ParameterKind.wholeBody) {
 						try v = deserializeJson!PT(req.json);
 						catch (JSONException e) enforceBadRequest(false, e.msg);
+						catch (SerializationLogicError e) enforceBadRequest(false, e.msg);
 					} else static if (sparam.kind == ParameterKind.body_) {
 						try {
 							if (auto pv = fieldname in req.json)
 								v = deserializeJson!PT(*pv);
-						} catch (JSONException e)
+						} catch (JSONException e) {
 							enforceBadRequest(false, e.msg);
+						} catch (SerializationLogicError e) {
+							enforceBadRequest(false, e.msg);
+						}
 					} else static if (sparam.kind == ParameterKind.header) {
 						if (auto pv = fieldname in req.headers)
 							v = fromRestString!PT(*pv);
@@ -1939,6 +1944,8 @@ private {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		} catch (UUIDParsingException e) {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
+		} catch (SerializationLogicError e) {
+			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		}
 	}
 
@@ -1971,6 +1978,10 @@ private {
 
 		struct Foo { int bar; }
 		assertHTTPStatus(fromRestString!(Foo)("foo"), HTTPStatus.badRequest);
+
+		enum Bar { foo, bar }
+		assert(fromRestString!(Bar)("bar") == Bar.bar);
+		assertHTTPStatus(fromRestString!(Bar)("foobarbaz"), HTTPStatus.badRequest);
 	}
 }
 
