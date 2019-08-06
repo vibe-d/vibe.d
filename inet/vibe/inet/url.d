@@ -424,6 +424,7 @@ private bool isDoubleSlashSchema(string schema)
 	switch (schema) {
 		case "ftp", "http", "https", "http+unix", "https+unix":
 		case "spdy", "sftp", "ws", "wss", "file", "redis", "tcp":
+		case "rtsp", "rtsps":
 			return true;
 		default:
 			return false;
@@ -500,6 +501,14 @@ unittest {
 	URL url = URL("ws://127.0.0.1:8080/echo");
 	assert(url.host == "127.0.0.1");
 	assert(url.port == 8080);
+	assert(url.localURI == "/echo");
+}
+
+//rtsp unittest
+unittest {
+	URL url = URL("rtsp://127.0.0.1:554/echo");
+	assert(url.host == "127.0.0.1");
+	assert(url.port == 554);
 	assert(url.localURI == "/echo");
 }
 
