@@ -633,21 +633,21 @@ bool cacheMatch(string match, ETag etag, bool allow_weak)
 	}
 
 	auto allBytes = match.representation;
+	auto range = allBytes;
 
-	for (auto range = allBytes; !range.empty; range.popFront)
+	while (!range.empty)
 	{
 		range = range.stripLeft!isWhite;
 		bool isWeak = range.skipOver("W/");
 		if (!range.skipOver('"'))
-			break;
+			return false; // malformed
+
 		auto end = range.countUntil('"');
 		if (end == -1)
-			end = range.length;
+			return false; // malformed
 
 		const check = range[0 .. end];
 		range = range[end .. $];
-		range.skipOver('"');
-		range = range.stripLeft!isWhite;
 
 		if (allow_weak || !isWeak) {
 			if (check == etag.tag) {
@@ -655,8 +655,11 @@ bool cacheMatch(string match, ETag etag, bool allow_weak)
 			}
 		}
 
+		range.skipOver('"');
+		range = range.stripLeft!isWhite;
+
 		if (!range.skipOver(","))
-			break;
+			return false; // malformed
 	}
 
 	return false;
@@ -686,18 +689,23 @@ unittest
 	assert(cacheMatch(`"1"`, ETag(false, "1"), false));
 	assert(cacheMatch(`"1"`, ETag(false, "1"), true));
 
-	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzy"), false));
-	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzy"), true));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzy"), false));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzy"), true));
 
-	assert(!cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzz"), false));
-	assert(!cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzz"), true));
+	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzz"), false));
+	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzz"), true));
 
-	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), false));
-	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), true));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), false));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), true));
 
-	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "c3piozzzz"), false));
-	assert(cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, "c3piozzzz"), true));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "c3piozzzz"), false));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "c3piozzzz"), true));
 
-	assert(!cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, ""), false));
-	assert(!cacheMatch(`"xyzzy", "r2d2xxxx", "c3piozzzz"`, ETag(false, ""), true));
+	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, ""), false));
+	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, ""), true));
+
+	assert(!cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(true, "r2d2xxxx"), false));
+	assert( cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(true, "r2d2xxxx"), true));
+	assert(!cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), false));
+	assert( cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), true));
 }
