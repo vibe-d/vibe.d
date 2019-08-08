@@ -24,6 +24,7 @@ import std.digest.md;
 import std.exception;
 import std.range : popFront, empty, drop;
 import std.string;
+import std.typecons : Flag, Yes, No;
 
 @safe:
 
@@ -461,7 +462,7 @@ bool handleCacheFile(scope HTTPServerRequest req, scope HTTPServerResponse res,
 	import std.digest.md : MD5, toHexString;
 
 	SysTime lastModified = dirent.timeModified;
-	const weak = dirent.isDirectory;
+	const weak = cast(Flag!"weak") dirent.isDirectory;
 	auto etag = ETag.md5(weak, lastModified.stdTime.nativeToLittleEndian, dirent.size.nativeToLittleEndian);
 
 	return handleCache(req, res, etag, lastModified, cache_control, max_age);
@@ -514,7 +515,7 @@ bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag
 	// https://tools.ietf.org/html/rfc7232#section-3.1
 	string ifMatch = req.headers.get("If-Match");
 	if (ifMatch.length) {
-		if (!cacheMatch(ifMatch, etag, false)) {
+		if (!cacheMatch(ifMatch, etag, No.allowWeak)) {
 			res.statusCode = HTTPStatus.preconditionFailed;
 			res.writeVoidBody();
 			return true;
@@ -537,7 +538,7 @@ bool handleCache(scope HTTPServerRequest req, scope HTTPServerResponse res, ETag
 	// https://tools.ietf.org/html/rfc7232#section-3.2
 	string ifNoneMatch = req.headers.get("If-None-Match");
 	if (ifNoneMatch.length) {
-		if (cacheMatch(ifNoneMatch, etag, true)) {
+		if (cacheMatch(ifNoneMatch, etag, Yes.allowWeak)) {
 			if (req.method.among!(HTTPMethod.GET, HTTPMethod.HEAD))
 				res.statusCode = HTTPStatus.notModified;
 			else
@@ -599,7 +600,7 @@ struct ETag
 	/**
 		Encodes the bytes with URL Base64 to a human readable string and returns an ETag struct wrapping it.
 	 */
-	static ETag fromBytesBase64URLNoPadding(scope const(ubyte)[] bytes, bool weak = false)
+	static ETag fromBytesBase64URLNoPadding(scope const(ubyte)[] bytes, Flag!"weak" weak = No.weak)
 	{
 		import std.base64 : Base64URLNoPadding;
 
@@ -609,7 +610,7 @@ struct ETag
 	/**
 		Hashes the input bytes with md5 and returns an URL Base64 encoded representation as ETag.
 	 */
-	static ETag md5(T...)(bool weak, T data)
+	static ETag md5(T...)(Flag!"weak" weak, T data)
 	{
 		import std.digest.md : md5Of;
 
@@ -622,7 +623,7 @@ struct ETag
 
 	Standards: https://tools.ietf.org/html/rfc7232#section-2.3.2
 */
-bool cacheMatch(string match, ETag etag, bool allow_weak)
+bool cacheMatch(string match, ETag etag, Flag!"allowWeak" allow_weak)
 {
 	if (match == "*") {
 		return true;
@@ -677,35 +678,35 @@ unittest
 	// | "1"    | "1"    | match             | match           |
 	// +--------+--------+-------------------+-----------------+
 
-	assert(!cacheMatch(`W/"1"`, ETag(true, "1"), false));
-	assert( cacheMatch(`W/"1"`, ETag(true, "1"), true));
+	assert(!cacheMatch(`W/"1"`, ETag(Yes.weak, "1"), No.allowWeak));
+	assert( cacheMatch(`W/"1"`, ETag(Yes.weak, "1"), Yes.allowWeak));
 
-	assert(!cacheMatch(`W/"1"`, ETag(true, "2"), false));
-	assert(!cacheMatch(`W/"1"`, ETag(true, "2"), true));
+	assert(!cacheMatch(`W/"1"`, ETag(Yes.weak, "2"), No.allowWeak));
+	assert(!cacheMatch(`W/"1"`, ETag(Yes.weak, "2"), Yes.allowWeak));
 
-	assert(!cacheMatch(`W/"1"`, ETag(false, "1"), false));
-	assert( cacheMatch(`W/"1"`, ETag(false, "1"), true));
+	assert(!cacheMatch(`W/"1"`, ETag(No.weak, "1"), No.allowWeak));
+	assert( cacheMatch(`W/"1"`, ETag(No.weak, "1"), Yes.allowWeak));
 
-	assert(cacheMatch(`"1"`, ETag(false, "1"), false));
-	assert(cacheMatch(`"1"`, ETag(false, "1"), true));
+	assert(cacheMatch(`"1"`, ETag(No.weak, "1"), No.allowWeak));
+	assert(cacheMatch(`"1"`, ETag(No.weak, "1"), Yes.allowWeak));
 
-	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzy"), false));
-	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzy"), true));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "xyzzy"), No.allowWeak));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "xyzzy"), Yes.allowWeak));
 
-	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzz"), false));
-	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "xyzzz"), true));
+	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "xyzzz"), No.allowWeak));
+	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "xyzzz"), Yes.allowWeak));
 
-	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), false));
-	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), true));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "r2d2xxxx"), No.allowWeak));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "r2d2xxxx"), Yes.allowWeak));
 
-	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "c3piozzzz"), false));
-	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, "c3piozzzz"), true));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "c3piozzzz"), No.allowWeak));
+	assert(cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "c3piozzzz"), Yes.allowWeak));
 
-	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, ""), false));
-	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(false, ""), true));
+	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, ""), No.allowWeak));
+	assert(!cacheMatch(`"xyzzy","r2d2xxxx", "c3piozzzz"`, ETag(No.weak, ""), Yes.allowWeak));
 
-	assert(!cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(true, "r2d2xxxx"), false));
-	assert( cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(true, "r2d2xxxx"), true));
-	assert(!cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), false));
-	assert( cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(false, "r2d2xxxx"), true));
+	assert(!cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(Yes.weak, "r2d2xxxx"), No.allowWeak));
+	assert( cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(Yes.weak, "r2d2xxxx"), Yes.allowWeak));
+	assert(!cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "r2d2xxxx"), No.allowWeak));
+	assert( cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "r2d2xxxx"), Yes.allowWeak));
 }
