@@ -673,7 +673,7 @@ final class HTTPClient {
 
 				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, m_settings.dnsAddressFamily, use_dns);
 				proxyAddr.port = m_settings.proxyURL.port;
-				m_conn = connectTCP(proxyAddr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
+				m_conn = connectTCPWithTimeout(proxyAddr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
 			}
 			else {
 				version(UnixSocket)
@@ -696,12 +696,12 @@ final class HTTPClient {
 						addr = resolveHost(m_server, m_settings.dnsAddressFamily);
 						addr.port = m_port;
 					}
-					m_conn = connectTCP(addr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
+					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
 				} else
 				{
 					auto addr = resolveHost(m_server, m_settings.dnsAddressFamily);
 					addr.port = m_port;
-					m_conn = connectTCP(addr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
+					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
 				}
 			}
 
@@ -754,18 +754,14 @@ final class HTTPClient {
 	}
 }
 
-static if (!isTcpConnectionTimeoutEnabled)
+private auto connectTCPWithTimeout(NetworkAddress addr, NetworkAddress bind_address, Duration timeout)
 {
-	/// Wrapper for timeouts support by the same way as provides vibe-core's connectTCP
-	private auto connectTCP(NetworkAddress addr, NetworkAddress bind_address, Duration timeout)
-	{
-		auto conn = vibe.core.net.connectTCP(addr, bind_address);
+	auto conn = vibe.core.net.connectTCP(addr, bind_address);
 
-		if(timeout != Duration.max)
-			conn.readTimeout = timeout;
+	if(timeout != Duration.max)
+		conn.readTimeout = timeout;
 
-		return conn;
-	}
+	return conn;
 }
 
 /**
