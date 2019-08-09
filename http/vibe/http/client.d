@@ -352,12 +352,6 @@ unittest {
 		sw.stop;
 		isThrown = true;
 
-		version(VibeLibasyncDriver)
-		{
-			if(!e.msg.canFind("timeout"))
-				throw e;
-		}
-
 		if(sw.peek > 1.seconds) // request should fail ~immediately
 			throw e;
 	}
@@ -758,7 +752,7 @@ private auto connectTCPWithTimeout(NetworkAddress addr, NetworkAddress bind_addr
 {
 	auto conn = vibe.core.net.connectTCP(addr, bind_address);
 
-	if(timeout != Duration.max)
+	if(isTcpConnectionTimeoutEnabled && timeout != Duration.max)
 		conn.readTimeout = timeout;
 
 	return conn;
