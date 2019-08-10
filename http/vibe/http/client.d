@@ -134,10 +134,10 @@ private bool isTlsNeed(in URL url, in HTTPClientSettings settings)
 	return use_tls;
 }
 
-//TODO: remove @trusted
-private void httpRequesterDg(scope HTTPClientRequest req, in URL url, in HTTPClientSettings settings, scope void delegate(scope HTTPClientRequest req) requester) @trusted
+private void httpRequesterDg(scope HTTPClientRequest req, in URL url, in HTTPClientSettings settings, scope void delegate(scope HTTPClientRequest req) requester)
 {
 	import std.algorithm.searching : canFind;
+	import vibe.http.auth.basic_auth_client: addBasicAuth;
 
 	if (url.localURI.length) {
 		assert(url.path.absolute, "Request URL path must be absolute.");
@@ -156,14 +156,10 @@ private void httpRequesterDg(scope HTTPClientRequest req, in URL url, in HTTPCli
 	else
 		req.headers["Host"] = hoststr;
 
-	if ("authorization" !in req.headers && url.username != "") {
-		import std.base64;
-		string pwstr = url.username ~ ":" ~ url.password;
-		req.headers["Authorization"] = "Basic " ~
-			cast(string)Base64.encode(cast(ubyte[])pwstr);
-	}
+	if ("authorization" !in req.headers && url.username != "")
+		req.addBasicAuth(url.username, url.password);
 
-	if (requester) requester(req);
+	if (requester) () @trusted{ requester(req); } ();
 }
 
 /** Posts a simple JSON request. Note that the server www.example.org does not

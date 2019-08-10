@@ -105,15 +105,4 @@ bool checkBasicAuth(scope HTTPServerRequest req, scope PasswordVerifyCallback pw
 	return false;
 }
 
-
-/**
-	Augments the given HTTP request with an HTTP Basic Auth header.
-*/
-void addBasicAuth(scope HTTPRequest req, string user, string password)
-{
-	string pwstr = user ~ ":" ~ password;
-	string authstr = () @trusted { return cast(string)Base64.encode(cast(ubyte[])pwstr); } ();
-	req.headers["Authorization"] = "Basic " ~ authstr;
-}
-
 alias PasswordVerifyCallback = bool delegate(string user, string password);
