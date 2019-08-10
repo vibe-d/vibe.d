@@ -79,23 +79,7 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 {
 	import std.algorithm.searching : canFind;
 
-	version(UnixSocket) {
-		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
-	} else {
-		enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
-	}
-	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool use_tls;
-
-	if (settings.proxyURL.schema !is null)
-		use_tls = settings.proxyURL.schema == "https";
-	else
-	{
-		version(UnixSocket)
-			use_tls = url.schema == "https" || url.schema == "https+unix";
-		else
-			use_tls = url.schema == "https";
-	}
+	bool use_tls = isTlsNeed(url, settings);
 
 	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
 	auto res = cli.request((req){
@@ -137,23 +121,7 @@ void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) re
 /// ditto
 void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, const(HTTPClientSettings) settings = defaultSettings)
 {
-	version(UnixSocket) {
-		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
-	} else {
-		enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
-	}
-	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool use_tls;
-
-	if (settings.proxyURL.schema !is null)
-		use_tls = settings.proxyURL.schema == "https";
-	else
-	{
-		version(UnixSocket)
-			use_tls = url.schema == "https" || url.schema == "https+unix";
-		else
-			use_tls = url.schema == "https";
-	}
+	bool use_tls = isTlsNeed(url, settings);
 
 	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
 	cli.request((scope req) {
@@ -180,6 +148,29 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 	}, responder);
 	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
 	assert(!cli.m_responding, "HTTP client still responding after return!?");
+}
+
+private bool isTlsNeed(in URL url, in HTTPClientSettings settings)
+{
+	version(UnixSocket) {
+		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
+	} else {
+		enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
+	}
+	enforce(url.host.length > 0, "URL must contain a host name.");
+	bool use_tls;
+
+	if (settings.proxyURL.schema !is null)
+		use_tls = settings.proxyURL.schema == "https";
+	else
+	{
+		version(UnixSocket)
+			use_tls = url.schema == "https" || url.schema == "https+unix";
+		else
+			use_tls = url.schema == "https";
+	}
+
+	return use_tls;
 }
 
 /** Posts a simple JSON request. Note that the server www.example.org does not
