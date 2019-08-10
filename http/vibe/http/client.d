@@ -147,10 +147,10 @@ private void httpRequesterDg(scope HTTPClientRequest req, in URL url, in HTTPCli
 	if (settings.proxyURL.schema !is null)
 		req.requestURL = url.toString(); // proxy exception to the URL representation
 
-	// Provide port number when it is not the default one (RFC2616 section 14.23)
 	// IPv6 addresses need to be put into brackets
 	auto hoststr = url.host.canFind(':') ? "["~url.host~"]" : url.host;
 
+	// Provide port number when it is not the default one (RFC2616 section 14.23)
 	if (url.port && url.port != url.defaultPort)
 		req.headers["Host"] = format("%s:%d", hoststr, url.port);
 	else
@@ -159,7 +159,7 @@ private void httpRequesterDg(scope HTTPClientRequest req, in URL url, in HTTPCli
 	if ("authorization" !in req.headers && url.username != "")
 		req.addBasicAuth(url.username, url.password);
 
-	if (requester) () @trusted{ requester(req); } ();
+	if (requester) () @trusted { requester(req); } ();
 }
 
 /** Posts a simple JSON request. Note that the server www.example.org does not
