@@ -302,7 +302,7 @@ unittest {
 		assertNotThrown(deserializeString(val));
 	}
 
-	assertThrown!SerializationLogicError(deserializeString("foobar"));
+	assertThrown!JSONException(deserializeString("foobar"));
 }
 
 /**
@@ -589,13 +589,6 @@ private struct SubTraits(Traits, T, A...)
 	alias ContainerAttributes = Traits.Attributes;
 }
 
-@safe
-class SerializationLogicError : Exception {
-	this(string msg, string file = __FILE__, size_t line = __LINE__) {
-		super(msg, file, line);
-	}
-}
-
 private template deserializeValueImpl(Serializer, alias Policy) {
 	alias _Policy = Policy;
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
@@ -624,22 +617,14 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 		static if (isPolicySerializable!(Policy, T)) {
 			alias CustomType = typeof(Policy!T.toRepresentation(T.init));
 			return Policy!T.fromRepresentation(ser.deserializeValue!(CustomType, ATTRIBUTES));
+		} else static if (Serializer.isSupportedValueType!T) {
+			return ser.readValue!(Traits, T)();
 		} else static if (is(T == enum)) {
 			static if (hasPolicyAttributeL!(ByNameAttribute, Policy, ATTRIBUTES)) {
 				return ser.deserializeValue!(string, ATTRIBUTES).to!T();
 			} else {
-				auto value = cast(T)ser.deserializeValue!(OriginalType!T);
-
-				switch (value) {
-					static foreach (enumvalue; EnumMembers!T) {
-						case enumvalue: return value;
-					}
-					default:
-						throw new SerializationLogicError("Unexpected enum value " ~ value.to!string());
-				}
+				return cast(T)ser.deserializeValue!(OriginalType!T);
 			}
-		} else static if (Serializer.isSupportedValueType!T) {
-			return ser.readValue!(Traits, T)();
 		} else static if (/*isInstanceOf!(Tuple, TU)*/is(T == Tuple!TPS, TPS...)) {
 			enum fieldsCount = T.Types.length;
 			import std.algorithm.searching: all;
@@ -1297,7 +1282,7 @@ unittest {
 	static assert(!hasAttributeL!(AsArrayAttribute!DefaultPolicy, byName));
 }
 
-private template hasPolicyAttributeL(alias T, alias POLICY, ATTRIBUTES...)
+template hasPolicyAttributeL(alias T, alias POLICY, ATTRIBUTES...)
 {
 	enum hasPolicyAttributeL = hasAttributeL!(T!POLICY, ATTRIBUTES) || hasAttributeL!(T!DefaultPolicy, ATTRIBUTES);
 }
