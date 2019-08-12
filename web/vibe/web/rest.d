@@ -244,7 +244,7 @@ import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAu
 
 import std.algorithm : startsWith, endsWith;
 import std.range : isOutputRange;
-import std.typecons : Nullable;
+import std.typecons : No, Nullable, Yes;
 import std.typetuple : anySatisfy, Filter;
 import std.traits;
 
@@ -476,7 +476,7 @@ HTTPServerRequestDelegate serveRestJSClient(I)(RestInterfaceSettings settings)
 
 	auto app = appender!string();
 	generateRestJSClient!I(app, settings);
-	ETag tag = ETag.md5(false, app.data);
+	ETag tag = ETag.md5(No.weak, app.data);
 
 	void serve(HTTPServerRequest req, HTTPServerResponse res)
 	{
