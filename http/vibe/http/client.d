@@ -252,13 +252,6 @@ static ~this()
 private struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
 private static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 
-// TODO: Connection timeout argument is accepted by libasync and win32 drivers but not affects to anything by some reason
-version(VibeLibasyncDriver)
-	enum isTcpConnectionTimeoutEnabled = false;
-else version(VibeWin32Driver)
-	enum isTcpConnectionTimeoutEnabled = false;
-else
-	enum isTcpConnectionTimeoutEnabled = true;
 
 /**************************************************************************************************/
 /* Public types                                                                                   */
@@ -271,15 +264,17 @@ class HTTPClientSettings {
 	URL proxyURL;
 	Duration defaultKeepAliveTimeout = 10.seconds;
 
-	static if(!isTcpConnectionTimeoutEnabled)
-	{
-		// To avoid accidental usage it is declared as const
-		const Duration tcpConnectionTimeout = Duration.max;
-	}
-	else
-	{
-		Duration tcpConnectionTimeout = Duration.max;
-	}
+	/** Timeout for establishing a connection to the server
+
+		Note that this setting is only supported when using the vibe-core
+		module. If using one of the legacy drivers, any value other than
+		`Duration.max` will emit a runtime warning and connects without a
+		specific timeout.
+	*/
+	Duration connectTimeout = Duration.max;
+
+	/// Timeout during read operations on the underyling transport
+	Duration readTimeout = Duration.max;
 
 	/// Forces a specific network interface to use for outgoing connections.
 	NetworkAddress networkInterface = anyAddress;
@@ -297,7 +292,8 @@ class HTTPClientSettings {
 	const @safe {
 		auto ret = new HTTPClientSettings;
 		ret.proxyURL = this.proxyURL;
-		static if(isTcpConnectionTimeoutEnabled) ret.tcpConnectionTimeout = this.tcpConnectionTimeout;
+		ret.connectTimeout = this.connectTimeout;
+		ret.readTimeout = this.readTimeout;
 		ret.networkInterface = this.networkInterface;
 		ret.dnsAddressFamily = this.dnsAddressFamily;
 		ret.tlsContextSetup = this.tlsContextSetup;
@@ -327,37 +323,64 @@ unittest {
 	}
 }
 
-static if(isTcpConnectionTimeoutEnabled)
-unittest {
-	import std.exception;
-	import std.algorithm.searching;
-	import std.datetime.stopwatch;
+version (Have_vibe_core)
+unittest { // test connect timeout
+	import std.conv : to;
+	import vibe.core.stream : pipe, nullSink;
 
 	HTTPClientSettings settings = new HTTPClientSettings;
-	settings.tcpConnectionTimeout = 1.msecs; // for testing purposes closes connection ~immediately after creation
+	settings.connectTimeout = 50.msecs;
 
-	bool isThrown;
-	auto sw = StopWatch(AutoStart.yes);
+	// Use an IP address that is guaranteed to be unassigned globally to force
+	// a timeout (see RFC 3330)
+	auto cli = connectHTTP("192.0.2.0", 80, false, settings);
+	auto timer = setTimer(500.msecs, { assert(false, "Connect timeout occurred too late"); });
+	scope (exit) timer.stop();
 
-	try
-	{
-		requestHTTP(
-			"http://www.example.org",
-			(scope req){ req.method = HTTPMethod.GET; },
-			settings
+	try {
+		cli.request(
+			(scope req) { assert(false, "Expected no connection"); },
+			(scope res) { assert(false, "Expected no response"); }
 		);
-	}
-	catch(Exception e)
-	{
-		sw.stop;
-		isThrown = true;
-
-		if(sw.peek > 1.seconds) // request should fail ~immediately
-			throw e;
-	}
-
-	assert(isThrown);
+		assert(false, "Response read expected to fail due to timeout");
+	} catch(Exception e) {}
 }
+
+unittest { // test read timeout
+	import std.conv : to;
+	import vibe.core.stream : pipe, nullSink;
+
+	version (VibeLibasyncDriver) {
+		logInfo("Skipping HTTP client read timeout test due to buggy libasync driver.");
+	} else {
+		HTTPClientSettings settings = new HTTPClientSettings;
+		settings.readTimeout = 50.msecs;
+
+		auto l = listenTCP(0, (conn) {
+			try conn.pipe(nullSink);
+			catch (Exception e) assert(false, e.msg);
+			conn.close();
+		}, "127.0.0.1");
+
+		auto cli = connectHTTP("127.0.0.1", l.bindAddress.port, false, settings);
+		auto timer = setTimer(500.msecs, { assert(false, "Read timeout occurred too late"); });
+		scope (exit) {
+			timer.stop();
+			l.stopListening();
+			cli.disconnect();
+			sleep(10.msecs); // allow the read connection end to fully close
+		}
+
+		try {
+			cli.request(
+				(scope req) { req.method = HTTPMethod.GET; },
+				(scope res) { assert(false, "Expected no response"); }
+			);
+			assert(false, "Response read expected to fail due to timeout");
+		} catch(Exception e) {}
+	}
+}
+
 
 /**
 	Implementation of a HTTP 1.0/1.1 client with keep-alive support.
@@ -667,7 +690,7 @@ final class HTTPClient {
 
 				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, m_settings.dnsAddressFamily, use_dns);
 				proxyAddr.port = m_settings.proxyURL.port;
-				m_conn = connectTCPWithTimeout(proxyAddr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
+				m_conn = connectTCPWithTimeout(proxyAddr, m_settings.networkInterface, m_settings.connectTimeout);
 			}
 			else {
 				version(UnixSocket)
@@ -690,14 +713,17 @@ final class HTTPClient {
 						addr = resolveHost(m_server, m_settings.dnsAddressFamily);
 						addr.port = m_port;
 					}
-					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
+					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.connectTimeout);
 				} else
 				{
 					auto addr = resolveHost(m_server, m_settings.dnsAddressFamily);
 					addr.port = m_port;
-					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.tcpConnectionTimeout);
+					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.connectTimeout);
 				}
 			}
+
+			if (m_settings.readTimeout != Duration.max)
+				m_conn.readTimeout = m_settings.readTimeout;
 
 			m_stream = m_conn;
 			if (m_useTLS) {
@@ -750,12 +776,13 @@ final class HTTPClient {
 
 private auto connectTCPWithTimeout(NetworkAddress addr, NetworkAddress bind_address, Duration timeout)
 {
-	auto conn = vibe.core.net.connectTCP(addr, bind_address);
-
-	if(isTcpConnectionTimeoutEnabled && timeout != Duration.max)
-		conn.readTimeout = timeout;
-
-	return conn;
+	version (Have_vibe_core) {
+		return connectTCP(addr, bind_address, timeout);
+	} else {
+		if (timeout != Duration.max)
+			logWarn("HTTP client connect timeout is set, but not supported by the legacy vibe-d:core module.");
+		return connectTCP(addr, bind_address);
+	}
 }
 
 /**

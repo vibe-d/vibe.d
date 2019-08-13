@@ -122,7 +122,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 	@property void readTimeout(Duration v)
 	{
 		m_readTimeout = v;
-		if( v == dur!"seconds"(0) ){
+		if (v == dur!"seconds"(0) || v == Duration.max) {
 			() @trusted { bufferevent_set_timeouts(m_ctx.event, null, null); } ();
 		} else {
 			assert(v.total!"seconds" <= int.max);
