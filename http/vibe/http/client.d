@@ -79,7 +79,7 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 {
 	import std.algorithm.searching : canFind;
 
-	bool use_tls = isTlsNeed(url, settings);
+	bool use_tls = isTLSRequired(url, settings);
 
 	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
 	auto res = cli.request(
@@ -100,7 +100,7 @@ void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) re
 /// ditto
 void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, const(HTTPClientSettings) settings = defaultSettings)
 {
-	bool use_tls = isTlsNeed(url, settings);
+	bool use_tls = isTLSRequired(url, settings);
 
 	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
 	cli.request(
@@ -111,7 +111,7 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 	assert(!cli.m_responding, "HTTP client still responding after return!?");
 }
 
-private bool isTlsNeed(in URL url, in HTTPClientSettings settings)
+private bool isTLSRequired(in URL url, in HTTPClientSettings settings)
 {
 	version(UnixSocket) {
 		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
