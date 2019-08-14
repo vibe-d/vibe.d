@@ -244,7 +244,7 @@ import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAu
 
 import std.algorithm : startsWith, endsWith;
 import std.range : isOutputRange;
-import std.typecons : Nullable;
+import std.typecons : No, Nullable, Yes;
 import std.typetuple : anySatisfy, Filter;
 import std.traits;
 
@@ -469,23 +469,20 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, string 
 HTTPServerRequestDelegate serveRestJSClient(I)(RestInterfaceSettings settings)
 	if (is(I == interface))
 {
-	import std.digest.md : md5Of;
-	import std.digest : toHexString;
+	import std.datetime.systime : SysTime;
 	import std.array : appender;
+
+	import vibe.http.fileserver : ETag, handleCache;
 
 	auto app = appender!string();
 	generateRestJSClient!I(app, settings);
-	auto hash = app.data.md5Of.toHexString.idup;
+	ETag tag = ETag.md5(No.weak, app.data);
 
 	void serve(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		if (auto pv = "If-None-Match" in res.headers) {
-			res.statusCode = HTTPStatus.notModified;
-			res.writeVoidBody();
+		if (handleCache(req, res, tag, SysTime.init, "public"))
 			return;
-		}
 
-		res.headers["Etag"] = hash;
 		res.writeBody(app.data, "application/javascript; charset=UTF-8");
 	}
 
