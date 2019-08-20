@@ -3,7 +3,7 @@
 
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
-module vibe.http.auth.basic_auth_client;
+module vibe.http.internal.basic_auth_client;
 
 import vibe.http.common;
 import std.base64;

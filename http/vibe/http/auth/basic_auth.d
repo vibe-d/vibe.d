@@ -105,9 +105,8 @@ bool checkBasicAuth(scope HTTPServerRequest req, scope PasswordVerifyCallback pw
 	return false;
 }
 
-static import vibe.http.auth.basic_auth_client;
+static import vibe.http.internal.basic_auth_client;
 
-deprecated("It will be removed in 0.9. Use vibe.http.auth.basic_auth_client.addBasicAuth instead.")
-alias addBasicAuth = vibe.http.auth.basic_auth_client.addBasicAuth;
+alias addBasicAuth = vibe.http.internal.basic_auth_client.addBasicAuth;
 
 alias PasswordVerifyCallback = bool delegate(string user, string password);

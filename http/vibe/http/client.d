@@ -137,7 +137,7 @@ private bool isTLSRequired(in URL url, in HTTPClientSettings settings)
 private void httpRequesterDg(scope HTTPClientRequest req, in URL url, in HTTPClientSettings settings, scope void delegate(scope HTTPClientRequest req) requester)
 {
 	import std.algorithm.searching : canFind;
-	import vibe.http.auth.basic_auth_client: addBasicAuth;
+	import vibe.http.internal.basic_auth_client: addBasicAuth;
 
 	if (url.localURI.length) {
 		assert(url.path.absolute, "Request URL path must be absolute.");
