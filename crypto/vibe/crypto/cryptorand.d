@@ -167,7 +167,7 @@ final class SystemRNG : RandomNumberStream {
 			version (linux) static if (LinuxMaybeHasGetrandom)
 			{
 				import core.atomic : atomicLoad, atomicStore;
-				auto p = atomicLoad(*cast(const shared GET_RANDOM*) &hasGetRandom);
+				GET_RANDOM p = atomicLoad(*cast(const shared GET_RANDOM*) &hasGetRandom);
 				if (p == GET_RANDOM.UNINITIALIZED)
 				{
 					p = initHasGetRandom() ? GET_RANDOM.AVAILABLE
