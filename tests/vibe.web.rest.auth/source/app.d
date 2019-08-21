@@ -3,7 +3,6 @@ module app;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.http.auth.basic_auth;
-import vibe.http.auth.basic_auth_client;
 import vibe.http.client;
 import vibe.http.router;
 import vibe.http.server;
