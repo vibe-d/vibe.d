@@ -79,49 +79,12 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 {
 	import std.algorithm.searching : canFind;
 
-	version(UnixSocket) {
-		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
-	} else {
-		enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
-	}
-	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool use_tls;
-
-	if (settings.proxyURL.schema !is null)
-		use_tls = settings.proxyURL.schema == "https";
-	else
-	{
-		version(UnixSocket)
-			use_tls = url.schema == "https" || url.schema == "https+unix";
-		else
-			use_tls = url.schema == "https";
-	}
+	bool use_tls = isTLSRequired(url, settings);
 
 	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
-	auto res = cli.request((req){
-		if (url.localURI.length) {
-			assert(url.path.absolute, "Request URL path must be absolute.");
-			req.requestURL = url.localURI;
-		}
-		if (settings.proxyURL.schema !is null)
-			req.requestURL = url.toString(); // proxy exception to the URL representation
-
-		// Provide port number when it is not the default one (RFC2616 section 14.23)
-		// IPv6 addresses need to be put into brackets
-		auto hoststr = url.host.canFind(':') ? "["~url.host~"]" : url.host;
-		if (url.port && url.port != url.defaultPort)
-			req.headers["Host"] = format("%s:%d", hoststr, url.port);
-		else
-			req.headers["Host"] = hoststr;
-
-		if ("authorization" !in req.headers && url.username != "") {
-			import std.base64;
-			string pwstr = url.username ~ ":" ~ url.password;
-			req.headers["Authorization"] = "Basic " ~
-				cast(string)Base64.encode(cast(ubyte[])pwstr);
-		}
-		if (requester) requester(req);
-	});
+	auto res = cli.request(
+		(scope req){ httpRequesterDg(req, url, settings, requester); },
+	);
 
 	// make sure the connection stays locked if the body still needs to be read
 	if( res.m_client ) res.lockedConnection = cli;
@@ -137,6 +100,19 @@ void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) re
 /// ditto
 void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, const(HTTPClientSettings) settings = defaultSettings)
 {
+	bool use_tls = isTLSRequired(url, settings);
+
+	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
+	cli.request(
+		(scope req){ httpRequesterDg(req, url, settings, requester); },
+		responder
+	);
+	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
+	assert(!cli.m_responding, "HTTP client still responding after return!?");
+}
+
+private bool isTLSRequired(in URL url, in HTTPClientSettings settings)
+{
 	version(UnixSocket) {
 		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
 	} else {
@@ -155,31 +131,35 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 			use_tls = url.schema == "https";
 	}
 
-	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
-	cli.request((scope req) {
-		if (url.localURI.length) {
-			assert(url.path.absolute, "Request URL path must be absolute.");
-			req.requestURL = url.localURI;
-		}
-		if (settings.proxyURL.schema !is null)
-			req.requestURL = url.toString(); // proxy exception to the URL representation
+	return use_tls;
+}
 
-		// Provide port number when it is not the default one (RFC2616 section 14.23)
-		if (url.port && url.port != url.defaultPort)
-			req.headers["Host"] = format("%s:%d", url.host, url.port);
-		else
-			req.headers["Host"] = url.host;
+private void httpRequesterDg(scope HTTPClientRequest req, in URL url, in HTTPClientSettings settings, scope void delegate(scope HTTPClientRequest req) requester)
+{
+	import std.algorithm.searching : canFind;
+	import vibe.http.internal.basic_auth_client: addBasicAuth;
 
-		if ("authorization" !in req.headers && url.username != "") {
-			import std.base64;
-			string pwstr = url.username ~ ":" ~ url.password;
-			req.headers["Authorization"] = "Basic " ~
-				cast(string)Base64.encode(cast(ubyte[])pwstr);
-		}
-		if (requester) requester(req);
-	}, responder);
-	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
-	assert(!cli.m_responding, "HTTP client still responding after return!?");
+	if (url.localURI.length) {
+		assert(url.path.absolute, "Request URL path must be absolute.");
+		req.requestURL = url.localURI;
+	}
+
+	if (settings.proxyURL.schema !is null)
+		req.requestURL = url.toString(); // proxy exception to the URL representation
+
+	// IPv6 addresses need to be put into brackets
+	auto hoststr = url.host.canFind(':') ? "["~url.host~"]" : url.host;
+
+	// Provide port number when it is not the default one (RFC2616 section 14.23)
+	if (url.port && url.port != url.defaultPort)
+		req.headers["Host"] = format("%s:%d", hoststr, url.port);
+	else
+		req.headers["Host"] = hoststr;
+
+	if ("authorization" !in req.headers && url.username != "")
+		req.addBasicAuth(url.username, url.password);
+
+	if (requester) () @trusted { requester(req); } ();
 }
 
 /** Posts a simple JSON request. Note that the server www.example.org does not
