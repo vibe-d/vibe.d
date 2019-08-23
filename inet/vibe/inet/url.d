@@ -37,7 +37,7 @@ struct URL {
 	}
 
 	/// Constructs a new URL object from its components.
-	this(string schema, string host, ushort port, InetPath path)
+	this(string schema, string host, ushort port, InetPath path) pure
 	{
 		m_schema = schema;
 		m_host = host;
@@ -46,29 +46,29 @@ struct URL {
 		else m_pathString = urlEncode(path.toString(), "/");
 	}
 	/// ditto
-	this(string schema, InetPath path)
+	this(string schema, InetPath path) pure
 	{
 		this(schema, null, 0, path);
 	}
 
 	version (Have_vibe_core) {
 		/// ditto
-		this(string schema, string host, ushort port, PosixPath path)
+		this(string schema, string host, ushort port, PosixPath path) pure
 		{
 			this(schema, host, port, cast(InetPath)path);
 		}
 		/// ditto
-		this(string schema, PosixPath path)
+		this(string schema, PosixPath path) pure
 		{
 			this(schema, null, 0, cast(InetPath)path);
 		}
 		/// ditto
-		this(string schema, string host, ushort port, WindowsPath path)
+		this(string schema, string host, ushort port, WindowsPath path) pure
 		{
 			this(schema, host, port, cast(InetPath)path);
 		}
 		/// ditto
-		this(string schema, WindowsPath path)
+		this(string schema, WindowsPath path) pure
 		{
 			this(schema, null, 0, cast(InetPath)path);
 		}
@@ -78,7 +78,7 @@ struct URL {
 			Note that the path must be absolute. On Windows, both, paths starting
 			with a drive letter and UNC paths are supported.
 		*/
-		this(WindowsPath path)
+		this(WindowsPath path) pure
 		{
 			import std.algorithm.iteration : map;
 			import std.range : chain, only, repeat;
@@ -100,7 +100,7 @@ struct URL {
 			} else this("file", host, 0, cast(InetPath)path);
 		}
 		/// ditto
-		this(PosixPath path)
+		this(PosixPath path) pure
 		{
 			enforce(path.absolute, "Only absolute paths can be converted to a URL.");
 
@@ -236,7 +236,7 @@ struct URL {
 	}
 
 	/// The host part of the URL (depends on the schema)
-	@property string host() const { return m_host; }
+	@property string host() const pure { return m_host; }
 	/// ditto
 	@property void host(string v) { m_host = v; }
 
