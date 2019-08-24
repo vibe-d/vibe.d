@@ -17,6 +17,10 @@ configuration "vibe-core" {
 }
 
 configuration "win32_mscoff" {
+	preGenerateCommands "echo ---" "echo Deprecation: the vibe-d:core package is \
+		deprecated and will be removed in January 2020. Please update your \
+		code to depend on vibe-core instead." "echo ---"
+
 	// this configuration works around the problem that x88_mscoff
 	// will also match the libevent configuration, even if no
 	// libevent binaries exist as MSCOFF - see also dub/#228
@@ -27,6 +31,10 @@ configuration "win32_mscoff" {
 }
 
 configuration "libevent" {
+	preGenerateCommands "echo ---" "echo Deprecation: the vibe-d:core package is \
+		deprecated and will be removed in January 2020. Please update your \
+		code to depend on vibe-core instead." "echo ---"
+
 	platforms "windows-x86-dmd" "posix"
 	dependency "libevent" version="~>2.0.1"
 	targetType "library"
@@ -39,12 +47,20 @@ configuration "libevent" {
 }
 
 configuration "libasync" {
+	preGenerateCommands "echo ---" "echo Deprecation: the vibe-d:core package is \
+		deprecated and will be removed in January 2020. Please update your \
+		code to depend on vibe-core instead." "echo ---"
+
 	dependency "libasync" version="~>0.8.1"
 	targetType "library"
 	versions "VibeUseNativeDriverType" "VibeLibasyncDriver"
 }
 
 configuration "win32" {
+	preGenerateCommands "echo ---" "echo Deprecation: the vibe-d:core package is \
+		deprecated and will be removed in January 2020. Please update your \
+		code to depend on vibe-core instead." "echo ---"
+
 	platforms "windows"
 	targetType "library"
 	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
