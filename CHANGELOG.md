@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.8.6 - 2019-07-
+v0.8.6 - 2019-09-
 -------------------
 
 ### Features and improvements ###
@@ -14,9 +14,13 @@ v0.8.6 - 2019-07-
     - Added `MongoClient.cleanupConnections`
 - Added `Cookie.sameSite` property and `SessionOption.noSameSiteStrict`, defaulting to "same-site" (by Sebastian Wilzback) - [pull #2297][issue2297]
 - Added `HTTPServerSettings.sessionOptions` (by Sebastian Wilzbach) - [pull #2299][issue2299]
+- Added `HTTPClientSettings.readTimeout` (by Denis Feklushkin aka denizzzka) - [pull #2344][issue2344]
+- Added `HTTPClientSettings.connectTimeout` - [pull #2347][issue2347]
+- Extended caching support for HTTP (file) serving (by Jan Jurzitza aka WebFreak001) - [pull #2300][issue2300]
 - Reduced hashing overhead in `HashMap!T` for built-in types (by Nathan Sashihara aka n8sh) - [pull #2291][issue2291]
 - Added `TCPListenOptions.reuseAddress`, enabled by default (by Radu Ricariu) - [pull #2303][issue2303]
 - Enabled Unix socket support for vibe-core builds (by Benjamin Schaaf) - [pull #2316][issue2316]
+- Annotated `URL` constructors `pure` and `nothrow` (by Denis Feklushkin aka denizzzka) - [issue #2322][issue2322], [pull #2351][issue2351]
 
 ### Bug fixes ###
 
@@ -26,6 +30,9 @@ v0.8.6 - 2019-07-
 - Fixed `connectWebSocket` to work for "wss"/"ws" (by Jan Jurzitza aka WebFreak001) - [pull #2321][issue2321]
 - Fixed `HashMap` to properly work for classes that override `opEquals`+`toHash` (by Nathan Sashihara aka n8sh) - [pull #2292][issue2292]
 - Fixed a resource leak for libevent based `TCPConnection` instances that are not explicitly closed, but reaped by the GC - [pull #2329][issue2329]
+- Fixed the HTTP client to not use chunked encoding by default for HTTP/1.0 connections (by Tomáš Chaloupka) - [pull #2333][issue2333]
+- Fixed an issue in `ConnectionPool` where the pool became unusable after connection failures (by Tomáš Chaloupka) - [pull #2340][issue2340]
+- Fixed "rtsp(s)" URLs to be considered a double-slash style schema (by Tomáš Chaloupka) - [pull #2343][issue2343]
 
 
 [issue2285]: https://github.com/vibe-d/vibe.d/issues/2285
@@ -36,6 +43,7 @@ v0.8.6 - 2019-07-
 [issue2292]: https://github.com/vibe-d/vibe.d/issues/2292
 [issue2297]: https://github.com/vibe-d/vibe.d/issues/2297
 [issue2299]: https://github.com/vibe-d/vibe.d/issues/2299
+[issue2300]: https://github.com/vibe-d/vibe.d/issues/2300
 [issue2303]: https://github.com/vibe-d/vibe.d/issues/2303
 [issue2306]: https://github.com/vibe-d/vibe.d/issues/2306
 [issue2308]: https://github.com/vibe-d/vibe.d/issues/2308
@@ -43,8 +51,15 @@ v0.8.6 - 2019-07-
 [issue2316]: https://github.com/vibe-d/vibe.d/issues/2316
 [issue2317]: https://github.com/vibe-d/vibe.d/issues/2317
 [issue2321]: https://github.com/vibe-d/vibe.d/issues/2321
+[issue2322]: https://github.com/vibe-d/vibe.d/issues/2322
 [issue2329]: https://github.com/vibe-d/vibe.d/issues/2329
 [issue2330]: https://github.com/vibe-d/vibe.d/issues/2330
+[issue2333]: https://github.com/vibe-d/vibe.d/issues/2333
+[issue2340]: https://github.com/vibe-d/vibe.d/issues/2340
+[issue2343]: https://github.com/vibe-d/vibe.d/issues/2343
+[issue2344]: https://github.com/vibe-d/vibe.d/issues/2344
+[issue2347]: https://github.com/vibe-d/vibe.d/issues/2347
+[issue2351]: https://github.com/vibe-d/vibe.d/issues/2351
 [issue-vibe-core-101]: https://github.com/vibe-d/vibe-core/issues/101
 
 
