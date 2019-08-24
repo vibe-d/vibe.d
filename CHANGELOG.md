@@ -6,7 +6,7 @@ v0.8.6 - 2019-09-
 
 ### Features and improvements ###
 
-- Updated compiler support for DMD 2.086.1 and LDC 1.6.0 - [pull #2312][issue2312], [pull #2330][issue2330]
+- Updated compiler support for DMD 2.087.1 and LDC 1.6.0 - [pull #2312][issue2312], [pull #2330][issue2330]
 - Added functionality to portably convert from `URL` to `NativePath` and back - [pull #2285][issue2285]
 - Changed the serialization framework to work with `auto ref` arguments, enabling serialization of non-copyable types (by Tomáš Chaloupka) - [pull #2275][issue2275]
 - Added `ConnectionPool.removeUnused` to enable closing all unused connections - [issue vibe-core/#101][issue-vibe-core-101], [pull #2287][issue2287]
