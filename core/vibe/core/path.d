@@ -186,7 +186,7 @@ struct Path {
 	}
 
 	/// Converts the Path back to a string representation using slashes.
-	string toString()
+	string toString() pure
 	const {
 		if (m_nodes.empty)
 			return absolute ? "/" : endsWithSlash ? "./" : "";
