@@ -7,16 +7,18 @@ v0.8.6 - 2019-09-
 ### Features and improvements ###
 
 - Updated compiler support for DMD 2.087.1 and LDC 1.6.0 - [pull #2312][issue2312], [pull #2330][issue2330]
-- Added functionality to portably convert from `URL` to `NativePath` and back - [pull #2285][issue2285]
-- Changed the serialization framework to work with `auto ref` arguments, enabling serialization of non-copyable types (by Tomáš Chaloupka) - [pull #2275][issue2275]
+- Officially deprecated the old vibe-d:core module - it is scheduled for removal in January 2020
 - Added `ConnectionPool.removeUnused` to enable closing all unused connections - [issue vibe-core/#101][issue-vibe-core-101], [pull #2287][issue2287]
     - All keep-alive connections of the global HTTP client pool are now disconnected at thread shutdown
     - Added `MongoClient.cleanupConnections`
-- Added `Cookie.sameSite` property and `SessionOption.noSameSiteStrict`, defaulting to "same-site" (by Sebastian Wilzback) - [pull #2297][issue2297]
-- Added `HTTPServerSettings.sessionOptions` (by Sebastian Wilzbach) - [pull #2299][issue2299]
-- Added `HTTPClientSettings.readTimeout` (by Denis Feklushkin aka denizzzka) - [pull #2344][issue2344]
-- Added `HTTPClientSettings.connectTimeout` - [pull #2347][issue2347]
-- Extended caching support for HTTP (file) serving (by Jan Jurzitza aka WebFreak001) - [pull #2300][issue2300]
+- HTTP client/server
+	- Added `Cookie.sameSite` property and `SessionOption.noSameSiteStrict`, defaulting to "same-site" (by Sebastian Wilzback) - [pull #2297][issue2297]
+	- Added `HTTPServerSettings.sessionOptions` (by Sebastian Wilzbach) - [pull #2299][issue2299]
+	- Extended caching support for HTTP (file) serving (by Jan Jurzitza aka WebFreak001) - [pull #2300][issue2300]
+	- Added `HTTPClientSettings.readTimeout` (by Denis Feklushkin aka denizzzka) - [pull #2344][issue2344]
+	- Added `HTTPClientSettings.connectTimeout` - [pull #2347][issue2347]
+- Added functionality to portably convert from `URL` to `NativePath` and back - [pull #2285][issue2285]
+- Changed the serialization framework to work with `auto ref` arguments, enabling serialization of non-copyable types (by Tomáš Chaloupka) - [pull #2275][issue2275]
 - Reduced hashing overhead in `HashMap!T` for built-in types (by Nathan Sashihara aka n8sh) - [pull #2291][issue2291]
 - Added `TCPListenOptions.reuseAddress`, enabled by default (by Radu Ricariu) - [pull #2303][issue2303]
 - Enabled Unix socket support for vibe-core builds (by Benjamin Schaaf) - [pull #2316][issue2316]
