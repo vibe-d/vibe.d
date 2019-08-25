@@ -1771,7 +1771,7 @@ unittest {
 	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToJson, deserializeJson
 */
 struct JsonSerializer {
-	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == enum) || is(T == typeof(null)) || is(Unqual!T == UUID) || isJsonSerializable!T; }
+	template isJsonBasicType(T) { enum isJsonBasicType = std.traits.isNumeric!T || isBoolean!T || isSomeString!T || is(T == typeof(null)) || is(Unqual!T == UUID) || isJsonSerializable!T; }
 
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(Unqual!T == Json) || is(Unqual!T == JSONValue); }
 
@@ -1867,22 +1867,6 @@ struct JsonSerializer {
 				case Json.Type.undefined: return T.nan;
 				case Json.Type.float_: return cast(T)m_current.get!double;
 				case Json.Type.bigInt: return cast(T)m_current.bigIntToLong();
-			}
-		} else static if (is(T == enum)) {
-			const T value = () {
-				static if (hasPolicyAttributeL!(ByNameAttribute, Traits.Policy, Traits.Attributes)) {
-					return readValue!(Traits, string)().to!T();
-				} else {
-					return cast(T)readValue!(Traits, OriginalType!T)();
-				}
-			}();
-
-			switch (value) {
-				static foreach (enumvalue; EnumMembers!T) {
-					case enumvalue: return value;
-				}
-				default:
-					throw new JSONException("Unexpected enum value " ~ value.to!string());
 			}
 		} else static if (is(T == const(char)[])) {
 			return readValue!(Traits, string);
