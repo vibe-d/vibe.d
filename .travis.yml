@@ -39,14 +39,25 @@ d:
   - dmd-beta
 
 env:
-  - VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests #,meson
   - VIBED_DRIVER=vibe-core PARTS=builds,unittests,examples,tests
-  - VIBED_DRIVER=libasync PARTS=builds,unittests
 
 matrix:
   include:
     - d: dmd
       env: DFLAGS="-cov -version=VibedSetCoverageMerge" PARTS=unittests,tests
+    # test deprecated configurations on the latest and oldest compiler versions
+    - d: dmd-2.087.1
+      env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests #,meson
+    - d: dmd-2.087.1
+      env: VIBED_DRIVER=libasync PARTS=builds,unittests
+    - d: dmd-2.077.1
+      env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests #,meson
+    - d: dmd-2.077.1
+      env: VIBED_DRIVER=libasync PARTS=builds,unittests
+    - d: ldc-1.16.0
+      env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests #,meson
+    - d: ldc-1.16.0
+      env: VIBED_DRIVER=libasync PARTS=builds,unittests
 
 #before_install:
 #  - pyenv global system 3.6
