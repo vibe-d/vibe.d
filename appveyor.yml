@@ -2,13 +2,17 @@ platform: x64
 environment:
  matrix:
   - DC: dmd
-    DVersion: 2.086.1
+    DVersion: 2.087.1
     arch: x64
     config: vibe-core
   - DC: dmd
-    DVersion: 2.086.1
+    DVersion: 2.087.1
     arch: x86_mscoff
     config: vibe-core
+  - DC: dmd
+    DVersion: 2.087.1
+    arch: x86
+    config: win32
   - DC: dmd
     DVersion: 2.086.1
     arch: x86
@@ -17,48 +21,12 @@ environment:
     DVersion: 2.085.1
     arch: x64
     config: vibe-core
-  - DC: dmd
-    DVersion: 2.085.1
-    arch: x86_mscoff
-    config: vibe-core
-  - DC: dmd
-    DVersion: 2.085.1
-    arch: x86
-    config: win32
   - DC: dmd
     DVersion: 2.084.1
     arch: x64
     config: vibe-core
   - DC: dmd
-    DVersion: 2.083.1
-    arch: x86
-    config: win32
-  - DC: dmd
-    DVersion: 2.082.1
-    arch: x86
-    config: win32
-  - DC: dmd
-    DVersion: 2.081.2
-    arch: x86
-    config: win32
-  - DC: dmd
-    DVersion: 2.080.1
-    arch: x86
-    config: win32
-  - DC: dmd
-    DVersion: 2.079.1
-    arch: x86_mscoff
-    config: win32
-  - DC: dmd
-    DVersion: 2.078.3
-    arch: x86_mscoff
-    config: win32
-  - DC: dmd
     DVersion: 2.077.1
-    arch: x86_mscoff
-    config: win32
-  - DC: dmd
-    DVersion: 2.076.1
     arch: x86_mscoff
     config: win32
   - DC: ldc
@@ -76,26 +44,6 @@ environment:
   - DC: ldc
     DVersion: 1.13.0
     arch: x86
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.12.0
-    arch: x86
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.11.0
-    arch: x86
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.10.0
-    arch: x64
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.9.0
-    arch: x86
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.8.0
-    arch: x64
     config: vibe-core
   - DC: ldc
     DVersion: 1.7.0
