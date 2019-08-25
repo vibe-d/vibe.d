@@ -1432,6 +1432,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if (m_bodyWriter) return m_bodyWriter;
 
 		assert(!m_headerWritten, "A void body was already written!");
+		assert(this.statusCode >= 200, "1xx responses can't have body");
 
 		if (m_isHeadResponse) {
 			// for HEAD requests, we define a NullOutputWriter for convenience
@@ -1538,6 +1539,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
 		m_requiresConnectionClose = true;
+		m_headerWritten = true;
 		return createConnectionProxyStream(m_conn, m_rawConnection);
 	}
 	/// ditto
@@ -1547,6 +1549,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
 		m_requiresConnectionClose = true;
+		m_headerWritten = true;
 		() @trusted {
 			auto conn = createConnectionProxyStreamFL(m_conn, m_rawConnection);
 			del(conn);
@@ -1716,7 +1719,10 @@ final class HTTPServerResponse : HTTPResponse {
 		import vibe.stream.wrapper;
 
 		assert(!m_bodyWriter && !m_headerWritten, "Try to write header after body has already begun.");
-		m_headerWritten = true;
+		assert(this.httpVersion != HTTPVersion.HTTP_1_0 || this.statusCode >= 200, "Informational status codes aren't supported by HTTP/1.0.");
+
+		// Don't set m_headerWritten for 1xx status codes
+		if (this.statusCode >= 200) m_headerWritten = true;
 		auto dst = streamOutputRange!1024(m_conn);
 
 		void writeLine(T...)(string fmt, T args)

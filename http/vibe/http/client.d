@@ -552,6 +552,7 @@ final class HTTPClient {
 		}
 
 		Exception user_exception;
+		while (true)
 		{
 			scope (failure) {
 				m_responding = false;
@@ -562,6 +563,14 @@ final class HTTPClient {
 				logDebug("Error while handling response: %s", e.toString().sanitize());
 				user_exception = e;
 			}
+			if (res.statusCode < 200) {
+				// just an informational status -> read and handle next response
+				if (m_responding) res.dropBody();
+				if (m_conn) {
+					res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
+					continue;
+				}
+			}
 			if (m_responding) {
 				logDebug("Failed to handle the complete response of the server - disconnecting.");
 				res.disconnect();
@@ -570,6 +579,7 @@ final class HTTPClient {
 
 			if (user_exception || res.headers.get("Connection") == "close")
 				disconnect();
+			break;
 		}
 		if (user_exception) throw user_exception;
 	}
