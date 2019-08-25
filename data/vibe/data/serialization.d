@@ -286,9 +286,8 @@ unittest {
 }
 
 unittest {
-	import vibe.data.json;
 	import std.conv : ConvException;
-	import std.exception;
+	import std.exception : assertThrown, assertNotThrown;
 
 	enum Testable : string {
 		foo = "foo",
@@ -296,7 +295,7 @@ unittest {
 	}
 
 	void deserializeString(string value) {
-		deserialize!(JsonSerializer, Testable)(Json(value));
+		deserialize!(TestSerializer, Testable)("V(Aya)(" ~ value ~ ")");
 	}
 
 	foreach (string val; ["foo", "bar"]) {
@@ -304,6 +303,29 @@ unittest {
 	}
 
 	assertThrown!ConvException(deserializeString("foobar"));
+}
+
+unittest {
+	import std.conv : ConvException;
+	import std.exception : assertThrown, assertNotThrown;
+
+	enum Foo {
+		foobar
+	};
+
+	struct Testable {
+		@byName
+		Foo bar;
+	}
+
+	void deserializeString(string value) {
+		auto d = "D(" ~ Testable.mangleof ~ ")";
+		auto de = "DE(" ~ Foo.mangleof ~ ",bar)";
+		deserialize!(TestSerializer, Testable)(d ~ "{" ~ de ~ "(V(Aya)(" ~ value ~ "))" ~ de ~ "}" ~ d);
+	}
+
+	assertNotThrown(deserializeString("foobar"));
+	assertThrown!ConvException(deserializeString("baz"));
 }
 
 /**
