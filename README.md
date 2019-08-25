@@ -7,7 +7,7 @@ more specialized needs, there are also many compatible
 [DUB packages](https://code.dlang.org/?sort=updated&category=library.vibed)
 available.
 
-Visit the website at <http://vibed.org/> for more information and
+Visit the website at <https://vibed.org/> for more information and
 [documentation](https://vibed.org/docs).
 
 [![DUB Package](https://img.shields.io/dub/v/vibe-d.svg)](https://code.dlang.org/packages/vibe-d)
@@ -20,17 +20,17 @@ Hello Vibe.d
 ```d
 #!/usr/bin/env dub
 /+ dub.sdl:
-name "hello_vibed"
-dependency "vibe-d" version="~>0.8.0"
+   name "hello_vibed"
+   dependency "vibe-d" version="~>0.8.0"
 +/
-import vibe.d;
+import vibe.vibe;
 
 void main()
 {
-    auto settings = new HTTPServerSettings;
-    settings.port = 8080;
+    listenHTTP("127.0.0.1:8080", (req, res) {
+        res.writeBody("Hello Vibe.d: " ~ req.path);
+    });
 
-    listenHTTP(settings, (req, res) { res.writeBody("Hello Vibe.d: " ~ req.path); });
     runApplication();
 }
 ```
@@ -109,8 +109,8 @@ for instructions.
 Additional setup on Windows
 ---------------------------
 
- - Just install DMD using the installer on <http://dlang.org/download.html>
- - And get the latest [DUB release](http://code.dlang.org/download)
+ - Just install DMD using the installer on <https://dlang.org/download.html>
+ - And get the latest [DUB release](https://code.dlang.org/download)
 
 ### Note for building on Win64
 
@@ -121,7 +121,7 @@ Additional setup on Mac using brew
 ----------------------------------
 
 If you don't have brew installed, install it according to their [install
-instructions](<http://www.brew.sh>) and
+instructions](<https://www.brew.sh>) and
 install libevent.
 
     ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
@@ -133,7 +133,7 @@ You can then also install DUB using brew:
 
 (Note: Install brew only if you do not have macports, as they will conflict)
 
-Install DMD using the installer on <http://dlang.org/download.html>.
+Install DMD using the installer on <https://dlang.org/download.html>.
 
 Optionally, run `./setup-mac.sh` to create a user/group pair for privilege lowering.
 
@@ -149,15 +149,15 @@ Install vibe.d's dependencies (*)
 On 32-bit linux: Install DMD-i386
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://downloads.dlang.org/releases/2.x/2.068.2/dmd_2.068.2-0_i386.deb"
-    sudo dpkg -i dmd_2.068.2-0_i386.deb
+    wget "http://downloads.dlang.org/releases/2.x/2.087.1/dmd_2.087.1-0_i386.deb"
+    sudo dpkg -i dmd_2.087.1-0_i386.deb
 
 
 On 64-bit linux: Install DMD-amd64
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://downloads.dlang.org/releases/2.x/2.068.2/dmd_2.068.2-0_amd64.deb"
-    sudo dpkg -i dmd_2.068.2-0_amd64.deb
+    wget "http://downloads.dlang.org/releases/2.x/2.087.1/dmd_2.087.1-0_amd64.deb"
+    sudo dpkg -i dmd_2.087.1-0_amd64.deb
 
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
@@ -172,6 +172,8 @@ You need to have the following dependencies installed:
 
  - [DMD 2.077.1 or greater](http://dlang.org/download)
  - [libssl](http://www.openssl.org/source/)
+
+If using the (now deprecated) "libevent" configuration, libevent is also required:
  - [libevent 2.0.x](http://libevent.org/) (*)
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
