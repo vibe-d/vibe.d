@@ -12,7 +12,7 @@ v0.8.6 - 2019-09-
     - All keep-alive connections of the global HTTP client pool are now disconnected at thread shutdown
     - Added `MongoClient.cleanupConnections`
 - HTTP client/server
-	- Added `Cookie.sameSite` property and `SessionOption.noSameSiteStrict`, defaulting to "same-site" (by Sebastian Wilzback) - [pull #2297][issue2297]
+	- Added `Cookie.sameSite` property and `SessionOption.noSameSiteStrict`, defaulting to "same-site" (by Sebastian Wilzbach) - [pull #2297][issue2297]
 	- Added `HTTPServerSettings.sessionOptions` (by Sebastian Wilzbach) - [pull #2299][issue2299]
 	- Extended caching support for HTTP (file) serving (by Jan Jurzitza aka WebFreak001) - [pull #2300][issue2300]
 	- Added `HTTPClientSettings.readTimeout` (by Denis Feklushkin aka denizzzka) - [pull #2344][issue2344]
