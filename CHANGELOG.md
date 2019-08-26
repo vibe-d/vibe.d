@@ -17,6 +17,7 @@ v0.8.6 - 2019-09-
 	- Extended caching support for HTTP (file) serving (by Jan Jurzitza aka WebFreak001) - [pull #2300][issue2300]
 	- Added `HTTPClientSettings.readTimeout` (by Denis Feklushkin aka denizzzka) - [pull #2344][issue2344]
 	- Added `HTTPClientSettings.connectTimeout` - [pull #2347][issue2347]
+- Added support for "Markdown Extra"-like class/id attribute annotations in the Markdown parser - [pull #2356][issue2356]
 - Added functionality to portably convert from `URL` to `NativePath` and back - [pull #2285][issue2285]
 - Changed the serialization framework to work with `auto ref` arguments, enabling serialization of non-copyable types (by Tomáš Chaloupka) - [pull #2275][issue2275]
 - Reduced hashing overhead in `HashMap!T` for built-in types (by Nathan Sashihara aka n8sh) - [pull #2291][issue2291]
@@ -62,6 +63,7 @@ v0.8.6 - 2019-09-
 [issue2344]: https://github.com/vibe-d/vibe.d/issues/2344
 [issue2347]: https://github.com/vibe-d/vibe.d/issues/2347
 [issue2351]: https://github.com/vibe-d/vibe.d/issues/2351
+[issue2356]: https://github.com/vibe-d/vibe.d/issues/2356
 [issue-vibe-core-101]: https://github.com/vibe-d/vibe-core/issues/101
 
 
