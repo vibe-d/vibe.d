@@ -27,10 +27,10 @@ d:
   # are present to reduce the overall CI time
   - dmd-2.087.1
   - dmd-2.077.1
+  - ldc-1.17.0
   - ldc-1.16.0
   - ldc-1.15.0
   - ldc-1.14.0
-  - ldc-1.13.0
   - ldc-1.7.0
   - dmd-2.086.1
   - dmd-2.085.0 # 2.085.1 has a regression

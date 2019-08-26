@@ -30,6 +30,10 @@ environment:
     arch: x86_mscoff
     config: win32
   - DC: ldc
+    DVersion: 1.17.0
+    arch: x86
+    config: vibe-core
+  - DC: ldc
     DVersion: 1.16.0
     arch: x64
     config: vibe-core
@@ -39,10 +43,6 @@ environment:
     config: vibe-core
   - DC: ldc
     DVersion: 1.14.0
-    arch: x86
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.13.0
     arch: x86
     config: vibe-core
   - DC: ldc
