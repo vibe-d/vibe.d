@@ -6,7 +6,7 @@ v0.8.6 - 2019-09-
 
 ### Features and improvements ###
 
-- Updated compiler support for DMD 2.087.1 and LDC 1.6.0 - [pull #2312][issue2312], [pull #2330][issue2330]
+- Updated compiler support for DMD 2.087.1 and LDC 1.7.0 - [pull #2312][issue2312], [pull #2330][issue2330]
 - Officially deprecated the old vibe-d:core module - it is scheduled for removal in January 2020
 - Added `ConnectionPool.removeUnused` to enable closing all unused connections - [issue vibe-core/#101][issue-vibe-core-101], [pull #2287][issue2287]
     - All keep-alive connections of the global HTTP client pool are now disconnected at thread shutdown
