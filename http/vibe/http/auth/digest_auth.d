@@ -238,6 +238,7 @@ struct DigestAuthParams {
 	Creates the digest authorization request header.
 
 	Params:
+		method = HTTP method (required only when some qop is requested)
 		username = user name
 		password = user password
 		url = requested url

@@ -182,6 +182,7 @@ HTTPServerRequestDelegateS serveStaticFile(string local_path, HTTPFileServerSett
 		req = The incoming HTTP request - cache and modification headers of the
 			request can influence the generated response.
 		res = The response object to write to.
+		path = Path to the file to be sent.
 		settings = Optional settings object enabling customization of how the
 			file gets served.
 */

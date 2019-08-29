@@ -110,6 +110,7 @@ import std.traits : hasUDA;
 
 		Params:
 			settings = Optional settings object.
+			is_client = Whether this struct is used by a client.
 	*/
 	this(RestInterfaceSettings settings, bool is_client)
 	{
