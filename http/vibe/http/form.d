@@ -116,6 +116,7 @@ unittest {
 	Writes a `vibe.http.client.HTTPClientRequest` body as URL encoded form data.
 
 	Params:
+	  req  = Request object to write to.
 	  form = range of `t = Tuple!(string, string)`,
 			 where `t[0]` is the name and `t[1]` the
 			 value of a form entry.

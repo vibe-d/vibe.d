@@ -37,6 +37,7 @@ interface RandomNumberStream : InputStream {
 			dst = The buffer that will be filled with random numbers.
 				It will contain buffer.length random ubytes.
 				Supportes both heap-based and stack-based arrays.
+			mode = The desired waiting mode for IO operations.
 
 		Throws:
 			CryptoException on error.
@@ -615,4 +616,3 @@ version(Windows)
 		BOOL CryptGenRandom(HCRYPTPROV hProv, DWORD dwLen, BYTE *pbBuffer);
 	}
 }
-

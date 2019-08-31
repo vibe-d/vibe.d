@@ -189,7 +189,7 @@ unittest
 	the function returns to the caller.
 
 	Params:
-		connections = The stream to treat as an incoming HTTP client connection.
+		connection = The stream to treat as an incoming HTTP client connection.
 		context = Information about the incoming listener and available
 			virtual hosts
 */
@@ -1241,7 +1241,7 @@ final class HTTPServerResponse : HTTPResponse {
 		Params:
 			data = The data to write as the body contents
 			status = Optional response status code to set
-			content_tyoe = Optional content type to apply to the response.
+			content_type = Optional content type to apply to the response.
 				If no content type is given and no "Content-Type" header is
 				set in the response, this will default to
 				`"application/octet-stream"`.
@@ -1580,6 +1580,7 @@ final class HTTPServerResponse : HTTPResponse {
 			name = Name of the cookie
 			value = New cookie value - pass null to clear the cookie
 			path = Path (as seen by the client) of the directory tree in which the cookie is visible
+			encoding = Optional encoding (url, raw), default to URL encoding
 	*/
 	Cookie setCookie(string name, string value, string path = "/", Cookie.Encoding encoding = Cookie.Encoding.url)
 	@safe {
