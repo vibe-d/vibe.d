@@ -1359,7 +1359,6 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	@safe {
 		if (route.bodyParameters.length) {
-			logDebug("BODYPARAMS: %s %s", Method, route.bodyParameters.length);
 			/*enforceBadRequest(req.contentType == "application/json",
 				"The Content-Type header needs to be set to application/json.");*/
 			enforceBadRequest(req.json.type != Json.Type.undefined,
