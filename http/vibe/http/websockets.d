@@ -778,7 +778,10 @@ final class WebSocket {
 	private void startReader()
 	{
 		m_readMutex.performLocked!({}); //Wait until initialization
-		scope (exit) m_readCondition.notifyAll();
+		scope (exit) {
+			m_conn.close();
+			m_readCondition.notifyAll();
+		}
 		try {
 			while (!m_conn.empty) {
 				assert(!m_nextMessage);
