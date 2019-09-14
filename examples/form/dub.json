@@ -1,0 +1,12 @@
+{
+	"name": "form_example",
+	"authors": [
+		"Pablo De Napoli"
+	],
+	"dependencies": {
+		"vibe-d": "~>0.8.2"
+	},
+	"description": "An example of how to use forms with vibe",
+	"copyright": "Copyright © 2019, Pablo De Napoli",
+	"license": "MIT"
+}

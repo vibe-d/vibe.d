@@ -1,0 +1,15 @@
+doctype html
+html
+	head 
+		title D form submission example
+		link(rel='stylesheet', type='text/css', href='form_style.css')
+	body
+		form( method="post", action="/hello")
+			div
+				label(for='say') What greeting do you want to say?
+				input(name='say', id="say", value="Hi")
+			div
+				label(for='to') Who do you want to say it to?
+				input(name='to', id="to", value='Mom')
+			div
+				button(type='submit') Send my greetings
