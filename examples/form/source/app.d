@@ -20,7 +20,7 @@ class WebInterface
   @path("/hello") 
   void postHello(string say, string to)
    {
-	logInfo("postHello method called with parameters: say=" ~ say ~ ",to" ~ to );
+	logInfo("postHello method called with parameters: say=" ~ say ~ ",to=" ~ to );
 	render!("greeting.dt",say,to);
   }
 }
