@@ -1,7 +1,7 @@
 /**
 	Markdown parser implementation
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2019 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -142,6 +142,7 @@ enum MarkdownFlags {
 	//noLinks = 1<<3,
 	//allowUnsafeHtml = 1<<4,
 	tables = 1<<5,
+	attributes = 1<<6,
 	vanillaMarkdown = none,
 	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml|tables
 }
@@ -285,12 +286,17 @@ private enum BlockType {
 
 private struct Block {
 	BlockType type;
+	Attribute[] attributes;
 	string[] text;
 	Block[] blocks;
 	size_t headerLevel;
 	Alignment[] columns;
 }
 
+private struct Attribute {
+	string attribute;
+	string value;
+}
 
 private enum Alignment {
 	none = 0,
@@ -301,6 +307,8 @@ private enum Alignment {
 
 private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, scope MarkdownSettings settings)
 pure @safe {
+	import std.conv : to;
+
 	if( base_indent.length == 0 ) root.type = BlockType.Text;
 	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
 
@@ -342,6 +350,10 @@ pure @safe {
 						auto setln = lines[1].unindented;
 						b.type = BlockType.Header;
 						b.text = [ln.unindented];
+						if (settings.flags & MarkdownFlags.attributes)
+							parseAttributeString(skipAttributes(b.text[0]), b.attributes);
+						if (!b.attributes.canFind!(a => a.attribute == "id"))
+							b.attributes ~= Attribute("id", asSlug(b.text[0]).to!string);
 						b.headerLevel = setln.strip()[0] == '=' ? 1 : 2;
 						lines.popFrontN(2);
 					} else if( lines.length >= 2 && lines[1].type == LineType.TableSeparator
@@ -380,6 +392,12 @@ pure @safe {
 						b.headerLevel++;
 						hl = hl[1 .. $];
 					}
+
+					if (settings.flags & MarkdownFlags.attributes)
+						parseAttributeString(skipAttributes(hl), b.attributes);
+					if (!b.attributes.canFind!(a => a.attribute == "id"))
+						b.attributes ~= Attribute("id", asSlug(hl).to!string);
+
 					while( hl.length > 0 && (hl[$-1] == '#' || hl[$-1] == ' ') )
 						hl = hl[0 .. $-1];
 					b.text = [hl];
@@ -512,9 +530,9 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			break;
 		case BlockType.Header:
 			assert(block.blocks.length == 0);
-			auto hlvl = block.headerLevel + (settings ? settings.headingBaseLevel-1 : 0);
-			dst.formattedWrite("<h%s id=\"%s\">", hlvl, block.text[0].asSlug);
 			assert(block.text.length == 1);
+			auto hlvl = block.headerLevel + (settings ? settings.headingBaseLevel-1 : 0);
+			dst.writeTag(block.attributes, "h", hlvl);
 			writeMarkdownEscaped(dst, block.text[0], links, settings);
 			dst.formattedWrite("</h%s>\n", hlvl);
 			break;
@@ -665,16 +683,14 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				break;
 			case '[':
 				Link link;
-				if( parseLink(ln, link, linkrefs) ){
-					dst.put("<a href=\"");
-					filterHTMLAttribEscape(dst, filterLink(link.url, false));
-					dst.put("\"");
-					if( link.title.length ){
-						dst.put(" title=\"");
-						filterHTMLAttribEscape(dst, link.title);
-						dst.put("\"");
-					}
-					dst.put(">");
+				Attribute[] attributes;
+				if (parseLink(ln, link, linkrefs,
+					settings.flags & MarkdownFlags.attributes ? &attributes : null))
+				{
+					attributes ~= Attribute("href", filterLink(link.url, false));
+					if (link.title.length)
+						attributes ~= Attribute("title", link.title);
+					dst.writeTag(attributes, "a");
 					writeMarkdownEscaped(dst, link.text, linkrefs, settings);
 					dst.put("</a>");
 				} else {
@@ -684,18 +700,15 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				break;
 			case '!':
 				Link link;
-				if( parseLink(ln, link, linkrefs) ){
-					dst.put("<img src=\"");
-					filterHTMLAttribEscape(dst, filterLink(link.url, true));
-					dst.put("\" alt=\"");
-					filterHTMLAttribEscape(dst, link.text);
-					dst.put("\"");
-					if( link.title.length ){
-						dst.put(" title=\"");
-						filterHTMLAttribEscape(dst, link.title);
-						dst.put("\"");
-					}
-					dst.put(">");
+				Attribute[] attributes;
+				if (parseLink(ln, link, linkrefs,
+					settings.flags & MarkdownFlags.attributes ? &attributes : null))
+				{
+					attributes ~= Attribute("src", filterLink(link.url, true));
+					attributes ~= Attribute("alt", link.text);
+					if (link.title.length)
+						attributes ~= Attribute("title", link.title);
+					dst.writeTag(attributes, "img");
 				} else if( ln.length >= 2 ){
 					dst.put(ln[0 .. 2]);
 					ln = ln[2 .. $];
@@ -738,6 +751,24 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 		}
 	}
 	if( br ) dst.put("<br/>");
+}
+
+private void writeTag(R, ARGS...)(ref R dst, string name, ARGS name_additions)
+{
+	writeTag(dst, cast(Attribute[])null, name, name_additions);
+}
+
+private void writeTag(R, ARGS...)(ref R dst, scope const(Attribute)[] attributes, string name, ARGS name_additions)
+{
+	dst.formattedWrite("<%s", name);
+	foreach (add; name_additions)
+		dst.formattedWrite("%s", add);
+	foreach (a; attributes) {
+		dst.formattedWrite(" %s=\"", a.attribute);
+		dst.filterHTMLAttribEscape(a.value);
+		dst.put('\"');
+	}
+	dst.put('>');
 }
 
 private bool isLineBlank(string ln)
@@ -856,7 +887,7 @@ pure @safe {
 	switch(tp){
 		default: assert(false);
 		case LineType.OList: // skip bullets and output using normal escaping
-			auto idx = str.indexOfCT('.');
+			auto idx = str.indexOf('.');
 			assert(idx > 0);
 			return str[idx+1 .. $].stripLeft();
 		case LineType.UList:
@@ -980,7 +1011,7 @@ pure @safe {
 	return true;
 }
 
-private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs)
+private bool parseLink(ref string str, ref Link dst, scope const(LinkRef[string]) linkrefs, scope Attribute[]* attributes)
 pure @safe {
 	string pstr = str;
 	if( pstr.length < 3 ) return false;
@@ -1001,7 +1032,7 @@ pure @safe {
 		cidx = pstr.matchBracket();
 		if( cidx < 1 ) return false;
 		auto inner = pstr[1 .. cidx];
-		immutable qidx = inner.indexOfCT('"');
+		immutable qidx = inner.indexOf('"');
 		import std.ascii : isWhite;
 		if( qidx > 1 && inner[qidx - 1].isWhite()){
 			dst.url = inner[0 .. qidx].stripRight();
@@ -1016,17 +1047,26 @@ pure @safe {
 		if (dst.url.startsWith("<") && dst.url.endsWith(">"))
 			dst.url = dst.url[1 .. $-1];
 		pstr = pstr[cidx+1 .. $];
+
+		if (attributes) {
+			if (pstr.startsWith('{')) {
+				auto idx = pstr.indexOf('}');
+				if (idx > 0) {
+					parseAttributeString(pstr[1 .. idx], *attributes);
+					pstr = pstr[idx+1 .. $];
+				}
+			}
+		}
 	} else {
 		if( pstr[0] == ' ' ) pstr = pstr[1 .. $];
 		if( pstr[0] != '[' ) return false;
 		pstr = pstr[1 .. $];
-		cidx = pstr.indexOfCT(']');
+		cidx = pstr.indexOf(']');
 		if( cidx < 0 ) return false;
 		if( cidx == 0 ) refid = dst.text;
 		else refid = pstr[0 .. cidx];
 		pstr = pstr[cidx+1 .. $];
 	}
-
 
 	if( refid.length > 0 ){
 		auto pr = toLower(refid) in linkrefs;
@@ -1036,6 +1076,7 @@ pure @safe {
 		}
 		dst.url = pr.url;
 		dst.title = pr.title;
+		if (attributes) *attributes ~= pr.attributes;
 	}
 
 	str = pstr;
@@ -1047,7 +1088,7 @@ pure @safe {
 	static void testLink(string s, Link exp, in LinkRef[string] refs)
 	{
 		Link link;
-		assert(parseLink(s, link, refs), s);
+		assert(parseLink(s, link, refs, null), s);
 		assert(link == exp);
 	}
 	LinkRef[string] refs;
@@ -1085,7 +1126,26 @@ pure @safe {
 	];
 	Link link;
 	foreach (s; failing)
-		assert(!parseLink(s, link, refs), s);
+		assert(!parseLink(s, link, refs, null), s);
+}
+
+@safe unittest { // attributes
+	void test(string s, LinkRef[string] refs, bool parse_atts, string exprem, Link explnk, Attribute[] expatts...)
+	@safe {
+		Link lnk;
+		Attribute[] atts;
+		parseLink(s, lnk, refs, parse_atts ? () @trusted { return &atts; } () : null);
+		assert(lnk == explnk);
+		assert(s == exprem);
+		assert(atts == expatts);
+	}
+
+	test("[foo](bar){.baz}", null, false, "{.baz}", Link("foo", "bar", ""));
+	test("[foo](bar){.baz}", null, true, "", Link("foo", "bar", ""), Attribute("class", "baz"));
+
+	auto refs = ["bar": LinkRef("bar", "url", "title", [Attribute("id", "hid")])];
+	test("[foo][bar]", refs, false, "", Link("foo", "url", "title"));
+	test("[foo][bar]", refs, true, "", Link("foo", "url", "title"), Attribute("id", "hid"));
 }
 
 private bool parseAutoLink(ref string str, ref string url)
@@ -1139,6 +1199,73 @@ unittest {
 	test(true, "<\"foo:bar\"@baz>", "mailto:\"foo:bar\"@baz");
 }
 
+private string skipAttributes(ref string line)
+@safe pure {
+	auto strs = line.stripRight;
+	if (!strs.endsWith("}")) return null;
+
+	auto idx = strs.lastIndexOf('{');
+	if (idx < 0) return null;
+
+	auto ret = strs[idx+1 .. $-1];
+	line = strs[0 .. idx];
+	return ret;
+}
+
+unittest {
+	void test(string inp, string outp, string att)
+	{
+		auto ratt = skipAttributes(inp);
+		assert(ratt == att, ratt);
+		assert(inp == outp, inp);
+	}
+
+	test(" foo ", " foo ", null);
+	test("foo {bar}", "foo ", "bar");
+	test("foo {bar}  ", "foo ", "bar");
+	test("foo bar} ", "foo bar} ", null);
+	test(" {bar} foo ", " {bar} foo ", null);
+	test(" fo {o {bar} ", " fo {o ", "bar");
+	test(" fo {o} {bar} ", " fo {o} ", "bar");
+}
+
+private void parseAttributeString(string attributes, ref Attribute[] dst)
+@safe pure {
+	import std.algorithm.iteration : splitter;
+
+	// TODO: handle custom attributes (requires a different approach than splitter)
+
+	foreach (el; attributes.splitter(' ')) {
+		el = el.strip;
+		if (!el.length) continue;
+		if (el[0] == '#') {
+			auto idx = dst.countUntil!(a => a.attribute == "id");
+			if (idx >= 0) dst[idx].value = el[1 .. $];
+			else dst ~= Attribute("id", el[1 .. $]);
+		} else if (el[0] == '.') {
+			auto idx = dst.countUntil!(a => a.attribute == "class");
+			if (idx >= 0) dst[idx].value ~= " " ~ el[1 .. $];
+			else dst ~= Attribute("class", el[1 .. $]);
+		}
+	}
+}
+
+unittest {
+	void test(string str, Attribute[] atts...)
+	{
+		Attribute[] res;
+		parseAttributeString(str, res);
+		assert(res == atts, format("%s: %s", str, res));
+	}
+
+	test("");
+	test(".foo", Attribute("class", "foo"));
+	test("#foo", Attribute("id", "foo"));
+	test("#foo #bar", Attribute("id", "bar"));
+	test(".foo .bar", Attribute("class", "foo bar"));
+	test("#foo #bar", Attribute("id", "bar"));
+	test(".foo #bar .baz", Attribute("class", "foo baz"), Attribute("id", "bar"));
+}
 
 private LinkRef[string] scanForReferences(ref string[] lines)
 pure @safe {
@@ -1161,19 +1288,21 @@ pure @safe {
 		string refid = ln[0 .. idx];
 		ln = stripLeft(ln[idx+2 .. $]);
 
+		string attstr = ln.skipAttributes();
+
 		string url;
 		if( ln.startsWith("<") ){
-			idx = ln.indexOfCT('>');
+			idx = ln.indexOf('>');
 			if( idx < 0 ) continue;
 			url = ln[1 .. idx];
 			ln = ln[idx+1 .. $];
 		} else {
-			idx = ln.indexOfCT(' ');
+			idx = ln.indexOf(' ');
 			if( idx > 0 ){
 				url = ln[0 .. idx];
 				ln = ln[idx+1 .. $];
 			} else {
-				idx = ln.indexOfCT('\t');
+				idx = ln.indexOf('\t');
 				if( idx < 0 ){
 					url = ln;
 					ln = ln[$ .. $];
@@ -1191,7 +1320,12 @@ pure @safe {
 				title = ln[1 .. $-1];
 		}
 
-		ret[toLower(refid)] = LinkRef(refid, url, title);
+		LinkRef lref;
+		lref.id = refid;
+		lref.url = url;
+		lref.title = title;
+		parseAttributeString(attstr, lref.attributes);
+		ret[toLower(refid)] = lref;
 		reflines[lnidx] = true;
 
 		debug if (!__ctfe) logTrace("[detected ref on line %d]", lnidx+1);
@@ -1288,6 +1422,7 @@ private struct LinkRef {
 	string id;
 	string url;
 	string title;
+	Attribute[] attributes;
 }
 
 private struct Link {

@@ -37,6 +37,7 @@ interface RandomNumberStream : InputStream {
 			dst = The buffer that will be filled with random numbers.
 				It will contain buffer.length random ubytes.
 				Supportes both heap-based and stack-based arrays.
+			mode = The desired waiting mode for IO operations.
 
 		Throws:
 			CryptoException on error.
@@ -167,7 +168,7 @@ final class SystemRNG : RandomNumberStream {
 			version (linux) static if (LinuxMaybeHasGetrandom)
 			{
 				import core.atomic : atomicLoad, atomicStore;
-				auto p = atomicLoad(*cast(const shared GET_RANDOM*) &hasGetRandom);
+				GET_RANDOM p = atomicLoad(*cast(const shared GET_RANDOM*) &hasGetRandom);
 				if (p == GET_RANDOM.UNINITIALIZED)
 				{
 					p = initHasGetRandom() ? GET_RANDOM.AVAILABLE
@@ -615,4 +616,3 @@ version(Windows)
 		BOOL CryptGenRandom(HCRYPTPROV hProv, DWORD dwLen, BYTE *pbBuffer);
 	}
 }
-

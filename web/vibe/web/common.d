@@ -509,8 +509,8 @@ public struct WebParamAttribute {
  * If no fieldname is given, the entire body is serialized into the object.
  *
  * Params:
- * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
- * - field: The name of the field in the JSON object.
+ *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
+ *   field = The name of the field in the JSON object.
  *
  * ----
  * @bodyParam("pack", "package")
@@ -548,8 +548,8 @@ WebParamAttribute bodyParam(string identifier)
  * However, passing aggregate via header isn't a good practice and should be avoided for new production code.
  *
  * Params:
- * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
- * - field: The name of the header field to use (e.g: 'Accept', 'Content-Type'...).
+ *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
+ *   field = The name of the header field to use (e.g: 'Accept', 'Content-Type'...).
  *
  * ----
  * // The server will receive the content of the "Authorization" header.
@@ -572,8 +572,8 @@ WebParamAttribute headerParam(string identifier, string field)
  * The serialization format is not customizable.
  *
  * Params:
- * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
- * - field: The field name to use.
+ *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
+ *   field = The field name to use.
  *
  * ----
  * // For a call to postData("D is awesome"), the server will receive the query:
@@ -683,7 +683,6 @@ static assert(isNullable!(Nullable!int));
 package struct ParamError {
 	string field;
 	string text;
-	string debugText;
 }
 
 package enum ParamResult {

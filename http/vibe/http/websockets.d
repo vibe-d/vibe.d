@@ -85,6 +85,9 @@ class WebSocketException: Exception
 */
 WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = defaultSettings)
 @safe {
+	const use_tls = (url.schema == "wss" || url.schema == "https") ? true : false;
+	url.schema = use_tls ? "https" : "http";
+
 	auto rng = secureRNG();
 	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
@@ -108,7 +111,7 @@ WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = default
 /// ditto
 void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPClientSettings) settings = defaultSettings)
 @safe {
-	bool use_tls = (url.schema == "wss") ? true : false;
+	const use_tls = (url.schema == "wss" || url.schema == "https") ? true : false;
 	url.schema = use_tls ? "https" : "http";
 
 	/*scope*/auto rng = secureRNG();

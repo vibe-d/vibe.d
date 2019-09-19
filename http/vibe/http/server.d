@@ -189,7 +189,7 @@ unittest
 	the function returns to the caller.
 
 	Params:
-		connections = The stream to treat as an incoming HTTP client connection.
+		connection = The stream to treat as an incoming HTTP client connection.
 		context = Information about the incoming listener and available
 			virtual hosts
 */
@@ -531,7 +531,9 @@ private enum HTTPServerOptionImpl {
 	none                      = 0,
 	errorStackTraces          = 1<<7,
 	reusePort                 = 1<<8,
-	distribute                = 1<<9 // deprecated
+	distribute                = 1<<9, // deprecated
+	reuseAddress              = 1<<10,
+	defaults                  = reuseAddress
 }
 
 // TODO: Should be turned back into an enum once the deprecated symbols can be removed
@@ -585,13 +587,19 @@ struct HTTPServerOption {
 	static enum errorStackTraces          = HTTPServerOptionImpl.errorStackTraces;
 	/// Enable port reuse in `listenTCP()`
 	static enum reusePort                 = HTTPServerOptionImpl.reusePort;
+	/// Enable address reuse in `listenTCP()`
+	static enum reuseAddress              = HTTPServerOptionImpl.reuseAddress;
 
 	/** The default set of options.
 
 		Includes all parsing options, as well as the `errorStackTraces`
 		option if the code is compiled in debug mode.
 	*/
-	static enum defaults = () { debug return HTTPServerOptionImpl.errorStackTraces; else return HTTPServerOptionImpl.none; } ().HTTPServerOption;
+	static enum defaults = () {
+		HTTPServerOptionImpl ops = HTTPServerOptionImpl.defaults;
+		debug ops |= HTTPServerOptionImpl.errorStackTraces;
+		return ops;
+	} ().HTTPServerOption;
 
 	deprecated("None has been renamed to none.")
 	static enum None = none;
@@ -1233,7 +1241,7 @@ final class HTTPServerResponse : HTTPResponse {
 		Params:
 			data = The data to write as the body contents
 			status = Optional response status code to set
-			content_tyoe = Optional content type to apply to the response.
+			content_type = Optional content type to apply to the response.
 				If no content type is given and no "Content-Type" header is
 				set in the response, this will default to
 				`"application/octet-stream"`.
@@ -1572,6 +1580,7 @@ final class HTTPServerResponse : HTTPResponse {
 			name = Name of the cookie
 			value = New cookie value - pass null to clear the cookie
 			path = Path (as seen by the client) of the directory tree in which the cookie is visible
+			encoding = Optional encoding (url, raw), default to URL encoding
 	*/
 	Cookie setCookie(string name, string value, string path = "/", Cookie.Encoding encoding = Cookie.Encoding.url)
 	@safe {
@@ -1729,7 +1738,7 @@ final class HTTPServerResponse : HTTPResponse {
 			this.statusPhrase.length ? this.statusPhrase : httpStatusText(this.statusCode));
 
 		// write all normal headers
-		foreach (k, v; this.headers) {
+		foreach (k, v; this.headers.byKeyValue) {
 			dst.put(k);
 			dst.put(": ");
 			dst.put(v);
@@ -1740,7 +1749,7 @@ final class HTTPServerResponse : HTTPResponse {
 		logTrace("---------------------");
 
 		// write cookies
-		foreach (n, cookie; this.cookies) {
+		foreach (n, cookie; this.cookies.byKeyValue) {
 			dst.put("Set-Cookie: ");
 			cookie.writeString(() @trusted { return &dst; } (), n);
 			dst.put("\r\n");
@@ -2021,10 +2030,11 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 	import vibe.core.core : runWorkerTaskDist;
 	import std.algorithm : canFind, find;
 
-	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort, bool is_tls)
+	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort, bool reuseAddress, bool is_tls)
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
+			if(reuseAddress) options |= TCPListenOptions.reuseAddress; else options &= ~TCPListenOptions.reuseAddress;
 			if(reusePort) options |= TCPListenOptions.reusePort; else options &= ~TCPListenOptions.reusePort;
 			auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) nothrow @safe {
 					try handleHTTPConnection(conn, listen_info);
@@ -2065,6 +2075,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 			if (auto tcp_lst = doListen(li,
 					(settings.options & HTTPServerOptionImpl.distribute) != 0,
 					(settings.options & HTTPServerOption.reusePort) != 0,
+					(settings.options & HTTPServerOption.reuseAddress) != 0,
 					settings.tlsContext !is null)) // DMD BUG 2043
 			{
 				li.m_listener = tcp_lst;
@@ -2131,9 +2142,6 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	void errorOut(int code, string msg, string debug_msg, Throwable ex)
 	@safe {
 		assert(!res.headerWritten);
-
-		// stack traces sometimes contain random bytes - make sure they are replaced
-		debug_msg = sanitizeUTF8(cast(const(ubyte)[])debug_msg);
 
 		res.statusCode = code;
 		if (settings && settings.errorPageHandler) {
@@ -2238,7 +2246,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 			}
 		}
 
-        // eagerly parse the URL as its lightweight and defacto @nogc
+		// eagerly parse the URL as its lightweight and defacto @nogc
 		auto url = URL.parse(req.requestURI);
 		req.queryString = url.queryString;
 		req.username = url.username;
@@ -2261,7 +2269,9 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		if (settings.serverString.length)
 			res.headers["Server"] = settings.serverString;
 		res.headers["Date"] = formatRFC822DateAlloc(request_allocator, reqtime);
-		if (req.persistent) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
+		if (req.persistent)
+			res.headers["Keep-Alive"] = formatAlloc(
+				request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
 
 		// finished parsing the request
 		parsed = true;
@@ -2283,17 +2293,21 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		}
 	} catch (HTTPStatusException err) {
 		if (!res.headerWritten) errorOut(err.status, err.msg, err.debugMessage, err);
-		else logDiagnostic("HTTPSterrorOutatusException while writing the response: %s", err.msg);
-		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURI, () @trusted { return err.toString().sanitize; } ());
+		else logDiagnostic("HTTPStatusException while writing the response: %s", err.msg);
+		debug logDebug("Exception while handling request %s %s: %s", req.method,
+					   req.requestURI, () @trusted { return err.toString().sanitize; } ());
 		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
 			keep_alive = false;
 	} catch (UncaughtException e) {
 		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
 		string dbg_msg;
-		if (settings.options & HTTPServerOption.errorStackTraces) dbg_msg = () @trusted { return e.toString().sanitize; } ();
-		if (!res.headerWritten && tcp_connection.connected) errorOut(status, httpStatusText(status), dbg_msg, e);
+		if (settings.options & HTTPServerOption.errorStackTraces)
+			dbg_msg = () @trusted { return e.toString().sanitize; } ();
+		if (!res.headerWritten && tcp_connection.connected)
+			errorOut(status, httpStatusText(status), dbg_msg, e);
 		else logDiagnostic("Error while writing the response: %s", e.msg);
-		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURI, () @trusted { return e.toString().sanitize(); } ());
+		debug logDebug("Exception while handling request %s %s: %s", req.method,
+					   req.requestURI, () @trusted { return e.toString().sanitize(); } ());
 		if (!parsed || res.headerWritten || !cast(Exception)e) keep_alive = false;
 	}
 
@@ -2310,7 +2324,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	if (res.m_requiresConnectionClose)
 		keep_alive = false;
 
-	foreach (k, v ; req._files) {
+	foreach (k, v ; req._files.byKeyValue) {
 		if (existsFile(v.tempPath)) {
 			removeFile(v.tempPath);
 			logDebug("Deleted upload tempfile %s", v.tempPath.toString());
@@ -2360,7 +2374,7 @@ private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream 
 	//headers
 	parseRFC5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc, false);
 
-	foreach (k, v; req.headers)
+	foreach (k, v; req.headers.byKeyValue)
 		logTrace("%s: %s", k, v);
 	logTrace("--------------------");
 }

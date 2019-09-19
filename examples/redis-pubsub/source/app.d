@@ -4,7 +4,7 @@ import vibe.core.core;
 import vibe.core.log;
 import vibe.db.redis.redis;
 
-void printReply(string channel, string message)
+void printReply(string channel, string message) @safe
 {
 	logInfo("Received a message from channel %s: %s", channel, message);
 }

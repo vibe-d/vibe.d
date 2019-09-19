@@ -455,7 +455,7 @@ interface UDPConnection {
 */
 enum TCPListenOptions {
 	/// Don't enable any particular option
-	defaults = 0,
+	none = 0,
 	/// Causes incoming connections to be distributed across the thread pool
 	distribute = 1<<0,
 	/// Disables automatic closing of the connection when the connection callback exits
@@ -464,6 +464,10 @@ enum TCPListenOptions {
 	    Does not affect libasync driver because it is always enabled by libasync.
 	*/
 	reusePort = 1<<2,
+	/// Enable address reuse
+	reuseAddress = 1<<3,
+	/// Enables address reuse by default
+	defaults = reuseAddress
 }
 
 private pure nothrow {

@@ -23,8 +23,8 @@ void createPipePair(out Stream a, out Stream b)
 {
 	auto p1 = new TaskPipe;
 	auto p2 = new TaskPipe;
-	a = new ProxyStream(p1, p2);
-	b = new ProxyStream(p2, p1);
+	a = createProxyStream(p1, p2);
+	b = createProxyStream(p2, p1);
 }
 
 void testConn(

@@ -58,7 +58,6 @@ RedisClient connectRedis(string host, ushort port = RedisClient.defaultPort)
 
 	Params:
 		url = Redis URI scheme for a Redis database instance
-		host_or_url = Can either be a host name, in which case the default port will be used, or a URL with the redis:// scheme.
 
 	Returns:
 		A new RedisDatabase instance that can be used to access the database.

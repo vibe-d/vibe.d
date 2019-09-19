@@ -101,10 +101,13 @@ package final class Libevent2TCPConnection : TCPConnection {
 		} ();
 	}
 
-	/*~this()
-	{
-		//assert(m_ctx is null, "Leaking TCPContext because it has not been cleaned up and we are not allowed to touch the GC in finalizers..");
-	}*/
+	~this()
+	@trusted {
+		if (m_ctx && m_ctx.state == ConnectionState.passiveClose) {
+			if (m_ctx.event) bufferevent_free(m_ctx.event);
+			TCPContextAlloc.free(m_ctx);
+		}
+	}
 
 	@property void tcpNoDelay(bool enabled)
 	{
@@ -119,7 +122,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 	@property void readTimeout(Duration v)
 	{
 		m_readTimeout = v;
-		if( v == dur!"seconds"(0) ){
+		if (v == dur!"seconds"(0) || v == Duration.max) {
 			() @trusted { bufferevent_set_timeouts(m_ctx.event, null, null); } ();
 		} else {
 			assert(v.total!"seconds" <= int.max);
@@ -389,6 +392,14 @@ package final class Libevent2TCPConnection : TCPConnection {
 	void finalize()
 	{
 		flush();
+
+		if (m_ctx && m_ctx.state == ConnectionState.passiveClose) {
+			() @trusted {
+				if (m_ctx.event) bufferevent_free(m_ctx.event);
+				TCPContextAlloc.free(m_ctx);
+			} ();
+			m_ctx = null;
+		}
 	}
 
 	private bool fillReadBuffer(bool block, bool throw_on_fail = true, bool wait_for_timeout = false)
@@ -782,15 +793,4 @@ package nothrow extern(C)
 		}
 	}
 }
-
-/// private
-package void removeFromArray(T)(ref T[] array, T item)
-{
-	foreach( i; 0 .. array.length )
-		if( array[i] is item ){
-			array = array[0 .. i] ~ array[i+1 .. $];
-			return;
-		}
-}
-
 }

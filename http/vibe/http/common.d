@@ -322,7 +322,7 @@ class HTTPResponse {
 	Throwing this exception from within a request handler will produce a matching error page.
 */
 class HTTPStatusException : Exception {
-	@safe:
+	pure nothrow @safe @nogc:
 
 	private {
 		int m_status;
@@ -330,7 +330,7 @@ class HTTPStatusException : Exception {
 
 	this(int status, string message = null, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
-		super(message != "" ? message : httpStatusText(status), file, line, next);
+		super(message.length ? message : httpStatusText(status), file, line, next);
 		m_status = status;
 	}
 
@@ -349,8 +349,13 @@ final class MultiPart {
 	string[string] form;
 }
 
+/**
+ * Returns:
+ *     The version string corresponding to the `ver`,
+ *     suitable for usage in the start line of the request.
+ */
 string getHTTPVersionString(HTTPVersion ver)
-@safe nothrow {
+nothrow pure @nogc @safe {
 	final switch(ver){
 		case HTTPVersion.HTTP_1_0: return "HTTP/1.0";
 		case HTTPVersion.HTTP_1_1: return "HTTP/1.1";

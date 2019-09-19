@@ -127,7 +127,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	{
 		FormFields options;
 		parseURLEncodedForm(tmpUrl[queryIndex+1 .. $], options);
-		foreach (option, value; options) {
+		foreach (option, value; options.byKeyValue) {
 			bool setBool(ref bool dst)
 			{
 				try {

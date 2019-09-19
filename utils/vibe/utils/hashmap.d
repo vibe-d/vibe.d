@@ -17,12 +17,16 @@ struct DefaultHashMapTraits(Key) {
 	enum clearValue = Key.init;
 	static bool equals(in Key a, in Key b)
 	{
-		static if (is(Key == class)) return a is b;
+		static if (__traits(isFinalClass, Key) && &Unqual!Key.init.opEquals is &Object.init.opEquals)
+			return a is b;
+		else static if (is(Key == class))
+			// BUG: improperly casting away const
+			return () @trusted { return a is b ? true : (a !is null && (cast(Object) a).opEquals(cast(Object) b)); }();
 		else return a == b;
 	}
 	static size_t hashOf(in ref Key k)
 	@safe {
-		static if (is(Key == class) && &Unqual!Key.init.toHash is &Object.init.toHash)
+		static if (__traits(isFinalClass, Key) && &Unqual!Key.init.toHash is &Object.init.toHash)
 			return () @trusted { return cast(size_t)cast(void*)k; } ();
 		else static if (__traits(compiles, Key.init.toHash()))
 			return () @trusted { return (cast(Key)k).toHash(); } ();
@@ -43,6 +47,31 @@ struct DefaultHashMapTraits(Key) {
 			return () @trusted { return (cast(typeof(&properlyTypedWrapper))&hashWrapper)(k); } ();
 		}
 	}
+}
+
+unittest
+{
+	final class Integer : Object {
+		public const int value;
+
+		this(int x) @nogc nothrow pure @safe { value = x; }
+
+		override bool opEquals(Object rhs) const @nogc nothrow pure @safe {
+			if (auto r = cast(Integer) rhs)
+				return value == r.value;
+			return false;
+		}
+
+		override size_t toHash() const @nogc nothrow pure @safe {
+			return value;
+		}
+	}
+
+	auto hashMap = HashMap!(Object, int)(vibeThreadAllocator());
+	foreach (x; [2, 4, 8, 16])
+		hashMap[new Integer(x)] = x;
+	foreach (x; [2, 4, 8, 16])
+		assert(hashMap[new Integer(x)] == x);
 }
 
 struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey, Allocator = IAllocator)

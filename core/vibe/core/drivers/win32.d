@@ -1206,14 +1206,10 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 
 	override @property ulong leastSize()
 	{
-		acquireReader();
-		scope(exit) releaseReader();
-
-		while( m_readBuffer.empty ){
-			if( !connected ) return 0;
-			m_driver.m_core.yieldForEvent();
-		}
-		return m_readBuffer.length;
+		waitForData(Duration.max);
+		if (m_readBuffer.length) return m_readBuffer.length;
+		if (!connected) return 0;
+		throw new Exception("Reading from TCP connection timed out.");
 	}
 
 	override @property bool dataAvailableForRead()
@@ -1237,6 +1233,8 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 	{
 		if (timeout == 0.seconds)
 			logDebug("Warning: use Duration.max as an argument to waitForData() to wait infinitely, not 0.seconds.");
+
+		if (timeout <= 0.seconds || timeout > m_readTimeout) timeout = m_readTimeout;
 
 		acquireReader();
 		scope(exit) releaseReader();

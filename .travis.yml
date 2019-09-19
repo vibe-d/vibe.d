@@ -1,6 +1,5 @@
 language: d
-sudo: false
-dist: trusty
+dist: xenial
 
 services:
   - mongodb
@@ -24,36 +23,41 @@ d:
   # this way the overall test time gets cut down (GDC/LDC are a lot
   # slower tham DMD, so they should be started early), while still
   # catching most DMD version related build failures early
-  - dmd-2.085.0
-  - dmd-2.076.1
-  - ldc-1.14.0
-  - ldc-1.13.0
-  - ldc-1.12.0
-  - ldc-1.11.0
-  - ldc-1.10.0
-  - ldc-1.9.0
-  - ldc-1.8.0
-  - ldc-1.7.0
-  - ldc-1.6.0
-  - dmd-2.084.1
-  - dmd-2.083.1
-  - dmd-2.081.2
-  - dmd-2.082.1
-  - dmd-2.080.1
-  - dmd-2.079.1
-  - dmd-2.078.3
+  # only the latest 4 and the oldest supported versions of each compiler
+  # are present to reduce the overall CI time
+  - dmd-2.087.1
   - dmd-2.077.1
+  - ldc-1.17.0
+  - ldc-1.16.0
+  - ldc-1.15.0
+  - ldc-1.14.0
+  - ldc-1.7.0
+  - dmd-2.086.1
+  - dmd-2.085.0 # 2.085.1 has a regression
+  - dmd-2.084.1
+  - dmd-2.078.3
   - dmd-beta
 
 env:
-  - VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests,mongo #,meson
   - VIBED_DRIVER=vibe-core PARTS=builds,unittests,examples,tests,mongo
-  - VIBED_DRIVER=libasync PARTS=builds,unittests,mongo
 
 matrix:
   include:
     - d: dmd
       env: DFLAGS="-cov -version=VibedSetCoverageMerge" PARTS=unittests,tests,mongo
+    # test deprecated configurations on the latest and oldest compiler versions
+    - d: dmd-2.087.1
+      env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests,mongo #,meson
+    - d: dmd-2.087.1
+      env: VIBED_DRIVER=libasync PARTS=builds,unittests,mongo
+    - d: dmd-2.077.1
+      env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests,mongo #,meson
+    - d: dmd-2.077.1
+      env: VIBED_DRIVER=libasync PARTS=builds,unittests,mongo
+    - d: ldc-1.16.0
+      env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests,mongo #,meson
+    - d: ldc-1.16.0
+      env: VIBED_DRIVER=libasync PARTS=builds,unittests,mongo
 
 #before_install:
 #  - pyenv global system 3.6

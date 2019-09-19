@@ -25,7 +25,7 @@ void test(bool tls)
 	}));
 
 	const serverAddr = listener.bindAddresses[0];
-	const server_url = URL((tls ? "https://" : "http://") ~ serverAddr.toString);
+	const server_url = URL((tls ? "wss://" : "ws://") ~ serverAddr.toString);
 
 	runTask({
 		scope(exit) exitEventLoop(true);
