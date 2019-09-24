@@ -586,6 +586,10 @@ unittest {
 	the matching method style for this. The RestInterfaceClient class will derive from the
 	interface that is passed as a template argument. It can be used as a drop-in replacement
 	of the real implementation of the API this way.
+
+	Non-success:
+		If a request failed, timed out, or the server returned an non-success status code,
+		an `vibe.web.common.RestException` will be thrown.
 */
 class RestInterfaceClient(I) : I
 {
