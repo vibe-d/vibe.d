@@ -130,6 +130,16 @@ final class RedisClient {
 		});
 	}
 
+	/** Release all connections that are not in use. Call before exiting the
+	 * program to avoid relying on the GC to clean up the sockets.
+	 */
+	void releaseUnusedConnections() @safe
+	{
+		m_connections.removeUnused((conn) @safe {
+                 conn.m_conn.close();
+		});
+	}
+
 	/// Returns Redis version
 	@property string redisVersion()
 	{
