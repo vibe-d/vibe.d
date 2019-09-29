@@ -135,8 +135,12 @@ final class RedisClient {
 	 */
 	void releaseUnusedConnections() @safe
 	{
-		m_connections.removeUnused((conn) @safe {
+		// the try/catch in this is for the old vibe.d:core library, not
+		// necessary in vibe-core, but we have to work with both.
+		m_connections.removeUnused((conn) @safe nothrow {
+			try {
                  conn.m_conn.close();
+			 } catch(Exception e) {}
 		});
 	}
 
