@@ -83,7 +83,7 @@ class WebSocketException: Exception
 /**
 	Returns a WebSocket client object that is connected to the specified host.
 */
-WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = defaultSettings)
+WebSocket connectWebSocket(URL url, string[string] addHeaders = null, const(HTTPClientSettings) settings = defaultSettings)
 @safe {
 	const use_tls = (url.schema == "wss" || url.schema == "https") ? true : false;
 	url.schema = use_tls ? "https" : "http";
@@ -92,11 +92,17 @@ WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = default
 	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
 	auto res = requestHTTP(url, (scope req){
-		req.method = HTTPMethod.GET;
+	        req.method = HTTPMethod.GET;
 		req.headers["Upgrade"] = "websocket";
 		req.headers["Connection"] = "Upgrade";
 		req.headers["Sec-WebSocket-Version"] = "13";
 		req.headers["Sec-WebSocket-Key"] = challengeKey;
+		
+		if (addHeaders.length != 0) {
+                        foreach(k, v; addHeaders) {
+                                req.headers[k] = v;
+                        }
+                }
 	});
 
 	enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
