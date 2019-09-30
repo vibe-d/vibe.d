@@ -92,17 +92,16 @@ WebSocket connectWebSocket(URL url, string[string] addHeaders = null, const(HTTP
 	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
 	auto res = requestHTTP(url, (scope req){
-	        req.method = HTTPMethod.GET;
+		req.method = HTTPMethod.GET;
 		req.headers["Upgrade"] = "websocket";
 		req.headers["Connection"] = "Upgrade";
 		req.headers["Sec-WebSocket-Version"] = "13";
 		req.headers["Sec-WebSocket-Key"] = challengeKey;
-		
 		if (addHeaders.length != 0) {
-                        foreach(k, v; addHeaders) {
-                                req.headers[k] = v;
-                        }
-                }
+			foreach(k, v; addHeaders) {
+            	req.headers[k] = v;
+            }
+        }
 	});
 
 	enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
