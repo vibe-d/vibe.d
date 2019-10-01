@@ -1462,7 +1462,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 					else if (v.isNull()) {
 						static if (!is(PDefaults[i] == void)) params[i] = PDefaults[i];
 						else enforceBadRequest(false, "Missing non-optional "~sparam.kind.to!string~" parameter '"~(fieldname.length?fieldname:sparam.name)~"'.");
-					} else params[i] = v;
+					} else params[i] = v.get;
 				}
 			}
 		} catch (Exception e) {
