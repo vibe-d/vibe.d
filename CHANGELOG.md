@@ -1,8 +1,13 @@
 ﻿Changelog
 =========
 
-v0.8.6 - 2019-09-
+v0.8.6 - 2019-10-03
 -------------------
+
+Officially deprecates the old libevent based core module and updates compiler
+support to the latest versions. This release contains a number of small
+features, bug fixes, as well as improving the default HTTP session cookie
+security.
 
 ### Features and improvements ###
 
@@ -24,6 +29,7 @@ v0.8.6 - 2019-09-
 - Added `TCPListenOptions.reuseAddress`, enabled by default (by Radu Ricariu) - [pull #2303][issue2303]
 - Enabled Unix socket support for vibe-core builds (by Benjamin Schaaf) - [pull #2316][issue2316]
 - Annotated `URL` constructors `pure` and `nothrow` (by Denis Feklushkin aka denizzzka) - [issue #2322][issue2322], [pull #2351][issue2351]
+- Added "application/wasm" mime type to the HTTP server (by Hiroki Noda aka kubo39) - [pull #2375][issue2375]
 
 ### Bug fixes ###
 
@@ -64,6 +70,7 @@ v0.8.6 - 2019-09-
 [issue2347]: https://github.com/vibe-d/vibe.d/issues/2347
 [issue2351]: https://github.com/vibe-d/vibe.d/issues/2351
 [issue2356]: https://github.com/vibe-d/vibe.d/issues/2356
+[issue2375]: https://github.com/vibe-d/vibe.d/issues/2375
 [issue-vibe-core-101]: https://github.com/vibe-d/vibe-core/issues/101
 
 
