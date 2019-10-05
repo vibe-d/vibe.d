@@ -946,7 +946,7 @@ final class HTTPServerRequest : HTTPRequest {
 			if (_cookies.isNull) {
 				_cookies = CookieValueMap.init;
 				if (auto pv = "cookie" in headers)
-					parseCookies(*pv, _cookies);
+					parseCookies(*pv, _cookies.get);
 			}
 			return _cookies.get;
 		}
@@ -959,7 +959,7 @@ final class HTTPServerRequest : HTTPRequest {
 		@property ref FormFields query() @safe {
 			if (_query.isNull) {
 				_query = FormFields.init;
-				parseURLEncodedForm(queryString, _query);
+				parseURLEncodedForm(queryString, _query.get);
 			}
 
 			return _query.get;
@@ -1038,7 +1038,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 		private void parseFormAndFiles() @safe {
 			_form = FormFields.init;
-			parseFormData(_form, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
+			parseFormData(_form.get, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
 		}
 
 		/** Contains information about any uploaded file for a HTML _form request.
