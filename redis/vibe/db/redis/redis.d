@@ -140,7 +140,9 @@ final class RedisClient {
 		m_connections.removeUnused((conn) @safe nothrow {
 			try {
                  conn.m_conn.close();
-			 } catch(Exception e) {}
+			 } catch(Exception e) {
+				 logDebug("Failed to close unused Redis connection: %s", e.msg);
+			 }
 		});
 	}
 
