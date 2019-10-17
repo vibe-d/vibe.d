@@ -26,6 +26,14 @@ final class RedisSessionStore : SessionStore {
 		m_db = connectRedis(host, port).getDatabase(database);
 	}
 
+	/** Release all connections that are not in use. Call this at the end of
+	 * your program to clean up unused sockets that may be held by the GC.
+	 */
+	void releaseUnusedConnections() @safe
+	{
+		m_db.client.releaseUnusedConnections();
+	}
+
 	/** The duration without access after which a session expires.
 	*/
 	@property Duration expirationTime() const { return m_expirationTime; }
