@@ -14,13 +14,13 @@ copyFiles "../lib/win-amd64/libssl-1_1-x64.dll" "../lib/win-amd64/libcrypto-1_1-
 
 configuration "openssl-mscoff" {
 	platforms "windows-x86_mscoff" "windows-x86_64" "windows-x86-ldc"
-	dependency "openssl" version=">=1.0.0+1.0.0e"
+	dependency "openssl" version=">=1.0.0"
 	sourceFiles "../lib/win-i386-mscoff/libssl.lib" "../lib/win-i386-mscoff/libcrypto.lib" platform="windows-x86"
 	sourceFiles "../lib/win-amd64/libssl.lib" "../lib/win-amd64/libcrypto.lib" platform="windows-x86_64"
 }
 
 configuration "openssl" {
-	dependency "openssl" version="~>1.0"
+	dependency "openssl" version=">=1.0.0"
 
 	// Windows
 	sourceFiles "../lib/win-i386/libssl.lib" "../lib/win-i386/libcrypto.lib" platform="windows-x86-dmd"
@@ -47,19 +47,19 @@ configuration "openssl" {
 
 configuration "openssl-1.1" {
 	platforms "posix"
-	dependency "openssl" version="~>1.0"
+	dependency "openssl" version=">=1.1.0"
 	versions "VibeUseOpenSSL11"
 }
 
 configuration "openssl-1.0" {
 	platforms "posix"
-	dependency "openssl" version="~>1.0"
+	dependency "openssl" version=">=1.0.0"
 	versions "VibeUseOpenSSL10"
 }
 
 configuration "openssl-0.9" {
 	platforms "posix"
-	dependency "openssl" version="~>1.0"
+	dependency "openssl" version=">=1.0.0"
 	versions "VibeUseOldOpenSSL"
 }
 
