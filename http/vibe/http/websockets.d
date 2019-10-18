@@ -701,10 +701,11 @@ final class WebSocket {
 		if (connected) {
 			send((scope msg) {
 				m_sentCloseFrame = true;
-				if (code != 0)
+				if (code != 0) {
 					msg.write(std.bitmanip.nativeToBigEndian(code));
 					msg.write(cast(const ubyte[])reason);
-				}, FrameOpcode.close);
+				}
+			}, FrameOpcode.close);
 		}
 		if (m_pingTimer) m_pingTimer.stop();
 
