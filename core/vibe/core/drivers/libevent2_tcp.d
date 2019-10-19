@@ -488,6 +488,13 @@ final class Libevent2TCPListener : TCPListener {
 				TCPContextAlloc.free(ctx);
 			} ();
 			m_ctx = null;
+
+			version(Posix)
+			{
+				if (m_bindAddress.family == AF_UNIX) {
+					removeFile(m_bindAddress.toAddressString());
+				}
+			}
 		}
 	}
 }
