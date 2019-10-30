@@ -197,7 +197,7 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPC
 	auto sttngs = settings ? settings : defaultSettings;
 
 	if (port == 0) port = use_tls ? 443 : 80;
-	auto ckey = ConnInfo(host, port, use_tls, sttngs.proxyURL.host, sttngs.proxyURL.port, sttngs.networkInterface);
+	auto ckey = ConnInfo(host, port, use_tls, sttngs.proxyURL.host, sttngs.proxyURL.port, sttngs.networkInterface, sttngs.tryTimes, sttngs.tryPersistentTimes);
 
 	ConnectionPool!HTTPClient pool;
 	s_connections.opApply((ref c) @safe {
@@ -229,7 +229,7 @@ static ~this()
 	}
 }
 
-private struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
+private struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; uint tryTimes; uint tryPersistentTimes; }
 private static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 
 
@@ -268,6 +268,12 @@ class HTTPClientSettings {
 	*/
 	void delegate(TLSContext ctx) @safe nothrow tlsContextSetup;
 
+	/// Set higher to retry more times on connection closed.
+	uint tryTimes = 1;
+
+	/// Same as tryTimes but for persistent requests.
+	uint tryPersistentTimes = 2;
+
 	@property HTTPClientSettings dup()
 	const @safe {
 		auto ret = new HTTPClientSettings;
@@ -277,6 +283,8 @@ class HTTPClientSettings {
 		ret.networkInterface = this.networkInterface;
 		ret.dnsAddressFamily = this.dnsAddressFamily;
 		ret.tlsContextSetup = this.tlsContextSetup;
+		ret.tryTimes = this.tryTimes;
+		ret.tryPersistentTimes = this.tryPersistentTimes;
 		return ret;
 	}
 }
@@ -603,8 +611,11 @@ final class HTTPClient {
 
 		// retry the request if the connection gets closed prematurely and this is a persistent request
 		bool has_body;
-		foreach (i; 0 .. is_persistent_request ? 2 : 1) {
-		 	connected_time = Clock.currTime(UTC());
+		uint tryTimes = m_settings.tryTimes;
+		uint tryPersistentTimes = m_settings.tryPersistentTimes;
+		uint maxTries = is_persistent_request ? tryPersistentTimes : tryTimes;
+		foreach (i; 0 .. maxTries) {
+			connected_time = Clock.currTime(UTC());
 
 			close_conn = false;
 			has_body = doRequest(requester, close_conn, false, connected_time);
@@ -612,7 +623,7 @@ final class HTTPClient {
 			logTrace("HTTP client waiting for response");
 			if (!m_stream.empty) break;
 
-			enforce(i != 1, "Second attempt to send HTTP request failed.");
+			enforce(i != maxTries - 1, text("Attempt ", maxTries, " to send HTTP request failed."));
 		}
 		return has_body;
 	}
