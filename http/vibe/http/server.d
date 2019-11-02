@@ -365,7 +365,7 @@ struct DefaultDietFilters {
 		string indent_string = "\n";
 		while (indent-- > 0) indent_string ~= '\t';
 
-		string ret = indent_string~"<style type=\"text/css\"><!--";
+		string ret = indent_string~"<style><!--";
 		indent_string = indent_string ~ '\t';
 		foreach (ln; lines) ret ~= indent_string ~ ln;
 		indent_string = indent_string[0 .. $-1];
@@ -426,11 +426,11 @@ unittest {
 		return strip(cast(string)(dst.data));
 	}
 
-	assert(compile!":css .test" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
+	assert(compile!":css .test" == "<style><!--\n\t.test\n--></style>");
 	assert(compile!":javascript test();" == "<script>\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
 	assert(compile!":markdown **test**" == "<p><strong>test</strong>\n</p>");
 	assert(compile!":htmlescape <test>" == "&lt;test&gt;");
-	assert(compile!":css !{\".test\"}" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
+	assert(compile!":css !{\".test\"}" == "<style><!--\n\t.test\n--></style>");
 	assert(compile!":javascript !{\"test();\"}" == "<script>\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
 	assert(compile!":markdown !{\"**test**\"}" == "<p><strong>test</strong>\n</p>");
 	assert(compile!":htmlescape !{\"<test>\"}" == "&lt;test&gt;");
