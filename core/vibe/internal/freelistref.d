@@ -17,7 +17,6 @@ import core.exception : OutOfMemoryError;
 import core.stdc.stdlib;
 import core.memory;
 import std.conv;
-import std.exception : enforceEx;
 import std.traits;
 import std.algorithm;
 
