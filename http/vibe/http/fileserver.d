@@ -119,7 +119,7 @@ unittest {
 
 		auto fsettings = new HTTPFileServerSettings;
 		fsettings.serverPathPrefix = "/static";
-		router.get("static/*", serveStaticFiles("public/", fsettings));
+		router.get("/static/*", serveStaticFiles("public/", fsettings));
 
 		auto settings = new HTTPServerSettings;
 		listenHTTP(settings, router);
