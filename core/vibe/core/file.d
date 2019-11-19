@@ -234,6 +234,19 @@ void removeFile(string path)
 }
 
 /**
+	Removes a directory including its files recursively
+*/
+void removeDirectory(Path path)
+{
+	removeDirectory(path.toNativeString());
+}
+/// ditto
+void removeDirectory(string path)
+@trusted {
+	std.file.rmdirRecurse(path);
+}
+
+/**
 	Checks if a file exists
 */
 bool existsFile(Path path) nothrow
@@ -259,6 +272,24 @@ FileInfo getFileInfo(Path path)
 FileInfo getFileInfo(string path)
 {
 	return getFileInfo(Path(path));
+}
+
+/**
+	Sums up all file sizes recursively in a directory
+
+	Throws: A `FileException` is thrown if the file does not exist.
+*/
+size_t getDirectorySize(Path path)
+{
+	return getDirectorySize(path.toNativeString());
+}
+/// ditto
+size_t getDirectorySize(string path)
+@trusted {
+	size_t total;
+	foreach( DirEntry ent; dirEntries(path, SpanMode.depth) )
+		total += makeFileInfo(ent).size;
+	return total;
 }
 
 /**
