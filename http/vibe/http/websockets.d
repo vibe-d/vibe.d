@@ -97,7 +97,7 @@ WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = default
 		req.headers["Connection"] = "Upgrade";
 		req.headers["Sec-WebSocket-Version"] = "13";
 		req.headers["Sec-WebSocket-Key"] = challengeKey;
-	});
+	}, settings);
 
 	enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
 
@@ -136,7 +136,8 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 				del(ws);
 				if (ws.connected) ws.close();
 			});
-		}
+		},
+		settings
 	);
 }
 /// Scheduled for deprecation - use a `@safe` callback instead.
