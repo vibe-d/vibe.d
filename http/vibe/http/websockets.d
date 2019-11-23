@@ -80,10 +80,11 @@ class WebSocketException: Exception
 	}
 }
 
-/**
-	Returns a WebSocket client object that is connected to the specified host.
+/** Establishes a WebSocket connection at the specified endpoint.
 */
-WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = defaultSettings)
+WebSocket connectWebSocketEx(URL url,
+	scope void delegate(scope HTTPClientRequest) @safe request_modifier,
+	const(HTTPClientSettings) settings = defaultSettings)
 @safe {
 	const use_tls = (url.schema == "wss" || url.schema == "https") ? true : false;
 	url.schema = use_tls ? "https" : "http";
@@ -97,7 +98,8 @@ WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = default
 		req.headers["Connection"] = "Upgrade";
 		req.headers["Sec-WebSocket-Version"] = "13";
 		req.headers["Sec-WebSocket-Key"] = challengeKey;
-	});
+		request_modifier(req);
+	}, settings);
 
 	enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
 
@@ -109,7 +111,10 @@ WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = default
 }
 
 /// ditto
-void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPClientSettings) settings = defaultSettings)
+void connectWebSocketEx(URL url,
+	scope void delegate(scope HTTPClientRequest) @safe request_modifier,
+	scope WebSocketHandshakeDelegate del,
+	const(HTTPClientSettings) settings = defaultSettings)
 @safe {
 	const use_tls = (url.schema == "wss" || url.schema == "https") ? true : false;
 	url.schema = use_tls ? "https" : "http";
@@ -125,6 +130,7 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 			req.headers["Connection"] = "Upgrade";
 			req.headers["Sec-WebSocket-Version"] = "13";
 			req.headers["Sec-WebSocket-Key"] = challengeKey;
+			request_modifier(req);
 		},
 		(scope res) {
 			enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
@@ -136,8 +142,28 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 				del(ws);
 				if (ws.connected) ws.close();
 			});
-		}
+		},
+		settings
 	);
+}
+
+/// ditto
+WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = defaultSettings)
+@safe {
+	return connectWebSocketEx(url, (scope req) {}, settings);
+}
+/// ditto
+void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPClientSettings) settings = defaultSettings)
+@safe {
+	connectWebSocketEx(url, (scope req) {}, del, settings);
+}
+/// ditto
+void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
+@system {
+	connectWebSocket(url, (scope ws) nothrow {
+		try del(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	}, settings);
 }
 /// Scheduled for deprecation - use a `@safe` callback instead.
 void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system nothrow del, const(HTTPClientSettings) settings = defaultSettings)
@@ -147,14 +173,6 @@ void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system noth
 /// Scheduled for deprecation - use a `nothrow` callback instead.
 void connectWebSocket(URL url, scope void delegate(scope WebSocket) @safe del, const(HTTPClientSettings) settings = defaultSettings)
 @safe {
-	connectWebSocket(url, (scope ws) nothrow {
-		try del(ws);
-		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
-	}, settings);
-}
-/// ditto
-void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
-@system {
 	connectWebSocket(url, (scope ws) nothrow {
 		try del(ws);
 		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
