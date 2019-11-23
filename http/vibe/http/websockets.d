@@ -140,6 +140,14 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 		settings
 	);
 }
+/// ditto
+void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
+@system {
+	connectWebSocket(url, (scope ws) nothrow {
+		try del(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	}, settings);
+}
 /// Scheduled for deprecation - use a `@safe` callback instead.
 void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system nothrow del, const(HTTPClientSettings) settings = defaultSettings)
 @system {
@@ -148,14 +156,6 @@ void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system noth
 /// Scheduled for deprecation - use a `nothrow` callback instead.
 void connectWebSocket(URL url, scope void delegate(scope WebSocket) @safe del, const(HTTPClientSettings) settings = defaultSettings)
 @safe {
-	connectWebSocket(url, (scope ws) nothrow {
-		try del(ws);
-		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
-	}, settings);
-}
-/// ditto
-void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
-@system {
 	connectWebSocket(url, (scope ws) nothrow {
 		try del(ws);
 		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
