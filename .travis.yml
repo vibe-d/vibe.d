@@ -25,17 +25,15 @@ d:
   # catching most DMD version related build failures early
   # only the latest 4 and the oldest supported versions of each compiler
   # are present to reduce the overall CI time
-  - dmd-2.087.1
-  - dmd-2.077.1
-  - ldc-1.17.0
-  - ldc-1.16.0
-  - ldc-1.15.0
-  - ldc-1.14.0
-  - ldc-1.7.0
-  - dmd-2.086.1
-  - dmd-2.085.0 # 2.085.1 has a regression
-  - dmd-2.084.1
-  - dmd-2.078.3
+  - dmd-2.089.0,dub
+  - dmd-2.088.1,dub
+  - dmd-2.077.1,dub
+  - ldc-1.18.0,dub
+  - ldc-1.17.0,dub
+  - ldc-1.7.0,dub
+  - dmd-2.085.0,dub # 2.085.1 has a regression
+  - dmd-2.084.1,dub
+  - dmd-2.078.3,dub
   - dmd-beta
 
 env:
@@ -46,27 +44,23 @@ matrix:
     - d: dmd
       env: DFLAGS="-cov -version=VibedSetCoverageMerge" PARTS=unittests,tests
     # test deprecated configurations on the latest and oldest compiler versions
-    - d: dmd-2.087.1
+    - d: dmd-2.087.1,dub
       env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests #,meson
-    - d: dmd-2.087.1
+    - d: dmd-2.087.1,dub
       env: VIBED_DRIVER=libasync PARTS=builds,unittests
-    - d: dmd-2.077.1
+    - d: dmd-2.077.1,dub
       env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests #,meson
-    - d: dmd-2.077.1
+    - d: dmd-2.077.1,dub
       env: VIBED_DRIVER=libasync PARTS=builds,unittests
-    - d: ldc-1.16.0
+    - d: ldc-1.16.0,dub
       env: VIBED_DRIVER=libevent PARTS=lint,builds,unittests,examples,tests #,meson
-    - d: ldc-1.16.0
+    - d: ldc-1.16.0,dub
       env: VIBED_DRIVER=libasync PARTS=builds,unittests
 
 #before_install:
 #  - pyenv global system 3.6
 #  - pip3 install 'meson==0.47.2' # pinned until the meson#4248 fix is released
-#  # Use the dub-updating fork of the installer script until https://github.com/dlang/installer/pull/301 is merged
-#  - wget https://raw.githubusercontent.com/wilzbach/installer-dub/master/script/install.sh -O ~/dlang/install.dub.sh
-#  - . $(bash ~/dlang/install.dub.sh -a dub)
-#  - dub --version
-#
+
 #install:
 #  - mkdir .ntmp
 #  - curl -L https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -o .ntmp/ninja-linux.zip
