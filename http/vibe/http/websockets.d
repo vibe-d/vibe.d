@@ -717,12 +717,17 @@ final class WebSocket {
 			reason = reason[0 .. min($, 123)];
 
 		if (connected) {
-			send((scope msg) {
-				m_sentCloseFrame = true;
-				if (code != 0)
-					msg.write(std.bitmanip.nativeToBigEndian(code));
-					msg.write(cast(const ubyte[])reason);
+			try {
+				send((scope msg) {
+					m_sentCloseFrame = true;
+					if (code != 0) {
+						msg.write(std.bitmanip.nativeToBigEndian(code));
+						msg.write(cast(const ubyte[])reason);
+					}
 				}, FrameOpcode.close);
+			} catch (Exception e) {
+				logDiagnostic("Failed to send active web socket close frame: %s", e.msg);
+			}
 		}
 		if (m_pingTimer) m_pingTimer.stop();
 
