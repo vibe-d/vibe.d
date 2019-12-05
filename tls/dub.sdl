@@ -46,7 +46,7 @@ configuration "openssl" {
 }
 
 configuration "openssl-1.1" {
-	platforms "posix"
+	platforms "posix" "windows"
 	dependency "openssl" version="~>1.0"
 	versions "VibeUseOpenSSL11"
 }
