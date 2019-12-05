@@ -1,68 +1,35 @@
 name "core"
-description "Basic I/O and concurrency primitives, as well as low level utility functions"
+description "Compatibility forwarding package for vibe-core"
 
 dependency "vibe-d:data" version=">=0.0.0"
 dependency "vibe-d:utils" version=">=0.0.0"
+dependency "vibe-core" version=">=1.7.0-rc.2 <2.0.0-0"
 
-targetType "library"
-buildRequirements "requireBoundsCheck"
-sourcePaths "."
-importPaths "."
-
-mainSourceFile "vibe/appmain.d"
+targetType "none"
 
 configuration "vibe-core" {
-	targetType "none"
-	dependency "vibe-core" version=">=1.7.0-rc.2 <2.0.0-0"
 }
 
 configuration "win32_mscoff" {
-	preGenerateCommands "echo ---" "echo Deprecation: the vibe-d:core package is \
-		deprecated and will be removed in January 2020. Please update your \
-		code to depend on vibe-core instead." "echo ---"
-
-	// this configuration works around the problem that x88_mscoff
-	// will also match the libevent configuration, even if no
-	// libevent binaries exist as MSCOFF - see also dub/#228
-	platforms "windows-x86_mscoff-dmd"
-	targetType "library"
-	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
-	versions "VibeWin32Driver"
+	preGenerateCommands "echo ---" "echo The win32 legacy driver has been \
+		removed and the vibe-core implementation is used instead. Please \
+		update your dependencies to use vibe-core directly." "echo ---"
 }
 
 configuration "libevent" {
-	preGenerateCommands "echo ---" "echo Deprecation: the vibe-d:core package is \
-		deprecated and will be removed in January 2020. Please update your \
-		code to depend on vibe-core instead." "echo ---"
-
-	platforms "windows-x86-dmd" "posix"
-	dependency "libevent" version="~>2.0.1"
-	targetType "library"
-	libs "wsock32" "ws2_32" "advapi32" platform="windows"
-	sourceFiles "../lib/win-i386/event2.lib" platform="windows-x86"
-	sourceFiles "../lib/win-amd64/event2.lib" platform="windows-x86_64"
-	copyFiles "../lib/win-i386/libevent.dll" platform="windows-x86"
-	copyFiles "../lib/win-amd64/libevent.dll" platform="windows-x86_64"
-	versions "VibeLibeventDriver"
+	preGenerateCommands "echo ---" "echo The libevent legacy driver has been \
+		removed and the vibe-core implementation is used instead. Please \
+		update your dependencies to use vibe-core directly." "echo ---"
 }
 
 configuration "libasync" {
-	preGenerateCommands "echo ---" "echo Deprecation: the vibe-d:core package is \
-		deprecated and will be removed in January 2020. Please update your \
-		code to depend on vibe-core instead." "echo ---"
-
-	dependency "libasync" version="~>0.8.1"
-	targetType "library"
-	versions "VibeUseNativeDriverType" "VibeLibasyncDriver"
+	preGenerateCommands "echo ---" "echo The libasync legacy driver has been \
+		removed and the vibe-core implementation is used instead. Please \
+		update your dependencies to use vibe-core directly." "echo ---"
 }
 
 configuration "win32" {
-	preGenerateCommands "echo ---" "echo Deprecation: the vibe-d:core package is \
-		deprecated and will be removed in January 2020. Please update your \
-		code to depend on vibe-core instead." "echo ---"
-
-	platforms "windows"
-	targetType "library"
-	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
-	versions "VibeWin32Driver"
+	preGenerateCommands "echo ---" "echo The win32 legacy driver has been \
+		removed and the vibe-core implementation is used instead. Please \
+		update your dependencies to use vibe-core directly." "echo ---"
 }
