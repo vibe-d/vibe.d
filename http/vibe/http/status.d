@@ -54,6 +54,7 @@ enum HTTPStatus {
 	gatewayTimeout               = 504,
 	httpVersionNotSupported      = 505,
 	// WebDAV status codes
+	processing                   = 102, /// See: https://tools.ietf.org/html/rfc2518#section-10.1
 	multiStatus                  = 207,
 	unprocessableEntity          = 422,
 	locked                       = 423,
@@ -160,6 +161,7 @@ string httpStatusText(int code)
 		case HTTPStatus.locked                       : return "Locked";
 		case HTTPStatus.failedDependency             : return "Failed Dependency";
 		case HTTPStatus.insufficientStorage          : return "Insufficient Storage";
+		case HTTPStatus.processing                   : return "Processing";
 	}
 	if( code >= 600 ) return "Unknown";
 	if( code >= 500 ) return "Unknown server error";
