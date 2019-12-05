@@ -610,7 +610,7 @@ final class OpenSSLContext : TLSContext {
 		c_long options = SSL_OP_NO_COMPRESSION;
 		static if (OPENSSL_VERSION.startsWith("1.1")) {}
 		else
-			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
+			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE; // There are always enabled in OpenSSL 1.1.0.
 		int minver = TLS1_VERSION;
 
 		() @trusted {
@@ -1410,4 +1410,3 @@ static if (haveALPN) {
 	void SSL_get0_alpn_selected(const SSL *ssl, const ubyte** data, uint *len);
 }
 const(ssl_method_st)* TLSv1_2_server_method();
-
