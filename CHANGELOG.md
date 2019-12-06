@@ -1,6 +1,28 @@
 ﻿Changelog
 =========
 
+v0.9.0 - 2020-01-
+-------------------
+
+Removes all legacy drivers (libevent, win32, libasync) and fully relies on
+vibe-core instead.
+
+- Removed all legacy vibe-d:core drivers (libevent, libasync, win32) - vibe-core is the only core implementation now
+- Updated OpenSSL Windows binaries to 1.1.1d - [pull #2395][issue2395]
+- Fixed OpenSSL linking on macOS Catalina - [pull #2379][issue2379]
+- Enabled the manual "openssl-1.1" configuration on Windows - [pull #2392][issue2392]
+- Added `RedisClient.removeUnusedConnections` (by Steven Schveighoffer) - [pull #2372][issue2372]
+- Removed unnecessary HTML attribues from ":css" and ":javascript" Diet filters (by Beyarz) - [pull #2384][issue2384]
+- Added `connectWebSocketEx` to allow customizing the initial HTTP request - [pull #2390][issue2390]
+- Allow LF newlines in addition to CRLF in `parseRFC5322Header` to make it more robust outside of the standard (by Tomáš Chaloupka) - [pull #2362][issue2362]
+- Removed the deprecated simple password hash functions and deprecated the `vibe.crypto.passwordhash` module (by Hiroki Noda aka kubo39) - [pull #2365][issue2365]
+- Informational replies are handled properly in the HTTP client (by Tomáš Chaloupka) - [pull #2352][issue2352]
+
+- Fixed `connectWebSocket` to actually use the supplied `settings` parameter - [pull #2390][issue2390]
+- Fixed a malformed WebSocket close packet and handles disconnect errors gracefully (by v1ne) - [pull #2337][issue2337]
+- Fixed a possible WebSocket connection leak in case of read errors (by Benjamin Schaaf) - [pull #2364][issue2364]
+
+
 v0.8.6 - 2019-10-03
 -------------------
 
