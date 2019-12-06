@@ -5,8 +5,6 @@ set -e -x -o pipefail
 DUB_ARGS="--build-mode=${DUB_BUILD_MODE:-separate} ${DUB_ARGS:-}"
 # default to run all parts
 : ${PARTS:=lint,builds,unittests,examples,tests,meson}
-# default to vibe-core driver
-: ${VIBED_DRIVER:=vibe-core}
 
 if [[ $PARTS =~ (^|,)lint(,|$) ]]; then
     ./scripts/test_version.sh
@@ -16,37 +14,37 @@ fi
 
 if [[ $PARTS =~ (^|,)builds(,|$) ]]; then
     # test for successful release build
-    dub build --combined -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
+    dub build --combined -b release --compiler=$DC
     dub clean --all-packages
 
     # test for successful 32-bit build
     if [ "$DC" == "dmd" ]; then
-        dub build --combined --arch=x86 --config=${VIBED_DRIVER=libevent}
+        dub build --combined --arch=x86
         dub clean --all-packages
     fi
 fi
 
 if [[ $PARTS =~ (^|,)unittests(,|$) ]]; then
     dub test :data --compiler=$DC $DUB_ARGS
-    dub test :core --compiler=$DC --config=$VIBED_DRIVER $DUB_ARGS
-    dub test :mongodb --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
-    dub test :redis --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
-    dub test :web --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :core --compiler=$DC $DUB_ARGS
+    dub test :mongodb --compiler=$DC $DUB_ARGS
+    dub test :redis --compiler=$DC $DUB_ARGS
+    dub test :web --compiler=$DC $DUB_ARGS
     dub test :utils --compiler=$DC $DUB_ARGS
-    dub test :http --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
-    dub test :mail --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
-    dub test :stream --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
-    dub test :crypto --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
-    dub test :tls --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
-    dub test :textfilter --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
-    dub test :inet --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS
+    dub test :http --compiler=$DC $DUB_ARGS
+    dub test :mail --compiler=$DC $DUB_ARGS
+    dub test :stream --compiler=$DC $DUB_ARGS
+    dub test :crypto --compiler=$DC $DUB_ARGS
+    dub test :tls --compiler=$DC $DUB_ARGS
+    dub test :textfilter --compiler=$DC $DUB_ARGS
+    dub test :inet --compiler=$DC $DUB_ARGS
     dub clean --all-packages
 fi
 
 if [[ $PARTS =~ (^|,)examples(,|$) ]]; then
     for ex in $(\ls -1 examples/); do
         echo "[INFO] Building example $ex"
-        (cd examples/$ex && dub build --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS && dub clean)
+        (cd examples/$ex && dub build --compiler=$DC $DUB_ARGS && dub clean)
     done
 fi
 
@@ -57,7 +55,7 @@ if [[ $PARTS =~ (^|,)tests(,|$) ]]; then
                 echo "[WARNING] Skipping test $ex due to TravisCI incompatibility".
             else
                 echo "[INFO] Running test $ex"
-                (cd tests/$ex && dub --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS && dub clean)
+                (cd tests/$ex && dub --compiler=$DC $DUB_ARGS && dub clean)
             fi
         fi
     done
