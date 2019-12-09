@@ -70,9 +70,14 @@ if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
 
     for ex in $(\ls -1 tests/mongodb); do
         if [ -r tests/mongodb/$ex/run.sh ]; then
+            # advanced mongodb test where we simply run a test script and it will do the rest (useful for the connection test with different server startup authentication options)
+
             echo "[INFO] Running mongo test $ex"
-            (cd tests/mongodb/$ex && DUB_INVOKE="dub --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS" ./run.sh)
+            (cd tests/mongodb/$ex && DUB_INVOKE="dub --compiler=$DC $DUB_ARGS" ./run.sh)
         elif [ -r tests/mongodb/$ex/dub.json ] || [ -r tests/mongodb/$ex/dub.sdl ]; then
+            # test with only dub.json, let travis-ci.sh start and shutdown the server so we don't have to duplicate the code across all tests
+            # We use --fork in all mongod calls because it waits until the database is fully up-and-running for all queries.
+
             MONGOPORT=22824
             rm -f tests/mongodb/log.txt
             rm -rf tests/mongodb/$ex/db
@@ -80,7 +85,7 @@ if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
             MONGOPID=$(mongod --logpath tests/mongodb/log.txt --bind_ip 127.0.0.1 --port $MONGOPORT --dbpath tests/mongodb/$ex/db --fork | grep -Po 'forked process: \K\d+')
 
             echo "[INFO] Running mongo test $ex"
-            (cd tests/mongodb/$ex && dub --compiler=$DC --override-config=vibe-d:core/$VIBED_DRIVER $DUB_ARGS -- $MONGOPORT && dub clean && mongodump --port=$MONGOPORT)
+            (cd tests/mongodb/$ex && dub --compiler=$DC $DUB_ARGS -- $MONGOPORT && dub clean && mongodump --port=$MONGOPORT)
 
             if [ -r tests/mongodb/$ex/test.sh ]; then
                 (cd tests/mongodb/$ex && ./tests/mongodb/$ex/test.sh)

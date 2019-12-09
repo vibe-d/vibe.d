@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# This test file uses run.sh to manually start the mongod server with different authentication schemes and run dub multiple times with different expected test results.
+
 MONGOPORT=22824
 rm -f log.txt*
 rm -rf db
@@ -9,6 +12,8 @@ mkdir -p db/auth
 if ! eval $DUB_INVOKE -- $MONGOPORT failconnect ; then
 	exit 1
 fi
+
+# We use --fork in all mongod calls because it waits until the database is fully up-and-running for all queries.
 
 # Unauthenticated Test
 

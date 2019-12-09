@@ -37,15 +37,19 @@ package struct ScramState
 	private DigestType!SHA1 m_saltedPassword;
 	private string m_authMessage;
 
-	string createInitialRequest(string user, string nonce = null)
+	string createInitialRequest(string user)
 	{
-		if (nonce.length) {
-			m_nonce = nonce;
-		} else {
-			ubyte[18] randomBytes;
-			g_rng.read(randomBytes[]);
-			m_nonce = Base64.encode(randomBytes);
-		}
+		ubyte[18] randomBytes;
+		g_rng.read(randomBytes[]);
+		m_nonce = Base64.encode(randomBytes);
+
+		m_firstMessageBare = format("n=%s,r=%s", escapeUsername(user), m_nonce);
+		return format("n,,%s", m_firstMessageBare);
+	}
+
+	version (unittest) private string createInitialRequestWithFixedNonce(string user, string nonce)
+	{
+		m_nonce = nonce;
 
 		m_firstMessageBare = format("n=%s,r=%s", escapeUsername(user), m_nonce);
 		return format("n,,%s", m_firstMessageBare);
@@ -174,7 +178,8 @@ unittest
 	import vibe.db.mongo.settings : MongoClientSettings;
 
 	ScramState state;
-	assert(state.createInitialRequest("user", "fyko+d2lbbFgONRv9qkxdawL") == "n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL");
+	assert(state.createInitialRequestWithFixedNonce("user", "fyko+d2lbbFgONRv9qkxdawL")
+		== "n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL");
 	auto last = state.update(MongoClientSettings.makeDigest("user", "pencil"),
 		"r=fyko+d2lbbFgONRv9qkxdawLHo+Vgk7qvUOKUwuWLIWg4l/9SraGMHEE,s=rQ9ZY3MntBeuP3E1TDVC4w==,i=10000");
 	assert(last == "c=biws,r=fyko+d2lbbFgONRv9qkxdawLHo+Vgk7qvUOKUwuWLIWg4l/9SraGMHEE,p=MC2T8BvbmWRckDw8oWl5IVghwCY=",
