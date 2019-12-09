@@ -4,51 +4,39 @@ environment:
   - DC: dmd
     DVersion: 2.087.1
     arch: x64
-    config: vibe-core
   - DC: dmd
     DVersion: 2.087.1
     arch: x86_mscoff
-    config: vibe-core
   - DC: dmd
     DVersion: 2.087.1
     arch: x86
-    config: win32
   - DC: dmd
     DVersion: 2.086.1
     arch: x86
-    config: win32
   - DC: dmd
     DVersion: 2.085.1
     arch: x64
-    config: vibe-core
   - DC: dmd
     DVersion: 2.084.1
     arch: x64
-    config: vibe-core
   - DC: dmd
     DVersion: 2.077.1
     arch: x86_mscoff
-    config: win32
   - DC: ldc
     DVersion: 1.17.0
     arch: x86
-    config: vibe-core
   - DC: ldc
     DVersion: 1.16.0
     arch: x64
-    config: vibe-core
   - DC: ldc
     DVersion: 1.15.0
     arch: x86
-    config: vibe-core
   - DC: ldc
     DVersion: 1.14.0
     arch: x86
-    config: vibe-core
   - DC: ldc
     DVersion: 1.7.0
     arch: x64
-    config: vibe-core
 
 branches:
   only:
@@ -146,15 +134,15 @@ test_script:
  - '%DC% --version'
  - dub test :utils --arch=%Darch% --compiler=%DC%
  - dub test :data --arch=%Darch% --compiler=%DC%
- - dub test :core --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :stream --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :crypto --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :tls --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :textfilter --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :inet --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :mail --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :http --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :mongodb --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :redis --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :web --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :core --arch=%Darch% --compiler=%DC%
+ - dub test :stream --arch=%Darch% --compiler=%DC%
+ - dub test :crypto --arch=%Darch% --compiler=%DC%
+ - dub test :tls --arch=%Darch% --compiler=%DC%
+ - dub test :textfilter --arch=%Darch% --compiler=%DC%
+ - dub test :inet --arch=%Darch% --compiler=%DC%
+ - dub test :mail --arch=%Darch% --compiler=%DC%
+ - dub test :http --arch=%Darch% --compiler=%DC%
+ - dub test :mongodb --arch=%Darch% --compiler=%DC%
+ - dub test :redis --arch=%Darch% --compiler=%DC%
+ - dub test :web --arch=%Darch% --compiler=%DC%
  - echo TODO - run the test suite

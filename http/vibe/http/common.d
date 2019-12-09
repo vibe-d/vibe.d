@@ -365,14 +365,11 @@ nothrow pure @nogc @safe {
 
 HTTPVersion parseHTTPVersion(ref string str)
 @safe {
-	enforceBadRequest(str.startsWith("HTTP/"));
-	str = str[5 .. $];
-	int majorVersion = parse!int(str);
-	enforceBadRequest(str.startsWith("."));
-	str = str[1 .. $];
+	enforceBadRequest(str.startsWith("HTTP/1."));
+	str = str[7 .. $];
 	int minorVersion = parse!int(str);
 
-	enforceBadRequest( majorVersion == 1 && (minorVersion == 0 || minorVersion == 1) );
+	enforceBadRequest( minorVersion == 0 || minorVersion == 1 );
 	return minorVersion == 0 ? HTTPVersion.HTTP_1_0 : HTTPVersion.HTTP_1_1;
 }
 

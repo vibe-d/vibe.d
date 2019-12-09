@@ -24,6 +24,9 @@ void runTest()
 		logInfo("Failed to connect to local Redis server. Skipping test.");
 		return;
 	}
+
+	scope(exit) redis.releaseUnusedConnections();
+
 	{
 		auto db = redis.getDatabase(0);
 		db.deleteAll();

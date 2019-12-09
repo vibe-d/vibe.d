@@ -365,7 +365,7 @@ struct DefaultDietFilters {
 		string indent_string = "\n";
 		while (indent-- > 0) indent_string ~= '\t';
 
-		string ret = indent_string~"<style type=\"text/css\"><!--";
+		string ret = indent_string~"<style><!--";
 		indent_string = indent_string ~ '\t';
 		foreach (ln; lines) ret ~= indent_string ~ ln;
 		indent_string = indent_string[0 .. $-1];
@@ -382,7 +382,7 @@ struct DefaultDietFilters {
 		string indent_string = "\n";
 		while (indent-- > 0) indent_string ~= '\t';
 
-		string ret = indent_string~"<script type=\"application/javascript\">";
+		string ret = indent_string~"<script>";
 		ret ~= indent_string~'\t' ~ "//<![CDATA[";
 		foreach (ln; lines) ret ~= indent_string ~ '\t' ~ ln;
 		ret ~= indent_string ~ '\t' ~ "//]]>" ~ indent_string ~ "</script>";
@@ -426,15 +426,15 @@ unittest {
 		return strip(cast(string)(dst.data));
 	}
 
-	assert(compile!":css .test" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
-	assert(compile!":javascript test();" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
+	assert(compile!":css .test" == "<style><!--\n\t.test\n--></style>");
+	assert(compile!":javascript test();" == "<script>\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
 	assert(compile!":markdown **test**" == "<p><strong>test</strong>\n</p>");
 	assert(compile!":htmlescape <test>" == "&lt;test&gt;");
-	assert(compile!":css !{\".test\"}" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
-	assert(compile!":javascript !{\"test();\"}" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
+	assert(compile!":css !{\".test\"}" == "<style><!--\n\t.test\n--></style>");
+	assert(compile!":javascript !{\"test();\"}" == "<script>\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
 	assert(compile!":markdown !{\"**test**\"}" == "<p><strong>test</strong>\n</p>");
 	assert(compile!":htmlescape !{\"<test>\"}" == "&lt;test&gt;");
-	assert(compile!":javascript\n\ttest();" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
+	assert(compile!":javascript\n\ttest();" == "<script>\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
 }
 
 
@@ -946,7 +946,7 @@ final class HTTPServerRequest : HTTPRequest {
 			if (_cookies.isNull) {
 				_cookies = CookieValueMap.init;
 				if (auto pv = "cookie" in headers)
-					parseCookies(*pv, _cookies);
+					parseCookies(*pv, _cookies.get);
 			}
 			return _cookies.get;
 		}
@@ -959,7 +959,7 @@ final class HTTPServerRequest : HTTPRequest {
 		@property ref FormFields query() @safe {
 			if (_query.isNull) {
 				_query = FormFields.init;
-				parseURLEncodedForm(queryString, _query);
+				parseURLEncodedForm(queryString, _query.get);
 			}
 
 			return _query.get;
@@ -1038,7 +1038,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 		private void parseFormAndFiles() @safe {
 			_form = FormFields.init;
-			parseFormData(_form, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
+			parseFormData(_form.get, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
 		}
 
 		/** Contains information about any uploaded file for a HTML _form request.
@@ -1432,6 +1432,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if (m_bodyWriter) return m_bodyWriter;
 
 		assert(!m_headerWritten, "A void body was already written!");
+		assert(this.statusCode >= 200, "1xx responses can't have body");
 
 		if (m_isHeadResponse) {
 			// for HEAD requests, we define a NullOutputWriter for convenience
@@ -1538,6 +1539,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
 		m_requiresConnectionClose = true;
+		m_headerWritten = true;
 		return createConnectionProxyStream(m_conn, m_rawConnection);
 	}
 	/// ditto
@@ -1547,6 +1549,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
 		m_requiresConnectionClose = true;
+		m_headerWritten = true;
 		() @trusted {
 			auto conn = createConnectionProxyStreamFL(m_conn, m_rawConnection);
 			del(conn);
@@ -1717,7 +1720,10 @@ final class HTTPServerResponse : HTTPResponse {
 		import vibe.stream.wrapper;
 
 		assert(!m_bodyWriter && !m_headerWritten, "Try to write header after body has already begun.");
-		m_headerWritten = true;
+		assert(this.httpVersion != HTTPVersion.HTTP_1_0 || this.statusCode >= 200, "Informational status codes aren't supported by HTTP/1.0.");
+
+		// Don't set m_headerWritten for 1xx status codes
+		if (this.statusCode >= 200) m_headerWritten = true;
 		auto dst = streamOutputRange!1024(m_conn);
 
 		void writeLine(T...)(string fmt, T args)

@@ -130,6 +130,22 @@ final class RedisClient {
 		});
 	}
 
+	/** Release all connections that are not in use. Call before exiting the
+	 * program to avoid relying on the GC to clean up the sockets.
+	 */
+	void releaseUnusedConnections() @safe
+	{
+		// the try/catch in this is for the old vibe.d:core library, not
+		// necessary in vibe-core, but we have to work with both.
+		m_connections.removeUnused((conn) @safe nothrow {
+			try {
+                 conn.m_conn.close();
+			 } catch(Exception e) {
+				 logDebug("Failed to close unused Redis connection: %s", e.msg);
+			 }
+		});
+	}
+
 	/// Returns Redis version
 	@property string redisVersion()
 	{

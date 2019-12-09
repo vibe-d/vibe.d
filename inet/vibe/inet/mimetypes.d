@@ -480,6 +480,7 @@ string getMimeTypeForFile(string filename)
 		case "zir","zirz": return "application/vnd.zul";
 		case "zaz": return "application/vnd.zzazz.deck+xml";
 		case "vxml": return "application/voicexml+xml";
+		case "wasm": return "application/wasm";
 		case "wgt": return "application/widget";
 		case "hlp": return "application/winhlp";
 		case "wsdl": return "application/wsdl+xml";

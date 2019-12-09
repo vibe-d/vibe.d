@@ -3,7 +3,7 @@ description "TLS stream implementations"
 
 dependency "vibe-d:stream" version="*"
 
-lflags "-L/usr/local/opt/openssl/lib" platform="osx"
+lflags "-L/usr/local/opt/openssl@1.1/lib" "-L/usr/local/opt/openssl/lib" platform="osx"
 
 targetType "library"
 sourcePaths "."
@@ -46,9 +46,16 @@ configuration "openssl" {
 }
 
 configuration "openssl-1.1" {
-	platforms "posix"
+	platforms "posix" "windows"
 	dependency "openssl" version="~>1.0"
 	versions "VibeUseOpenSSL11"
+	sourceFiles "../lib/win-i386-mscoff/libssl.lib" "../lib/win-i386-mscoff/libcrypto.lib" platform="windows-x86"
+	sourceFiles "../lib/win-amd64/libssl.lib" "../lib/win-amd64/libcrypto.lib" platform="windows-x86_64"
+}
+
+configuration "openssl-1.1-optlink" {
+	platforms "windows-x86-dmd"
+	sourceFiles "../lib/win-i386/libssl.lib" "../lib/win-i386/libcrypto.lib" platform="windows-x86-dmd"
 }
 
 configuration "openssl-1.0" {

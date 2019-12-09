@@ -115,12 +115,18 @@ static if (OPENSSL_VERSION.startsWith("1.1")) {
 	alias get_rfc3526_prime_2048 = BN_get_rfc3526_prime_2048;
 
 	// #  define sk_num OPENSSL_sk_num
-	extern(C) int OPENSSL_sk_num(const void *);
-	extern(C) int sk_num(const(_STACK)* p) { return OPENSSL_sk_num(p); }
+	static if (!is(typeof(OPENSSL_sk_num)))
+	{
+		extern(C) int OPENSSL_sk_num(const void *);
+		extern(C) int sk_num(const(_STACK)* p) { return OPENSSL_sk_num(p); }
+	}
 
 	// #  define sk_value OPENSSL_sk_value
-	extern(C) void *OPENSSL_sk_value(const void *, int);
-	extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
+	static if (!is(typeof(OPENSSL_sk_value)))
+	{
+		extern(C) void *OPENSSL_sk_value(const void *, int);
+		extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
+	}
 
 	private enum SSL_CTRL_SET_MIN_PROTO_VERSION = 123;
 
@@ -604,7 +610,7 @@ final class OpenSSLContext : TLSContext {
 		c_long options = SSL_OP_NO_COMPRESSION;
 		static if (OPENSSL_VERSION.startsWith("1.1")) {}
 		else
-			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
+			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE; // There are always enabled in OpenSSL 1.1.0.
 		int minver = TLS1_VERSION;
 
 		() @trusted {
@@ -1404,4 +1410,3 @@ static if (haveALPN) {
 	void SSL_get0_alpn_selected(const SSL *ssl, const ubyte** data, uint *len);
 }
 const(ssl_method_st)* TLSv1_2_server_method();
-
