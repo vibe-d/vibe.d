@@ -7,7 +7,9 @@ import vibe.core.core;
 import vibe.core.log;
 import vibe.data.bson;
 import vibe.db.mongo.mongo;
+
 import std.algorithm : canFind, map, equal;
+import std.conv : to;
 import std.encoding : sanitize;
 
 struct DBTestEntry
