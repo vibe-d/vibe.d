@@ -9,6 +9,7 @@ module vibe.db.mongo.connection;
 
 public import vibe.data.bson;
 
+import vibe.core.core : vibeVersionString;
 import vibe.core.log;
 import vibe.core.net;
 import vibe.db.mongo.settings;
@@ -200,7 +201,7 @@ final class MongoConnection {
 		// TODO: add support for os.version
 
 		handshake["client"] = Bson([
-			"driver": Bson(["name": Bson("vibe.db.mongo"), "version": Bson("0.1.0")]),
+			"driver": Bson(["name": Bson("vibe.db.mongo"), "version": Bson(vibeVersionString)]),
 			"os": Bson(["type": Bson(os.os.to!string), "architecture": Bson(hostArchitecture)]),
 			"platform": Bson(platform)
 		]);
