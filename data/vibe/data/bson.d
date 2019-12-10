@@ -798,7 +798,7 @@ struct BsonBinData {
 		generic = 0x00,
 		function_ = 0x01,
 		binaryOld = 0x02,
-		uuid = 0x03,
+		uuid = 0x04,
 		md5 = 0x05,
 		userDefined = 0x80,
 
