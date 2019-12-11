@@ -37,7 +37,7 @@ d:
   - dmd-beta
 
 env:
-  - VIBED_DRIVER=vibe-core PARTS=builds,unittests,examples,tests
+  - VIBED_DRIVER=vibe-core PARTS=builds,unittests,examples,tests,mongo
 
 matrix:
   include:
