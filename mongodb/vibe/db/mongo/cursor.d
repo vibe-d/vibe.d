@@ -293,6 +293,12 @@ private abstract class MongoCursorData(DocType) {
 	final private void destroy()
 	@safe {
 		if (m_cursor == 0) return;
+		
+		debug {
+			import vibe.internal.allocator : ensureNotInGC;
+			ensureNotInGC!(typeof(this))();
+		}
+		
 		auto conn = m_client.lockConnection();
 		conn.killCursors(() @trusted { return (&m_cursor)[0 .. 1]; } ());
 		m_cursor = 0;
