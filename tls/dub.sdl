@@ -31,14 +31,35 @@ configuration "openssl" {
 	if (dir.buildPath("tls").exists)  {
 		dir = dir.buildPath("tls");
 	}
-	auto opensslVersion = "0.0.0";
+	string opensslVersion;
 	try {
+		const res = execute(["pkg-config", "openssl", "--modversion"]);
+		if (res.status == 0)
+			opensslVersion = res.output.strip();
+	} catch (Exception e) {}
+
+	if (!opensslVersion.length) try
+	{
 		const res = execute(["openssl", "version"]).output;
 		if (res.canFind("OpenSSL ")) {
 			opensslVersion = res.splitter(" ").dropOne.front.filter!(not!(std.uni.isAlpha)).text;
+		} else if (res.canFind("LibreSSL ")) {
+			writeln("\tWarning: Your default openssl binary points to LibreSSL, which is not supported.");
+			version (OSX) {
+				writeln("\tOn Mac OSX, this is the default behavior.");
+				writeln("\tIf you installed openssl via a package manager, you need to tell DUB how to find it.");
+				writeln("\tAssuming brew, run [brew link openssl] and follow the instructions for pkg-config.\n");
+			}
 		}
-	} catch (Exception e) { writeln("Warning: ", e); }
-	auto data = text("module openssl_version;\nenum OPENSSL_VERSION=\"", opensslVersion, "\";");
+	} catch (Exception e) {}
+	if (!opensslVersion.length)
+	{
+		 writeln("\tWarning: Could not find OpenSSL version via pkg-config nor by calling the openssl binary.");
+		 writeln("\tAssuming version 1.0.0.");
+		 writeln("\tYou might need to export PKG_CONFIG_PATH or install the openssl package if you have a library-only package.");
+		 opensslVersion = "1.0.0";
+	}
+	auto data = text("module openssl_version;\nenum OPENSSL_VERSION=\"", opensslVersion, "\";\n");
 	auto output = dir.buildPath("openssl_version.d");
 	if (!output.exists || output.readText.strip != data.strip)
 		data.toFile(output);
