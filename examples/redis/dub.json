@@ -3,6 +3,5 @@
 	"description": "Basic Redis usage example.",
 	"dependencies": {
 		"vibe-d:redis": {"path": "../../"}
-	},
-	"versions": ["VibeCustomMain"]
+	}
 }

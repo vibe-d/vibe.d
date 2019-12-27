@@ -4,6 +4,5 @@
 	"dependencies": {
 		"vibe-d:data": {"path": "../../"},
 		"vibe-d:core": {"path": "../../"}
-	},
-	"versions": ["VibeCustomMain"]
+	}
 }
