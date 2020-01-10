@@ -44,7 +44,7 @@ d:
   - dmd-2.085.0,dub # 2.085.1 has a regression
   - dmd-2.084.1,dub
   - dmd-2.078.3,dub
-  - dmd-beta
+  - dmd-beta,dub
 
 env:
   - VIBED_DRIVER=vibe-core PARTS=builds,unittests,examples,tests,mongo
