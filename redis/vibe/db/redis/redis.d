@@ -1077,14 +1077,9 @@ final class RedisSubscriberImpl {
 			logTrace("Redis listener exiting");
 			// More publish commands may be sent to this connection after recycling it, so we
 			// actively destroy it
-			Action act;
-			// wait for the listener helper to send its stop message
-			while (act != Action.STOP)
-				act = () @trusted { return receiveOnly!Action(); } ();
 			m_lockedConnection.conn.close();
 			m_lockedConnection.destroy();
 			m_listening = false;
-			return;
 		}
 		// http://redis.io/topics/pubsub
 		/**
