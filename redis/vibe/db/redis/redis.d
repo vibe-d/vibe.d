@@ -1181,23 +1181,31 @@ final class RedisSubscriberImpl {
 		}
 
 		// Waits for data and advises the handler
-		m_listenerHelper = runTask( {
-			while(true) {
-				if (!m_stop && m_lockedConnection.conn && m_lockedConnection.conn.waitForData(100.msecs)) {
-					// We check every 5 seconds if this task should stay active
-					if (m_stop)	break;
-					else if (m_lockedConnection.conn && !m_lockedConnection.conn.dataAvailableForRead) continue;
-					// Data has arrived, this task is in charge of notifying the main handler loop
-					logTrace("Notify data arrival");
+		m_listenerHelper = runTask({
+			loop: while(true) {
+				if (m_stop || !m_lockedConnection.conn) break;
 
-					() @trusted { receiveTimeout(0.seconds, (Variant v) {}); } (); // clear message queue
-					() @trusted { m_listener.send(Action.DATA); } ();
-					if (!() @trusted { return receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }); } ())
-						assert(false);
+				const waitResult = m_lockedConnection.conn.waitForDataEx(100.msecs);
+				if (m_stop) break;
 
-				} else if (m_stop || !m_lockedConnection.conn) break;
-				logTrace("No data arrival in 100 ms...");
+				final switch (waitResult) {
+					case WaitForDataStatus.noMoreData:
+						break loop;
+					case WaitForDataStatus.timeout:
+						logTrace("No data arrival in 100 ms...");
+						continue loop;
+					case WaitForDataStatus.dataAvailable:
+				}
+
+				// Data has arrived, this task is in charge of notifying the main handler loop
+				logTrace("Notify data arrival");
+
+				() @trusted { receiveTimeout(0.seconds, (Variant v) {}); } (); // clear message queue
+				() @trusted { m_listener.send(Action.DATA); } ();
+				if (!() @trusted { return receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }); } ())
+					assert(false);
 			}
+
 			logTrace("Listener Helper exit.");
 			() @trusted { m_listener.send(Action.STOP); } ();
 		} );
