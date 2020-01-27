@@ -2,7 +2,7 @@
 	Implements WebSocket support and fallbacks for older browsers.
 
 	Standards: $(LINK2 https://tools.ietf.org/html/rfc6455, RFC6455)
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2014 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger
 */

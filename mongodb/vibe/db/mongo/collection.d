@@ -1,7 +1,7 @@
 /**
 	MongoCollection class
 
-	Copyright: © 2012-2016 RejectedSoftware e.K.
+	Copyright: © 2012-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */

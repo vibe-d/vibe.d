@@ -10,7 +10,7 @@
 	a network sniffer to monitor what exectly needs to be sent. MongoDB has a
 	dedicated utility for this called $(LINK2 http://docs.mongodb.org/manual/reference/program/mongosniff/ mongosniff).
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2013 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */

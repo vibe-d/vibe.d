@@ -2,7 +2,7 @@
 	MongoClient class doing connection management. Usually this is a main entry point
 	for client code.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
