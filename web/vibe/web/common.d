@@ -523,7 +523,7 @@ WebParamAttribute bodyParam(string identifier, string field) @safe
 in {
 	assert(field.length > 0, "fieldname can't be empty.");
 }
-body
+do
 {
 	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)

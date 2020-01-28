@@ -631,7 +631,7 @@ string parseHTTPCookie(string header_string, scope Cookie dst)
 @safe
 in {
 	assert(dst !is null);
-} body {
+} do {
 	if (!header_string.length)
 		return typeof(return).init;
 

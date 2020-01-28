@@ -92,7 +92,7 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// Returns a single route handle to conveniently register multiple methods.
 	URLRoute route(string path)
 	in { assert(path.length, "Cannot register null or empty path!"); }
-	body { return URLRoute(this, path); }
+	do { return URLRoute(this, path); }
 
 	///
 	unittest {

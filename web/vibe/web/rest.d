@@ -2007,7 +2007,7 @@ unittest
 // errors in the server and client.
 package string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
-body {
+do {
 	import vibe.web.internal.rest.common : ParameterKind;
 	import std.typetuple : TypeTuple;
 	import std.algorithm : strip;
