@@ -8,6 +8,7 @@ services:
 addons:
   apt:
     packages:
+      - gdb
       - pkg-config
       - zlib1g-dev
       - libevent-dev
@@ -17,6 +18,15 @@ branches:
   only:
   - master
   - 0.7.x
+
+# Enable core dumps
+before_script:
+  - ulimit -c unlimited -S
+  - sudo mkdir /cores/ && sudo chmod 777 /cores/
+  - echo "/cores/%E.%p" | sudo tee /proc/sys/kernel/core_pattern
+
+after_failure:
+  - ./scripts/core-dump.sh
 
 d:
   # order: latest DMD, oldest DMD, LDC/GDC, remaining DMD versions

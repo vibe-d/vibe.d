@@ -1,4 +1,3 @@
 name "tests"
 description "Tests body transfer for non-keep-alive connections"
 dependency "vibe-d:http" path="../.."
-versions "VibeDefaultMain"
