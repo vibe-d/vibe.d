@@ -2,7 +2,7 @@
 	Wrapper streams which count the number of bytes or limit the stream based on the number of
 	transferred bytes.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
