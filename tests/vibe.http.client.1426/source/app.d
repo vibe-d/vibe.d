@@ -3,10 +3,11 @@ import vibe.core.net;
 import vibe.http.client;
 import vibe.stream.operations;
 
-shared static this()
+int main ()
 {
-	immutable serverAddr = listenTCP(0, (TCPConnection c) {
-		c.write("HTTP/1.1 200 OK\r\nConnection: Close\r\n\r\nqwerty");
+	immutable serverAddr = listenTCP(0, (TCPConnection c) @safe nothrow {
+		try c.write("HTTP/1.1 200 OK\r\nConnection: Close\r\n\r\nqwerty");
+		catch (Exception e) assert(0, e.msg);
 	}, "127.0.0.1").bindAddress;
 
 	runTask({
@@ -18,4 +19,5 @@ shared static this()
 		);
 		exitEventLoop();
 	});
+    return runEventLoop();
 }
