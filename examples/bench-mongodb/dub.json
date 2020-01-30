@@ -4,5 +4,5 @@
 	"dependencies": {
 		"vibe-d:mongodb": {"path": "../../"}
 	},
-	"versions": ["VibeCustomMain", "VibeRouterTreeMatch"]
+	"versions": [ "VibeRouterTreeMatch" ]
 }
