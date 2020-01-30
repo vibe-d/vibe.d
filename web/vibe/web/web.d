@@ -475,7 +475,7 @@ in
 {
 	assert(100 <= statusCode && statusCode < 600);
 }
-body
+do
 {
 	getRequestContext().res.statusCode = statusCode;
 }

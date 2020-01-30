@@ -150,7 +150,7 @@ class LockAllocator : Allocator {
 			assert(mem.ptr !is null, "realloc() called with null array.");
 			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc().");
 		}
-		body {
+		do {
 			static if (!synchronizedIsNothrow)
 				scope (failure) assert(0, "Internal error: function should be nothrow");
 
@@ -162,7 +162,7 @@ class LockAllocator : Allocator {
 			assert(mem.ptr !is null, "free() called with null array.");
 			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free().");
 		}
-		body {
+		do {
 			static if (!synchronizedIsNothrow)
 				scope (failure) assert(0, "Internal error: function should be nothrow");
 			synchronized(this)
@@ -828,7 +828,7 @@ in {
 	assert((cast(size_t) chunk.ptr) % T.alignof == 0,
 		   format("emplace: Misaligned memory block (0x%X): it must be %s-byte aligned for type %s", chunk.ptr, T.alignof, T.stringof));
 
-} body {
+} do {
 	enum classSize = __traits(classInstanceSize, T);
 	auto result = cast(T) chunk.ptr;
 
@@ -862,7 +862,7 @@ in {
 	assert((cast(size_t) chunk.ptr) % T.alignof == 0,
 		   format("emplace: Misaligned memory block (0x%X): it must be %s-byte aligned for type %s", chunk.ptr, T.alignof, T.stringof));
 
-} body {
+} do {
 	return emplace(cast(T*)chunk.ptr, args);
 }
 

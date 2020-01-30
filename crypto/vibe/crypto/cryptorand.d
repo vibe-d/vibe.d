@@ -220,7 +220,7 @@ final class SystemRNG : RandomNumberStream {
 		assert(buffer.length, "buffer length must be larger than 0");
 		assert(buffer.length <= uint.max, "buffer length must be smaller or equal uint.max");
 	}
-	body
+	do
 	{
 		version (Windows)
 		{
@@ -403,7 +403,7 @@ final class HashMixerRNG(Hash, uint factor) : RandomNumberStream
 		assert(buffer.length, "buffer length must be larger than 0");
 		assert(buffer.length <= uint.max, "buffer length must be smaller or equal uint.max");
 	}
-	body
+	do
 	{
 		auto len = buffer.length;
 

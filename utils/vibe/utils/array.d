@@ -650,7 +650,7 @@ struct ArraySet(Key)
 
 	void setAllocator(IAllocator allocator)
 	in { assert(m_entries.ptr is null, "Cannot set allocator after elements have been inserted."); }
-	body {
+	do {
 		m_allocator = AllocatorType(AW(allocator));
 	}
 
