@@ -1,29 +1,36 @@
 import vibe.db.redis.redis;
 import vibe.core.core;
 import vibe.core.log;
-
-enum redisPort = 16379;
+import vibe.core.core;
+import vibe.core.concurrency;
 
 void main()
 {
-	runTask(&redisServerMock);
-	runTask(&listenRedis);
+	auto task = runTask(&listenRedis);
+	runTask(&redisServerMock, task);
 	runApplication();
 }
 
-void redisServerMock()
+void redisServerMock(Task task)
 {
-	listenTCP(redisPort, (conn) {
-		conn.write("*3\r\n$9\r\nsubscribe\r\n$4\r\ntest\r\n:1\r\n");
-		conn.write("*3\r\n$7\r\nmessage\r\n$4\r\ntest\r\n$5\r\nhello\r\n");
+	auto listener = listenTCP(0, (conn) {
+		scope(failure) assert(0); // for @nothrow
 
+		// accept subscription
+		conn.write("*3\r\n$9\r\nsubscribe\r\n$4\r\ntest\r\n:1\r\n");
+		// send a pubsub message
+		conn.write("*3\r\n$7\r\nmessage\r\n$4\r\ntest\r\n$5\r\nhello\r\n");
 		// server terminates unexpectedly
 		conn.close();
-	});
+	}, "127.0.0.1");
+
+	task.send(listener.bindAddress.port);
 }
 
 void listenRedis()
 {
+	auto redisPort = receiveOnly!ushort();
+
 	auto redis = connectRedis("127.0.0.1", redisPort);
 	auto subs = redis.createSubscriber();
 	subs.subscribe("test");
