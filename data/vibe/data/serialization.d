@@ -81,7 +81,7 @@
 			auto getSerializedResult();
 			void beginWriteDocument(TypeTraits)();
 			void endWriteDocument(TypeTraits)();
-			void beginWriteDictionary(TypeTraits)();
+			void beginWriteDictionary(TypeTraits)(size_t length); [OR] void beginWriteDictionary(TypeTraits)();
 			void endWriteDictionary(TypeTraits)();
 			void beginWriteDictionaryEntry(ElementTypeTraits)(string name);
 			void endWriteDictionaryEntry(ElementTypeTraits)(string name);
@@ -515,7 +515,18 @@ private template serializeValueImpl(Serializer, alias Policy) {
 				ser.endWriteArray!Traits();
 			} else {
 				static if (__traits(compiles, ser.beginWriteDictionary!Traits(0))) {
-					enum nfields = getExpandedFieldCount!(TU, SerializableFields!(TU, Policy));
+					auto nfields = getExpandedFieldCount!(TU, SerializableFields!(TU, Policy));
+
+					foreach (mname; SerializableFields!(TU, Policy)) {
+						static if (!isBuiltinTuple!(T, mname)) {
+							auto vt = safeGetMember!mname(value);
+							static if (is(typeof(vt) : Nullable!NVT, NVT)
+									&& hasPolicyAttribute!(EmbedNullableIgnoreNullAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0])) {
+								if (vt.isNull) nfields--;
+							}
+						}
+					}
+
 					ser.beginWriteDictionary!Traits(nfields);
 				} else {
 					ser.beginWriteDictionary!Traits();
@@ -525,7 +536,14 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 					enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 					static if (!isBuiltinTuple!(T, mname)) {
-						auto vt = safeGetMember!mname(value);
+						auto vtn = safeGetMember!mname(value);
+						static if (is(typeof(vtn) : Nullable!NVT, NVT)
+								&& hasPolicyAttribute!(EmbedNullableIgnoreNullAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0])) {
+							if (vtn.isNull) continue;
+							auto vt = vtn.get;
+						} else {
+							auto vt = vtn;
+						}
 					} else {
 						alias TTM = TypeTuple!(typeof(__traits(getMember, value, mname)));
 						auto vt = tuple!TTM(__traits(getMember, value, mname));
@@ -954,6 +972,28 @@ unittest {
 }
 
 
+/**
+	Makes this nullable as if it is not a nullable to the serializer. Ignores the field completely when it is null.
+
+	Works with Nullable!classes and Nullable!structs. Behavior is undefined if this is applied to other types.
+
+	Implicitly marks this as optional for deserialization. (Keeps the struct default value when not present in serialized value)
+*/
+@property EmbedNullableIgnoreNullAttribute!Policy embedNullable(alias Policy = DefaultPolicy)()
+{
+	return EmbedNullableIgnoreNullAttribute!Policy();
+}
+///
+unittest {
+	import std.typecons : Nullable;
+
+	struct Test {
+		// Not serialized at all if null, ignored on deserialization if not present.
+		@embedNullable Nullable!int field;
+	}
+}
+
+
 ///
 enum FieldExistence
 {
@@ -972,6 +1012,8 @@ struct IgnoreAttribute(alias POLICY) { alias Policy = POLICY; }
 struct ByNameAttribute(alias POLICY) { alias Policy = POLICY; }
 /// ditto
 struct AsArrayAttribute(alias POLICY) { alias Policy = POLICY; }
+/// ditto
+struct EmbedNullableIgnoreNullAttribute(alias POLICY) { alias Policy = POLICY; }
 
 /**
 	Checks if a given type has a custom serialization representation.
@@ -1230,20 +1272,38 @@ unittest {
 
 private template hasPolicyAttribute(alias T, alias POLICY, alias decl)
 {
-	enum hasPolicyAttribute = hasAttribute!(T!POLICY, decl) || hasAttribute!(T!DefaultPolicy, decl);
+	// __traits(identifier) to hack around T being a template and not a type
+	// this if makes hasPolicyAttribute!(OptionalAttribute) == true when EmbedNullableIgnoreNullAttribute is present.
+	static if (__traits(identifier, T) == __traits(identifier, OptionalAttribute))
+		enum hasPolicyAttribute = hasPolicyAttributeImpl!(T, POLICY, decl)
+			|| hasPolicyAttributeImpl!(EmbedNullableIgnoreNullAttribute, POLICY, decl);
+	else
+		enum hasPolicyAttribute = hasPolicyAttributeImpl!(T, POLICY, decl);
+}
+
+private template hasPolicyAttributeImpl(alias T, alias POLICY, alias decl)
+{
+	enum hasPolicyAttributeImpl = hasAttribute!(T!POLICY, decl) || hasAttribute!(T!DefaultPolicy, decl);
 }
 
 unittest {
+	import std.typecons : Nullable;
+
 	template CP(T) {}
 	@asArray!CP int i1;
 	@asArray int i2;
 	int i3;
+	@embedNullable Nullable!int i4;
+
 	static assert(hasPolicyAttribute!(AsArrayAttribute, CP, i1));
 	static assert(hasPolicyAttribute!(AsArrayAttribute, CP, i2));
 	static assert(!hasPolicyAttribute!(AsArrayAttribute, CP, i3));
 	static assert(!hasPolicyAttribute!(AsArrayAttribute, DefaultPolicy, i1));
 	static assert(hasPolicyAttribute!(AsArrayAttribute, DefaultPolicy, i2));
 	static assert(!hasPolicyAttribute!(AsArrayAttribute, DefaultPolicy, i3));
+	static assert(hasPolicyAttribute!(EmbedNullableIgnoreNullAttribute, DefaultPolicy, i4));
+	static assert(hasPolicyAttribute!(OptionalAttribute, DefaultPolicy, i4));
+	static assert(!hasPolicyAttribute!(IgnoreAttribute, DefaultPolicy, i4));
 }
 
 
@@ -1995,4 +2055,36 @@ unittest { // issue #2110 - single-element tuples
 		auto a = deserialize!(TestSerializer, T)(b);
 		assert(a.fields[0] == 42);
 	}
+}
+
+@safe unittest {
+	import std.typecons : Nullable;
+
+	struct S {
+		@embedNullable Nullable!int x;
+		@embedNullable Nullable!string s;
+	}
+
+	enum Sn = S.mangleof;
+
+	auto s = S(Nullable!int(3), Nullable!string.init);
+	auto expected = "D("~Sn~"){DE(i,x)(V(i)(3))DE(i,x)}D("~Sn~")";
+
+	assert(serialize!TestSerializer(s) == expected, serialize!TestSerializer(s));
+	assert(deserialize!(TestSerializer, S)(expected) == s);
+
+	s.s = "hello";
+	expected = "D("~Sn~"){DE(i,x)(V(i)(3))DE(i,x)DE(Aya,s)(V(Aya)(hello))DE(Aya,s)}D("~Sn~")";
+	assert(serialize!TestSerializer(s) == expected, serialize!TestSerializer(s));
+	assert(deserialize!(TestSerializer, S)(expected) == s);
+
+	s.x.nullify();
+	expected = "D("~Sn~"){DE(Aya,s)(V(Aya)(hello))DE(Aya,s)}D("~Sn~")";
+	assert(serialize!TestSerializer(s) == expected);
+	assert(deserialize!(TestSerializer, S)(expected) == s);
+
+	s.s.nullify();
+	expected = "D("~Sn~"){}D("~Sn~")";
+	assert(serialize!TestSerializer(s) == expected);
+	assert(deserialize!(TestSerializer, S)(expected) == s);
 }
