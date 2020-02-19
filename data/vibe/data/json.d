@@ -255,7 +255,7 @@ struct Json {
 	/**
 		Allows assignment of D values to a JSON value.
 	*/
-	ref Json opAssign(Json v)
+	ref Json opAssign(Json v) return
 	{
 		if (v.type != Type.bigInt)
 			runDestructors();
