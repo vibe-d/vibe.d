@@ -9,7 +9,7 @@
 
 	See $(D registerWebInterface) for an overview of how the system works.
 
-	Copyright: © 2013-2016 RejectedSoftware e.K.
+	Copyright: © 2013-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -475,7 +475,7 @@ in
 {
 	assert(100 <= statusCode && statusCode < 600);
 }
-body
+do
 {
 	getRequestContext().res.statusCode = statusCode;
 }

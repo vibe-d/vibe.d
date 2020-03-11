@@ -3,6 +3,5 @@
     "description": "High level REST client test for vibe.d",
     "dependencies": {
         "vibe-d": {"version": "~master", "path": "../../"}
-    },
-    "versions": ["VibeCustomMain"]
+    }
 }

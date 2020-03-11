@@ -3,7 +3,7 @@
 
 	See `URLRouter` for more details.
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	Copyright: © 2012-2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -92,7 +92,7 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// Returns a single route handle to conveniently register multiple methods.
 	URLRoute route(string path)
 	in { assert(path.length, "Cannot register null or empty path!"); }
-	body { return URLRoute(this, path); }
+	do { return URLRoute(this, path); }
 
 	///
 	unittest {

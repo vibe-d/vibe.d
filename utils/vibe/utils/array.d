@@ -1,7 +1,7 @@
 /**
 	Utility functions for array processing
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -650,7 +650,7 @@ struct ArraySet(Key)
 
 	void setAllocator(IAllocator allocator)
 	in { assert(m_entries.ptr is null, "Cannot set allocator after elements have been inserted."); }
-	body {
+	do {
 		m_allocator = AllocatorType(AW(allocator));
 	}
 

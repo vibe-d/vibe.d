@@ -220,7 +220,7 @@
 		To see how to implement the client side in detail, jump to
 		the `RestInterfaceClient` documentation.
 
-	Copyright: © 2012-2018 RejectedSoftware e.K.
+	Copyright: © 2012-2018 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Михаил Страшун, Mathias 'Geod24' Lang
 */
@@ -2007,7 +2007,7 @@ unittest
 // errors in the server and client.
 package string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
-body {
+do {
 	import vibe.web.internal.rest.common : ParameterKind;
 	import std.typetuple : TypeTuple;
 	import std.algorithm : strip;

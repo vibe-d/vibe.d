@@ -3,7 +3,7 @@
 
 	This is a minimal implementation based on RFC 2069.
 
-	Copyright: © 2015 RejectedSoftware e.K.
+	Copyright: © 2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Kai Nacke
 */

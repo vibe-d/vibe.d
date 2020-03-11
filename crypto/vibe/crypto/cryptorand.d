@@ -1,7 +1,7 @@
 /**
 	Implements cryptographically secure random number generators.
 
-	Copyright: © 2013 RejectedSoftware e.K.
+	Copyright: © 2013 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Ilya Shipunov
 */
@@ -220,7 +220,7 @@ final class SystemRNG : RandomNumberStream {
 		assert(buffer.length, "buffer length must be larger than 0");
 		assert(buffer.length <= uint.max, "buffer length must be smaller or equal uint.max");
 	}
-	body
+	do
 	{
 		version (Windows)
 		{
@@ -403,7 +403,7 @@ final class HashMixerRNG(Hash, uint factor) : RandomNumberStream
 		assert(buffer.length, "buffer length must be larger than 0");
 		assert(buffer.length <= uint.max, "buffer length must be smaller or equal uint.max");
 	}
-	body
+	do
 	{
 		auto len = buffer.length;
 

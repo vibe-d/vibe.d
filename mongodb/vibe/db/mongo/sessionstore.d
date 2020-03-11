@@ -1,7 +1,7 @@
 /**
 	MongoDB based HTTP session store.
 
-	Copyright: © 2017 RejectedSoftware e.K.
+	Copyright: © 2017 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */

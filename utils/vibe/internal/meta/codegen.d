@@ -4,7 +4,7 @@
 	Some of those are very similar to `traits` utilities but instead of general type
 	information focus on properties that are most important during such code generation.
 
-	Copyright: © 2013 RejectedSoftware e.K.
+	Copyright: © 2013 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Михаил Страшун
 */

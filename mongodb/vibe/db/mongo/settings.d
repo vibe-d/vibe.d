@@ -1,7 +1,7 @@
 /**
 	MongoDB client connection settings.
 
-	Copyright: © 2012-2016 RejectedSoftware e.K.
+	Copyright: © 2012-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -157,6 +157,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 			switch( option.toLower() ){
 				default: logWarn("Unknown MongoDB option %s", option); break;
+				case "appname": cfg.appName = value; break;
 				case "slaveok": bool v; if( setBool(v) && v ) cfg.defQueryFlags |= QueryFlags.SlaveOk; break;
 				case "replicaset": cfg.replicaSet = value; warnNotImplemented(); break;
 				case "safe": setBool(cfg.safe); break;
@@ -341,6 +342,8 @@ class MongoClientSettings
 	string sslPEMKeyFile;
 	string sslCAFile;
 	MongoAuthMechanism authMechanism;
+	/// Application name for the connection information when connected.
+	string appName;
 
 	static string makeDigest(string username, string password)
 	@safe {

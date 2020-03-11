@@ -4,6 +4,5 @@
 	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
 		"vibe-d:http": {"path": "../../"}
-	},
-	"versions": ["VibeCustomMain"]
+	}
 }

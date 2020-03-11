@@ -50,13 +50,48 @@ fi
 
 if [[ $PARTS =~ (^|,)tests(,|$) ]]; then
     for ex in `\ls -1 tests/`; do
-        if [ -r tests/$ex/dub.json ] || [ -r tests/$ex/dub.sdl ]; then
+        if [ -r tests/$ex/run.sh ]; then
+            echo "[INFO] Running test $ex"
+            (cd tests/$ex && ./run.sh)
+        elif [ -r tests/$ex/dub.json ] || [ -r tests/$ex/dub.sdl ]; then
             if [ $ex == "vibe.http.client.2080" ]; then
                 echo "[WARNING] Skipping test $ex due to TravisCI incompatibility".
             else
                 echo "[INFO] Running test $ex"
                 (cd tests/$ex && dub --compiler=$DC $DUB_ARGS && dub clean)
             fi
+        fi
+    done
+fi
+
+# MongoDB tests starting dummy server which can be analyzed exactly
+if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
+    mongod --version
+
+    for ex in $(\ls -1 tests/mongodb); do
+        if [ -r tests/mongodb/$ex/run.sh ]; then
+            # advanced mongodb test where we simply run a test script and it will do the rest (useful for the connection test with different server startup authentication options)
+
+            echo "[INFO] Running mongo test $ex"
+            (cd tests/mongodb/$ex && DUB_INVOKE="dub --compiler=$DC $DUB_ARGS" ./run.sh)
+        elif [ -r tests/mongodb/$ex/dub.json ] || [ -r tests/mongodb/$ex/dub.sdl ]; then
+            # test with only dub.json, let travis-ci.sh start and shutdown the server so we don't have to duplicate the code across all tests
+            # We use --fork in all mongod calls because it waits until the database is fully up-and-running for all queries.
+
+            MONGOPORT=22824
+            rm -f tests/mongodb/log.txt
+            rm -rf tests/mongodb/$ex/db
+            mkdir -p tests/mongodb/$ex/db
+            MONGOPID=$(mongod --logpath tests/mongodb/log.txt --bind_ip 127.0.0.1 --port $MONGOPORT --dbpath tests/mongodb/$ex/db --fork | grep -Po 'forked process: \K\d+')
+
+            echo "[INFO] Running mongo test $ex"
+            (cd tests/mongodb/$ex && dub --compiler=$DC $DUB_ARGS -- $MONGOPORT && dub clean && mongodump --port=$MONGOPORT)
+
+            if [ -r tests/mongodb/$ex/test.sh ]; then
+                (cd tests/mongodb/$ex && ./tests/mongodb/$ex/test.sh)
+            fi
+
+            kill $MONGOPID
         fi
     done
 fi

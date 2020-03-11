@@ -1,7 +1,7 @@
 /**
 	MongoCollection class
 
-	Copyright: © 2012-2016 RejectedSoftware e.K.
+	Copyright: © 2012-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -469,6 +469,7 @@ struct MongoCollection {
 		if (flags & IndexFlags.expireAfterSeconds) doc["expireAfterSeconds"] = expire_time.total!"seconds";
 		database["system.indexes"].insert(doc);
 	}
+
 	/// ditto
 	deprecated("Use the overload taking an array of field_orders instead.")
 	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.none, ulong expireAfterSeconds = 0)
@@ -479,6 +480,9 @@ struct MongoCollection {
 		ensureIndex(orders, flags, expireAfterSeconds.seconds);
 	}
 
+	/**
+		Drops or removes the specified index from the collection.
+	*/
 	void dropIndex(string name)
 	@safe {
 		static struct CMD {
@@ -493,6 +497,47 @@ struct MongoCollection {
 		enforce(reply["ok"].get!double == 1, "dropIndex command failed: "~reply["errmsg"].opt!string);
 	}
 
+	/**
+		Creates indexes on the collection.
+	*/
+	void createIndex(T)(T query) 
+	@safe {
+		static struct Indexes {
+			T key;
+		}
+
+		static struct CMD {
+			string createIndexes;
+			Indexes indexes;
+		}
+
+		CMD cmd;
+		cmd.createIndexes = m_name;
+		cmd.indexes.key = query;
+		auto reply = database.runCommand(cmd);
+		enforce(reply["ok"].get!double == 1, "createIndex command failed: "~reply["errmsg"].opt!string);
+	}
+
+	/**
+		Returns an array that holds a list of documents that identify and describe the existing indexes on the collection. 
+	*/
+	MongoCursor!R getIndexes(T = Bson, R = Bson)() 
+	@safe {
+		static struct CMD {
+			string listIndexes;
+		}
+
+		CMD cmd;
+		cmd.listIndexes = m_name;
+
+		auto reply = database.runCommand(cmd);
+		enforce(reply["ok"].get!double == 1, "getIndexes command failed: "~reply["errmsg"].opt!string);
+		return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
+	}
+
+	/**
+		Removes a collection or view from the database. The method also removes any indexes associated with the dropped collection.
+	*/
 	void drop()
 	@safe {
 		static struct CMD {

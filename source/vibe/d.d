@@ -8,7 +8,7 @@
 	Initialization is done in module constructors (static this), which run just before the event
 	loop is started by the application entry point.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */

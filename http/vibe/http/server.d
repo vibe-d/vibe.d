@@ -1,7 +1,7 @@
 /**
 	A HTTP 1.1/1.0 server implementation.
 
-	Copyright: © 2012-2017 RejectedSoftware e.K.
+	Copyright: © 2012-2017 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger, Ilya Shipunov
 */
@@ -548,34 +548,6 @@ private enum HTTPServerOptionImpl {
 */
 struct HTTPServerOption {
 	static enum none                      = HTTPServerOptionImpl.none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum parseURL                  = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum parseQueryString          = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum parseFormBody             = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum parseJsonBody             = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum parseMultiPartBody        = none;
-	/** Deprecated: Distributes request processing among worker threads
-
-		Note that this functionality assumes that the request handler
-		is implemented in a thread-safe way. However, the D type system
-		is bypassed, so that no static verification takes place.
-
-		For this reason, it is recommended to instead use
-		`vibe.core.core.runWorkerTaskDist` and call `listenHTTP`
-		from each task/thread individually. If the `reusePort` option
-		is set, then all threads will be able to listen on the same port,
-		with the operating system distributing the incoming connections.
-
-		If possible, instead of threads, the use of separate processes
-		is more robust and often faster. The `reusePort` option works
-		the same way in this scenario.
-	*/
-	deprecated("Use runWorkerTaskDist or start threads separately. It will be removed in 0.9.")
-	static enum distribute                = HTTPServerOptionImpl.distribute;
 	/** Enables stack traces (`HTTPServerErrorInfo.debugMessage`).
 
 		Note that generating the stack traces are generally a costly
@@ -603,18 +575,6 @@ struct HTTPServerOption {
 
 	deprecated("None has been renamed to none.")
 	static enum None = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum ParseURL = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum ParseQueryString = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum ParseFormBody = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum ParseJsonBody = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum ParseMultiPartBody = none;
-	deprecated("This is done lazily. It will be removed in 0.9.")
-	static enum ParseCookies = none;
 
 	HTTPServerOptionImpl x;
 	alias x this;

@@ -5,7 +5,7 @@
 	JSON values. De(serialization) of arbitrary D types is also supported and
 	is recommended for handling JSON in performance sensitive applications.
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	Copyright: © 2012-2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -255,7 +255,7 @@ struct Json {
 	/**
 		Allows assignment of D values to a JSON value.
 	*/
-	ref Json opAssign(Json v)
+	ref Json opAssign(Json v) return
 	{
 		if (v.type != Type.bigInt)
 			runDestructors();
