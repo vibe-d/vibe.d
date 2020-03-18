@@ -228,7 +228,9 @@ final class MongoConnection {
 			m_isAuthenticating = true;
 			scope (exit)
 				m_isAuthenticating = false;
-			if (m_settings.authMechanism == MongoAuthMechanism.mongoDBCR || !m_description.satisfiesVersion(WireVersion.v30))
+			if ((m_settings.authMechanism == MongoAuthMechanism.mongoDBCR
+					&& !m_description.satisfiesVersion(WireVersion.v40)) // removed in MongoDB 4.0
+				|| !m_description.satisfiesVersion(WireVersion.v30)) // deprecated in MongoDB 3.0
 				authenticate(); // use old mechanism if explicitly stated
 			else {
 				/**
@@ -531,7 +533,18 @@ final class MongoConnection {
 		Bson cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
 		cmd["mechanism"] = Bson("MONGODB-X509");
-		cmd["user"] = Bson(m_settings.username);
+		if (m_description.satisfiesVersion(WireVersion.v34))
+		{
+			if (m_settings.username.length)
+				cmd["user"] = Bson(m_settings.username);
+		}
+		else
+		{
+			if (!m_settings.username.length)
+				throw new MongoAuthException("No username provided but connected to MongoDB server <=3.2 not supporting this");
+
+			cmd["user"] = Bson(m_settings.username);
+		}
 		query!Bson("$external.$cmd", QueryFlags.None, 0, -1, cmd, Bson(null),
 			(cursor, flags, first_doc, num_docs) {
 				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
