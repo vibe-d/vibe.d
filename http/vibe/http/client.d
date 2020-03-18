@@ -635,7 +635,7 @@ final class HTTPClient {
 		m_requesting = true;
 		scope(exit) m_requesting = false;
 
-		if (!m_conn || !m_conn.connected) {
+		if (!m_conn || !m_conn.connected || m_conn.waitForDataEx(0.seconds) == WaitForDataStatus.noMoreData) {
 			if (m_conn) {
 				m_conn.close(); // make sure all resources are freed
 				m_conn = TCPConnection.init;
