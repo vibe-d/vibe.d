@@ -8,7 +8,7 @@ import vibe.core.log;
 import vibe.data.bson;
 import vibe.db.mongo.mongo;
 
-import std.algorithm : canFind, map, equal;
+import std.algorithm : canFind, equal, map, sort;
 import std.conv : to;
 import std.encoding : sanitize;
 
@@ -84,7 +84,9 @@ void runTest(ushort port)
 	coll.insert(["a": "first", "b": "bar"]);
 	coll.insert(["a": "second", "b": "baz"]);
 	coll.insert(["a": "second", "b": "bam"]);
-	assert(coll.distinct!string("b", ["a": "first"]).equal(["foo", "bar"]));
+	auto d = coll.distinct!string("b", ["a": "first"]).array;
+	d.sort!"a<b";
+	assert(d == ["bar", "foo"]);
 }
 
 int main(string[] args)
