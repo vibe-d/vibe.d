@@ -165,6 +165,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "journal": setBool(cfg.journal); break;
 				case "connecttimeoutms": setLong(cfg.connectTimeoutMS); warnNotImplemented(); break;
 				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); warnNotImplemented(); break;
+				case "tls": setBool(cfg.ssl); break;
 				case "ssl": setBool(cfg.ssl); break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
 				case "authmechanism": cfg.authMechanism = parseAuthMechanism(value); break;
