@@ -302,11 +302,43 @@ unittest
 	assert(cfg.hosts[0].port == 27017);
 }
 
+/**
+ * Describes a vibe.d supported authentication mechanism to use on client
+ * connection to a MongoDB server.
+ */
 enum MongoAuthMechanism
 {
+	/**
+	 * Use no auth mechanism. If a digest or ssl certificate is given this
+	 * defaults to trying the recommend auth mechanisms depending on server
+	 * version and input parameters.
+	 */
 	none,
+
+	/**
+	 * Use SCRAM-SHA-1 as defined in [RFC 5802](http://tools.ietf.org/html/rfc5802)
+	 *
+	 * This is the default when a password is provided. In the future other
+	 * scram algorithms may be implemented and selectable through these values.
+	 *
+	 * MongoDB: 3.0–
+	 */
 	scramSHA1,
+
+	/**
+	 * Forces login through the legacy MONGODB-CR authentication mechanism. This
+	 * mechanism is a nonce and MD5 based system.
+	 *
+	 * MongoDB: 1.4–4.0 (deprecated 3.0)
+	 */
 	mongoDBCR,
+
+	/**
+	 * Use an X.509 certificate to authenticate. Only works if digest is set to
+	 * null or empty string in the MongoClientSettings.
+	 *
+	 * MongoDB: 2.6–
+	 */
 	mongoDBX509
 }
 
@@ -464,11 +496,11 @@ class MongoClientSettings
 	string sslCAFile;
 
 	/**
-	 * Prefer to use this authentication mechanism.
+	 * Use the given authentication mechanism when connecting to the server. If
+	 * unsupported by the server, throw a MongoAuthException.
 	 *
-	 * Note: this only supports forcing MongoDB-CR authentication on <4.0
-	 * servers, has no effect otherwise. To use SSL certificate authentication,
-	 * unset the digest string or use $(LREF authenticateSSL).
+	 * If set to none, but digest or sslPEMKeyFile are set, this automatically
+	 * determines a suitable authentication mechanism based on server version.
 	 */
 	MongoAuthMechanism authMechanism;
 
@@ -528,8 +560,11 @@ class MongoClientSettings
 	}
 }
 
+/// Describes a host we might be able to connect to
 struct MongoHost
 {
+	/// The host name or IP address of the remote MongoDB server.
 	string name;
+	/// The port of the MongoDB server. See `MongoClientSettings.defaultPort`.
 	ushort port;
 }
