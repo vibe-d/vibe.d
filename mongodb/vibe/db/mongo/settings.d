@@ -40,7 +40,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 	cfg = new MongoClientSettings();
 
-	string tmpUrl = url[0..$]; // Slice of the url (not a copy)
+	string tmpUrl = url[0..$]; // Slice of the URL (not a copy)
 
 	if( !startsWith(tmpUrl, "mongodb://") )
 	{

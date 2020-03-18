@@ -26,7 +26,7 @@ import std.range;
 	Represents a connection to a MongoDB server.
 
 	Note that this class uses a ConnectionPool internally to create and reuse
-	network conections to the server as necessary. It should be reused for all
+	network connections to the server as necessary. It should be reused for all
 	fibers in a thread for optimum performance in high concurrency scenarios.
  */
 final class MongoClient {
@@ -107,7 +107,7 @@ final class MongoClient {
 		conjunction with MongoDatabase.opIndex.
 
 		Returns:
-			MongoCollection for the given combined database and collectiion name(path)
+			MongoCollection for the given combined database and collection name (path)
 
 		Examples:
 			---

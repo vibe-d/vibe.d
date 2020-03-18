@@ -7,8 +7,10 @@
 	known from the JavaScript driver, but these can usually be implemented in
 	terms of MongoDatabase.runCommand or MongoCollection.find. Since the
 	official documentation is lacking in some places, it may be necessary to use
-	a network sniffer to monitor what exectly needs to be sent. MongoDB has a
+	a network sniffer to monitor what exactly needs to be sent. MongoDB has a
 	dedicated utility for this called $(LINK2 http://docs.mongodb.org/manual/reference/program/mongosniff/ mongosniff).
+
+	As of 2014 there is proper documentation on $(LINK https://github.com/mongodb/specifications).
 
 	Copyright: © 2012-2013 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.

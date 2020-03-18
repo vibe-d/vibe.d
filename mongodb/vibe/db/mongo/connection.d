@@ -324,7 +324,7 @@ final class MongoConnection {
 	{
 		// Though higher level abstraction level by concept, this function
 		// is implemented here to allow to check errors upon every request
-		// on conncetion level.
+		// on connection level.
 
 		Bson command_and_options = Bson.emptyObject;
 		command_and_options["getLastError"] = Bson(1.0);
