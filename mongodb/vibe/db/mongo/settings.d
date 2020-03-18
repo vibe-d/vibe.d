@@ -350,6 +350,41 @@ class MongoClientSettings
 	@safe {
 		return md5Of(username ~ ":mongo:" ~ password).toHexString().idup.toLower();
 	}
+
+	/**
+	 * Sets the username and the digest string in this MongoClientSettings
+	 * instance.
+	 */
+	void authenticatePassword(string username, string password)
+	@safe {
+		this.username = username;
+		this.digest = MongoClientSettings.makeDigest(username, password);
+	}
+
+	/**
+	 * Sets ssl, the username, the PEM key file and the trusted CA file in this
+	 * MongoClientSettings instance.
+	 *
+	 * Params:
+	 *   username = The username as provided in the cert file like
+	 *   `"C=IS,ST=Reykjavik,L=Reykjavik,O=MongoDB,OU=Drivers,CN=client"`.
+	 *
+	 *   The username can be blank if connecting to MongoDB 3.4 or above.
+	 *
+	 *   sslPEMKeyFile = Path to a certificate with private key and certificate
+	 *   chain to connect with.
+	 *
+	 *   sslCAFile = Optional path to a trusted certificate authority file for
+	 *   verifying the remote certificate.
+	 */
+	void authenticateSSL(string username, string sslPEMKeyFile, string sslCAFile = null)
+	@safe {
+		this.ssl = true;
+		this.digest = null;
+		this.username = username;
+		this.sslPEMKeyFile = sslPEMKeyFile;
+		this.sslCAFile = sslCAFile;
+	}
 }
 
 struct MongoHost
