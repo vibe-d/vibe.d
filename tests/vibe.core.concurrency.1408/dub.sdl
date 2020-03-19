@@ -1,5 +1,0 @@
-name "tests"
-description "std.concurrency integration issue"
-dependency "vibe-d:core" path="../../"
-versions "VibeDefaultMain"
-
