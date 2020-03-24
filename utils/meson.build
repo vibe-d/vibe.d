@@ -13,7 +13,6 @@ vibe_utils_src = [
     'vibe/internal/meta/uda.d',
     'vibe/internal/rangeutil.d',
     'vibe/internal/utilallocator.d',
-    'vibe/internal/win32.d',
     'vibe/utils/array.d',
     'vibe/utils/dictionarylist.d',
     'vibe/utils/hashmap.d',
