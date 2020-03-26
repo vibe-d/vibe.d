@@ -2028,6 +2028,7 @@ unittest {
 
 unittest { // issue 1991 - @system property getters/setters does not compile
 	static class A {
+        @safe:
 		@property @name("foo") {
 			string fooString() const { return "a"; }
 			void fooString(string a) {  }

@@ -365,7 +365,7 @@ struct Json {
 	ref inout(Json) opIndex(size_t idx) inout { checkType!(Json[])(); return m_array[idx]; }
 
 	///
-	unittest {
+	@safe unittest {
 		Json value = Json.emptyArray;
 		value ~= 1;
 		value ~= true;
@@ -413,7 +413,7 @@ struct Json {
 	}
 
 	///
-	unittest {
+	@safe unittest {
 		Json value = Json.emptyObject;
 		value["a"] = 1;
 		value["b"] = true;
@@ -995,7 +995,7 @@ struct Json {
 	}
 
 	///
-	unittest {
+	@safe unittest {
 		auto j = Json.emptyObject;
 		j["a"] = "foo";
 		j["b"] = Json.undefined;
@@ -1391,7 +1391,7 @@ Json parseJsonString(string str, string filename = null)
 	static assert(test());
 }
 
-@safe unittest {
+@safe nothrow unittest {
 	bool test() {
 		try parseJsonString(" \t\n ");
 		catch (Exception e) assert(e.msg.endsWith("JSON string contains only whitespaces."));
@@ -1592,7 +1592,7 @@ T deserializeJson(T, R)(R input)
 	assert(ulong.max == serializeToJson(ulong.max).deserializeJson!ulong);
 }
 
-unittest {
+@safe unittest {
 	static struct A { int value; static A fromJson(Json val) @safe { return A(val.get!int); } Json toJson() const @safe { return Json(value); } }
 	static struct C { int value; static C fromString(string val) @safe { return C(val.to!int); } string toString() const @safe { return value.to!string; } }
 	static struct D { int value; }
@@ -1605,7 +1605,7 @@ unittest {
 	assert(serializeToJson(D(123))       == serializeToJson(["value": 123]));
 }
 
-unittest {
+@safe unittest {
 	auto d = Date(2001,1,1);
 	deserializeJson(d, serializeToJson(Date.init));
 	assert(d == Date.init);
@@ -1627,7 +1627,7 @@ unittest {
 	assert(text(t) == text(T()));
 }
 
-unittest {
+@safe unittest {
 	static class C {
 		@safe:
 		int a;
@@ -1649,7 +1649,7 @@ unittest {
 	assert(c.b == d.b);
 }
 
-unittest {
+@safe unittest {
 	static struct C { @safe: int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
 	enum Color { Red, Green, Blue }
 	{
@@ -1685,7 +1685,7 @@ unittest {
 	}
 }
 
-unittest {
+@safe unittest {
 	import std.typecons : Nullable;
 
 	struct S { Nullable!int a, b; }
@@ -1701,12 +1701,12 @@ unittest {
 	assert(t.b.isNull());
 }
 
-unittest { // #840
+@safe unittest { // #840
 	int[2][2] nestedArray = 1;
 	assert(nestedArray.serializeToJson.deserializeJson!(typeof(nestedArray)) == nestedArray);
 }
 
-unittest { // #1109
+@safe unittest { // #1109
 	static class C {
 		@safe:
 		int mem;
@@ -1719,14 +1719,14 @@ unittest { // #1109
 	assert(deserializeJson!C(Json(14)).mem == 13);
 }
 
-unittest { // const and mutable json
+@safe unittest { // const and mutable json
 	Json j = Json(1);
 	const k = Json(2);
 	assert(serializeToJson(j) == Json(1));
 	assert(serializeToJson(k) == Json(2));
 }
 
-unittest { // issue #1660 - deserialize AA whose key type is string-based enum
+@safe unittest { // issue #1660 - deserialize AA whose key type is string-based enum
 	enum Foo: string
 	{
 		Bar = "bar",
@@ -1745,7 +1745,7 @@ unittest { // issue #1660 - deserialize AA whose key type is string-based enum
 	assert(deserializeJson!S(j).f == [Foo.Bar: 2000]);
 }
 
-unittest {
+@safe unittest {
 	struct V {
 		UUID v;
 	}
