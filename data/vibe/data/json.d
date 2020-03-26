@@ -123,7 +123,7 @@ struct Json {
 	static assert(!hasElaborateDestructor!BigInt && !hasElaborateCopyConstructor!BigInt,
 		"struct Json is missing required ~this and/or this(this) members for BigInt.");
 
-	private {
+	private nothrow{
 		// putting all fields in a union results in many false pointers leading to
 		// memory leaks and, worse, std.algorithm.swap triggering an assertion
 		// because of internal pointers. This crude workaround seems to fix
@@ -181,19 +181,20 @@ struct Json {
 	}
 
 	/// New JSON value of Type.Undefined
-	static @property Json undefined() { return Json(); }
+	static @property Json undefined() nothrow { return Json(); }
 
 	/// New JSON value of Type.Object
-	static @property Json emptyObject() { return Json(cast(Json[string])null); }
+	static @property Json emptyObject() nothrow { return Json(cast(Json[string])null); }
 
 	/// New JSON value of Type.Array
-	static @property Json emptyArray() { return Json(cast(Json[])null); }
+	static @property Json emptyArray() nothrow { return Json(cast(Json[])null); }
 
 	version(JsonLineNumbers) int line;
 
 	/**
 		Constructor for a JSON object.
 	*/
+    nothrow {
 	this(typeof(null)) @trusted { m_type = Type.null_; }
 	/// ditto
 	this(bool v) @trusted { m_type = Type.bool_; m_bool = v; }
@@ -224,7 +225,7 @@ struct Json {
 
 	// used internally for UUID serialization support
 	private this(UUID v) { this(v.toString()); }
-
+    }
 	/**
 		Converts a std.json.JSONValue object to a vibe Json object.
 	 */
@@ -1198,7 +1199,7 @@ struct Json {
 	}
 
 	private void initBigInt()
-	@trusted {
+	@trusted nothrow{
 		BigInt[1] init_;
 		// BigInt is a struct, and it has a special BigInt.init value, which differs from null.
 		// m_data has no special initializer and when it tries to first access to BigInt
