@@ -123,7 +123,7 @@ struct Json {
 	static assert(!hasElaborateDestructor!BigInt && !hasElaborateCopyConstructor!BigInt,
 		"struct Json is missing required ~this and/or this(this) members for BigInt.");
 
-	private nothrow{
+	private {
 		// putting all fields in a union results in many false pointers leading to
 		// memory leaks and, worse, std.algorithm.swap triggering an assertion
 		// because of internal pointers. This crude workaround seems to fix
@@ -137,18 +137,18 @@ struct Json {
 		static assert(m_data.offsetof == 0, "m_data must be the first struct member.");
 		static assert(BigInt.alignof <= 8, "Json struct alignment of 8 isn't sufficient to store BigInt.");
 
-		ref inout(T) getDataAs(T)() inout @trusted {
+		ref inout(T) getDataAs(T)() inout nothrow @trusted {
 			static assert(T.sizeof <= m_data.sizeof);
 			return (cast(inout(T)[1])m_data[0 .. T.sizeof])[0];
 		}
 
-		@property ref inout(BigInt) m_bigInt() inout { return getDataAs!BigInt(); }
-		@property ref inout(long) m_int() inout { return getDataAs!long(); }
-		@property ref inout(double) m_float() inout { return getDataAs!double(); }
-		@property ref inout(bool) m_bool() inout { return getDataAs!bool(); }
-		@property ref inout(string) m_string() inout { return getDataAs!string(); }
-		@property ref inout(Json[string]) m_object() inout { return getDataAs!(Json[string])(); }
-		@property ref inout(Json[]) m_array() inout { return getDataAs!(Json[])(); }
+		@property ref inout(BigInt) m_bigInt() inout nothrow { return getDataAs!BigInt(); }
+		@property ref inout(long) m_int() inout nothrow { return getDataAs!long(); }
+		@property ref inout(double) m_float() inout nothrow { return getDataAs!double(); }
+		@property ref inout(bool) m_bool() inout nothrow { return getDataAs!bool(); }
+		@property ref inout(string) m_string() inout nothrow { return getDataAs!string(); }
+		@property ref inout(Json[string]) m_object() inout nothrow { return getDataAs!(Json[string])(); }
+		@property ref inout(Json[]) m_array() inout nothrow { return getDataAs!(Json[])(); }
 
 		Type m_type = Type.undefined;
 
@@ -194,38 +194,37 @@ struct Json {
 	/**
 		Constructor for a JSON object.
 	*/
-    nothrow {
-	this(typeof(null)) @trusted { m_type = Type.null_; }
+	this(typeof(null)) @trusted nothrow { m_type = Type.null_; }
 	/// ditto
-	this(bool v) @trusted { m_type = Type.bool_; m_bool = v; }
+	this(bool v) @trusted nothrow { m_type = Type.bool_; m_bool = v; }
 	/// ditto
-	this(byte v) { this(cast(long)v); }
+	this(byte v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(ubyte v) { this(cast(long)v); }
+	this(ubyte v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(short v) { this(cast(long)v); }
+	this(short v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(ushort v) { this(cast(long)v); }
+	this(ushort v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(int v) { this(cast(long)v); }
+	this(int v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(uint v) { this(cast(long)v); }
+	this(uint v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(long v) @trusted { m_type = Type.int_; m_int = v; }
+	this(long v) @trusted nothrow { m_type = Type.int_; m_int = v; }
 	/// ditto
-	this(BigInt v) @trusted { m_type = Type.bigInt; initBigInt(); m_bigInt = v; }
+	this(BigInt v) @trusted nothrow { m_type = Type.bigInt; initBigInt(); m_bigInt = v; }
 	/// ditto
-	this(double v) @trusted { m_type = Type.float_; m_float = v; }
+	this(double v) @trusted nothrow { m_type = Type.float_; m_float = v; }
 	/// ditto
-	this(string v) @trusted { m_type = Type.string; m_string = v; }
+	this(string v) @trusted nothrow { m_type = Type.string; m_string = v; }
 	/// ditto
-	this(Json[] v) @trusted { m_type = Type.array; m_array = v; }
+	this(Json[] v) @trusted nothrow { m_type = Type.array; m_array = v; }
 	/// ditto
-	this(Json[string] v) @trusted { m_type = Type.object; m_object = v; }
+	this(Json[string] v) @trusted nothrow { m_type = Type.object; m_object = v; }
 
 	// used internally for UUID serialization support
-	private this(UUID v) { this(v.toString()); }
-    }
+	private this(UUID v) nothrow { this(v.toString()); }
+
 	/**
 		Converts a std.json.JSONValue object to a vibe Json object.
 	 */
