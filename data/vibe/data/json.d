@@ -137,18 +137,18 @@ struct Json {
 		static assert(m_data.offsetof == 0, "m_data must be the first struct member.");
 		static assert(BigInt.alignof <= 8, "Json struct alignment of 8 isn't sufficient to store BigInt.");
 
-		ref inout(T) getDataAs(T)() inout @trusted {
+		ref inout(T) getDataAs(T)() inout nothrow @trusted {
 			static assert(T.sizeof <= m_data.sizeof);
 			return (cast(inout(T)[1])m_data[0 .. T.sizeof])[0];
 		}
 
-		@property ref inout(BigInt) m_bigInt() inout { return getDataAs!BigInt(); }
-		@property ref inout(long) m_int() inout { return getDataAs!long(); }
-		@property ref inout(double) m_float() inout { return getDataAs!double(); }
-		@property ref inout(bool) m_bool() inout { return getDataAs!bool(); }
-		@property ref inout(string) m_string() inout { return getDataAs!string(); }
-		@property ref inout(Json[string]) m_object() inout { return getDataAs!(Json[string])(); }
-		@property ref inout(Json[]) m_array() inout { return getDataAs!(Json[])(); }
+		@property ref inout(BigInt) m_bigInt() inout nothrow { return getDataAs!BigInt(); }
+		@property ref inout(long) m_int() inout nothrow { return getDataAs!long(); }
+		@property ref inout(double) m_float() inout nothrow { return getDataAs!double(); }
+		@property ref inout(bool) m_bool() inout nothrow { return getDataAs!bool(); }
+		@property ref inout(string) m_string() inout nothrow { return getDataAs!string(); }
+		@property ref inout(Json[string]) m_object() inout nothrow { return getDataAs!(Json[string])(); }
+		@property ref inout(Json[]) m_array() inout nothrow { return getDataAs!(Json[])(); }
 
 		Type m_type = Type.undefined;
 
@@ -181,49 +181,49 @@ struct Json {
 	}
 
 	/// New JSON value of Type.Undefined
-	static @property Json undefined() { return Json(); }
+	static @property Json undefined() nothrow { return Json(); }
 
 	/// New JSON value of Type.Object
-	static @property Json emptyObject() { return Json(cast(Json[string])null); }
+	static @property Json emptyObject() nothrow { return Json(cast(Json[string])null); }
 
 	/// New JSON value of Type.Array
-	static @property Json emptyArray() { return Json(cast(Json[])null); }
+	static @property Json emptyArray() nothrow { return Json(cast(Json[])null); }
 
 	version(JsonLineNumbers) int line;
 
 	/**
 		Constructor for a JSON object.
 	*/
-	this(typeof(null)) @trusted { m_type = Type.null_; }
+	this(typeof(null)) @trusted nothrow { m_type = Type.null_; }
 	/// ditto
-	this(bool v) @trusted { m_type = Type.bool_; m_bool = v; }
+	this(bool v) @trusted nothrow { m_type = Type.bool_; m_bool = v; }
 	/// ditto
-	this(byte v) { this(cast(long)v); }
+	this(byte v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(ubyte v) { this(cast(long)v); }
+	this(ubyte v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(short v) { this(cast(long)v); }
+	this(short v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(ushort v) { this(cast(long)v); }
+	this(ushort v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(int v) { this(cast(long)v); }
+	this(int v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(uint v) { this(cast(long)v); }
+	this(uint v) nothrow { this(cast(long)v); }
 	/// ditto
-	this(long v) @trusted { m_type = Type.int_; m_int = v; }
+	this(long v) @trusted nothrow { m_type = Type.int_; m_int = v; }
 	/// ditto
-	this(BigInt v) @trusted { m_type = Type.bigInt; initBigInt(); m_bigInt = v; }
+	this(BigInt v) @trusted nothrow { m_type = Type.bigInt; initBigInt(); m_bigInt = v; }
 	/// ditto
-	this(double v) @trusted { m_type = Type.float_; m_float = v; }
+	this(double v) @trusted nothrow { m_type = Type.float_; m_float = v; }
 	/// ditto
-	this(string v) @trusted { m_type = Type.string; m_string = v; }
+	this(string v) @trusted nothrow { m_type = Type.string; m_string = v; }
 	/// ditto
-	this(Json[] v) @trusted { m_type = Type.array; m_array = v; }
+	this(Json[] v) @trusted nothrow { m_type = Type.array; m_array = v; }
 	/// ditto
-	this(Json[string] v) @trusted { m_type = Type.object; m_object = v; }
+	this(Json[string] v) @trusted nothrow { m_type = Type.object; m_object = v; }
 
 	// used internally for UUID serialization support
-	private this(UUID v) { this(v.toString()); }
+	private this(UUID v) nothrow { this(v.toString()); }
 
 	/**
 		Converts a std.json.JSONValue object to a vibe Json object.
@@ -364,7 +364,7 @@ struct Json {
 	ref inout(Json) opIndex(size_t idx) inout { checkType!(Json[])(); return m_array[idx]; }
 
 	///
-	unittest {
+	@safe unittest {
 		Json value = Json.emptyArray;
 		value ~= 1;
 		value ~= true;
@@ -412,7 +412,7 @@ struct Json {
 	}
 
 	///
-	unittest {
+	@safe unittest {
 		Json value = Json.emptyObject;
 		value["a"] = 1;
 		value["b"] = true;
@@ -994,7 +994,7 @@ struct Json {
 	}
 
 	///
-	unittest {
+	@safe unittest {
 		auto j = Json.emptyObject;
 		j["a"] = "foo";
 		j["b"] = Json.undefined;
@@ -1198,7 +1198,7 @@ struct Json {
 	}
 
 	private void initBigInt()
-	@trusted {
+	@trusted nothrow{
 		BigInt[1] init_;
 		// BigInt is a struct, and it has a special BigInt.init value, which differs from null.
 		// m_data has no special initializer and when it tries to first access to BigInt
@@ -1390,7 +1390,7 @@ Json parseJsonString(string str, string filename = null)
 	static assert(test());
 }
 
-@safe unittest {
+@safe nothrow unittest {
 	bool test() {
 		try parseJsonString(" \t\n ");
 		catch (Exception e) assert(e.msg.endsWith("JSON string contains only whitespaces."));
@@ -1591,7 +1591,7 @@ T deserializeJson(T, R)(R input)
 	assert(ulong.max == serializeToJson(ulong.max).deserializeJson!ulong);
 }
 
-unittest {
+@safe unittest {
 	static struct A { int value; static A fromJson(Json val) @safe { return A(val.get!int); } Json toJson() const @safe { return Json(value); } }
 	static struct C { int value; static C fromString(string val) @safe { return C(val.to!int); } string toString() const @safe { return value.to!string; } }
 	static struct D { int value; }
@@ -1604,7 +1604,7 @@ unittest {
 	assert(serializeToJson(D(123))       == serializeToJson(["value": 123]));
 }
 
-unittest {
+@safe unittest {
 	auto d = Date(2001,1,1);
 	deserializeJson(d, serializeToJson(Date.init));
 	assert(d == Date.init);
@@ -1626,7 +1626,7 @@ unittest {
 	assert(text(t) == text(T()));
 }
 
-unittest {
+@safe unittest {
 	static class C {
 		@safe:
 		int a;
@@ -1648,7 +1648,7 @@ unittest {
 	assert(c.b == d.b);
 }
 
-unittest {
+@safe unittest {
 	static struct C { @safe: int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
 	enum Color { Red, Green, Blue }
 	{
@@ -1684,7 +1684,7 @@ unittest {
 	}
 }
 
-unittest {
+@safe unittest {
 	import std.typecons : Nullable;
 
 	struct S { Nullable!int a, b; }
@@ -1700,12 +1700,12 @@ unittest {
 	assert(t.b.isNull());
 }
 
-unittest { // #840
+@safe unittest { // #840
 	int[2][2] nestedArray = 1;
 	assert(nestedArray.serializeToJson.deserializeJson!(typeof(nestedArray)) == nestedArray);
 }
 
-unittest { // #1109
+@safe unittest { // #1109
 	static class C {
 		@safe:
 		int mem;
@@ -1718,14 +1718,14 @@ unittest { // #1109
 	assert(deserializeJson!C(Json(14)).mem == 13);
 }
 
-unittest { // const and mutable json
+@safe unittest { // const and mutable json
 	Json j = Json(1);
 	const k = Json(2);
 	assert(serializeToJson(j) == Json(1));
 	assert(serializeToJson(k) == Json(2));
 }
 
-unittest { // issue #1660 - deserialize AA whose key type is string-based enum
+@safe unittest { // issue #1660 - deserialize AA whose key type is string-based enum
 	enum Foo: string
 	{
 		Bar = "bar",
@@ -1744,7 +1744,7 @@ unittest { // issue #1660 - deserialize AA whose key type is string-based enum
 	assert(deserializeJson!S(j).f == [Foo.Bar: 2000]);
 }
 
-unittest {
+@safe unittest {
 	struct V {
 		UUID v;
 	}
