@@ -383,7 +383,7 @@ struct RedisHash(T = string) {
 	{
 		import std.typecons;
 		auto ret = m_db.hget!(Nullable!string)(m_key, field);
-		return ret.isNull ? def_value : ret.fromRedis!T;
+		return ret.isNull ? def_value : ret.get().fromRedis!T;
 	}
 
 	bool setIfNotExist(string field, T value)
