@@ -156,6 +156,8 @@ final class MongoConnection {
 
 	void connect()
 	{
+		bool isTLS;
+
 		/*
 		 * TODO: Connect to one of the specified hosts taking into consideration
 		 * options such as connect timeouts and so on.
@@ -177,6 +179,7 @@ final class MongoConnection {
 				}
 
 				m_stream = createTLSStream(m_conn, ctx, m_settings.hosts[0].name);
+				isTLS = true;
 			}
 			else {
 				m_stream = m_conn;
@@ -223,30 +226,51 @@ final class MongoConnection {
 			});
 
 		m_bytesRead = 0;
-		if(m_settings.digest != string.init)
+		auto authMechanism = m_settings.authMechanism;
+		if (authMechanism == MongoAuthMechanism.none)
 		{
-			m_isAuthenticating = true;
-			scope (exit)
-				m_isAuthenticating = false;
-			if (m_settings.authMechanism == MongoAuthMechanism.mongoDBCR || !m_description.satisfiesVersion(WireVersion.v30))
-				authenticate(); // use old mechanism if explicitly stated
-			else {
-				/**
-				SCRAM-SHA-1 was released in March 2015 and on a properly
-				configured Mongo instance Authentication.none is disabled.
-				However, as a fallback to avoid breakage with old setups,
-				no authentication is tried in case of an error.
-				*/
-				try
-					scramAuthenticate(); // scram-sha-1 is default in version v3.0+
-				catch (MongoAuthException e)
-					authenticate(); // fall back if scram-sha-1 fails
+			if (m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
+			{
+				authMechanism = MongoAuthMechanism.mongoDBX509;
 			}
-
+			else if (m_settings.digest.length)
+			{
+				// SCRAM-SHA-1 default since 3.0, otherwise use legacy authentication
+				if (m_description.satisfiesVersion(WireVersion.v30))
+					authMechanism = MongoAuthMechanism.scramSHA1;
+				else
+					authMechanism = MongoAuthMechanism.mongoDBCR;
+			}
 		}
-		else if (m_settings.sslPEMKeyFile != null && m_settings.username != null)
+
+		if (authMechanism == MongoAuthMechanism.mongoDBCR && m_description.satisfiesVersion(WireVersion.v40))
+			throw new MongoAuthException("Trying to force MONGODB-CR authentication on a >=4.0 server not supported");
+
+		if (authMechanism == MongoAuthMechanism.scramSHA1 && !m_description.satisfiesVersion(WireVersion.v30))
+			throw new MongoAuthException("Trying to force SCRAM-SHA-1 authentication on a <3.0 server not supported");
+
+		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !m_description.satisfiesVersion(WireVersion.v26))
+			throw new MongoAuthException("Trying to force MONGODB-X509 authentication on a <2.6 server not supported");
+
+		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !isTLS)
+			throw new MongoAuthException("Trying to force MONGODB-X509 authentication, but didn't use ssl!");
+
+		m_isAuthenticating = true;
+		scope (exit)
+			m_isAuthenticating = false;
+		final switch (authMechanism)
 		{
+		case MongoAuthMechanism.none:
+			break;
+		case MongoAuthMechanism.mongoDBX509:
 			certAuthenticate();
+			break;
+		case MongoAuthMechanism.scramSHA1:
+			scramAuthenticate();
+			break;
+		case MongoAuthMechanism.mongoDBCR:
+			authenticate();
+			break;
 		}
 	}
 
@@ -322,7 +346,7 @@ final class MongoConnection {
 	{
 		// Though higher level abstraction level by concept, this function
 		// is implemented here to allow to check errors upon every request
-		// on conncetion level.
+		// on connection level.
 
 		Bson command_and_options = Bson.emptyObject;
 		command_and_options["getLastError"] = Bson(1.0);
@@ -531,7 +555,18 @@ final class MongoConnection {
 		Bson cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
 		cmd["mechanism"] = Bson("MONGODB-X509");
-		cmd["user"] = Bson(m_settings.username);
+		if (m_description.satisfiesVersion(WireVersion.v34))
+		{
+			if (m_settings.username.length)
+				cmd["user"] = Bson(m_settings.username);
+		}
+		else
+		{
+			if (!m_settings.username.length)
+				throw new MongoAuthException("No username provided but connected to MongoDB server <=3.2 not supporting this");
+
+			cmd["user"] = Bson(m_settings.username);
+		}
 		query!Bson("$external.$cmd", QueryFlags.None, 0, -1, cmd, Bson(null),
 			(cursor, flags, first_doc, num_docs) {
 				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
