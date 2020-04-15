@@ -49,62 +49,59 @@ struct URL {
 	{
 		this(schema, null, 0, path);
 	}
+	/// ditto
+	this(string schema, string host, ushort port, PosixPath path) pure
+	{
+		this(schema, host, port, cast(InetPath)path);
+	}
+	/// ditto
+	this(string schema, PosixPath path) pure
+	{
+		this(schema, null, 0, cast(InetPath)path);
+	}
+	/// ditto
+	this(string schema, string host, ushort port, WindowsPath path) pure
+	{
+		this(schema, host, port, cast(InetPath)path);
+	}
+	/// ditto
+	this(string schema, WindowsPath path) pure
+	{
+		this(schema, null, 0, cast(InetPath)path);
+	}
 
-	version (Have_vibe_core) {
-		/// ditto
-		this(string schema, string host, ushort port, PosixPath path) pure
-		{
-			this(schema, host, port, cast(InetPath)path);
-		}
-		/// ditto
-		this(string schema, PosixPath path) pure
-		{
-			this(schema, null, 0, cast(InetPath)path);
-		}
-		/// ditto
-		this(string schema, string host, ushort port, WindowsPath path) pure
-		{
-			this(schema, host, port, cast(InetPath)path);
-		}
-		/// ditto
-		this(string schema, WindowsPath path) pure
-		{
-			this(schema, null, 0, cast(InetPath)path);
-		}
+	/** Constructs a "file:" URL from a native file system path.
 
-		/** Constructs a "file:" URL from a native file system path.
+		Note that the path must be absolute. On Windows, both, paths starting
+		with a drive letter and UNC paths are supported.
+	*/
+	this(WindowsPath path) pure
+	{
+		import std.algorithm.iteration : map;
+		import std.range : chain, only, repeat;
 
-			Note that the path must be absolute. On Windows, both, paths starting
-			with a drive letter and UNC paths are supported.
-		*/
-		this(WindowsPath path) pure
-		{
-			import std.algorithm.iteration : map;
-			import std.range : chain, only, repeat;
+		enforce(path.absolute, "Only absolute paths can be converted to a URL.");
 
-			enforce(path.absolute, "Only absolute paths can be converted to a URL.");
+		// treat UNC paths properly
+		if (path.startsWith(WindowsPath(`\\`))) {
+			auto segs = path.bySegment;
+			segs.popFront();
+			segs.popFront();
+			auto host = segs.front.name;
+			segs.popFront();
 
-			// treat UNC paths properly
-			if (path.startsWith(WindowsPath(`\\`))) {
-				auto segs = path.bySegment;
-				segs.popFront();
-				segs.popFront();
-				auto host = segs.front.name;
-				segs.popFront();
+			this("file", host, 0, InetPath(
+				only(InetPath.Segment("", '/'))
+				.chain(segs.map!(s => cast(InetPath.Segment)s))
+			));
+		} else this("file", host, 0, cast(InetPath)path);
+	}
+	/// ditto
+	this(PosixPath path) pure
+	{
+		enforce(path.absolute, "Only absolute paths can be converted to a URL.");
 
-				this("file", host, 0, InetPath(
-					only(InetPath.Segment("", '/'))
-					.chain(segs.map!(s => cast(InetPath.Segment)s))
-				));
-			} else this("file", host, 0, cast(InetPath)path);
-		}
-		/// ditto
-		this(PosixPath path) pure
-		{
-			enforce(path.absolute, "Only absolute paths can be converted to a URL.");
-
-			this("file", null, 0, cast(InetPath)path);
-		}
+		this("file", null, 0, cast(InetPath)path);
 	}
 
 	/** Constructs a URL from its string representation.
@@ -357,19 +354,11 @@ struct URL {
 
 		version (Windows) {
 			if (this.host.length) {
-				version (Have_vibe_core) {
-					auto p = NativePath(this.path
-							.bySegment
-							.dropOne
-							.map!(s => cast(WindowsPath.Segment)s)
-						);
-				} else {
-					auto p = NativePath(this.path
-							.bySegment
-							.dropOne
-							.array,
-						false);
-				}
+				auto p = NativePath(this.path
+						.bySegment
+						.dropOne
+						.map!(s => cast(WindowsPath.Segment)s)
+					);
 				return NativePath(`\\`~this.host) ~ p;
 			}
 		}
@@ -382,9 +371,7 @@ struct URL {
 		if( m_schema != rhs.m_schema ) return false;
 		if( m_host != rhs.m_host ) return false;
 		// FIXME: also consider user, port, querystring, anchor etc
-		version (Have_vibe_core)
-			return this.path.bySegment.startsWith(rhs.path.bySegment);
-		else return this.path.startsWith(rhs.path);
+		return this.path.bySegment.startsWith(rhs.path.bySegment);
 	}
 
 	URL opBinary(string OP, Path)(Path rhs) const if (OP == "~" && isAnyPath!Path) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
@@ -578,26 +565,18 @@ unittest { // host name role in file:// URLs
 unittest { // native path <-> URL conversion
 	import std.exception : assertThrown;
 
-	version (Have_vibe_core)
-		auto url = URL(NativePath("/foo/bar"));
-	else
-		auto url = URL("file", "", 0, InetPath("/foo/bar"));
+	auto url = URL(NativePath("/foo/bar"));
 	assert(url.schema == "file");
 	assert(url.host == "");
 	assert(url.path == InetPath("/foo/bar"));
 	assert(url.toNativePath == NativePath("/foo/bar"));
 
 	assertThrown(URL("http://example.org/").toNativePath);
-	version (Have_vibe_core) {
-		assertThrown(URL(NativePath("foo/bar")));
-	}
+	assertThrown(URL(NativePath("foo/bar")));
 }
 
 version (Windows) unittest { // Windows drive letter paths
-	version (Have_vibe_core)
-		auto url = URL(WindowsPath(`C:\foo`));
-	else
-		auto url = URL("file", "", 0, InetPath("/C:/foo"));
+	auto url = URL(WindowsPath(`C:\foo`));
 	assert(url.schema == "file");
 	assert(url.host == "");
 	assert(url.path == InetPath("/C:/foo"));
@@ -607,10 +586,7 @@ version (Windows) unittest { // Windows drive letter paths
 }
 
 version (Windows) unittest { // UNC paths
-	version (Have_vibe_core)
-		auto url = URL(WindowsPath(`\\server\share\path`));
-	else
-		auto url = URL("file", "server", 0, InetPath("/share/path"));
+	auto url = URL(WindowsPath(`\\server\share\path`));
 	assert(url.schema == "file");
 	assert(url.host == "server");
 	assert(url.path == InetPath("/share/path"));
