@@ -27,7 +27,7 @@ struct URL {
 @safe:
 	private {
 		string m_schema;
-		string m_pathString;
+		InetPath m_path;
 		string m_host;
 		ushort m_port;
 		string m_username;
@@ -42,8 +42,7 @@ struct URL {
 		m_schema = schema;
 		m_host = host;
 		m_port = port;
-		version (Have_vibe_core) m_pathString = path.toString();
-		else m_pathString = urlEncode(path.toString(), "/");
+		m_path = path;
 	}
 	/// ditto
 	this(string schema, InetPath path) pure
@@ -193,61 +192,49 @@ struct URL {
 		return URL(url_string);
 	}
 
-	invariant()
-	{
-		assert(isURLEncoded(m_pathString), "Wrong URL encoding of '"~m_pathString~"'");
-	}
-
 	/// The schema/protocol part of the URL
-	@property string schema() const { return m_schema; }
+	@property string schema() const nothrow { return m_schema; }
 	/// ditto
 	@property void schema(string v) { m_schema = v; }
 
 	/// The url encoded path part of the URL
-	@property string pathString() const { return m_pathString; }
+	@property string pathString() const nothrow { return m_path.toString; }
 
 	/// Set the path part of the URL. It should be properly encoded.
 	@property void pathString(string s)
 	{
 		enforce(isURLEncoded(s), "Wrong URL encoding of the path string '"~s~"'");
-		m_pathString = s;
+		m_path = InetPath(s);
 	}
 
 	/// The path part of the URL
-	@property InetPath path() const {
-		version (Have_vibe_core)
-			return InetPath(m_pathString);
-		else
-			return Path(urlDecode(m_pathString));
+	@property InetPath path() const nothrow { return m_path; }
+	/// ditto
+	@property void path(InetPath p)
+	nothrow {
+		m_path = p;
 	}
-	version (Have_vibe_core) {
-		/// ditto
-		@property void path(Path)(Path p)
-			if (isInstanceOf!(GenericPath, Path))
-		{
-			m_pathString = (cast(InetPath)p).toString();
-		}
-	} else {
-		/// ditto
-		@property void path(Path p)
-		{
-			m_pathString = p.toString().urlEncode("/");
-		}
+	/// ditto
+	@property void path(Path)(Path p)
+		if (isInstanceOf!(GenericPath, Path) && !is(Path == InetPath))
+	{
+		m_path = cast(InetPath)p;
 	}
 
 	/// The host part of the URL (depends on the schema)
-	@property string host() const pure { return m_host; }
+	@property string host() const pure nothrow { return m_host; }
 	/// ditto
 	@property void host(string v) { m_host = v; }
 
 	/// The port part of the URL (optional)
-	@property ushort port() const { return m_port ? m_port : defaultPort(m_schema); }
+	@property ushort port() const nothrow { return m_port ? m_port : defaultPort(m_schema); }
 	/// ditto
-	@property port(ushort v) { m_port = v; }
+	@property port(ushort v) nothrow { m_port = v; }
 
 	/// Get the default port for the given schema or 0
-	static ushort defaultPort(string schema) {
-		switch(schema){
+	static ushort defaultPort(string schema)
+	nothrow {
+		switch (schema) {
 			default:
 			case "file": return 0;
 			case "http": return 80;
@@ -258,34 +245,34 @@ struct URL {
 		}
 	}
 	/// ditto
-	ushort defaultPort() const {
+	ushort defaultPort()
+	const nothrow {
 		return defaultPort(m_schema);
 	}
 
 	/// The user name part of the URL (optional)
-	@property string username() const { return m_username; }
+	@property string username() const nothrow { return m_username; }
 	/// ditto
 	@property void username(string v) { m_username = v; }
 
 	/// The password part of the URL (optional)
-	@property string password() const { return m_password; }
+	@property string password() const nothrow { return m_password; }
 	/// ditto
 	@property void password(string v) { m_password = v; }
 
 	/// The query string part of the URL (optional)
-	@property string queryString() const { return m_queryString; }
+	@property string queryString() const nothrow { return m_queryString; }
 	/// ditto
 	@property void queryString(string v) { m_queryString = v; }
 
 	/// The anchor part of the URL (optional)
-	@property string anchor() const { return m_anchor; }
+	@property string anchor() const nothrow { return m_anchor; }
 
 	/// The path part plus query string and anchor
 	@property string localURI()
-	const {
+	const nothrow {
 		auto str = appender!string();
-		// m_pathString is already encoded
-		str.put(m_pathString);
+		str.put(m_path.toString);
 		if( queryString.length ) {
 			str.put("?");
 			str.put(queryString);
@@ -315,7 +302,8 @@ struct URL {
 	}
 
 	/// The URL to the parent path with query string and anchor stripped.
-	@property URL parentURL() const {
+	@property URL parentURL()
+	const {
 		URL ret;
 		ret.schema = schema;
 		ret.host = host;
@@ -328,7 +316,7 @@ struct URL {
 
 	/// Converts this URL object to its string representation.
 	string toString()
-	const {
+	const nothrow {
 		import std.format;
 		auto dst = appender!string();
 		dst.put(schema);
@@ -349,7 +337,11 @@ struct URL {
 		dst.put(host);
 		if ( ipv6 ) dst.put(']');
 
-		if( m_port > 0 ) formattedWrite(dst, ":%d", m_port);
+		if (m_port > 0) {
+			try formattedWrite(dst, ":%d", m_port);
+			catch (Exception e) assert(false, e.msg);
+		}
+
 		dst.put(localURI);
 		return dst.data;
 	}
@@ -385,7 +377,8 @@ struct URL {
 		return cast(NativePath)this.path;
 	}
 
-	bool startsWith(const URL rhs) const {
+	bool startsWith(const URL rhs)
+	const nothrow {
 		if( m_schema != rhs.m_schema ) return false;
 		if( m_host != rhs.m_host ) return false;
 		// FIXME: also consider user, port, querystring, anchor etc
@@ -400,19 +393,20 @@ struct URL {
 	void opOpAssign(string OP, Path)(Path.Segment rhs) if (OP == "~" && isAnyPath!Path) { this.path = this.path ~ rhs; }
 
 	/// Tests two URLs for equality using '=='.
-	bool opEquals(ref const URL rhs) const {
-		if( m_schema != rhs.m_schema ) return false;
-		if( m_host != rhs.m_host ) return false;
-		if( m_pathString != rhs.m_pathString ) return false;
+	bool opEquals(ref const URL rhs)
+	const nothrow {
+		if (m_schema != rhs.m_schema) return false;
+		if (m_host != rhs.m_host) return false;
+		if (m_path != rhs.m_path) return false;
 		return true;
 	}
 	/// ditto
-	bool opEquals(const URL other) const { return opEquals(other); }
+	bool opEquals(const URL other) const nothrow { return opEquals(other); }
 
-	int opCmp(ref const URL rhs) const {
-		if( m_schema != rhs.m_schema ) return m_schema.cmp(rhs.m_schema);
-		if( m_host != rhs.m_host ) return m_host.cmp(rhs.m_host);
-		if( m_pathString != rhs.m_pathString ) return cmp(m_pathString, rhs.m_pathString);
+	int opCmp(ref const URL rhs) const nothrow {
+		if (m_schema != rhs.m_schema) return m_schema.cmp(rhs.m_schema);
+		if (m_host != rhs.m_host) return m_host.cmp(rhs.m_host);
+		if (m_path != rhs.m_path) return cmp(m_path.toString, rhs.m_path.toString);
 		return true;
 	}
 }
