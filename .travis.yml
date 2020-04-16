@@ -35,12 +35,12 @@ d:
   # catching most DMD version related build failures early
   # only the latest 4 and the oldest supported versions of each compiler
   # are present to reduce the overall CI time
-  - dmd-2.089.0,dub
-  - dmd-2.088.1,dub
+  - dmd-2.091.0,dub
   - dmd-2.077.1,dub
   - ldc-1.18.0,dub
   - ldc-1.17.0,dub
   - ldc-1.7.0,dub
+  - dmd-2.090.1,dub
   - dmd-2.085.0,dub # 2.085.1 has a regression
   - dmd-2.084.1,dub
   - dmd-2.078.3,dub
