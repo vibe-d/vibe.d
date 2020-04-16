@@ -105,16 +105,26 @@ struct URL {
 
 		// treat UNC paths properly
 		if (path.startsWith(WindowsPath(`\\`))) {
-			auto segs = path.bySegment;
+			static if (is(InetPath.Segment2)) {
+				auto segs = path.bySegment2;
+			} else {
+				auto segs = path.bySegment;
+			}
 			segs.popFront();
 			segs.popFront();
 			auto host = segs.front.name;
 			segs.popFront();
 
-			this("file", host, 0, InetPath(
-				only(InetPath.Segment("", '/'))
-				.chain(segs.map!(s => cast(InetPath.Segment)s))
-			));
+			InetPath ip;
+			static if (is(InetPath.Segment2)) {
+				ip = InetPath(only(InetPath.Segment2.fromTrustedString("", '/'))
+					.chain(segs.map!(s => cast(InetPath.Segment2)s)));
+			} else {
+				ip = InetPath(only(InetPath.Segment("", '/'))
+					.chain(segs.map!(s => cast(InetPath.Segment)s)));
+			}
+
+			this("file", host, 0, ip);
 		} else this("file", host, 0, cast(InetPath)path);
 	}
 	/// ditto
@@ -375,12 +385,20 @@ struct URL {
 
 		version (Windows) {
 			if (this.host.length) {
-				auto p = NativePath(this.path
-						.bySegment
-						.dropOne
-						.map!(s => cast(WindowsPath.Segment)s)
-					);
-				return NativePath(`\\`~this.host) ~ p;
+				static if (is(NativePath.Segment2)) {
+					auto p = NativePath(this.path
+							.bySegment2
+							.dropOne
+							.map!(s => cast(WindowsPath.Segment2)s)
+						);
+				} else {
+					auto p = NativePath(this.path
+							.bySegment
+							.dropOne
+							.map!(s => cast(WindowsPath.Segment)s)
+						);
+				}
+				return NativePath.fromTrustedString(`\\`~this.host) ~ p;
 			}
 		}
 
@@ -392,13 +410,19 @@ struct URL {
 		if( m_schema != rhs.m_schema ) return false;
 		if( m_host != rhs.m_host ) return false;
 		// FIXME: also consider user, port, querystring, anchor etc
-		return this.path.bySegment.startsWith(rhs.path.bySegment);
+		static if (is(InetPath.Segment2))
+			return this.path.bySegment2.startsWith(rhs.path.bySegment2);
+		else return this.path.bySegment.startsWith(rhs.path.bySegment);
 	}
 
 	URL opBinary(string OP, Path)(Path rhs) const if (OP == "~" && isAnyPath!Path) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
 	URL opBinary(string OP, Path)(Path.Segment rhs) const if (OP == "~" && isAnyPath!Path) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
 	void opOpAssign(string OP, Path)(Path rhs) if (OP == "~" && isAnyPath!Path) { this.path = this.path ~ rhs; }
 	void opOpAssign(string OP, Path)(Path.Segment rhs) if (OP == "~" && isAnyPath!Path) { this.path = this.path ~ rhs; }
+	static if (is(InetPath.Segment2)) {
+		URL opBinary(string OP, Path)(Path.Segment2 rhs) const if (OP == "~" && isAnyPath!Path) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
+		void opOpAssign(string OP, Path)(Path.Segment2 rhs) if (OP == "~" && isAnyPath!Path) { this.path = this.path ~ rhs; }
+	}
 
 	/// Tests two URLs for equality using '=='.
 	bool opEquals(ref const URL rhs)
