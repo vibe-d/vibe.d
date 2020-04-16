@@ -37,37 +37,58 @@ struct URL {
 	}
 
 	/// Constructs a new URL object from its components.
-	this(string schema, string host, ushort port, InetPath path) pure
-	{
+	this(string schema, string host, ushort port, InetPath path) pure nothrow
+	in {
+		assert(isValidSchema(schema));
+		assert(host.length == 0 || isValidHostName(host));
+	}
+	do {
 		m_schema = schema;
 		m_host = host;
 		m_port = port;
 		m_path = path;
 	}
 	/// ditto
-	this(string schema, InetPath path) pure
-	{
+	this(string schema, InetPath path) pure nothrow
+	in { assert(isValidSchema(schema)); }
+	do {
 		this(schema, null, 0, path);
 	}
 	/// ditto
-	this(string schema, string host, ushort port, PosixPath path) pure
-	{
-		this(schema, host, port, cast(InetPath)path);
+	this(string schema, string host, ushort port, PosixPath path) pure nothrow
+	in {
+		assert(isValidSchema(schema));
+		assert(host.length == 0 || isValidHostName(host));
+	}
+	do {
+		InetPath ip;
+		try ip = cast(InetPath)path;
+		catch (Exception e) assert(false, e.msg); // InetPath should be able to capture all paths
+		this(schema, host, port, ip);
 	}
 	/// ditto
-	this(string schema, PosixPath path) pure
-	{
-		this(schema, null, 0, cast(InetPath)path);
+	this(string schema, PosixPath path) pure nothrow
+	in { assert(isValidSchema(schema)); }
+	do {
+		this(schema, null, 0, path);
 	}
 	/// ditto
-	this(string schema, string host, ushort port, WindowsPath path) pure
-	{
-		this(schema, host, port, cast(InetPath)path);
+	this(string schema, string host, ushort port, WindowsPath path) pure nothrow
+	in {
+		assert(isValidSchema(schema));
+		assert(host.length == 0 || isValidHostName(host));
+	}
+	do {
+		InetPath ip;
+		try ip = cast(InetPath)path;
+		catch (Exception e) assert(false, e.msg); // InetPath should be able to capture all paths
+		this(schema, host, port, ip);
 	}
 	/// ditto
-	this(string schema, WindowsPath path) pure
-	{
-		this(schema, null, 0, cast(InetPath)path);
+	this(string schema, WindowsPath path) pure nothrow
+	in { assert(isValidSchema(schema)); }
+	do {
+		this(schema, null, 0, path);
 	}
 
 	/** Constructs a "file:" URL from a native file system path.
@@ -397,6 +418,65 @@ struct URL {
 		return true;
 	}
 }
+
+bool isValidSchema(string schema)
+@safe pure nothrow {
+	if (schema.length < 1) return false;
+
+	foreach (char ch; schema) {
+		switch (ch) {
+			default: return false;
+			case 'a': .. case 'z': break;
+			case '0': .. case '9': break;
+			case '+', '.', '-': break;
+		}
+	}
+
+	return true;
+}
+
+unittest {
+	assert(isValidSchema("http+ssh"));
+	assert(isValidSchema("http"));
+	assert(!isValidSchema("http/ssh"));
+}
+
+
+bool isValidHostName(string name)
+@safe pure nothrow {
+	import std.algorithm.iteration : splitter;
+	import std.string : representation;
+
+	// According to RFC 1034
+	if (name.length < 1) return false;
+	if (name.length > 255) return false;
+	foreach (seg; name.representation.splitter('.')) {
+		if (seg.length < 1) return false;
+		if (seg.length > 63) return false;
+		if (seg[0] == '-') return false;
+
+		foreach (char ch; seg) {
+			switch (ch) {
+				default: return false;
+				case 'a': .. case 'z': break;
+				case 'A': .. case 'Z': break;
+				case '0': .. case '9': break;
+				case '-': break;
+			}
+		}
+	}
+	return true;
+}
+
+unittest {
+	assert(isValidHostName("foo"));
+	assert(isValidHostName("foo-"));
+	assert(isValidHostName("foo.bar"));
+	assert(isValidHostName("foo.bar-baz"));
+	assert(isValidHostName("foo1"));
+	assert(!isValidHostName("-foo"));
+}
+
 
 private enum isAnyPath(P) = is(P == InetPath) || is(P == PosixPath) || is(P == WindowsPath);
 
