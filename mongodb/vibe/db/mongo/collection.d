@@ -324,17 +324,16 @@ struct MongoCollection {
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
-		Bson cmd = Bson.emptyObject;
-		foreach (member; __traits(allMembers, AggregateOptions)) {
-			alias T = typeof(mixin("options." ~ member));
-			static if (is(T : Nullable!U, U)) {
-				if (!mixin("options." ~ member).isNull)
-					cmd[member] = mixin("options." ~ member).serializeToBson;
-			}
-		}
+		Bson cmd = Bson.emptyObject; // empty object because order is important
 		cmd["aggregate"] = Bson(m_name);
 		cmd["pipeline"] = serializeToBson(pipeline);
-		cmd["cursor"] = serializeToBson(options.cursor);
+		foreach (string k, v; serializeToBson(options))
+		{
+			// spec recommends to omit cursor field when explain is true
+			if (!options.explain.isNull && options.explain.get && k == "cursor")
+				continue;
+			cmd[k] = v;
+		}
 		auto ret = database.runCommand(cmd);
 		enforce(ret["ok"].get!double == 1, "Aggregate command failed: "~ret["errmsg"].opt!string);
 		R[] existing;
@@ -643,8 +642,8 @@ struct ReadConcern {
 		linearizable = "linearizable"
 	}
 
-	///
-	Level level;
+	/// The level of the read concern.
+	string level;
 }
 
 /**
@@ -701,36 +700,82 @@ struct Collation {
 
 ///
 struct CursorInitArguments {
-	/// Specifies the initial batch size for the cursor.
-	int batchSize;
+	/// Specifies the initial batch size for the cursor. Or null for server
+	/// default value.
+	@embedNullable Nullable!int batchSize;
 }
 
 /**
   Represents available options for an aggregate call
 
   See_Also: $(LINK https://docs.mongodb.com/manual/reference/method/db.collection.aggregate/)
+
+  Standards: $(LINK https://github.com/mongodb/specifications/blob/0c6e56141c867907aacf386e0cbe56d6562a0614/source/crud/crud.rst#api)
  */
 struct AggregateOptions {
-	/// Specifies the initial batch size for the cursor.
+	// non-optional since 3.6
+	// get/set by `batchSize`, undocumented in favor of that field
 	CursorInitArguments cursor;
-	/// Specifies to return the information on the processing of the pipeline.
-	Nullable!bool explain;
-	/// Enables writing to temporary files. When set to true, aggregation operations can write data to the _tmp subdirectory in the dbPath directory.
-	Nullable!bool allowDiskUse;
-	/// Specifies a time limit in milliseconds for processing operations on a cursor. If you do not specify a value for maxTimeMS, operations will not time out.
-	Nullable!uint maxTimeMS;
-	/// Available only if you specify the $out aggregation operator.
-	Nullable!bool bypassDocumentValidation;
-	/// Specifies the read concern.
-	Nullable!ReadConcern readConcern;
-	///
-	Nullable!Collation collation;
-	/**
-	  The index to use for the aggregation. The index is on the initial collection/view against which the aggregation is run.
 
-	  Specify the index either by the index name or by the index specification document.
+	/// Specifies the initial batch size for the cursor.
+	ref inout(Nullable!int) batchSize()
+	@property inout @safe pure nothrow @nogc @ignore {
+		return cursor.batchSize;
+	}
+
+	// undocumented because this field isn't a spec field because it is
+	// out-of-scope for a driver
+	@embedNullable Nullable!bool explain;
+
+	/**
+		Enables writing to temporary files. When set to true, aggregation
+		operations can write data to the _tmp subdirectory in the dbPath
+		directory.
+	*/
+	@embedNullable Nullable!bool allowDiskUse;
+
+	/**
+		Specifies a time limit in milliseconds for processing operations on a
+		cursor. If you do not specify a value for maxTimeMS, operations will not
+		time out.
+	*/
+	@embedNullable Nullable!long maxTimeMS;
+
+	/**
+		If true, allows the write to opt-out of document level validation.
+		This only applies when the $out or $merge stage is specified.
+	*/
+	@embedNullable Nullable!bool bypassDocumentValidation;
+
+	/**
+		Specifies the read concern. Only compatible with a write stage. (e.g.
+		`$out`, `$merge`)
+
+		Aggregate commands do not support the $(D ReadConcern.Level.linearizable)
+		level.
+
+		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
+	*/
+	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Specifies a collation.
+	@embedNullable Nullable!Collation collation;
+
+	/**
+		The index to use for the aggregation. The index is on the initial
+		collection / view against which the aggregation is run.
+
+		The hint does not apply to $lookup and $graphLookup stages.
+
+		Specify the index either by the index name as a string or the index key
+		pattern. If specified, then the query system will only consider plans
+		using the hinted index.
 	 */
-	Nullable!Bson hint;
-	/// Users can specify an arbitrary string to help trace the operation through the database profiler, currentOp, and logs.
-	Nullable!string comment;
+	@embedNullable Nullable!Bson hint;
+
+	/**
+		Users can specify an arbitrary string to help trace the operation
+		through the database profiler, currentOp, and logs.
+	*/
+	@embedNullable Nullable!string comment;
 }

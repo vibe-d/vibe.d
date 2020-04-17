@@ -567,6 +567,9 @@ struct Bson {
 	}
 	/// ditto
 	void opIndexAssign(T)(in T value, string idx){
+		// WARNING: it is ABSOLUTELY ESSENTIAL that ordering is not changed!!!
+		// MongoDB depends on ordering of the Bson maps.
+
 		auto newcont = appender!bdata_t();
 		checkType(Type.object);
 		auto d = m_data[4 .. $];
