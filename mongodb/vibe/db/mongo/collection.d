@@ -122,10 +122,10 @@ struct MongoCollection {
 	}
 
 	/// ditto
-	MongoCursor!(T, R, typeof(null)) find(R = Bson, T)(T query) { return find!R(query, null); }
+	MongoCursor!R find(R = Bson, T)(T query) { return find!R(query, null); }
 
 	/// ditto
-	MongoCursor!(Bson, R, typeof(null)) find(R = Bson)() { return find!R(Bson.emptyObject, null); }
+	MongoCursor!R find(R = Bson)() { return find!R(Bson.emptyObject, null); }
 
 	/** Queries the collection for existing documents.
 
