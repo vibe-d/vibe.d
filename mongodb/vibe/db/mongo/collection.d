@@ -580,25 +580,25 @@ struct Collation {
 	 */
 	string locale;
 	/// The level of comparison to perform. Corresponds to ICU Comparison Levels.
-	int strength;
+	@embedNullable Nullable!int strength;
 	/// Flag that determines whether to include case comparison at strength level 1 or 2.
-	bool caseLevel;
+	@embedNullable Nullable!bool caseLevel;
 	/// A flag that determines sort order of case differences during tertiary level comparisons.
-	string caseFirst;
+	@embedNullable Nullable!string caseFirst;
 	/// Flag that determines whether to compare numeric strings as numbers or as strings.
-	bool numericOrdering;
+	@embedNullable Nullable!bool numericOrdering;
 	/// Field that determines whether collation should consider whitespace and punctuation as base characters for purposes of comparison.
-	Alternate alternate;
+	@embedNullable Nullable!Alternate alternate;
 	/// Field that determines up to which characters are considered ignorable when `alternate: "shifted"`. Has no effect if `alternate: "non-ignorable"`
-	MaxVariable maxVariable;
+	@embedNullable Nullable!MaxVariable maxVariable;
 	/**
 	  Flag that determines whether strings with diacritics sort from back of the string, such as with some French dictionary ordering.
 
 	  If `true` compare from back to front, otherwise front to back.
 	 */
-	bool backwards;
+	@embedNullable Nullable!bool backwards;
 	/// Flag that determines whether to check if text require normalization and to perform normalization. Generally, majority of text does not require this normalization processing.
-	bool normalization;
+	@embedNullable Nullable!bool normalization;
 }
 
 ///
@@ -606,6 +606,84 @@ struct CursorInitArguments {
 	/// Specifies the initial batch size for the cursor. Or null for server
 	/// default value.
 	@embedNullable Nullable!int batchSize;
+}
+
+/// UDA to unset a nullable field if the server wire version doesn't at least
+/// match the given version. (inclusive)
+///
+/// Use with $(LREF enforceWireVersionConstraints)
+struct MinWireVersion
+{
+	///
+	WireVersion v;
+}
+
+/// ditto
+MinWireVersion since(WireVersion v) @safe { return MinWireVersion(v); }
+
+/// UDA to unset a nullable field if the server wire version is newer than the
+/// given version. (inclusive)
+///
+/// Use with $(LREF enforceWireVersionConstraints)
+struct MaxWireVersion
+{
+	///
+	WireVersion v;
+}
+/// ditto
+MaxWireVersion until(WireVersion v) @safe { return MaxWireVersion(v); }
+
+/// Unsets nullable fields not matching the server version as defined per UDAs.
+void enforceWireVersionConstraints(T)(ref T field, WireVersion serverVersion)
+@safe {
+	import std.traits : getUDAs;
+
+	foreach (i, ref v; field.tupleof) {
+		enum minV = getUDAs!(field.tupleof[i], MinWireVersion);
+		enum maxV = getUDAs!(field.tupleof[i], MaxWireVersion);
+
+		static foreach (min; minV)
+			if (serverVersion < min.v)
+				v.nullify();
+
+		static foreach (max; maxV)
+			if (serverVersion > max.v)
+				v.nullify();
+	}
+}
+
+///
+unittest
+{
+	struct SomeMongoCommand
+	{
+		@embedNullable @since(WireVersion.v34)
+		Nullable!int a;
+
+		@embedNullable @until(WireVersion.v30)
+		Nullable!int b;
+	}
+
+	SomeMongoCommand cmd;
+	cmd.a = 1;
+	cmd.b = 2;
+	assert(!cmd.a.isNull);
+	assert(!cmd.b.isNull);
+
+	SomeMongoCommand test = cmd;
+	enforceWireVersionConstraints(test, WireVersion.v30);
+	assert(test.a.isNull);
+	assert(!test.b.isNull);
+
+	test = cmd;
+	enforceWireVersionConstraints(test, WireVersion.v32);
+	assert(test.a.isNull);
+	assert(test.b.isNull);
+
+	test = cmd;
+	enforceWireVersionConstraints(test, WireVersion.v34);
+	assert(!test.a.isNull);
+	assert(test.b.isNull);
 }
 
 /**
