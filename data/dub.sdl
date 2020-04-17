@@ -1,6 +1,7 @@
 name "data"
 description "Data format and serialization support"
 dependency "vibe-d:utils" version=">=0.0.0"
+dependency "taggedalgebraic" version="~>0.11.13"
 targetType "library"
 sourcePaths "."
 importPaths "."
