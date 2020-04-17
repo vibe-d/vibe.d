@@ -523,7 +523,7 @@ unittest {
 		// the same goes for findOne
 		Nullable!User qusr = users.findOne!User(["_id": usr.id]);
 		if (!qusr.isNull)
-			logInfo("User: %s", qusr.loginName);
+			logInfo("User: %s", qusr.get.loginName);
 	}
 }
 
