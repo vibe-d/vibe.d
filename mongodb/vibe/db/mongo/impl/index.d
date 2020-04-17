@@ -46,10 +46,16 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 	}
 
 	/**
-		Drops or removes the specified index from the collection.
+		Drops a single index from the collection by the index name.
+
+		Throws: `Exception` if it is attempted to pass in `*`.
+		Use dropIndexes() to remove all indexes instead.
 	*/
-	void dropIndex(string name)
+	void dropIndex(string name, DropIndexOptions options = DropIndexOptions.init)
 	@safe {
+		if (name == "*")
+			throw new Exception("Attempted to remove single index with '*'");
+
 		static struct CMD {
 			string dropIndexes;
 			string index;
@@ -60,6 +66,62 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 		cmd.index = name;
 		auto reply = database.runCommand(cmd);
 		enforce(reply["ok"].get!double == 1, "dropIndex command failed: "~reply["errmsg"].opt!string);
+	}
+
+	/// ditto
+	void dropIndex(T)(T keys,
+		IndexOptions indexOptions = IndexOptions.init,
+		DropIndexOptions options = DropIndexOptions.init)
+	@safe if (!is(Unqual!T == IndexModel))
+	{
+		IndexModel model;
+		model.keys = serializeToBson(keys);
+		model.options = indexOptions;
+		dropIndex(model.name, options);
+	}
+
+	/// ditto
+	void dropIndex(const IndexModel keys,
+		DropIndexOptions options = DropIndexOptions.init)
+	@safe {
+		dropIndex(keys.name, options);
+	}
+
+	/// Drops all indexes in the collection.
+	void dropIndexes(DropIndexOptions options = DropIndexOptions.init)
+	@safe {
+		static struct CMD {
+			string dropIndexes;
+			string index;
+		}
+
+		CMD cmd;
+		cmd.dropIndexes = m_name;
+		cmd.index = "*";
+		auto reply = database.runCommand(cmd);
+		enforce(reply["ok"].get!double == 1, "dropIndexes command failed: "~reply["errmsg"].opt!string);
+	}
+
+	/// Unofficial API extension, more efficient multi-index removal on
+	/// MongoDB 4.2+
+	void dropIndexes(string[] names, DropIndexOptions options = DropIndexOptions.init)
+	@safe {
+		MongoConnection conn = m_client.lockConnection();
+		if (conn.description.satisfiesVersion(WireVersion.v42)) {
+			static struct CMD {
+				string dropIndexes;
+				string[] index;
+			}
+
+			CMD cmd;
+			cmd.dropIndexes = m_name;
+			cmd.index = names;
+			auto reply = database.runCommand(cmd);
+			enforce(reply["ok"].get!double == 1, "dropIndexes command failed: "~reply["errmsg"].opt!string);
+		} else {
+			foreach (name; names)
+				dropIndex(name);
+		}
 	}
 
 	/**
@@ -465,10 +527,23 @@ struct CreateIndexOptions
 {
 	/**
 		The maximum amount of time to allow the index build to take before
-		returning an error.
+		returning an error. (not implemented)
 	*/
 	@embedNullable Nullable!long maxTimeMS;
 }
 
 /// Same as $(LREF CreateIndexOptions)
 alias CreateIndexesOptions = CreateIndexOptions;
+
+/// Standards: $(LINK https://github.com/mongodb/specifications/blob/f4020bdb6ec093fcd259984e6ff6f42356b17d0e/source/index-management.rst#standard-api)
+struct DropIndexOptions
+{
+	/**
+		The maximum amount of time to allow the index drop to take before
+		returning an error. (not implemented)
+	*/
+	@embedNullable Nullable!long maxTimeMS;
+}
+
+/// Same as $(LREF DropIndexOptions)
+alias DropIndexesOptions = DropIndexOptions;
