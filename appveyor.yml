@@ -41,6 +41,13 @@ environment:
     DVersion: 1.7.0
     arch: x64
 
+# produces an Optlink failure
+matrix:
+  allow_failures:
+    - DC: dmd
+      DVersion: 2.091.0
+      arch: x86
+
 branches:
   only:
     - master
