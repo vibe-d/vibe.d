@@ -359,7 +359,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey, Allocator = IAl
 	}
 }
 
-unittest {
+nothrow unittest {
 	import std.conv;
 
 	HashMap!(string, string) map;
