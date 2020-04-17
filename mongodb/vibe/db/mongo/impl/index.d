@@ -137,19 +137,26 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 	/**
 		Returns an array that holds a list of documents that identify and describe the existing indexes on the collection. 
 	*/
-	MongoCursor!R getIndexes(T = Bson, R = Bson)() 
+	MongoCursor!R listIndexes(R = Bson)() 
 	@safe {
-		static struct CMD {
-			string listIndexes;
+		MongoConnection conn = m_client.lockConnection();
+		if (conn.description.satisfiesVersion(WireVersion.v30)) {
+			static struct CMD {
+				string listIndexes;
+			}
+
+			CMD cmd;
+			cmd.listIndexes = m_name;
+
+			auto reply = database.runCommand(cmd);
+			enforce(reply["ok"].get!double == 1, "getIndexes command failed: "~reply["errmsg"].opt!string);
+			return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
+		} else {
+			return database["system.indexes"].find!R();
 		}
-
-		CMD cmd;
-		cmd.listIndexes = m_name;
-
-		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "getIndexes command failed: "~reply["errmsg"].opt!string);
-		return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
 	}
+
+	deprecated("Please use the standard API name 'listIndexes'") alias getIndexes = listIndexes;
 }
 
 deprecated("Use CreateIndexOptions instead")
