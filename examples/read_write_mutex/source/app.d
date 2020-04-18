@@ -2,6 +2,7 @@
 import vibe.d;
 
 interface MyBlockingRestInterface {
+    @safe:
 	@path("/")
 	int getIndex();
 }
@@ -20,7 +21,7 @@ class RestInterfaceImplementation : MyBlockingRestInterface {
 	//by a TaskReadWriteMutex. Read operations are performed frequently (95%)
 	//and finish quickly (1ms wait time), while write operations occur rarely
 	//(5%) and take much longer to process (50ms wait time).
-	int getIndex()
+	override int getIndex() @safe
 	{
 		import std.random;
 		import std.stdio;
@@ -69,7 +70,7 @@ shared static this()
 
 		auto settings = new HTTPServerSettings();
 		settings.port = 8080;
-		settings.options = HTTPServerOption.parseURL|HTTPServerOption.reusePort;
+		settings.options = HTTPServerOption.reusePort;
 		settings.bindAddresses = ["::1", "127.0.0.1"];
 
 		listenHTTP(settings, routes);

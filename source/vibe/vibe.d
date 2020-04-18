@@ -5,7 +5,7 @@
 	vibe.d applications will import 'vibe.d' instead to also get an implicit application entry
 	point.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -18,7 +18,6 @@ public import vibe.core.file;
 public import vibe.core.log;
 public import vibe.core.net;
 public import vibe.core.sync;
-public import vibe.crypto.passwordhash;
 public import vibe.data.bson;
 public import vibe.data.json;
 public import vibe.db.mongo.mongo;

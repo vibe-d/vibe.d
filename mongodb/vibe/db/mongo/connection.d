@@ -1,7 +1,7 @@
 /**
 	Low level mongodb protocol.
 
-	Copyright: © 2012-2016 RejectedSoftware e.K.
+	Copyright: © 2012-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -9,6 +9,7 @@ module vibe.db.mongo.connection;
 
 public import vibe.data.bson;
 
+import vibe.core.core : vibeVersionString;
 import vibe.core.log;
 import vibe.core.net;
 import vibe.db.mongo.settings;
@@ -18,11 +19,12 @@ import vibe.stream.tls;
 
 import std.algorithm : map, splitter;
 import std.array;
-import std.range;
 import std.conv;
-import std.exception;
-import std.string;
 import std.digest.md;
+import std.exception;
+import std.range;
+import std.string;
+import std.typecons;
 
 
 private struct _MongoErrorDescription
@@ -127,6 +129,10 @@ final class MongoConnection {
 		ulong m_bytesRead;
 		int m_msgid = 1;
 		StreamOutputRange!(InterfaceProxy!Stream) m_outRange;
+		ServerDescription m_description;
+		/// Flag to prevent recursive connections when server closes connection while connecting
+		bool m_allowReconnect;
+		bool m_isAuthenticating;
 	}
 
 	enum ushort defaultPort = MongoClientSettings.defaultPort;
@@ -150,6 +156,8 @@ final class MongoConnection {
 
 	void connect()
 	{
+		bool isTLS;
+
 		/*
 		 * TODO: Connect to one of the specified hosts taking into consideration
 		 * options such as connect timeouts and so on.
@@ -171,6 +179,7 @@ final class MongoConnection {
 				}
 
 				m_stream = createTLSStream(m_conn, ctx, m_settings.hosts[0].name);
+				isTLS = true;
 			}
 			else {
 				m_stream = m_conn;
@@ -181,28 +190,87 @@ final class MongoConnection {
 			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
 		}
 
-		m_bytesRead = 0;
-		if(m_settings.digest != string.init)
-		{
-			if (m_settings.authMechanism == MongoAuthMechanism.mongoDBCR)
-				authenticate(); // use old mechanism if explicitly stated
-			else {
-				/**
-				SCRAM-SHA-1 was released in March 2015 and on a properly
-				configured Mongo instance Authentication.none is disabled.
-				However, as a fallback to avoid breakage with old setups,
-				no authentication is tried in case of an error.
-				*/
-				try
-					scramAuthenticate(); // scram-sha-1 is default in version v3.0+
-				catch (MongoAuthException e)
-					authenticate(); // fall back if scram-sha-1 fails
-			}
+		m_allowReconnect = false;
+		scope (exit)
+			m_allowReconnect = true;
 
+		Bson handshake = Bson.emptyObject;
+		handshake["isMaster"] = Bson(1);
+
+		import os = std.system;
+		import compiler = std.compiler;
+		string platform = compiler.name ~ " "
+			~ compiler.version_major.to!string ~ "." ~ compiler.version_minor.to!string;
+		// TODO: add support for os.version
+
+		handshake["client"] = Bson([
+			"driver": Bson(["name": Bson("vibe.db.mongo"), "version": Bson(vibeVersionString)]),
+			"os": Bson(["type": Bson(os.os.to!string), "architecture": Bson(hostArchitecture)]),
+			"platform": Bson(platform)
+		]);
+
+		if (m_settings.appName.length) {
+			enforce!MongoAuthException(m_settings.appName.length <= 128,
+				"The application name may not be larger than 128 bytes");
+			handshake["client"]["application"] = Bson(["name": Bson(m_settings.appName)]);
 		}
-		else if (m_settings.sslPEMKeyFile != null && m_settings.username != null)
+
+		query!Bson("$external.$cmd", QueryFlags.none, 0, -1, handshake, Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure) && num_docs == 1,
+					"Authentication handshake failed.");
+			},
+			(idx, ref doc) {
+				enforce!MongoAuthException(doc["ok"].get!double == 1.0, "Authentication failed.");
+				m_description = deserializeBson!ServerDescription(doc);
+			});
+
+		m_bytesRead = 0;
+		auto authMechanism = m_settings.authMechanism;
+		if (authMechanism == MongoAuthMechanism.none)
 		{
+			if (m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
+			{
+				authMechanism = MongoAuthMechanism.mongoDBX509;
+			}
+			else if (m_settings.digest.length)
+			{
+				// SCRAM-SHA-1 default since 3.0, otherwise use legacy authentication
+				if (m_description.satisfiesVersion(WireVersion.v30))
+					authMechanism = MongoAuthMechanism.scramSHA1;
+				else
+					authMechanism = MongoAuthMechanism.mongoDBCR;
+			}
+		}
+
+		if (authMechanism == MongoAuthMechanism.mongoDBCR && m_description.satisfiesVersion(WireVersion.v40))
+			throw new MongoAuthException("Trying to force MONGODB-CR authentication on a >=4.0 server not supported");
+
+		if (authMechanism == MongoAuthMechanism.scramSHA1 && !m_description.satisfiesVersion(WireVersion.v30))
+			throw new MongoAuthException("Trying to force SCRAM-SHA-1 authentication on a <3.0 server not supported");
+
+		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !m_description.satisfiesVersion(WireVersion.v26))
+			throw new MongoAuthException("Trying to force MONGODB-X509 authentication on a <2.6 server not supported");
+
+		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !isTLS)
+			throw new MongoAuthException("Trying to force MONGODB-X509 authentication, but didn't use ssl!");
+
+		m_isAuthenticating = true;
+		scope (exit)
+			m_isAuthenticating = false;
+		final switch (authMechanism)
+		{
+		case MongoAuthMechanism.none:
+			break;
+		case MongoAuthMechanism.mongoDBX509:
 			certAuthenticate();
+			break;
+		case MongoAuthMechanism.scramSHA1:
+			scramAuthenticate();
+			break;
+		case MongoAuthMechanism.mongoDBCR:
+			authenticate();
+			break;
 		}
 	}
 
@@ -225,6 +293,7 @@ final class MongoConnection {
 
 	@property bool connected() const { return m_conn && m_conn.connected; }
 
+	@property const(ServerDescription) description() const { return m_description; }
 
 	void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
 	{
@@ -277,7 +346,7 @@ final class MongoConnection {
 	{
 		// Though higher level abstraction level by concept, this function
 		// is implemented here to allow to check errors upon every request
-		// on conncetion level.
+		// on connection level.
 
 		Bson command_and_options = Bson.emptyObject;
 		command_and_options["getLastError"] = Bson(1.0);
@@ -403,6 +472,8 @@ final class MongoConnection {
 				auto bson = () @trusted { return recvBson(buf); } ();
 			}
 
+			// logDebugV("Received mongo response on %s:%s: %s", reqid, i, bson);
+
 			static if (is(T == Bson)) on_doc(i, bson);
 			else {
 				T doc = deserializeBson!T(bson);
@@ -415,14 +486,20 @@ final class MongoConnection {
 
 	private int send(ARGS...)(OpCode code, int response_to, ARGS args)
 	{
-		if( !connected() ) connect();
+		if( !connected() ) {
+			if (m_allowReconnect) connect();
+			else if (m_isAuthenticating) throw new MongoAuthException("Connection got closed while authenticating");
+			else throw new MongoDriverException("Connection got closed while connecting");
+		}
 		int id = nextMessageId();
-		sendValue(16 + sendLength(args));
-		sendValue(id);
-		sendValue(response_to);
-		sendValue(cast(int)code);
+		// sendValue!int to make sure we don't accidentally send other types after arithmetic operations/changing types
+		sendValue!int(16 + sendLength(args));
+		sendValue!int(id);
+		sendValue!int(response_to);
+		sendValue!int(cast(int)code);
 		foreach (a; args) sendValue(a);
 		m_outRange.flush();
+		// logDebugV("Sent mongo opcode %s (id %s) in response to %s with args %s", code, id, response_to, tuple(args));
 		return id;
 	}
 
@@ -478,7 +555,18 @@ final class MongoConnection {
 		Bson cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
 		cmd["mechanism"] = Bson("MONGODB-X509");
-		cmd["user"] = Bson(m_settings.username);
+		if (m_description.satisfiesVersion(WireVersion.v34))
+		{
+			if (m_settings.username.length)
+				cmd["user"] = Bson(m_settings.username);
+		}
+		else
+		{
+			if (!m_settings.username.length)
+				throw new MongoAuthException("No username provided but connected to MongoDB server <=3.2 not supporting this");
+
+			cmd["user"] = Bson(m_settings.username);
+		}
 		query!Bson("$external.$cmd", QueryFlags.None, 0, -1, cmd, Bson(null),
 			(cursor, flags, first_doc, num_docs) {
 				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
@@ -627,3 +715,81 @@ private int sendLength(ARGS...)(ARGS args)
 	else if (ARGS.length == 0) return 0;
 	else return sendLength(args[0 .. $/2]) + sendLength(args[$/2 .. $]);
 }
+
+struct ServerDescription
+{
+	enum ServerType
+	{
+		unknown,
+		standalone,
+		mongos,
+		possiblePrimary,
+		RSPrimary,
+		RSSecondary,
+		RSArbiter,
+		RSOther,
+		RSGhost
+	}
+
+@optional:
+	string address;
+	string error;
+	float roundTripTime = 0;
+	Nullable!BsonDate lastWriteDate;
+	Nullable!BsonObjectID opTime;
+	ServerType type = ServerType.unknown;
+	WireVersion minWireVersion, maxWireVersion;
+	string me;
+	string[] hosts, passives, arbiters;
+	string[string] tags;
+	string setName;
+	Nullable!int setVersion;
+	Nullable!BsonObjectID electionId;
+	string primary;
+	string lastUpdateTime = "infinity ago";
+	Nullable!int logicalSessionTimeoutMinutes;
+
+	bool satisfiesVersion(WireVersion wireVersion) @safe const @nogc pure nothrow
+	{
+		return maxWireVersion >= wireVersion;
+	}
+}
+
+enum WireVersion : int
+{
+	old,
+	v26,
+	v26_2,
+	v30,
+	v32,
+	v34,
+	v36,
+	v40,
+	v42
+}
+
+private string getHostArchitecture()
+{
+	import os = std.system;
+
+	version (X86_64)
+		string arch = "x86_64 ";
+	else version (X86)
+		string arch = "x86 ";
+	else version (AArch64)
+		string arch = "aarch64 ";
+	else version (ARM_HardFloat)
+		string arch = "armhf ";
+	else version (ARM)
+		string arch = "arm ";
+	else version (PPC64)
+		string arch = "ppc64 ";
+	else version (PPC)
+		string arch = "ppc ";
+	else
+		string arch = "unknown ";
+
+	return arch ~ os.endian.to!string;
+}
+
+private static immutable hostArchitecture = getHostArchitecture;

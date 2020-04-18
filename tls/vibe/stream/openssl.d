@@ -1,7 +1,7 @@
 /**
 	OpenSSL based SSL/TLS stream implementation
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2014 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -36,19 +36,38 @@ import deimos.openssl.ssl;
 import deimos.openssl.stack;
 import deimos.openssl.x509v3;
 
+// auto-detect OpenSSL 1.1.0
+version (VibeUseOpenSSL11)
+	enum OPENSSL_VERSION = "1.1.0";
+else version (VibeUseOpenSSL10)
+	enum OPENSSL_VERSION = "1.0.0";
+else version (VibeUseOldOpenSSL)
+	enum OPENSSL_VERSION = "0.9.0";
+else version (Botan)
+	enum OPENSSL_VERSION = "0.0.0";
+else
+{
+	// Only use the openssl_version file if it has been generated
+	static if (__traits(compiles, {import openssl_version; }))
+		mixin("public import openssl_version : OPENSSL_VERSION;");
+	else
+		// try 1.1.0 as softfallback if old other means failed
+		enum OPENSSL_VERSION = "1.1.0";
+}
+
 version (VibePragmaLib) {
 	pragma(lib, "ssl");
 	version (Windows) pragma(lib, "eay");
 }
 
-version (VibeUseOldOpenSSL) private enum haveECDH = false;
+static if (OPENSSL_VERSION.startsWith("0.9")) private enum haveECDH = false;
 else private enum haveECDH = OPENSSL_VERSION_NUMBER >= 0x10001000;
 version(VibeForceALPN) enum alpn_forced = true;
 else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
-// openssl 1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
-version (VibeUseOpenSSL11) {
+// openssl/1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
+static if (OPENSSL_VERSION.startsWith("1.1")) {
 	extern(C) const(SSL_METHOD)* TLS_client_method();
 	alias SSLv23_client_method = TLS_client_method;
 
@@ -79,11 +98,11 @@ version (VibeUseOpenSSL11) {
 	// #define SSL_get_ex_new_index(l, p, newf, dupf, freef) \
 	//    CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL, l, p, newf, dupf, freef)
 
-	extern(C) int CRYPTO_get_ex_new_index(int class_index, long argl, void *argp,
+	extern(C) int CRYPTO_get_ex_new_index(int class_index, c_long argl, void *argp,
 	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
 	                            CRYPTO_EX_free *free_func);
 
-	int SSL_get_ex_new_index(long argl, void *argp,
+	int SSL_get_ex_new_index(c_long argl, void *argp,
 	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
 	                            CRYPTO_EX_free *free_func) {
 		// # define CRYPTO_EX_INDEX_SSL              0
@@ -96,12 +115,87 @@ version (VibeUseOpenSSL11) {
 	alias get_rfc3526_prime_2048 = BN_get_rfc3526_prime_2048;
 
 	// #  define sk_num OPENSSL_sk_num
-	extern(C) int OPENSSL_sk_num(const void *);
-	extern(C) int sk_num(const(_STACK)* p) { return OPENSSL_sk_num(p); }
+	static if (!is(typeof(OPENSSL_sk_num)))
+	{
+		extern(C) int OPENSSL_sk_num(const void *);
+		extern(C) int sk_num(const(_STACK)* p) { return OPENSSL_sk_num(p); }
+	}
 
 	// #  define sk_value OPENSSL_sk_value
-	extern(C) void *OPENSSL_sk_value(const void *, int);
-	extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
+	static if (!is(typeof(OPENSSL_sk_value)))
+	{
+		extern(C) void *OPENSSL_sk_value(const void *, int);
+		extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
+	}
+
+	private enum SSL_CTRL_SET_MIN_PROTO_VERSION = 123;
+
+	private int SSL_CTX_set_min_proto_version(ssl_ctx_st* ctx, int ver) {
+		return cast(int) SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, ver, null);
+	}
+
+	private int SSL_set_min_proto_version(ssl_st* s, int ver) {
+		return cast(int) SSL_ctrl(s, SSL_CTRL_SET_MIN_PROTO_VERSION, ver, null);
+	}
+
+	extern(C) nothrow {
+		void BIO_set_init(BIO* bio, int init_) @trusted;
+		int BIO_get_init(BIO* bio) @trusted;
+		void BIO_set_data(BIO* bio, void* ptr) @trusted;
+		void* BIO_get_data(BIO* bio) @trusted;
+		void BIO_set_shutdown(BIO* bio, int shut) @trusted;
+		int BIO_get_shutdown(BIO* bio) @trusted;
+		void BIO_clear_flags(BIO* b, int flags) @trusted;
+		int BIO_test_flags(BIO* b, int flags) @trusted;
+		void BIO_set_flags(BIO* b, int flags) @trusted;
+
+		alias BIOMethWriteCallback = int function(BIO*, const(char)*, int);
+		alias BIOMethReadCallback = int function(BIO*, const(char)*, int);
+		alias BIOMethCtrlCallback = c_long function(BIO*, int, c_long, void*);
+		alias BIOMethCreateCallback = int function(BIO*);
+		alias BIOMethDestroyCallback = int function(BIO*);
+
+		int BIO_get_new_index();
+		BIO_METHOD* BIO_meth_new(int type, const(char)* name);
+		void BIO_meth_free(BIO_METHOD* biom);
+		int BIO_meth_set_write(BIO_METHOD* biom, BIOMethWriteCallback cb);
+		int BIO_meth_set_read(BIO_METHOD* biom, BIOMethReadCallback cb);
+		int BIO_meth_set_ctrl(BIO_METHOD* biom, BIOMethCtrlCallback cb);
+		int BIO_meth_set_create(BIO_METHOD* biom, BIOMethCreateCallback cb);
+		int BIO_meth_set_destroy(BIO_METHOD* biom, BIOMethDestroyCallback cb);
+	}
+} else {
+	private void BIO_set_init(BIO* b, int init_) @safe nothrow {
+		b.init_ = 1;
+	}
+	private int BIO_get_init(BIO* b) @safe nothrow {
+		return b.init_;
+	}
+	private void BIO_set_data(BIO* b, void* ptr) @safe nothrow {
+		b.ptr = ptr;
+	}
+	private void* BIO_get_data(BIO* b) @safe nothrow {
+		return b.ptr;
+	}
+	private void BIO_set_shutdown(BIO* b, int shut) @safe nothrow {
+		b.shutdown = shut;
+	}
+	private int BIO_get_shutdown(BIO* b) @safe nothrow {
+		return b.shutdown;
+	}
+	private void BIO_clear_flags(BIO *b, int flags) @safe nothrow {
+		b.flags &= ~flags;
+	}
+	private int BIO_test_flags(BIO *b, int flags) @safe nothrow {
+		return (b.flags & flags);
+	}
+	private void BIO_set_flags(BIO *b, int flags) @safe nothrow {
+		b.flags |= flags;
+	}
+}
+
+private int SSL_set_tlsext_host_name(ssl_st* s, const(char)* c) @trusted {
+	return cast(int) SSL_ctrl(s, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)c);
 }
 
 /**
@@ -126,6 +220,10 @@ final class OpenSSLStream : TLSStream {
 
 	this(InterfaceProxy!Stream underlying, OpenSSLContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init, string[] alpn = null)
 	{
+		// sanity check to distinguish any error that might have slipped
+		// somewhere else from errors generated here
+		validateSSLErrors();
+
 		m_stream = underlying;
 		m_state = state;
 		m_tlsCtx = ctx;
@@ -135,11 +233,16 @@ final class OpenSSLStream : TLSStream {
 			m_tls = null;
 		}
 
-		m_bio = () @trusted { return BIO_new(&s_bio_methods); } ();
+		static if (OPENSSL_VERSION.startsWith("1.1")) {
+			if (!s_bio_methods) initBioMethods();
+
+			m_bio = () @trusted { return BIO_new(s_bio_methods); } ();
+		} else
+			m_bio = () @trusted { return BIO_new(&s_bio_methods); } ();
 		enforce(m_bio !is null, "SSL failed: failed to create BIO structure.");
-		m_bio.init_ = 1;
-		m_bio.ptr = () @trusted { return cast(void*)this; } (); // lifetime is shorter than this, so no GC.addRange needed.
-		m_bio.shutdown = 0;
+		BIO_set_init(m_bio, 1);
+		BIO_set_data(m_bio, () @trusted { return cast(void*)this; } ()); // lifetime is shorter than this, so no GC.addRange needed.
+		BIO_set_shutdown(m_bio, 0);
 
 		() @trusted { SSL_set_bio(m_tls, m_bio, m_bio); } ();
 
@@ -150,7 +253,7 @@ final class OpenSSLStream : TLSStream {
 			vdata.callback = ctx.peerValidationCallback;
 			vdata.peerName = peer_name;
 			vdata.peerAddress = peer_address;
-			() @trusted { SSL_set_ex_data(m_tls, gs_verifyDataIndex, &vdata); } ();
+			checkSSLRet(() @trusted { return SSL_set_ex_data(m_tls, gs_verifyDataIndex, &vdata); } (), "Setting SSL user data");
 			scope (exit) () @trusted { SSL_set_ex_data(m_tls, gs_verifyDataIndex, null); } ();
 
 			final switch (state) {
@@ -162,8 +265,9 @@ final class OpenSSLStream : TLSStream {
 					// a client stream can override the default ALPN setting for this context
 					if (alpn.length) setClientALPN(alpn);
 					if (peer_name.length)
-						() @trusted { return SSL_ctrl(m_tls, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz); } ();
+						SSL_set_tlsext_host_name(m_tls, peer_name.toStringz);
 					//SSL_set_connect_state(m_tls);
+					validateSSLErrors();
 					checkSSLRet(() @trusted { return SSL_connect(m_tls); } (), "Connecting TLS tunnel");
 					break;
 				case TLSStreamState.connected:
@@ -241,6 +345,8 @@ final class OpenSSLStream : TLSStream {
 
 	@property ulong leastSize()
 	{
+		if(m_tls == null) return 0;
+
 		auto ret = () @trusted { return SSL_peek(m_tls, m_peekBuffer.ptr, 1); } ();
 		if (ret != 0) // zero means the connection got closed
 			checkSSLRet(ret, "Peeking TLS stream");
@@ -261,6 +367,8 @@ final class OpenSSLStream : TLSStream {
 	size_t read(scope ubyte[] dst, IOMode mode)
 	{
 		size_t nbytes = 0;
+		if(m_tls == null)
+			throw new Exception("Reading from closed stream");
 
 		while (dst.length > 0) {
 			int readlen = min(dst.length, int.max);
@@ -311,20 +419,39 @@ final class OpenSSLStream : TLSStream {
 		logTrace("OpenSSLStream finalize");
 
 		() @trusted {
-			SSL_shutdown(m_tls);
+			auto ret = SSL_shutdown(m_tls);
+			if (ret != 0) checkSSLRet(ret, "SSL_shutdown");
 			SSL_free(m_tls);
+			ERR_clear_error();
 		} ();
 
 		m_tls = null;
 		m_stream = InterfaceProxy!Stream.init;
 	}
 
+	private void validateSSLErrors()
+	@safe {
+		auto err = () @trusted { return ERR_get_error(); } ();
+		if (err != SSL_ERROR_NONE) {
+			throw new Exception("OpenSSL error occured previously: " ~ processSSLError(err));
+		}
+	}
+
 	private int checkSSLRet(int ret, string what)
 	@safe {
 		if (ret > 0) return ret;
 
-		string desc;
 		auto err = () @trusted { return SSL_get_error(m_tls, ret); } ();
+		string desc = processSSLError(err, what);
+
+		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
+		enforce(ret >= 0, format("%s returned an error: %s", what, desc));
+		return ret;
+	}
+
+	private string processSSLError(c_ulong err, string what = "OpenSSL")
+	@safe {
+		string desc;
 		switch (err) {
 			default: desc = format("Unknown error (%s)", err); break;
 			case SSL_ERROR_NONE: desc = "No error"; break;
@@ -335,8 +462,18 @@ final class OpenSSLStream : TLSStream {
 			case SSL_ERROR_WANT_ACCEPT: desc = "Need to block for accept"; break;
 			case SSL_ERROR_WANT_X509_LOOKUP: desc = "Need to block for certificate lookup"; break;
 			case SSL_ERROR_SYSCALL:
+				version (linux) {
+					import core.sys.linux.errno : errno;
+					import core.stdc.string : strerror;
+
+					desc = format("non-recoverable socket I/O error: %s (%s)", errno, (() @trusted => strerror(errno).to!string)());
+				} else {
+					desc = "non-recoverable socket I/O error";
+				}
+				break;
 			case SSL_ERROR_SSL:
-				return enforceSSL(ret, what);
+				throwSSL(what);
+				assert(false);
 		}
 
 		const(char)* file = null, data = null;
@@ -352,33 +489,7 @@ final class OpenSSLStream : TLSStream {
 				flags & ERR_TXT_STRING ? () @trusted { return to!string(data); } () : "-");
 		}
 
-		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
-		enforce(ret >= 0, format("%s returned an error: %s", what, desc));
-		return ret;
-	}
-
-	private int enforceSSL(int ret, string message)
-	@safe {
-		if (ret > 0) return ret;
-
-		c_ulong eret;
-		const(char)* file = null, data = null;
-		int line;
-		int flags;
-		string estr;
-		char[120] ebuf = 0;
-
-		while ((eret = () @trusted { return ERR_get_error_line_data(&file, &line, &data, &flags); } ()) != 0) {
-			() @trusted { ERR_error_string_n(eret, ebuf.ptr, ebuf.length); } ();
-			estr = () @trusted { return ebuf.ptr.to!string; } ();
-			// throw the last error code as an exception
-			logDebug("OpenSSL error at %s:%d: %s (%s)",
-				() @trusted { return file.to!string; } (), line, estr,
-				flags & ERR_TXT_STRING ? () @trusted { return to!string(data); } () : "-");
-			if (!() @trusted { return ERR_peek_error(); } ()) break;
-		}
-
-		throw new Exception(format("%s: %s (%s)", message, estr, eret));
+		return desc;
 	}
 
 	@property TLSCertificateInformation peerCertificate()
@@ -395,14 +506,17 @@ final class OpenSSLStream : TLSStream {
 	const {
 		static if (!haveALPN) assert(false, "OpenSSL support not compiled with ALPN enabled. Use VibeForceALPN.");
 		else {
-			char[32] data;
+			// modified since C functions expects a NULL pointer
+			const(ubyte)* data = null;
 			uint datalen;
+			string ret;
 
-			() @trusted { SSL_get0_alpn_selected(m_ssl, cast(const char*) data.ptr, &datalen); } ();
-			logDebug("alpn selected: ", data.to!string);
-			if (datalen > 0)
-				return data[0..datalen].idup;
-			else return null;
+			() @trusted {
+				SSL_get0_alpn_selected(m_tls, &data, &datalen);
+				ret = cast(string)data[0 .. datalen].idup;
+			} ();
+			logDebug("alpn selected: ", ret);
+			return  ret;
 		}
 	}
 
@@ -426,11 +540,42 @@ final class OpenSSLStream : TLSStream {
 		}
 		assert(i == len);
 
-		static if (haveALPN)
-			SSL_set_alpn_protos(m_ssl, cast(const char*) alpn.ptr, cast(uint) len);
 
-		() @trusted { vibeThreadAllocator.dispose(alpn); } ();
+		() @trusted {
+            static if (haveALPN)
+                SSL_set_alpn_protos(m_tls, cast(const char*) alpn.ptr, cast(uint) len);
+            vibeThreadAllocator.dispose(alpn);
+        } ();
 	}
+}
+
+private int enforceSSL(int ret, string message)
+@safe {
+	if (ret > 0) return ret;
+	throwSSL(message);
+	assert(false);
+}
+
+private void throwSSL(string message)
+@safe {
+	c_ulong eret;
+	const(char)* file = null, data = null;
+	int line;
+	int flags;
+	string estr;
+	char[120] ebuf = 0;
+
+	while ((eret = () @trusted { return ERR_get_error_line_data(&file, &line, &data, &flags); } ()) != 0) {
+		() @trusted { ERR_error_string_n(eret, ebuf.ptr, ebuf.length); } ();
+		estr = () @trusted { return ebuf.ptr.to!string; } ();
+		// throw the last error code as an exception
+		logDebug("OpenSSL error at %s:%d: %s (%s)",
+			() @trusted { return file.to!string; } (), line, estr,
+			flags & ERR_TXT_STRING ? () @trusted { return to!string(data); } () : "-");
+		if (!() @trusted { return ERR_peek_error(); } ()) break;
+	}
+
+	throw new Exception(format("%s: %s (%s)", message, estr, eret));
 }
 
 
@@ -455,39 +600,44 @@ final class OpenSSLContext : TLSContext {
 		TLSALPNCallback m_alpnCallback;
 	}
 
+
 	this(TLSContextKind kind, TLSVersion ver = TLSVersion.any)
 	{
 		m_kind = kind;
 
 		const(SSL_METHOD)* method;
-		c_long options = SSL_OP_NO_SSLv2|SSL_OP_NO_COMPRESSION|
-			SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
+		c_long veroptions = SSL_OP_NO_SSLv2;
+		c_long options = SSL_OP_NO_COMPRESSION;
+		static if (OPENSSL_VERSION.startsWith("1.1")) {}
+		else
+			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE; // There are always enabled in OpenSSL 1.1.0.
+		int minver = TLS1_VERSION;
 
 		() @trusted {
 		final switch (kind) {
 			case TLSContextKind.client:
 				final switch (ver) {
-					case TLSVersion.any: method = SSLv23_client_method(); options |= SSL_OP_NO_SSLv3; break;
-					case TLSVersion.ssl3: method = SSLv23_client_method(); options |= SSL_OP_NO_SSLv2|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; break;
-					case TLSVersion.tls1: method = TLSv1_client_method(); break;
+					case TLSVersion.any: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
+					case TLSVersion.ssl3: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv2|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = SSL3_VERSION; break;
+					case TLSVersion.tls1: method = TLSv1_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
 					//case TLSVersion.tls1_1: method = TLSv1_1_client_method(); break;
 					//case TLSVersion.tls1_2: method = TLSv1_2_client_method(); break;
-					case TLSVersion.tls1_1: method = SSLv23_client_method(); options |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; break;
-					case TLSVersion.tls1_2: method = SSLv23_client_method(); options |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; break;
-					case TLSVersion.dtls1: method = DTLSv1_client_method(); break;
+					case TLSVersion.tls1_1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; break;
+					case TLSVersion.tls1_2: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
+					case TLSVersion.dtls1: method = DTLSv1_client_method(); minver = DTLS1_VERSION; break;
 				}
 				break;
 			case TLSContextKind.server:
 			case TLSContextKind.serverSNI:
 				final switch (ver) {
-					case TLSVersion.any: method = SSLv23_server_method(); options |= SSL_OP_NO_SSLv3; break;
-					case TLSVersion.ssl3: method = SSLv23_server_method(); options |= SSL_OP_NO_SSLv2|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; break;
-					case TLSVersion.tls1: method = TLSv1_server_method(); break;
-					case TLSVersion.tls1_1: method = SSLv23_server_method(); options |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; break;
-					case TLSVersion.tls1_2: method = SSLv23_server_method(); options |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; break;
+					case TLSVersion.any: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
+					case TLSVersion.ssl3: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv2|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = SSL3_VERSION; break;
+					case TLSVersion.tls1: method = TLSv1_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
+					case TLSVersion.tls1_1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; break;
+					case TLSVersion.tls1_2: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
 					//case TLSVersion.tls1_1: method = TLSv1_1_server_method(); break;
 					//case TLSVersion.tls1_2: method = TLSv1_2_server_method(); break;
-					case TLSVersion.dtls1: method = DTLSv1_server_method(); break;
+					case TLSVersion.dtls1: method = DTLSv1_server_method(); minver = DTLS1_VERSION; break;
 				}
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 				break;
@@ -495,7 +645,22 @@ final class OpenSSLContext : TLSContext {
 		} ();
 
 		m_ctx = () @trusted { return SSL_CTX_new(method); } ();
-		() @trusted { SSL_CTX_set_options!()(m_ctx, options); }();
+		if (!m_ctx) {
+			enforceSSL(0, "Failed to create SSL context");
+			assert(false);
+		}
+		static if (OPENSSL_VERSION.startsWith("1.1")) {
+			() @trusted { return SSL_CTX_set_min_proto_version(m_ctx, minver); }()
+				.enforceSSL("Failed setting minimum protocol version");
+			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options); }();
+			if (retOptions != options)
+				logDiagnostic("SSL modified options: passed 0x%08x vs applied 0x%08x", options, retOptions);
+		} else {
+			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options | veroptions); }();
+			if (retOptions != options)
+				logDiagnostic("SSL modified options: passed 0x%08x vs applied 0x%08x", options | veroptions, retOptions);
+		}
+
 		if (kind == TLSContextKind.server) {
 			setDHParams();
 			static if (haveECDH) setECDHCurve();
@@ -553,7 +718,9 @@ final class OpenSSLContext : TLSContext {
 		m_alpnCallback = alpn_chooser;
 		static if (haveALPN) {
 			logDebug("Call select cb");
-			SSL_CTX_set_alpn_select_cb(m_ctx, &chooser, cast(void*)this);
+            () @trusted {
+			    SSL_CTX_set_alpn_select_cb(m_ctx, &chooser, cast(void*)this);
+            } ();
 		}
 	}
 
@@ -570,20 +737,27 @@ final class OpenSSLContext : TLSContext {
 			size_t len;
 			foreach (string alpn_value; alpn_list)
 				len += alpn_value.length + 1;
-			alpn = allocArray!ubyte(manualAllocator(), len);
+            () @trusted {
+			    alpn = allocArray!ubyte(manualAllocator(), len);
+            } ();
 
 			size_t i;
 			foreach (string alpn_value; alpn_list)
 			{
-				alpn[i++] = cast(ubyte)alpn_value.length;
-				alpn[i .. i+alpn_value.length] = cast(ubyte[])alpn_value;
+                () @trusted {
+                    alpn[i++] = cast(ubyte)alpn_value.length;
+                    alpn[i .. i+alpn_value.length] = cast(ubyte[])alpn_value;
+                } ();
+
 				i += alpn_value.length;
 			}
 			assert(i == len);
 
-			SSL_CTX_set_alpn_protos(m_ctx, cast(const char*) alpn.ptr, cast(uint) len);
+            () @trusted {
+			    SSL_CTX_set_alpn_protos(m_ctx, cast(const char*) alpn.ptr, cast(uint) len);
+			    freeArray(manualAllocator(), alpn);
+            } ();
 
-			freeArray(manualAllocator(), alpn);
 		}
 	}
 
@@ -686,9 +860,9 @@ final class OpenSSLContext : TLSContext {
 		if (list is null)
 			SSL_CTX_set_cipher_list(m_ctx,
 				"ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:"
-				~ "RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
+				~ "RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS").enforceSSL("Setting cipher list");
 		else
-			SSL_CTX_set_cipher_list(m_ctx, toStringz(list));
+			SSL_CTX_set_cipher_list(m_ctx, toStringz(list)).enforceSSL("Setting cipher list");
 	}
 
 	/** Make up a context ID to assign to the SSL context.
@@ -807,7 +981,12 @@ final class OpenSSLContext : TLSContext {
 
 	private SSLState createClientCtx()
 	{
-		return () @trusted { return SSL_new(m_ctx); } ();
+		SSLState ret = () @trusted { return SSL_new(m_ctx); } ();
+		if (!ret) {
+			enforceSSL(0, "Failed to create SSL context");
+			assert(false);
+		}
+		return ret;
 	}
 
 	private static struct VerifyData {
@@ -1039,7 +1218,6 @@ private nothrow @safe extern(C)
 	int chooser(SSL* ssl, const(char)** output, ubyte* outlen, const(char) *input_, uint inlen, void* arg) {
 		const(char)[] input = () @trusted { return input_[0 .. inlen]; } ();
 
-		logDebug("Got chooser input: %s", input);
 		OpenSSLContext ctx = () @trusted { return cast(OpenSSLContext) arg; } ();
 		import vibe.utils.array : AllocAppender, AppenderResetMode;
 		size_t i;
@@ -1107,28 +1285,28 @@ private nothrow @safe extern(C)
 
 	int onBioNew(BIO *b) nothrow
 	{
-		b.init_ = 0;
-		b.num = -1;
-		b.ptr = null;
-		b.flags = 0;
+		BIO_set_init(b, 0);
+		//b.num = -1;
+		BIO_set_data(b, null);
+		BIO_clear_flags(b, ~0);
 		return 1;
 	}
 
 	int onBioFree(BIO *b)
 	{
 		if( !b ) return 0;
-		if( b.shutdown ){
+		if(BIO_get_shutdown(b)){
 			//if( b.init && b.ptr ) b.ptr.stream.free();
-			b.init_ = 0;
-			b.flags = 0;
-			b.ptr = null;
+			BIO_set_init(b, 0);
+			BIO_clear_flags(b, ~0);
+			BIO_set_data(b, null);
 		}
 		return 1;
 	}
 
-	int onBioRead(BIO *b, char *outb, int outlen)
+	int onBioRead(BIO *b, const(char)* outb, int outlen)
 	{
-		auto stream = () @trusted { return cast(OpenSSLStream)b.ptr; } ();
+		auto stream = () @trusted { return cast(OpenSSLStream)BIO_get_data(b); } ();
 
 		try {
 			outlen = min(outlen, stream.m_stream.leastSize);
@@ -1142,7 +1320,7 @@ private nothrow @safe extern(C)
 
 	int onBioWrite(BIO *b, const(char) *inb, int inlen)
 	{
-		auto stream = () @trusted { return cast(OpenSSLStream)b.ptr; } ();
+		auto stream = () @trusted { return cast(OpenSSLStream)BIO_get_data(b); } ();
 		try {
 			stream.m_stream.write(() @trusted { return inb[0 .. inlen]; } ());
 		} catch (Exception e) {
@@ -1154,14 +1332,14 @@ private nothrow @safe extern(C)
 
 	c_long onBioCtrl(BIO *b, int cmd, c_long num, void *ptr)
 	{
-		auto stream = () @trusted { return cast(OpenSSLStream)b.ptr; } ();
+		auto stream = () @trusted { return cast(OpenSSLStream)BIO_get_data(b); } ();
 		c_long ret = 1;
 
 		switch(cmd){
-			case BIO_CTRL_GET_CLOSE: ret = b.shutdown; break;
+			case BIO_CTRL_GET_CLOSE: ret = BIO_get_shutdown(b); break;
 			case BIO_CTRL_SET_CLOSE:
 				logTrace("SSL set close %d", num);
-				b.shutdown = cast(int)num;
+				BIO_set_shutdown(b, cast(int)num);
 				break;
 			case BIO_CTRL_PENDING:
 				try {
@@ -1196,17 +1374,32 @@ private void setSSLError(string msg, string submsg, int line = __LINE__, string 
 	ERR_add_error_data(3, msg.toStringz, ": ".ptr, submsg.toStringz);
 }
 
-private BIO_METHOD s_bio_methods = {
-	57, "SslStream",
-	&onBioWrite,
-	&onBioRead,
-	&onBioPuts,
-	null, // &onBioGets
-	&onBioCtrl,
-	&onBioNew,
-	&onBioFree,
-	null, // &onBioCallbackCtrl
-};
+static if (OPENSSL_VERSION.startsWith("1.1")) {
+	private BIO_METHOD* s_bio_methods;
+
+	private void initBioMethods()
+	@trusted {
+		s_bio_methods = BIO_meth_new(BIO_get_new_index(), "SslStream");
+
+		BIO_meth_set_write(s_bio_methods, &onBioWrite);
+		BIO_meth_set_read(s_bio_methods, &onBioRead);
+		BIO_meth_set_ctrl(s_bio_methods, &onBioCtrl);
+		BIO_meth_set_create(s_bio_methods, &onBioNew);
+		BIO_meth_set_destroy(s_bio_methods, &onBioFree);
+	}
+} else {
+	private BIO_METHOD s_bio_methods = {
+		57, "SslStream",
+		&onBioWrite,
+		&onBioRead,
+		&onBioPuts,
+		null, // &onBioGets
+		&onBioCtrl,
+		&onBioNew,
+		&onBioFree,
+		null, // &onBioCallbackCtrl
+	};
+}
 
 private nothrow extern(C):
 static if (haveALPN) {
@@ -1214,6 +1407,6 @@ static if (haveALPN) {
 	void SSL_CTX_set_alpn_select_cb(SSL_CTX *ctx, ALPNCallback cb, void *arg);
 	int SSL_set_alpn_protos(SSL *ssl, const char *data, uint len);
 	int SSL_CTX_set_alpn_protos(SSL_CTX *ctx, const char* protos, uint protos_len);
-	void SSL_get0_alpn_selected(const SSL *ssl, const char* data, uint *len);
+	void SSL_get0_alpn_selected(const SSL *ssl, const ubyte** data, uint *len);
 }
 const(ssl_method_st)* TLSv1_2_server_method();

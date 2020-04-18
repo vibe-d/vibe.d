@@ -3,7 +3,7 @@
 
 	This is a minimal implementation based on RFC 2069.
 
-	Copyright: © 2015 RejectedSoftware e.K.
+	Copyright: © 2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Kai Nacke
 */
@@ -238,6 +238,7 @@ struct DigestAuthParams {
 	Creates the digest authorization request header.
 
 	Params:
+		method = HTTP method (required only when some qop is requested)
 		username = user name
 		password = user password
 		url = requested url

@@ -3,5 +3,5 @@
 	"dependencies": {
 		"vibe-d:http": {"path": "../../"}
 	},
-	"versions": ["VibeCustomMain", "VibeManualMemoryManagement"]
+	"versions": [ "VibeManualMemoryManagement" ]
 }

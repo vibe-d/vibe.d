@@ -1,7 +1,7 @@
 /**
 	Internet message handling according to RFC822/RFC5322
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2014 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -49,7 +49,8 @@ void parseRFC5322Header(InputStream)(InputStream input, ref InetHeaderMap dst, s
 	}
 
 	string readStringLine() @safe {
-		auto ret = input.readLine(max_line_length, "\r\n", alloc);
+		auto ret = input.readLine(max_line_length, "\n", alloc);
+		if (ret.length && ret[$-1] == '\r') ret = ret[0..$-1];
 		return () @trusted { return cast(string)ret; } ();
 	}
 
@@ -89,6 +90,17 @@ unittest { // fail for empty header names
 	assertThrown(parseRFC5322Header(createMemoryStream(hdr), map));
 }
 
+unittest { // tolerant line separator header parser - see: https://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.3
+	import std.exception;
+	import vibe.stream.memory;
+	auto hdr = cast(ubyte[])"a: test\r\nb: foo\nc: bar\n\nbody".dup;
+	InetHeaderMap map;
+	parseRFC5322Header(createMemoryStream(hdr), map);
+	assert(map.length == 3);
+	assert(map["a"] == "test");
+	assert(map["b"] == "foo");
+	assert(map["c"] == "bar");
+}
 
 private immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -361,6 +373,8 @@ struct QuotedPrintable {
 		auto ret = appender!(ubyte[])();
 		for( size_t i = 0; i < input.length; i++ ){
 			if( input[i] == '=' ){
+				import std.utf : UTFException;
+				if (input.length - i <= 2) throw new UTFException("");
 				auto code = input[i+1 .. i+3];
 				i += 2;
 				if( code != cast(const(ubyte)[])"\r\n" )
@@ -372,6 +386,16 @@ struct QuotedPrintable {
 	}
 }
 
+unittest
+{
+  assert(QuotedPrintable.decode("abc")   == "abc");
+  assert(QuotedPrintable.decode("a=3Cc") == "a<c");
+
+  import std.exception;
+  import std.utf : UTFException;
+  assertThrown!UTFException(QuotedPrintable.decode("ab=c"));
+  assertThrown!UTFException(QuotedPrintable.decode("abc="));
+}
 
 
 private void writeDecimal2(R)(ref R dst, uint n)

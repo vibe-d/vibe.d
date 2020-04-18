@@ -3,6 +3,5 @@
     "description": "Command-line argument test",
     "dependencies": {
         "vibe-d": {"version": "~master", "path": "../../"}
-    },
-    "versions": ["VibeCustomMain"]
+    }
 }

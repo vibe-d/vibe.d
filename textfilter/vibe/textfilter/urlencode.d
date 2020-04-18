@@ -1,7 +1,7 @@
 /**
 	URL-encoding implementation
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	Copyright: © 2012-2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger, Sönke Ludwig
 */
@@ -50,7 +50,9 @@ private auto isCorrectHexNum(const(char)[] str)
 /** Checks whether a given string has valid URL encoding.
 */
 bool isURLEncoded(const(char)[] str, const(char)[] reserved_chars = null)
-@safe {
+@safe nothrow {
+	import std.string : representation;
+
 	for (size_t i = 0; i < str.length; i++) {
 		switch (str[i]) {
 			case '-':
@@ -69,7 +71,7 @@ bool isURLEncoded(const(char)[] str, const(char)[] reserved_chars = null)
 				i += 2;
 				break;
 			default:
-				if (reserved_chars.canFind(str[i]))
+				if (reserved_chars.representation.canFind(str[i]))
 					return false;
 				break;
 		}
@@ -77,7 +79,7 @@ bool isURLEncoded(const(char)[] str, const(char)[] reserved_chars = null)
 	return true;
 }
 
-@safe unittest {
+@safe nothrow unittest {
 	assert(isURLEncoded("hello-world"));
 	assert(isURLEncoded("he%2F%af"));
 	assert(!isURLEncoded("hello world", " "));

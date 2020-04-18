@@ -1,6 +1,6 @@
 name "vibe-d"
 description "Event driven web and concurrency framework"
-homepage "http://vibed.org/"
+homepage "https://vibed.org/"
 
 license "MIT"
 copyright "Copyright © 2012-2018 rejectedsoftware e.K."

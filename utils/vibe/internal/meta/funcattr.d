@@ -4,7 +4,7 @@
 	Python decorator. D does not support this feature natively but
 	it can be emulated within certain code generation framework.
 
-	Copyright: © 2013 RejectedSoftware e.K.
+	Copyright: © 2013 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Михаил Страшун
  */

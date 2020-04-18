@@ -1,3 +1,0 @@
-name "tests"
-description "Invalid memory operation on TCP connection leakage at shutdown"
-dependency "vibe-d:core" path="../../"

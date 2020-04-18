@@ -1,7 +1,7 @@
 /**
 	Internal module with common functionality for REST interface generators.
 
-	Copyright: © 2015-2016 RejectedSoftware e.K.
+	Copyright: © 2015-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -110,16 +110,14 @@ import std.traits : hasUDA;
 
 		Params:
 			settings = Optional settings object.
+			is_client = Whether this struct is used by a client.
 	*/
 	this(RestInterfaceSettings settings, bool is_client)
 	{
 		import vibe.internal.meta.uda : findFirstUDA;
 
 		this.settings = settings ? settings.dup : new RestInterfaceSettings;
-		if (is_client) {
-			assert(this.settings.baseURL != URL.init,
-				"RESTful clients need to have a valid RestInterfaceSettings.baseURL set.");
-		} else if (this.settings.baseURL == URL.init) {
+		if (this.settings.baseURL == URL.init && !is_client) {
 			// use a valid dummy base URL to be able to construct sub-URLs
 			// for nested interfaces
 			this.settings.baseURL = URL("http://localhost/");
@@ -135,9 +133,14 @@ import std.traits : hasUDA;
 				this.basePath = concatURL(this.basePath, uda.value.data);
 			}
 		}
-		URL bu = this.settings.baseURL;
-		bu.pathString = this.basePath;
-		this.baseURL = bu.toString();
+
+		if (this.settings.baseURL != URL.init)
+		{
+			URL bu = this.settings.baseURL;
+			bu.pathString = this.basePath;
+			this.baseURL = bu.toString();
+		}
+		else this.baseURL = this.basePath;
 
 		computeRoutes();
 		computeSubInterfaces();

@@ -1,7 +1,7 @@
 /**
 	Internationalization/translation support for the web interface module.
 
-	Copyright: © 2014-2017 RejectedSoftware e.K.
+	Copyright: © 2014-2017 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -786,7 +786,7 @@ private string wrapText(string str)
 
 private string parse_nplurals(string msgstr)
 in { assert(msgstr, "An empty string cannot be parsed for Plural-Forms."); }
-body {
+do {
 	import std.string : indexOf, CaseSensitive;
 
 	auto start = msgstr.indexOf("Plural-Forms:", CaseSensitive.no);
@@ -811,7 +811,7 @@ unittest {
 
 private string parse_plural_expression(string msgstr)
 in { assert(msgstr, "An empty string cannot be parsed for Plural-Forms."); }
-body {
+do {
 	import std.string : indexOf, CaseSensitive;
 
 	auto start = msgstr.indexOf("Plural-Forms:", CaseSensitive.no);

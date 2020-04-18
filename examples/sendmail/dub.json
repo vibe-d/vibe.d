@@ -3,6 +3,5 @@
 	"description": "Sends a mail (be sure to adjust addresses before running).",
 	"dependencies": {
 		"vibe-d:mail": {"path": "../../"}
-	},
-	"versions": ["VibeCustomMain"]
+	}
 }

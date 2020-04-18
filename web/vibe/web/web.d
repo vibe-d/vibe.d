@@ -9,7 +9,7 @@
 
 	See $(D registerWebInterface) for an overview of how the system works.
 
-	Copyright: © 2013-2016 RejectedSoftware e.K.
+	Copyright: © 2013-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -80,11 +80,19 @@ import std.encoding : sanitize;
 		query/form fields, the following rules are applied:
 
 		$(UL
-			$(LI An array of values is mapped to
+			$(LI A dynamic array of values is mapped to
 				`<parameter_name>_<index>`, where `index`
-				denotes the zero based index of the array entry. The length
-				of the array is determined by searching for the first
-				non-existent index in the set of form fields.)
+				denotes the zero based index of the array entry. Any missing
+				indexes will be left as their `init` value. Arrays can also be
+				passed without indexes using the name `<parameter_name>_`. They
+				will be added in the order they appear in the form data or
+				query. Mixed styles can also be used, non-indexed elements will
+				be used to fill in missing indexes, or appended if no missing
+				index exists. Duplicate indexes are ignored)
+			$(LI A static array of values is mapped identically to dynamic
+				arrays, except that all elements must be present in the query
+				or form data, and indexes or non-indexed data beyond the size
+				of the array is ignored.)
 			$(LI $(D Nullable!T) typed parameters, as well as parameters with
 				default values, are optional parameters and are allowed to be
 				missing in the set of form fields. All other parameter types
@@ -102,7 +110,9 @@ import std.encoding : sanitize;
 				a static $(D fromStringValidate) method, a static $(D fromString)
 				method, using $(D std.conv.to!T).)
 			$(LI Any of these rules can be applied recursively, so that it is
-				possible to nest arrays and structs appropriately.)
+				possible to nest arrays and structs appropriately. Note that
+				non-indexed arrays used recursively will be ignored because of
+				the nature of that mechanism.)
 		)
 
 	Special_parameters:
@@ -137,6 +147,9 @@ import std.encoding : sanitize;
 		The `@path` attribute can also be applied to the class itself, in which
 		case it will be used as an additional prefix to the one in
 		`WebInterfaceSettings.urlPrefix`.
+
+		The $(D @nestedNameStyle) attribute can be applied only to the class
+		itself. Applying it to a method is not supported at this time.
 
 	Supported return types:
 		$(UL
@@ -462,7 +475,7 @@ in
 {
 	assert(100 <= statusCode && statusCode < 600);
 }
-body
+do
 {
 	getRequestContext().res.statusCode = statusCode;
 }
@@ -717,7 +730,8 @@ unittest {
 	}
 }
 
-/** Determines how nested D fields/array entries are mapped to form field names.
+/** Determines how nested D fields/array entries are mapped to form field
+ * names. Note that this attribute only works if applied to the class.
 */
 NestedNameStyleAttribute nestedNameStyle(NestedNameStyle style)
 {
@@ -735,7 +749,7 @@ unittest {
 	@nestedNameStyle(NestedNameStyle.d)
 	class MyService {
 		// expects fields in D native style:
-		// "items.entries[0]", "items.entries[1]", ...
+		// "items.entries[0]", "items.entries[1]", "items.entries[]", ...
 		void postItems(Items items)
 		{
 
@@ -963,9 +977,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, errnfo);
 				return;
 			} else {
-				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling field '"~err.field~"': "~err.text);
-				hex.debugMessage = err.debugText;
-				throw hex;
+				throw new HTTPStatusException(HTTPStatus.badRequest, "Error handling field '"~err.field~"': "~err.text);
 			}
 		}
 	}

@@ -1,7 +1,7 @@
 /**
 	HTTP (reverse) proxy implementation
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -166,7 +166,7 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 
 			// special case for empty response bodies
 			if ("Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HTTPMethod.HEAD) {
-				foreach (key, ref value; cres.headers)
+				foreach (key, ref value; cres.headers.byKeyValue)
 					if (icmp2(key, "Connection") != 0)
 						res.headers[key] = value;
 				res.writeVoidBody();
@@ -177,7 +177,7 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 			// (Squid and some other proxies)
 			if (res.httpVersion == HTTPVersion.HTTP_1_0 && ("Transfer-Encoding" in cres.headers || "Content-Length" !in cres.headers)) {
 				// copy all headers that may pass from upstream to client
-				foreach (n, ref v; cres.headers)
+				foreach (n, ref v; cres.headers.byKeyValue)
 					if (n !in non_forward_headers_map)
 						res.headers[n] = v;
 
@@ -192,7 +192,7 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 			// to perform a verbatim copy of the client response
 			if ("Content-Length" in cres.headers) {
 				if ("Content-Encoding" in res.headers) res.headers.remove("Content-Encoding");
-				foreach (key, ref value; cres.headers)
+				foreach (key, ref value; cres.headers.byKeyValue)
 					if (icmp2(key, "Connection") != 0)
 						res.headers[key] = value;
 				auto size = cres.headers["Content-Length"].to!size_t();
@@ -204,7 +204,7 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 
 			// fall back to a generic re-encoding of the response
 			// copy all headers that may pass from upstream to client
-			foreach (n, ref v; cres.headers)
+			foreach (n, ref v; cres.headers.byKeyValue)
 				if (n !in non_forward_headers_map)
 					res.headers[n] = v;
 			if (res.isHeadResponse) res.writeVoidBody();

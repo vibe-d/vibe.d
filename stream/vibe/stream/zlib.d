@@ -1,7 +1,7 @@
 /**
 	Zlib input/output streams
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2013 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -385,7 +385,7 @@ class ZlibInputStream : InputStream {
 			if (ret == Z_STREAM_END) {
 				m_finished = true;
 				zlibEnforce(() @trusted { return inflateEnd(&m_zstream); }());
-				assert(m_in.empty, "Input expected to be empty at this point.");
+				enforce(m_in.empty, "Extra data after end of compressed input.");
 				return;
 			}
 		}

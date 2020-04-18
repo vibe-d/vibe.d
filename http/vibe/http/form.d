@@ -1,7 +1,7 @@
 /**
 	Convenience functions for working with web forms.
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	Copyright: © 2012-2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -116,6 +116,7 @@ unittest {
 	Writes a `vibe.http.client.HTTPClientRequest` body as URL encoded form data.
 
 	Params:
+	  req  = Request object to write to.
 	  form = range of `t = Tuple!(string, string)`,
 			 where `t[0]` is the name and `t[1]` the
 			 value of a form entry.

@@ -1,7 +1,7 @@
 /**
 	Standard I/O streams
 
-	Copyright: © 2014 RejectedSoftware e.K.
+	Copyright: © 2014 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Eric Cornelius
 */
@@ -47,6 +47,8 @@ class StdFileStream : ConnectionStream {
 			m_writeThread.start();
 		}
 	}
+
+	@property std.stdio.File stdFile() { return m_file; }
 
 	override @property bool empty() { enforceReadable(); return m_readPipe.empty; }
 

@@ -26,8 +26,8 @@ USER_ID=$(dscl . -read /Users/_www UniqueID | sed "s/[^:]*: //")
 GROUP_ID=$(dscl . -read /Groups/_www PrimaryGroupID | sed "s/[^:]*: //")
 mkdir -p $(dirname $CONFIG_FILE)
 echo -e '{
-	"uid": '$USER_ID',
-	"gid": '$GROUP_ID'
+	"uid": "'$USER_ID'",
+	"gid": "'$GROUP_ID'"
 }' >$CONFIG_FILE
 
 # if everything went fine

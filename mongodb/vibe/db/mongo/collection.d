@@ -1,7 +1,7 @@
 /**
 	MongoCollection class
 
-	Copyright: © 2012-2016 RejectedSoftware e.K.
+	Copyright: © 2012-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -73,7 +73,7 @@ struct MongoCollection {
 	/**
 	  Performs an update operation on documents matching 'selector', updating them with 'update'.
 
-	  Throws: Exception if a DB communication error occured.
+	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Updating)
 	 */
 	void update(T, U)(T selector, U update, UpdateFlags flags = UpdateFlags.None)
@@ -92,7 +92,7 @@ struct MongoCollection {
 	  automatically. If you need to know the IDs of the inserted documents,
 	  you need to generate them locally.
 
-	  Throws: Exception if a DB communication error occured.
+	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Inserting)
 	 */
 	void insert(T)(T document_or_documents, InsertFlags flags = InsertFlags.None)
@@ -132,7 +132,7 @@ struct MongoCollection {
 			when no document matched. For types R that are not Bson, the returned value is either
 			of type $(D R), or of type $(Nullable!R), if $(D R) is not a reference/pointer type.
 
-		Throws: Exception if a DB communication error or a query error occured.
+		Throws: Exception if a DB communication error or a query error occurred.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	 */
 	auto findOne(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None)
@@ -162,7 +162,7 @@ struct MongoCollection {
 	/**
 	  Removes documents from the collection.
 
-	  Throws: Exception if a DB communication error occured.
+	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Removing)
 	 */
 	void remove(T)(T selector, DeleteFlags flags = DeleteFlags.None)
@@ -262,7 +262,7 @@ struct MongoCollection {
 	/**
 		Counts the results of the specified query expression.
 
-		Throws Exception if a DB communication error occured.
+		Throws Exception if a DB communication error occurred.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQueries-{{count%28%29}})
 	*/
 	ulong count(T)(T query)
@@ -300,7 +300,7 @@ struct MongoCollection {
 			value is either a single `Bson` array value or a `MongoCursor`
 			(input range) of the requested document type.
 
-		Throws: Exception if a DB communication error occured
+		Throws: Exception if a DB communication error occurred.
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/db.collection.aggregate)
 	*/
@@ -373,7 +373,7 @@ struct MongoCollection {
 			args ~= serializeToBson(["$sort": ["total": -1]]);
 
 			AggregateOptions options;
-			options.cursor.batchSize = 10; // prefetch the first 10 results
+			options.cursor.batchSize = 10; // pre-fetch the first 10 results
 			auto results = db["coll"].aggregate(args, options);
 		}
 	}
@@ -469,6 +469,7 @@ struct MongoCollection {
 		if (flags & IndexFlags.expireAfterSeconds) doc["expireAfterSeconds"] = expire_time.total!"seconds";
 		database["system.indexes"].insert(doc);
 	}
+
 	/// ditto
 	deprecated("Use the overload taking an array of field_orders instead.")
 	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.none, ulong expireAfterSeconds = 0)
@@ -479,6 +480,9 @@ struct MongoCollection {
 		ensureIndex(orders, flags, expireAfterSeconds.seconds);
 	}
 
+	/**
+		Drops or removes the specified index from the collection.
+	*/
 	void dropIndex(string name)
 	@safe {
 		static struct CMD {
@@ -493,6 +497,47 @@ struct MongoCollection {
 		enforce(reply["ok"].get!double == 1, "dropIndex command failed: "~reply["errmsg"].opt!string);
 	}
 
+	/**
+		Creates indexes on the collection.
+	*/
+	void createIndex(T)(T query) 
+	@safe {
+		static struct Indexes {
+			T key;
+		}
+
+		static struct CMD {
+			string createIndexes;
+			Indexes indexes;
+		}
+
+		CMD cmd;
+		cmd.createIndexes = m_name;
+		cmd.indexes.key = query;
+		auto reply = database.runCommand(cmd);
+		enforce(reply["ok"].get!double == 1, "createIndex command failed: "~reply["errmsg"].opt!string);
+	}
+
+	/**
+		Returns an array that holds a list of documents that identify and describe the existing indexes on the collection. 
+	*/
+	MongoCursor!R getIndexes(T = Bson, R = Bson)() 
+	@safe {
+		static struct CMD {
+			string listIndexes;
+		}
+
+		CMD cmd;
+		cmd.listIndexes = m_name;
+
+		auto reply = database.runCommand(cmd);
+		enforce(reply["ok"].get!double == 1, "getIndexes command failed: "~reply["errmsg"].opt!string);
+		return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
+	}
+
+	/**
+		Removes a collection or view from the database. The method also removes any indexes associated with the dropped collection.
+	*/
 	void drop()
 	@safe {
 		static struct CMD {
@@ -603,7 +648,7 @@ struct ReadConcern {
 }
 
 /**
-  Collation allows users to specify language-specific rules for string comparison, such as rules for lettercase and accent marks.
+  Collation allows users to specify language-specific rules for string comparison, such as rules for letter-case and accent marks.
 
   See_Also: $(LINK https://docs.mongodb.com/manual/reference/collation/)
  */

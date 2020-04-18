@@ -1,8 +1,0 @@
-{
-    "name": "tests",
-    "description": "TCP proxy test",
-    "dependencies": {
-        "vibe-d": {"version": "~master", "path": "../../"}
-    },
-    "versions": ["VibeCustomMain"]
-}

@@ -3,6 +3,7 @@
 vibe_utils_src_dir = include_directories('.')
 
 vibe_utils_src = [
+    'vibe/internal/exception.d',
     'vibe/internal/memory_legacy.d',
     'vibe/internal/meta/all.d',
     'vibe/internal/meta/codegen.d',

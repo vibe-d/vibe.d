@@ -1,8 +1,0 @@
-{
-    "name": "tests",
-    "description": "High level MongoDB test for vibe.d",
-    "dependencies": {
-        "vibe-d:mongodb": {"path": "../../"}
-    },
-    "versions": ["VibeCustomMain"]
-}

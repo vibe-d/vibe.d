@@ -26,6 +26,7 @@ import std.typecons : Nullable;
 @rootPathFromName
 interface Example1API
 {
+	@safe:
 	/* Default convention is based on camelCase
 	 */
 
@@ -44,7 +45,7 @@ interface Example1API
 	int postSum(int a, int b);
 
 	/* @property getters are always GET. @property setters are always PUT.
-	 * All supported convention prefixes are documentated : http://vibed.org/api/vibe.web.rest/registerRestInterface
+	 * All supported convention prefixes are documentated : https://vibed.org/api/vibe.web.rest/registerRestInterface
 	 * Rather obvious and thus omitted in this example interface.
 	 */
 	@property string getter();
@@ -52,6 +53,7 @@ interface Example1API
 
 class Example1 : Example1API
 {
+	@safe:
 	override: // usage of this handy D feature is highly recommended
 		string getSomeInfo()
 		{
@@ -90,6 +92,7 @@ unittest
 @rootPathFromName
 interface Example2API
 {
+	@safe:
 	// Any D data type may be here. Serializer is not configurable and will send all declared fields.
 	// This should be an API-specified type and may or may not be the same as data type used by other application code.
 	struct Aggregate
@@ -116,6 +119,7 @@ interface Example2API
 
 class Example2 : Example2API
 {
+	@safe:
 	override:
 		Aggregate queryAccumulateAll(Aggregate[] input)
 		{
@@ -146,6 +150,7 @@ unittest
 @rootPathFromName
 interface Example3API
 {
+	@safe:
 	/* Available under ./nested_module/
 	 */
 	@property Example3APINested nestedModule();
@@ -159,6 +164,7 @@ interface Example3API
 
 interface Example3APINested
 {
+	@safe:
 	/* In this example it will be available under "GET /nested_module/number"
 	 * But this interface does't really know it, it does not care about exact path
 	 *
@@ -170,6 +176,7 @@ interface Example3APINested
 
 class Example3 : Example3API
 {
+	@safe:
 	private:
 		Example3Nested m_nestedImpl;
 
@@ -193,6 +200,7 @@ class Example3 : Example3API
 
 class Example3Nested : Example3APINested
 {
+	@safe:
 	override:
 		int getNumber(int def_arg)
 		{
@@ -217,6 +225,7 @@ unittest
 @rootPathFromName
 interface Example4API
 {
+	@safe:
 	/* vibe.web.rest module provides two pre-defined UDA - @path and @method
 	 * You can use any one of those or both. In case @path is used, not method style
 	 * adjustment is made.
@@ -241,6 +250,7 @@ interface Example4API
 
 class Example4 : Example4API
 {
+	@safe:
 	override:
 		void myNameDoesNotMatter()
 		{
@@ -287,13 +297,14 @@ unittest
 @rootPathFromName
 interface Example5API
 {
+	@safe:
 	import vibe.web.rest : before, after;
 
 	@before!authenticate("user") @after!addBrackets()
 	string getSecret(int num, User user);
 }
 
-User authenticate(HTTPServerRequest req, HTTPServerResponse res)
+User authenticate(HTTPServerRequest req, HTTPServerResponse res) @safe
 {
 	return User("admin", true);
 }
@@ -304,13 +315,15 @@ struct User
 	bool authorized;
 }
 
-string addBrackets(string result, HTTPServerRequest, HTTPServerResponse)
+string addBrackets(string result, HTTPServerRequest, HTTPServerResponse) @safe
 {
 	return "{" ~ result ~ "}";
 }
 
 class Example5 : Example5API
 {
+	@safe:
+	override:
 	string getSecret(int num, User user)
 	{
 		import std.conv : to;
@@ -358,6 +371,7 @@ unittest
 @rootPathFromName
 interface Example6API
 {
+	@safe:
 	// The first parameter of @headerParam is the identifier (must match one of the parameter name).
 	// The second is the name of the field in the header, such as "Accept", "Content-Type", "User-Agent"...
 	@headerParam("auth", "Authorization")
@@ -392,7 +406,8 @@ interface Example6API
 
 class Example6 : Example6API
 {
-override:
+	@safe:
+	override:
 	string getPortal(string auth, ref string tester,
 					 out Nullable!string www)
 	{
@@ -443,12 +458,16 @@ unittest
 
 @rootPathFromName
 interface Example7API {
+	@safe:
 	// GET /example7_api/
 	// returns a custom JSON response
 	Json get();
 }
 
 class Example7 : Example7API {
+	@safe:
+	override:
+
 	Json get()
 	{
 		return serializeToJson(["foo": 42, "bar": 13]);

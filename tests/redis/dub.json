@@ -3,6 +3,5 @@
     "description": "High level Redis test for vibe.d",
     "dependencies": {
         "vibe-d:redis": {"path": "../../"}
-    },
-    "versions": ["VibeCustomMain"]
+    }
 }

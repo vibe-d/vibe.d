@@ -2,70 +2,55 @@ platform: x64
 environment:
  matrix:
   - DC: dmd
-    DVersion: 2.080.0
+    DVersion: 2.091.0
     arch: x64
-    config: vibe-core
   - DC: dmd
-    DVersion: 2.080.0
+    DVersion: 2.091.0
     arch: x86_mscoff
-    config: vibe-core
   - DC: dmd
-    DVersion: 2.080.0
+    DVersion: 2.091.0
     arch: x86
-    config: win32
   - DC: dmd
-    DVersion: 2.079.1
-    arch: x86
-    config: win32
+    DVersion: 2.090.1
+    arch: x64
   - DC: dmd
-    DVersion: 2.078.3
+    DVersion: 2.089.1
+    arch: x86_mscoff
+  - DC: dmd
+    DVersion: 2.088.1
     arch: x86
-    config: win32
   - DC: dmd
     DVersion: 2.077.1
     arch: x86_mscoff
-    config: win32
-  - DC: dmd
-    DVersion: 2.076.1
-    arch: x86_mscoff
-    config: win32
-  - DC: dmd
-    DVersion: 2.075.1
-    arch: x86_mscoff
-    config: win32
-  - DC: dmd
-    DVersion: 2.074.1
-    arch: x86_mscoff
-    config: win32
   - DC: ldc
-    DVersion: 1.9.0
+    DVersion: 1.20.1
     arch: x86
-    config: vibe-core
   - DC: ldc
-    DVersion: 1.8.0
+    DVersion: 1.19.0
+    arch: x86
+  - DC: ldc
+    DVersion: 1.18.0
     arch: x64
-    config: vibe-core
+  - DC: ldc
+    DVersion: 1.17.0
+    arch: x86
+  - DC: ldc
+    DVersion: 1.16.0
+    arch: x86
   - DC: ldc
     DVersion: 1.7.0
     arch: x64
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.6.0
-    arch: x64
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.5.0
-    arch: x86
-    config: vibe-core
-  - DC: ldc
-    DVersion: 1.4.0
-    arch: x64
-    config: vibe-core
+
+# produces an Optlink failure
+matrix:
+  allow_failures:
+    - DC: dmd
+      DVersion: 2.091.0
+      arch: x86
 
 branches:
   only:
     - master
-    - 0.7.x
 skip_tags: true
 
 services:
@@ -159,15 +144,15 @@ test_script:
  - '%DC% --version'
  - dub test :utils --arch=%Darch% --compiler=%DC%
  - dub test :data --arch=%Darch% --compiler=%DC%
- - dub test :core --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :stream --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :crypto --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :tls --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :textfilter --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :inet --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :mail --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :http --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :mongodb --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :redis --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :web --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :core --arch=%Darch% --compiler=%DC%
+ - dub test :stream --arch=%Darch% --compiler=%DC%
+ - dub test :crypto --arch=%Darch% --compiler=%DC%
+ - dub test :tls --arch=%Darch% --compiler=%DC%
+ - dub test :textfilter --arch=%Darch% --compiler=%DC%
+ - dub test :inet --arch=%Darch% --compiler=%DC%
+ - dub test :mail --arch=%Darch% --compiler=%DC%
+ - dub test :http --arch=%Darch% --compiler=%DC%
+ - dub test :mongodb --arch=%Darch% --compiler=%DC%
+ - dub test :redis --arch=%Darch% --compiler=%DC%
+ - dub test :web --arch=%Darch% --compiler=%DC%
  - echo TODO - run the test suite

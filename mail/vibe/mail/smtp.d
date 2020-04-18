@@ -1,7 +1,7 @@
 /**
 	SMTP client implementation
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	Copyright: © 2012-2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -211,7 +211,7 @@ void sendMail(in SMTPClientSettings settings, Mail mail)
 
 	conn.write("DATA\r\n");
 	expectStatus(conn, SMTPStatus.startMailInput, "DATA");
-	foreach (name, value; mail.headers) {
+	foreach (name, value; mail.headers.byKeyValue) {
 		conn.write(name~": "~value~"\r\n");
 	}
 	conn.write("\r\n");

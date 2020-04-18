@@ -3,7 +3,7 @@
 
 	Note that the API is still subject to change!
 
-	Copyright: © 2014 RejectedSoftware e.K.
+	Copyright: © 2014 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -383,7 +383,7 @@ struct RedisHash(T = string) {
 	{
 		import std.typecons;
 		auto ret = m_db.hget!(Nullable!string)(m_key, field);
-		return ret.isNull ? def_value : ret.fromRedis!T;
+		return ret.isNull ? def_value : ret.get().fromRedis!T;
 	}
 
 	bool setIfNotExist(string field, T value)

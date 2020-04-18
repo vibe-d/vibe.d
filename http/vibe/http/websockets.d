@@ -2,7 +2,7 @@
 	Implements WebSocket support and fallbacks for older browsers.
 
 	Standards: $(LINK2 https://tools.ietf.org/html/rfc6455, RFC6455)
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2014 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger
 */
@@ -80,54 +80,26 @@ class WebSocketException: Exception
 	}
 }
 
-/**
-	Returns a WebSocket client object that is connected to the specified host.
+/** Establishes a WebSocket connection at the specified endpoint.
 */
-WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = defaultSettings)
+WebSocket connectWebSocketEx(URL url,
+	scope void delegate(scope HTTPClientRequest) @safe request_modifier,
+	const(HTTPClientSettings) settings = defaultSettings)
 @safe {
-	import std.typecons : Tuple, tuple;
-
-	auto host = url.host;
-	auto port = url.port;
-	bool use_tls = (url.schema == "wss") ? true : false;
-
-	if (port == 0)
-		port = (use_tls) ? 443 : 80;
-
-	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
-	static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
-	auto   ckey = ConnInfo(host, port, use_tls, settings ? settings.proxyURL.host : null, settings ? settings.proxyURL.port : 0);
-
-	ConnectionPool!HTTPClient pool;
-	foreach (c; s_connections)
-		if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && (settings is null || (c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port)))
-			pool = c[1];
-
-	if (!pool)
-	{
-		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, (settings) ? settings.proxyURL.host : string.init, (settings) ? settings.proxyURL.port : 0);
-		pool = new ConnectionPool!HTTPClient({
-			auto ret = new HTTPClient;
-			ret.connect(host, port, use_tls, settings);
-			return ret;
-		});
-		if (s_connections.full)
-			s_connections.popFront();
-		s_connections.put(tuple(ckey, pool));
-	}
+	const use_tls = (url.schema == "wss" || url.schema == "https") ? true : false;
+	url.schema = use_tls ? "https" : "http";
 
 	auto rng = secureRNG();
 	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
-	auto cl = pool.lockConnection();
-	auto res = cl.request((scope req){
-		req.requestURL = (url.localURI == "") ? "/" : url.localURI;
+	auto res = requestHTTP(url, (scope req){
 		req.method = HTTPMethod.GET;
 		req.headers["Upgrade"] = "websocket";
 		req.headers["Connection"] = "Upgrade";
 		req.headers["Sec-WebSocket-Version"] = "13";
 		req.headers["Sec-WebSocket-Key"] = challengeKey;
-	});
+		request_modifier(req);
+	}, settings);
 
 	enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
 
@@ -135,14 +107,16 @@ WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = default
 	enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 	enforce(*key == answerKey, "Response has wrong accept key");
 	auto conn = res.switchProtocol("websocket");
-	auto ws = new WebSocket(conn, null, rng);
-	return ws;
+	return new WebSocket(conn, rng, res);
 }
 
 /// ditto
-void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPClientSettings) settings = defaultSettings)
+void connectWebSocketEx(URL url,
+	scope void delegate(scope HTTPClientRequest) @safe request_modifier,
+	scope WebSocketHandshakeDelegate del,
+	const(HTTPClientSettings) settings = defaultSettings)
 @safe {
-	bool use_tls = (url.schema == "wss") ? true : false;
+	const use_tls = (url.schema == "wss" || url.schema == "https") ? true : false;
 	url.schema = use_tls ? "https" : "http";
 
 	/*scope*/auto rng = secureRNG();
@@ -156,6 +130,7 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 			req.headers["Connection"] = "Upgrade";
 			req.headers["Sec-WebSocket-Version"] = "13";
 			req.headers["Sec-WebSocket-Key"] = challengeKey;
+			request_modifier(req);
 		},
 		(scope res) {
 			enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
@@ -163,11 +138,32 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 			enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 			enforce(*key == answerKey, "Response has wrong accept key");
 			res.switchProtocol("websocket", (scope conn) @trusted {
-				scope ws = new WebSocket(conn, null, rng);
+				scope ws = new WebSocket(conn, rng, res);
 				del(ws);
+				if (ws.connected) ws.close();
 			});
-		}
+		},
+		settings
 	);
+}
+
+/// ditto
+WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = defaultSettings)
+@safe {
+	return connectWebSocketEx(url, (scope req) {}, settings);
+}
+/// ditto
+void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPClientSettings) settings = defaultSettings)
+@safe {
+	connectWebSocketEx(url, (scope req) {}, del, settings);
+}
+/// ditto
+void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
+@system {
+	connectWebSocket(url, (scope ws) nothrow {
+		try del(ws);
+		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
+	}, settings);
 }
 /// Scheduled for deprecation - use a `@safe` callback instead.
 void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system nothrow del, const(HTTPClientSettings) settings = defaultSettings)
@@ -177,14 +173,6 @@ void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system noth
 /// Scheduled for deprecation - use a `nothrow` callback instead.
 void connectWebSocket(URL url, scope void delegate(scope WebSocket) @safe del, const(HTTPClientSettings) settings = defaultSettings)
 @safe {
-	connectWebSocket(url, (scope ws) nothrow {
-		try del(ws);
-		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
-	}, settings);
-}
-/// ditto
-void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
-@system {
 	connectWebSocket(url, (scope ws) nothrow {
 		try del(ws);
 		catch (Exception e) logWarn("WebSocket handler failed: %s", e.msg);
@@ -233,7 +221,7 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	res.headers["Connection"] = "Upgrade";
 	ConnectionStream conn = res.switchProtocol("websocket");
 
-	WebSocket socket = new WebSocket(conn, req, null);
+	WebSocket socket = new WebSocket(conn, req, res);
 	try {
 		on_handshake(socket);
 	} catch (Exception e) {
@@ -309,7 +297,7 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 		res.headers["Connection"] = "Upgrade";
 		res.switchProtocol("websocket", (scope conn) {
 			// TODO: put back 'scope' once it is actually enforced by DMD
-			/*scope*/ auto socket = new WebSocket(conn, req, null);
+			/*scope*/ auto socket = new WebSocket(conn, req, res);
 			try on_handshake(socket);
 			catch (Exception e) {
 				logDiagnostic("WebSocket handler failed: %s", e.msg);
@@ -527,7 +515,10 @@ final class WebSocket {
 		bool m_sentCloseFrame = false;
 		IncomingWebSocketMessage m_nextMessage = null;
 		const HTTPServerRequest m_request;
+		HTTPServerResponse m_serverResponse;
+		HTTPClientResponse m_clientResponse;
 		Task m_reader;
+		Task m_ownerTask;
 		InterruptibleTaskMutex m_readMutex, m_writeMutex;
 		InterruptibleTaskCondition m_readCondition;
 		Timer m_pingTimer;
@@ -547,12 +538,15 @@ final class WebSocket {
 	 *	 conn = Underlying connection string
 	 *	 request = HTTP request used to establish the connection
 	 *	 rng = Source of entropy to use.  If null, assume we're a server socket
+	 *   client_res = For client sockets, the response object (keeps the http client locked until the socket is done)
 	 */
-	private this(ConnectionStream conn, in HTTPServerRequest request,
-				 RandomNumberStream rng)
+	private this(ConnectionStream conn, in HTTPServerRequest request, HTTPServerResponse server_res, RandomNumberStream rng, HTTPClientResponse client_res)
 	{
+		m_ownerTask = Task.getThis();
 		m_conn = conn;
 		m_request = request;
+		m_clientResponse = client_res;
+		m_serverResponse = server_res;
 		assert(m_conn);
 		m_rng = rng;
 		m_writeMutex = new InterruptibleTaskMutex;
@@ -567,6 +561,16 @@ final class WebSocket {
 		});
 	}
 
+	private this(ConnectionStream conn, RandomNumberStream rng, HTTPClientResponse client_res)
+	{
+		this(conn, null, null, rng, client_res);
+	}
+
+	private this(ConnectionStream conn, in HTTPServerRequest request, HTTPServerResponse res)
+	{
+		this(conn, request, res, null, null);
+	}
+
 	/**
 		Determines if the WebSocket connection is still alive and ready for sending.
 
@@ -576,7 +580,7 @@ final class WebSocket {
 
 		See_also: $(D waitForData)
 	*/
-	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
+	@property bool connected() { return m_conn && m_conn.connected && !m_sentCloseFrame; }
 
 	/**
 		Returns the close code sent by the remote end.
@@ -713,15 +717,38 @@ final class WebSocket {
 			reason = reason[0 .. min($, 123)];
 
 		if (connected) {
-			send((scope msg) {
-				m_sentCloseFrame = true;
-				if (code != 0)
-					msg.write(std.bitmanip.nativeToBigEndian(code));
-					msg.write(cast(const ubyte[])reason);
+			try {
+				send((scope msg) {
+					m_sentCloseFrame = true;
+					if (code != 0) {
+						msg.write(std.bitmanip.nativeToBigEndian(code));
+						msg.write(cast(const ubyte[])reason);
+					}
 				}, FrameOpcode.close);
+			} catch (Exception e) {
+				logDiagnostic("Failed to send active web socket close frame: %s", e.msg);
+			}
 		}
 		if (m_pingTimer) m_pingTimer.stop();
-		if (Task.getThis() != m_reader) m_reader.join();
+
+
+		if (Task.getThis() == m_ownerTask) {
+			m_writeMutex.performLocked!({
+				if (m_clientResponse) {
+					m_clientResponse.disconnect();
+					m_clientResponse = HTTPClientResponse.init;
+				}
+				if (m_serverResponse) {
+					m_serverResponse.finalize();
+					m_serverResponse = HTTPServerResponse.init;
+				}
+			});
+
+			m_reader.join();
+
+			() @trusted { destroy(m_conn); } ();
+			m_conn = ConnectionStream.init;
+		}
 	}
 
 	/**
@@ -774,7 +801,10 @@ final class WebSocket {
 	private void startReader()
 	{
 		m_readMutex.performLocked!({}); //Wait until initialization
-		scope (exit) m_readCondition.notifyAll();
+		scope (exit) {
+			m_conn.close();
+			m_readCondition.notifyAll();
+		}
 		try {
 			while (!m_conn.empty) {
 				assert(!m_nextMessage);
@@ -811,7 +841,6 @@ final class WebSocket {
 
 						if(!m_sentCloseFrame) close();
 						logDebug("Terminating connection (%s)", m_sentCloseFrame);
-						m_conn.close();
 						return;
 					case FrameOpcode.text:
 					case FrameOpcode.binary:
@@ -832,7 +861,6 @@ final class WebSocket {
 		// If no close code was passed, e.g. this was an unclean termination
 		//  of our websocket connection, set the close code to 1006.
 		if (this.m_closeCode == 0) this.m_closeCode = WebSocketCloseReason.abnormalClosure;
-		m_writeMutex.performLocked!({ m_conn.close(); });
 	}
 
 	private void sendPing()
@@ -840,7 +868,7 @@ final class WebSocket {
 		try {
 			if (!m_pongReceived) {
 				logDebug("Pong skipped. Closing connection.");
-				m_writeMutex.performLocked!({ m_conn.close(); });
+				close();
 				m_pingTimer.stop();
 				return;
 			}

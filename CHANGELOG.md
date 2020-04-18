@@ -1,8 +1,175 @@
 ﻿Changelog
 =========
 
+v0.9.0 - 2020-01-
+-------------------
+
+Removes all legacy drivers (libevent, win32, libasync) and fully relies on
+vibe-core instead.
+
+- Removed all legacy vibe-d:core drivers (libevent, libasync, win32) - vibe-core is the only core implementation now
+- Updated OpenSSL Windows binaries to 1.1.1d - [pull #2395][issue2395]
+- Fixed OpenSSL linking on macOS Catalina - [pull #2379][issue2379]
+- Enabled the manual "openssl-1.1" configuration on Windows - [pull #2392][issue2392]
+- Added `RedisClient.removeUnusedConnections` (by Steven Schveighoffer) - [pull #2372][issue2372]
+- Removed unnecessary HTML attribues from ":css" and ":javascript" Diet filters (by Beyarz) - [pull #2384][issue2384]
+- Added `connectWebSocketEx` to allow customizing the initial HTTP request - [pull #2390][issue2390]
+- Allow LF newlines in addition to CRLF in `parseRFC5322Header` to make it more robust outside of the standard (by Tomáš Chaloupka) - [pull #2362][issue2362]
+- Removed the deprecated simple password hash functions and deprecated the `vibe.crypto.passwordhash` module (by Hiroki Noda aka kubo39) - [pull #2365][issue2365]
+- Informational replies are handled properly in the HTTP client (by Tomáš Chaloupka) - [pull #2352][issue2352]
+
+- Fixed `connectWebSocket` to actually use the supplied `settings` parameter - [pull #2390][issue2390]
+- Fixed a malformed WebSocket close packet and handles disconnect errors gracefully (by v1ne) - [pull #2337][issue2337]
+- Fixed a possible WebSocket connection leak in case of read errors (by Benjamin Schaaf) - [pull #2364][issue2364]
+
+
+v0.8.6 - 2019-10-03
+-------------------
+
+Officially deprecates the old libevent based core module and updates compiler
+support to the latest versions. This release contains a number of small
+features, bug fixes, as well as improving the default HTTP session cookie
+security.
+
+### Features and improvements ###
+
+- Updated compiler support for DMD 2.087.1 and LDC 1.17.0 - [pull #2312][issue2312], [pull #2330][issue2330]
+- Officially deprecated the old vibe-d:core module - it is scheduled for removal in January 2020
+- Added `ConnectionPool.removeUnused` to enable closing all unused connections - [issue vibe-core/#101][issue-vibe-core-101], [pull #2287][issue2287]
+    - All keep-alive connections of the global HTTP client pool are now disconnected at thread shutdown
+    - Added `MongoClient.cleanupConnections`
+- HTTP client/server
+	- Added `Cookie.sameSite` property and `SessionOption.noSameSiteStrict`, defaulting to "same-site" (by Sebastian Wilzbach) - [pull #2297][issue2297]
+	- Added `HTTPServerSettings.sessionOptions` (by Sebastian Wilzbach) - [pull #2299][issue2299]
+	- Extended caching support for HTTP (file) serving (by Jan Jurzitza aka WebFreak001) - [pull #2300][issue2300]
+	- Added `HTTPClientSettings.readTimeout` (by Denis Feklushkin aka denizzzka) - [pull #2344][issue2344]
+	- Added `HTTPClientSettings.connectTimeout` - [pull #2347][issue2347]
+- Added support for "Markdown Extra"-like class/id attribute annotations in the Markdown parser - [pull #2356][issue2356]
+- Added functionality to portably convert from `URL` to `NativePath` and back - [pull #2285][issue2285]
+- Changed the serialization framework to work with `auto ref` arguments, enabling serialization of non-copyable types (by Tomáš Chaloupka) - [pull #2275][issue2275]
+- Reduced hashing overhead in `HashMap!T` for built-in types (by Nathan Sashihara aka n8sh) - [pull #2291][issue2291]
+- Added `TCPListenOptions.reuseAddress`, enabled by default (by Radu Ricariu) - [pull #2303][issue2303]
+- Enabled Unix socket support for vibe-core builds (by Benjamin Schaaf) - [pull #2316][issue2316]
+- Annotated `URL` constructors `pure` and `nothrow` (by Denis Feklushkin aka denizzzka) - [issue #2322][issue2322], [pull #2351][issue2351]
+- Added "application/wasm" mime type to the HTTP server (by Hiroki Noda aka kubo39) - [pull #2375][issue2375]
+
+### Bug fixes ###
+
+- Fixed the macOS setup script to properly write the UID/GID into vibe.conf (by shove) - [pull #2306][issue2306], [issue #2279][issue2279]
+- Fixed an assertion in `ZlibInputStream` to be thrown as a normal `Exception` (by Simon Arneaud) - [pull #2317][issue2317]
+- Fixed detection of malformed URLs not starting with an alphabetic character (by Francesco Galla) - [pull #2308][issue2308]
+- Fixed `connectWebSocket` to work for "wss"/"ws" (by Jan Jurzitza aka WebFreak001) - [pull #2321][issue2321]
+- Fixed `HashMap` to properly work for classes that override `opEquals`+`toHash` (by Nathan Sashihara aka n8sh) - [pull #2292][issue2292]
+- Fixed a resource leak for libevent based `TCPConnection` instances that are not explicitly closed, but reaped by the GC - [pull #2329][issue2329]
+- Fixed the HTTP client to not use chunked encoding by default for HTTP/1.0 connections (by Tomáš Chaloupka) - [pull #2333][issue2333]
+- Fixed an issue in `ConnectionPool` where the pool became unusable after connection failures (by Tomáš Chaloupka) - [pull #2340][issue2340]
+- Fixed "rtsp(s)" URLs to be considered a double-slash style schema (by Tomáš Chaloupka) - [pull #2343][issue2343]
+
+
+[issue2285]: https://github.com/vibe-d/vibe.d/issues/2285
+[issue2287]: https://github.com/vibe-d/vibe.d/issues/2287
+[issue2275]: https://github.com/vibe-d/vibe.d/issues/2275
+[issue2279]: https://github.com/vibe-d/vibe.d/issues/2279
+[issue2291]: https://github.com/vibe-d/vibe.d/issues/2291
+[issue2292]: https://github.com/vibe-d/vibe.d/issues/2292
+[issue2297]: https://github.com/vibe-d/vibe.d/issues/2297
+[issue2299]: https://github.com/vibe-d/vibe.d/issues/2299
+[issue2300]: https://github.com/vibe-d/vibe.d/issues/2300
+[issue2303]: https://github.com/vibe-d/vibe.d/issues/2303
+[issue2306]: https://github.com/vibe-d/vibe.d/issues/2306
+[issue2308]: https://github.com/vibe-d/vibe.d/issues/2308
+[issue2312]: https://github.com/vibe-d/vibe.d/issues/2312
+[issue2316]: https://github.com/vibe-d/vibe.d/issues/2316
+[issue2317]: https://github.com/vibe-d/vibe.d/issues/2317
+[issue2321]: https://github.com/vibe-d/vibe.d/issues/2321
+[issue2322]: https://github.com/vibe-d/vibe.d/issues/2322
+[issue2329]: https://github.com/vibe-d/vibe.d/issues/2329
+[issue2330]: https://github.com/vibe-d/vibe.d/issues/2330
+[issue2333]: https://github.com/vibe-d/vibe.d/issues/2333
+[issue2340]: https://github.com/vibe-d/vibe.d/issues/2340
+[issue2343]: https://github.com/vibe-d/vibe.d/issues/2343
+[issue2344]: https://github.com/vibe-d/vibe.d/issues/2344
+[issue2347]: https://github.com/vibe-d/vibe.d/issues/2347
+[issue2351]: https://github.com/vibe-d/vibe.d/issues/2351
+[issue2356]: https://github.com/vibe-d/vibe.d/issues/2356
+[issue2375]: https://github.com/vibe-d/vibe.d/issues/2375
+[issue-vibe-core-101]: https://github.com/vibe-d/vibe-core/issues/101
+
+
+v0.8.5 - 2019-03-24
+-------------------
+
+This release revamps the OpenSSL 1.1 support, new support for index-less form
+array fields, and of course a number of bug fixes as well as smaller additions.
+
+### Features and improvements ###
+
+- The TLS package was updated to use OpenSSL 1.1.x by default - [pull #2190][issue2190]
+    - Using OpenSSL 1.1.0a on Windows
+    - Auto-detecting the OpenSSL version on Posix systems, falling back to 1.1.x if that fails (by Sebastian Wilzbach) - [issue #2053][issue2053]
+    - The exact version can still be pre-selected using the build configuration of "vibe-d:tls"
+- Compiles on DMD 2.076.1 up to 2.085.0 and LDC 1.14.0
+- Added support for OpenSSL 1.1.1 (by Jan Jurzitza aka WebFreak001) - [issue #2214][issue2214], [pull #2226][issue2226]
+- `URL.port` now returns the value of `defaultPort`, if no explicit port was specified (by Szabo Bogdan aka gedaiu) - [pull #2176][issue2176]
+- Changed `Bson.opEquals` to yield true for objects with the same fields but different field order (by Igor Stepanov) - [pull #2183][issue2183]
+- Removed the DNS lookup cache from the libevent driver (by Márcio Martins) - [pull #2257][issue2257]
+- Added an overload of `serveRestJSClient` that uses server-relative URIs (by Oleg B. aka deviator) - [issue #2222][issue2222], [pull #2223][issue2223]
+- Added `StdFileStream.stdFile` property (by Benjamin Schaaf) - [pull #2248][issue2248]
+- `vibe.web.common.WebParamAttribute` and `PathAttribute` are now public for external introspection purposes (by Robert Schadek) - [pull #2250][issue2250], [pull #2263][issue2263]
+- Added an overload of `BsonDate.toSysTime` taking a time zone (by Jan Jurzitza aka WebFreak001) - [pull #2252][issue2252]
+- Added `MemoryStream.truncate` and enable `seek` to be used to grow the stream size - [pull #2251][issue2251]
+- Array parameters for the web interface generator can now be sent as form parameters without explicit index (by Steven Schveighoffer) - [pull #2247][issue2247]
+- `vibe.utils.hashmap.HashMap` now supports singleton allocators without an object wrapper - [pull #2236][issue2236]
+
+### Bug fixes ###
+
+- Fixed `RestInterfaceSettings.dup` to properly duplicate the `httpClientSettings` field (by Vitali Karabitski aka vitalka200)- [pull #2197][issue2197]
+- Fixed a compile error in `Bson.get!BsonRegex` (by Tuukka Kurtti aka Soletek) - [pull #2224][issue2224]
+- Fixed host name string conversion for `SyslogLogger` (by Tomáš Chaloupka) - [pull #2220][issue2220]
+- Fixed invalid ALPN string conversion in `OpenSSLStream` (by Francesco Galla) - [issue #2235][issue2235], [pull #2235][issue2235]
+- Fixed a null pointer access in `OpenSSLStream` if `read` was called after `close` (by Francesco Galla) - [pull #2238][issue2238]
+- Fixed detection of broken quoted-printable encodings (by Adam Williams) - [pull #2237][issue2237]
+- Fixed `Json.clone` for fields of type array (by Szabo Bogdan) - [pull #2249][issue2249]
+- Fixed erroneous writing of a response body for certain status codes in the REST interface generator (by Tomáš Chaloupka) - [issue #2268][issue2268], [pull #2269][issue2269]
+- Fixed concurrent outgoing WebSocket connections and a socket descriptor leak - [issue #2169][issue2169], [pull #2265][issue2265]
+- Fixed `@safe` inference for `JsonStringSerializer` (by Tomáš Chaloupka) - [pull #2274][issue2274], [issue #1941][issue1942]
+
+[issue1941]: https://github.com/vibe-d/vibe.d/issues/1941
+[issue2053]: https://github.com/vibe-d/vibe.d/issues/2053
+[issue2169]: https://github.com/vibe-d/vibe.d/issues/2169
+[issue2176]: https://github.com/vibe-d/vibe.d/issues/2176
+[issue2183]: https://github.com/vibe-d/vibe.d/issues/2183
+[issue2190]: https://github.com/vibe-d/vibe.d/issues/2190
+[issue2214]: https://github.com/vibe-d/vibe.d/issues/2214
+[issue2226]: https://github.com/vibe-d/vibe.d/issues/2226
+[issue2222]: https://github.com/vibe-d/vibe.d/issues/2222
+[issue2223]: https://github.com/vibe-d/vibe.d/issues/2223
+[issue2197]: https://github.com/vibe-d/vibe.d/issues/2197
+[issue2224]: https://github.com/vibe-d/vibe.d/issues/2224
+[issue2220]: https://github.com/vibe-d/vibe.d/issues/2220
+[issue2235]: https://github.com/vibe-d/vibe.d/issues/2235
+[issue2235]: https://github.com/vibe-d/vibe.d/issues/2235
+[issue2236]: https://github.com/vibe-d/vibe.d/issues/2236
+[issue2237]: https://github.com/vibe-d/vibe.d/issues/2237
+[issue2238]: https://github.com/vibe-d/vibe.d/issues/2238
+[issue2247]: https://github.com/vibe-d/vibe.d/issues/2247
+[issue2248]: https://github.com/vibe-d/vibe.d/issues/2248
+[issue2249]: https://github.com/vibe-d/vibe.d/issues/2249
+[issue2250]: https://github.com/vibe-d/vibe.d/issues/2250
+[issue2251]: https://github.com/vibe-d/vibe.d/issues/2251
+[issue2252]: https://github.com/vibe-d/vibe.d/issues/2252
+[issue2257]: https://github.com/vibe-d/vibe.d/issues/2257
+[issue2263]: https://github.com/vibe-d/vibe.d/issues/2263
+[issue2265]: https://github.com/vibe-d/vibe.d/issues/2265
+[issue2268]: https://github.com/vibe-d/vibe.d/issues/2268
+[issue2269]: https://github.com/vibe-d/vibe.d/issues/2269
+[issue2274]: https://github.com/vibe-d/vibe.d/issues/2274
+
+
 v0.8.4 - 2018-06-02
 -------------------
+
+Small release with official support for DMD 2.080.0 and LDC 1.9.0, which contains a number of fixes and improvements. 
 
 ### Features and improvements ###
 
@@ -35,8 +202,8 @@ v0.8.4 - 2018-06-02
 - Fixed `Path.bySegment` (the legacy implementation in `vibe-d:core`) to insert an empty segment for absolute Posix paths, like `vibe-core` does - [pull #2143][issue2143]
 - Fixed JSON serialization of non-immutable and wide character strings - [issue #2150][issue2150], [pull #2151][issue2151]
 - Fixed bogus "mailto" links generated by the Markdown parser - [pull #2165][issue2165]
-- Fixed handling of Digest auth headers with equal signs occurring in a field value (by Geoffrey-A) - [issue #2023][issue2023], [pull #2059][issue2059]
-- Fixed behavior for buggy HTTP/1 servers that advertize keep-alive without a content length (by Tomáš Chaloupka) - [pull #2167][issue2167]
+- Fixed handling of Digest authentication headers with equal signs occurring in a field value (by Geoffrey-A) - [issue #2023][issue2023], [pull #2059][issue2059]
+- Fixed behavior for buggy HTTP/1 servers that advertise keep-alive without a content length (by Tomáš Chaloupka) - [pull #2167][issue2167]
 
 [commit064ddd66]: https://github.com/vibe-d/vibe.d/commit/064ddd6638cae017c6882f6ae0067a2dc10cc6c3
 [commite3a0d3a1]: https://github.com/vibe-d/vibe.d/commit/e3a0d3a18ff91d7b6e1ff7300a5c039cf7d0bb45

@@ -2,7 +2,7 @@
 	MongoClient class doing connection management. Usually this is a main entry point
 	for client code.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -26,7 +26,7 @@ import std.range;
 	Represents a connection to a MongoDB server.
 
 	Note that this class uses a ConnectionPool internally to create and reuse
-	network conections to the server as necessary. It should be reused for all
+	network connections to the server as necessary. It should be reused for all
 	fibers in a thread for optimum performance in high concurrency scenarios.
  */
 final class MongoClient {
@@ -85,6 +85,20 @@ final class MongoClient {
 		lockConnection();
 	}
 
+	/** Disconnects all currently unused connections to the server.
+	*/
+	void cleanupConnections()
+	{
+		m_connections.removeUnused((conn) nothrow @safe {
+			try conn.disconnect();
+			catch (Exception e) {
+				logWarn("Error thrown during MongoDB connection close: %s", e.msg);
+				try () @trusted { logDebug("Full error: %s", e.toString()); } ();
+				catch (Exception e) {}
+			}
+		});
+	}
+
 	/**
 		Accesses a collection using an absolute path.
 
@@ -93,7 +107,7 @@ final class MongoClient {
 		conjunction with MongoDatabase.opIndex.
 
 		Returns:
-			MongoCollection for the given combined database and collectiion name(path)
+			MongoCollection for the given combined database and collection name (path)
 
 		Examples:
 			---

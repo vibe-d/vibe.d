@@ -1,0 +1,3 @@
+name "http-static-server-example"
+description "Simple HTTP server that serves static files."
+dependency "vibe-d:http" path="../../"

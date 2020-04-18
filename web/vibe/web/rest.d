@@ -220,7 +220,7 @@
 		To see how to implement the client side in detail, jump to
 		the `RestInterfaceClient` documentation.
 
-	Copyright: © 2012-2018 RejectedSoftware e.K.
+	Copyright: © 2012-2018 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Михаил Страшун, Mathias 'Geod24' Lang
 */
@@ -244,7 +244,7 @@ import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAu
 
 import std.algorithm : startsWith, endsWith;
 import std.range : isOutputRange;
-import std.typecons : Nullable;
+import std.typecons : No, Nullable, Yes;
 import std.typetuple : anySatisfy, Filter;
 import std.traits;
 
@@ -469,23 +469,20 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, string 
 HTTPServerRequestDelegate serveRestJSClient(I)(RestInterfaceSettings settings)
 	if (is(I == interface))
 {
-	import std.digest.md : md5Of;
-	import std.digest.digest : toHexString;
+	import std.datetime.systime : SysTime;
 	import std.array : appender;
+
+	import vibe.http.fileserver : ETag, handleCache;
 
 	auto app = appender!string();
 	generateRestJSClient!I(app, settings);
-	auto hash = app.data.md5Of.toHexString.idup;
+	ETag tag = ETag.md5(No.weak, app.data);
 
 	void serve(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		if (auto pv = "If-None-Match" in res.headers) {
-			res.statusCode = HTTPStatus.notModified;
-			res.writeVoidBody();
+		if (handleCache(req, res, tag, SysTime.init, "public"))
 			return;
-		}
 
-		res.headers["Etag"] = hash;
 		res.writeBody(app.data, "application/javascript; charset=UTF-8");
 	}
 
@@ -503,6 +500,12 @@ HTTPServerRequestDelegate serveRestJSClient(I)(string base_url)
 {
 	auto settings = new RestInterfaceSettings;
 	settings.baseURL = URL(base_url);
+	return serveRestJSClient!I(settings);
+}
+/// ditto
+HTTPServerRequestDelegate serveRestJSClient(I)()
+{
+	auto settings = new RestInterfaceSettings;
 	return serveRestJSClient!I(settings);
 }
 
@@ -524,6 +527,7 @@ unittest {
 		router.get("/myapi.js", serveRestJSClient!MyAPI(restsettings));
 		//router.get("/myapi.js", serveRestJSClient!MyAPI(URL("http://api.example.org/")));
 		//router.get("/myapi.js", serveRestJSClient!MyAPI("http://api.example.org/"));
+		//router.get("/myapi.js", serveRestJSClient!MyAPI()); // if want to request to self server
 		//router.get("/", staticTemplate!"index.dt");
 
 		listenHTTP(new HTTPServerSettings, router);
@@ -582,6 +586,10 @@ unittest {
 	the matching method style for this. The RestInterfaceClient class will derive from the
 	interface that is passed as a template argument. It can be used as a drop-in replacement
 	of the real implementation of the API this way.
+
+	Non-success:
+		If a request failed, timed out, or the server returned an non-success status code,
+		an `vibe.web.common.RestException` will be thrown.
 */
 class RestInterfaceClient(I) : I
 {
@@ -1355,7 +1363,6 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	@safe {
 		if (route.bodyParameters.length) {
-			logDebug("BODYPARAMS: %s %s", Method, route.bodyParameters.length);
 			/*enforceBadRequest(req.contentType == "application/json",
 				"The Content-Type header needs to be set to application/json.");*/
 			enforceBadRequest(req.json.type != Json.Type.undefined,
@@ -1374,15 +1381,33 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 
 			if (settings.errorHandler) {
 				settings.errorHandler(req, res, RestErrorInformation(e, default_status));
-			} else if (auto se = cast(HTTPStatusException)e) {
-				res.writeJsonBody(["statusMessage": se.msg], se.status);
-			} else debug {
-				res.writeJsonBody(
-					[ "statusMessage": e.msg, "statusDebugMessage": () @trusted { return sanitizeUTF8(cast(ubyte[])e.toString()); } () ],
-					HTTPStatus.internalServerError
-				);
 			} else {
-				res.writeJsonBody(["statusMessage": e.msg], default_status);
+				import std.algorithm : among;
+				debug string debugMsg;
+
+				if (auto se = cast(HTTPStatusException)e)
+					res.statusCode = se.status;
+				else debug {
+					res.statusCode = HTTPStatus.internalServerError;
+					debugMsg = () @trusted { return sanitizeUTF8(cast(ubyte[])e.toString()); }();
+				}
+				else
+					res.statusCode = default_status;
+
+				// All 1xx(informational), 204 (no content), and 304 (not modified) responses MUST NOT include a message-body.
+				// See: https://tools.ietf.org/html/rfc2616#section-4.3
+				if (res.statusCode < 200 || res.statusCode.among(204, 304)) {
+					res.writeVoidBody();
+					return;
+				}
+
+				debug {
+					if (debugMsg) {
+						res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": debugMsg]);
+						return;
+					}
+				}
+				res.writeJsonBody(["statusMessage": e.msg]);
 			}
 		}
 
@@ -1441,7 +1466,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 					else if (v.isNull()) {
 						static if (!is(PDefaults[i] == void)) params[i] = PDefaults[i];
 						else enforceBadRequest(false, "Missing non-optional "~sparam.kind.to!string~" parameter '"~(fieldname.length?fieldname:sparam.name)~"'.");
-					} else params[i] = v;
+					} else params[i] = v.get;
 				}
 			}
 		} catch (Exception e) {
@@ -1819,7 +1844,7 @@ private Json request(URL base_url,
 
 	auto reqdg = (scope HTTPClientRequest req) {
 		req.method = verb;
-		foreach (k, v; hdrs)
+		foreach (k, v; hdrs.byKeyValue)
 			req.headers[k] = v;
 
 		if (request_body_filter) {
@@ -1848,14 +1873,14 @@ private Json request(URL base_url,
 
 		// Get required headers - Don't throw yet
 		string[] missingKeys;
-		foreach (k, ref v; reqReturnHdrs)
+		foreach (k, ref v; reqReturnHdrs.byKeyValue)
 			if (auto ptr = k in res.headers)
 				v = (*ptr).idup;
 			else
 				missingKeys ~= k;
 
 		// Get optional headers
-		foreach (k, ref v; optReturnHdrs)
+		foreach (k, ref v; optReturnHdrs.byKeyValue)
 			if (auto ptr = k in res.headers)
 				v = (*ptr).idup;
 			else
@@ -1982,7 +2007,7 @@ unittest
 // errors in the server and client.
 package string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
-body {
+do {
 	import vibe.web.internal.rest.common : ParameterKind;
 	import std.typetuple : TypeTuple;
 	import std.algorithm : strip;

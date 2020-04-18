@@ -1,7 +1,7 @@
 /**
 	In-memory streams
 
-	Copyright: © 2012-2016 RejectedSoftware e.K.
+	Copyright: © 2012-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -134,7 +134,13 @@ final class MemoryStream : RandomAccessStream {
 	@property bool readable() const nothrow { return true; }
 	@property bool writable() const nothrow { return m_writable; }
 
-	void seek(ulong offset) { assert(offset <= m_size); m_ptr = cast(size_t)offset; }
+	void truncate(ulong size)
+	{
+		enforce(size < m_data.length, "Size limit of memory stream reached.");
+		m_size = cast(size_t)size;
+	}
+
+	void seek(ulong offset) { assert(offset <= m_data.length); m_ptr = cast(size_t)offset; }
 	ulong tell() nothrow { return m_ptr; }
 	const(ubyte)[] peek() { return m_data[m_ptr .. min(m_size, m_ptr+m_peekWindow)]; }
 

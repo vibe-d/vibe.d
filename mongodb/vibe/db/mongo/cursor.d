@@ -1,7 +1,7 @@
 /**
 	MongoDB cursor abstraction
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2014 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -71,7 +71,7 @@ struct MongoCursor(DocType = Bson) {
 	/**
 		Controls the order in which the query returns matching documents.
 
-		This method must be called before starting to iterate, or an exeption
+		This method must be called before starting to iterate, or an exception
 		will be thrown. If multiple calls to $(D sort()) are issued, only
 		the last one will have an effect.
 
@@ -80,7 +80,7 @@ struct MongoCursor(DocType = Bson) {
 				of the result. This BSON object must be structured according to
 				the MongoDB documentation (see below).
 
-		Returns: Reference to the modified original curser instance.
+		Returns: Reference to the modified original cursor instance.
 
 		Throws:
 			An exception if there is a query or communication error.
@@ -118,7 +118,7 @@ struct MongoCursor(DocType = Bson) {
 	/**
 		Limits the number of documents that the cursor returns.
 
-		This method must be called before beginnig iteration in order to have
+		This method must be called before beginning iteration in order to have
 		effect. If multiple calls to limit() are made, the one with the lowest
 		limit will be chosen.
 
@@ -139,7 +139,7 @@ struct MongoCursor(DocType = Bson) {
 	/**
 		Skips a given number of elements at the beginning of the cursor.
 
-		This method must be called before beginnig iteration in order to have
+		This method must be called before beginning iteration in order to have
 		effect. If multiple calls to skip() are made, the one with the maximum
 		number will be chosen.
 

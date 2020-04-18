@@ -1,7 +1,7 @@
 /**
 	Maps file name extensions to standard mime types.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -480,6 +480,7 @@ string getMimeTypeForFile(string filename)
 		case "zir","zirz": return "application/vnd.zul";
 		case "zaz": return "application/vnd.zzazz.deck+xml";
 		case "vxml": return "application/voicexml+xml";
+		case "wasm": return "application/wasm";
 		case "wgt": return "application/widget";
 		case "hlp": return "application/winhlp";
 		case "wsdl": return "application/wsdl+xml";

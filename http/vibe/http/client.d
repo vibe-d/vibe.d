@@ -1,7 +1,7 @@
 /**
 	A simple HTTP/1.1 client implementation.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2014 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -23,6 +23,7 @@ import vibe.stream.operations;
 import vibe.stream.wrapper : createConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.utils.array;
+import vibe.utils.dictionarylist;
 import vibe.internal.allocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
@@ -41,10 +42,7 @@ import std.socket : AddressFamily;
 
 version(Posix)
 {
-	version(VibeLibeventDriver)
-	{
-		version = UnixSocket;
-	}
+	version = UnixSocket;
 }
 
 
@@ -81,49 +79,12 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 {
 	import std.algorithm.searching : canFind;
 
-	version(UnixSocket) {
-		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
-	} else {
-		enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
-	}
-	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool use_tls;
-
-	if (settings.proxyURL.schema !is null)
-		use_tls = settings.proxyURL.schema == "https";
-	else
-	{
-		version(UnixSocket)
-			use_tls = url.schema == "https" || url.schema == "https+unix";
-		else
-			use_tls = url.schema == "https";
-	}
+	bool use_tls = isTLSRequired(url, settings);
 
 	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
-	auto res = cli.request((req){
-		if (url.localURI.length) {
-			assert(url.path.absolute, "Request URL path must be absolute.");
-			req.requestURL = url.localURI;
-		}
-		if (settings.proxyURL.schema !is null)
-			req.requestURL = url.toString(); // proxy exception to the URL representation
-
-		// Provide port number when it is not the default one (RFC2616 section 14.23)
-		// IPv6 addresses need to be put into brackets
-		auto hoststr = url.host.canFind(':') ? "["~url.host~"]" : url.host;
-		if (url.port && url.port != url.defaultPort)
-			req.headers["Host"] = format("%s:%d", hoststr, url.port);
-		else
-			req.headers["Host"] = hoststr;
-
-		if ("authorization" !in req.headers && url.username != "") {
-			import std.base64;
-			string pwstr = url.username ~ ":" ~ url.password;
-			req.headers["Authorization"] = "Basic " ~
-				cast(string)Base64.encode(cast(ubyte[])pwstr);
-		}
-		if (requester) requester(req);
-	});
+	auto res = cli.request(
+		(scope req){ httpRequesterDg(req, url, settings, requester); },
+	);
 
 	// make sure the connection stays locked if the body still needs to be read
 	if( res.m_client ) res.lockedConnection = cli;
@@ -139,6 +100,19 @@ void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) re
 /// ditto
 void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, const(HTTPClientSettings) settings = defaultSettings)
 {
+	bool use_tls = isTLSRequired(url, settings);
+
+	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
+	cli.request(
+		(scope req){ httpRequesterDg(req, url, settings, requester); },
+		responder
+	);
+	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
+	assert(!cli.m_responding, "HTTP client still responding after return!?");
+}
+
+private bool isTLSRequired(in URL url, in HTTPClientSettings settings)
+{
 	version(UnixSocket) {
 		enforce(url.schema == "http" || url.schema == "https" || url.schema == "http+unix" || url.schema == "https+unix", "URL schema must be http(s) or http(s)+unix.");
 	} else {
@@ -157,31 +131,35 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 			use_tls = url.schema == "https";
 	}
 
-	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
-	cli.request((scope req) {
-		if (url.localURI.length) {
-			assert(url.path.absolute, "Request URL path must be absolute.");
-			req.requestURL = url.localURI;
-		}
-		if (settings.proxyURL.schema !is null)
-			req.requestURL = url.toString(); // proxy exception to the URL representation
+	return use_tls;
+}
 
-		// Provide port number when it is not the default one (RFC2616 section 14.23)
-		if (url.port && url.port != url.defaultPort)
-			req.headers["Host"] = format("%s:%d", url.host, url.port);
-		else
-			req.headers["Host"] = url.host;
+private void httpRequesterDg(scope HTTPClientRequest req, in URL url, in HTTPClientSettings settings, scope void delegate(scope HTTPClientRequest req) requester)
+{
+	import std.algorithm.searching : canFind;
+	import vibe.http.internal.basic_auth_client: addBasicAuth;
 
-		if ("authorization" !in req.headers && url.username != "") {
-			import std.base64;
-			string pwstr = url.username ~ ":" ~ url.password;
-			req.headers["Authorization"] = "Basic " ~
-				cast(string)Base64.encode(cast(ubyte[])pwstr);
-		}
-		if (requester) requester(req);
-	}, responder);
-	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
-	assert(!cli.m_responding, "HTTP client still responding after return!?");
+	if (url.localURI.length) {
+		assert(url.path.absolute, "Request URL path must be absolute.");
+		req.requestURL = url.localURI;
+	}
+
+	if (settings.proxyURL.schema !is null)
+		req.requestURL = url.toString(); // proxy exception to the URL representation
+
+	// IPv6 addresses need to be put into brackets
+	auto hoststr = url.host.canFind(':') ? "["~url.host~"]" : url.host;
+
+	// Provide port number when it is not the default one (RFC2616 section 14.23)
+	if (url.port && url.port != url.defaultPort)
+		req.headers["Host"] = format("%s:%d", hoststr, url.port);
+	else
+		req.headers["Host"] = hoststr;
+
+	if ("authorization" !in req.headers && url.username != "")
+		req.addBasicAuth(url.username, url.password);
+
+	if (requester) () @trusted { requester(req); } ();
 }
 
 /** Posts a simple JSON request. Note that the server www.example.org does not
@@ -216,12 +194,9 @@ unittest {
 */
 auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPClientSettings) settings = null)
 {
-	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
-	static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
-
 	auto sttngs = settings ? settings : defaultSettings;
 
-	if( port == 0 ) port = use_tls ? 443 : 80;
+	if (port == 0) port = use_tls ? 443 : 80;
 	auto ckey = ConnInfo(host, port, use_tls, sttngs.proxyURL.host, sttngs.proxyURL.port, sttngs.networkInterface);
 
 	ConnectionPool!HTTPClient pool;
@@ -245,6 +220,18 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPC
 	return pool.lockConnection();
 }
 
+static ~this()
+{
+	foreach (ci; s_connections) {
+		ci[1].removeUnused((conn) {
+			conn.disconnect();
+		});
+	}
+}
+
+private struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
+private static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
+
 
 /**************************************************************************************************/
 /* Public types                                                                                   */
@@ -256,6 +243,18 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPC
 class HTTPClientSettings {
 	URL proxyURL;
 	Duration defaultKeepAliveTimeout = 10.seconds;
+
+	/** Timeout for establishing a connection to the server
+
+		Note that this setting is only supported when using the vibe-core
+		module. If using one of the legacy drivers, any value other than
+		`Duration.max` will emit a runtime warning and connects without a
+		specific timeout.
+	*/
+	Duration connectTimeout = Duration.max;
+
+	/// Timeout during read operations on the underyling transport
+	Duration readTimeout = Duration.max;
 
 	/// Forces a specific network interface to use for outgoing connections.
 	NetworkAddress networkInterface = anyAddress;
@@ -273,6 +272,8 @@ class HTTPClientSettings {
 	const @safe {
 		auto ret = new HTTPClientSettings;
 		ret.proxyURL = this.proxyURL;
+		ret.connectTimeout = this.connectTimeout;
+		ret.readTimeout = this.readTimeout;
 		ret.networkInterface = this.networkInterface;
 		ret.dnsAddressFamily = this.dnsAddressFamily;
 		ret.tlsContextSetup = this.tlsContextSetup;
@@ -299,6 +300,64 @@ unittest {
 			logInfo("Response: %s", res.bodyReader.readAllUTF8());
 		}, settings);
 
+	}
+}
+
+version (Have_vibe_core)
+unittest { // test connect timeout
+	import std.conv : to;
+	import vibe.core.stream : pipe, nullSink;
+
+	HTTPClientSettings settings = new HTTPClientSettings;
+	settings.connectTimeout = 50.msecs;
+
+	// Use an IP address that is guaranteed to be unassigned globally to force
+	// a timeout (see RFC 3330)
+	auto cli = connectHTTP("192.0.2.0", 80, false, settings);
+	auto timer = setTimer(500.msecs, { assert(false, "Connect timeout occurred too late"); });
+	scope (exit) timer.stop();
+
+	try {
+		cli.request(
+			(scope req) { assert(false, "Expected no connection"); },
+			(scope res) { assert(false, "Expected no response"); }
+		);
+		assert(false, "Response read expected to fail due to timeout");
+	} catch(Exception e) {}
+}
+
+unittest { // test read timeout
+	import std.conv : to;
+	import vibe.core.stream : pipe, nullSink;
+
+	version (VibeLibasyncDriver) {
+		logInfo("Skipping HTTP client read timeout test due to buggy libasync driver.");
+	} else {
+		HTTPClientSettings settings = new HTTPClientSettings;
+		settings.readTimeout = 50.msecs;
+
+		auto l = listenTCP(0, (conn) {
+			try conn.pipe(nullSink);
+			catch (Exception e) assert(false, e.msg);
+			conn.close();
+		}, "127.0.0.1");
+
+		auto cli = connectHTTP("127.0.0.1", l.bindAddress.port, false, settings);
+		auto timer = setTimer(500.msecs, { assert(false, "Read timeout occurred too late"); });
+		scope (exit) {
+			timer.stop();
+			l.stopListening();
+			cli.disconnect();
+			sleep(10.msecs); // allow the read connection end to fully close
+		}
+
+		try {
+			cli.request(
+				(scope req) { req.method = HTTPMethod.GET; },
+				(scope res) { assert(false, "Expected no response"); }
+			);
+			assert(false, "Response read expected to fail due to timeout");
+		} catch(Exception e) {}
 	}
 }
 
@@ -381,13 +440,17 @@ final class HTTPClient {
 		Before calling this method, be sure that no request is currently being processed.
 	*/
 	void disconnect()
-	{
+	nothrow {
 		if (m_conn) {
+			version (Have_vibe_core) {}
+			else scope(failure) assert(false);
+
 			if (m_conn.connected) {
 				try m_stream.finalize();
 				catch (Exception e) logDebug("Failed to finalize connection stream when closing HTTP client connection: %s", e.msg);
 				m_conn.close();
 			}
+
 			if (m_useTLS) () @trusted { return destroy(m_stream); } ();
 			m_stream = InterfaceProxy!Stream.init;
 			() @trusted { return destroy(m_conn); } ();
@@ -489,6 +552,7 @@ final class HTTPClient {
 		}
 
 		Exception user_exception;
+		while (true)
 		{
 			scope (failure) {
 				m_responding = false;
@@ -499,6 +563,14 @@ final class HTTPClient {
 				logDebug("Error while handling response: %s", e.toString().sanitize());
 				user_exception = e;
 			}
+			if (res.statusCode < 200) {
+				// just an informational status -> read and handle next response
+				if (m_responding) res.dropBody();
+				if (m_conn) {
+					res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
+					continue;
+				}
+			}
 			if (m_responding) {
 				logDebug("Failed to handle the complete response of the server - disconnecting.");
 				res.disconnect();
@@ -507,6 +579,7 @@ final class HTTPClient {
 
 			if (user_exception || res.headers.get("Connection") == "close")
 				disconnect();
+			break;
 		}
 		if (user_exception) throw user_exception;
 	}
@@ -562,8 +635,12 @@ final class HTTPClient {
 		m_requesting = true;
 		scope(exit) m_requesting = false;
 
-		if (!m_conn || !m_conn.connected) {
-			if (m_conn) m_conn.close(); // make sure all resources are freed
+		if (!m_conn || !m_conn.connected || m_conn.waitForDataEx(0.seconds) == WaitForDataStatus.noMoreData) {
+			if (m_conn) {
+				m_conn.close(); // make sure all resources are freed
+				m_conn = TCPConnection.init;
+			}
+
 			if (m_settings.proxyURL.host !is null){
 
 				enum AddressType {
@@ -603,7 +680,7 @@ final class HTTPClient {
 
 				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, m_settings.dnsAddressFamily, use_dns);
 				proxyAddr.port = m_settings.proxyURL.port;
-				m_conn = connectTCP(proxyAddr, m_settings.networkInterface);
+				m_conn = connectTCPWithTimeout(proxyAddr, m_settings.networkInterface, m_settings.connectTimeout);
 			}
 			else {
 				version(UnixSocket)
@@ -626,20 +703,24 @@ final class HTTPClient {
 						addr = resolveHost(m_server, m_settings.dnsAddressFamily);
 						addr.port = m_port;
 					}
-					m_conn = connectTCP(addr, m_settings.networkInterface);
+					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.connectTimeout);
 				} else
 				{
 					auto addr = resolveHost(m_server, m_settings.dnsAddressFamily);
 					addr.port = m_port;
-					m_conn = connectTCP(addr, m_settings.networkInterface);
+					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.connectTimeout);
 				}
 			}
+
+			if (m_settings.readTimeout != Duration.max)
+				m_conn.readTimeout = m_settings.readTimeout;
 
 			m_stream = m_conn;
 			if (m_useTLS) {
 				try m_tlsStream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
 				catch (Exception e) {
 					m_conn.close();
+					m_conn = TCPConnection.init;
 					throw e;
 				}
 				m_stream = m_tlsStream;
@@ -683,6 +764,16 @@ final class HTTPClient {
 	}
 }
 
+private auto connectTCPWithTimeout(NetworkAddress addr, NetworkAddress bind_address, Duration timeout)
+{
+	version (Have_vibe_core) {
+		return connectTCP(addr, bind_address, timeout);
+	} else {
+		if (timeout != Duration.max)
+			logWarn("HTTP client connect timeout is set, but not supported by the legacy vibe-d:core module.");
+		return connectTCP(addr, bind_address);
+	}
+}
 
 /**
 	Represents a HTTP client request (as sent to the server).
@@ -734,7 +825,6 @@ final class HTTPClientRequest : HTTPRequest {
 	/// ditto
 	void writeBody(InputStream data)
 	{
-		headers["Transfer-Encoding"] = "chunked";
 		data.pipe(bodyWriter);
 		finalize();
 	}
@@ -886,7 +976,8 @@ final class HTTPClientRequest : HTTPRequest {
 
 		assert(!m_headerWritten, "Trying to write request body after body was already written.");
 
-		if ("Content-Length" !in headers && "Transfer-Encoding" !in headers
+		if (httpVersion != HTTPVersion.HTTP_1_0
+			&& "Content-Length" !in headers && "Transfer-Encoding" !in headers
 			&& headers.get("Connection", "") != "close")
 		{
 			headers["Transfer-Encoding"] = "chunked";
@@ -917,7 +1008,7 @@ final class HTTPClientRequest : HTTPRequest {
 		logTrace("HTTP client request:");
 		logTrace("--------------------");
 		logTrace("%s", this);
-		foreach (k, v; headers) {
+		foreach (k, v; headers.byKeyValue) {
 			() @trusted { formattedWrite(&output, "%s: %s\r\n", k, v); } ();
 			logTrace("%s: %s", k, v);
 		}
@@ -977,6 +1068,19 @@ final class HTTPClientResponse : HTTPResponse {
 		return m_maxRequests;
 	}
 
+
+	/// All cookies that shall be set on the client for this request
+	override @property ref DictionaryList!Cookie cookies() {
+		if ("Set-Cookie" in this.headers && m_cookies.length == 0) {
+			foreach (cookieString; this.headers.getAll("Set-Cookie")) {
+				auto cookie = parseHTTPCookie(cookieString);
+				if (cookie[0].length)
+					m_cookies[cookie[0]] = cookie[1];
+			}
+		}
+		return m_cookies;
+	}
+
 	/// private
 	this(HTTPClient client, bool has_body, bool close_conn, IAllocator alloc, SysTime connected_time = Clock.currTime(UTC()))
 	{
@@ -1007,10 +1111,9 @@ final class HTTPClientResponse : HTTPResponse {
 		logTrace("HTTP client response:");
 		logTrace("---------------------");
 		logTrace("%s", this);
-		foreach (k, v; this.headers)
+		foreach (k, v; this.headers.byKeyValue)
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
-
 		Duration server_timeout;
 		bool has_server_timeout;
 		if (auto pka = "Keep-Alive" in this.headers) {
@@ -1174,8 +1277,6 @@ final class HTTPClientResponse : HTTPResponse {
 		enforce(!new_protocol.length || !icmp(*resNewProto, new_protocol),
 			"Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
 		auto stream = createConnectionProxyStream!(typeof(m_client.m_stream), typeof(m_client.m_conn))(m_client.m_stream, m_client.m_conn);
-		m_client.m_responding = false;
-		m_client = null;
 		m_closeConn = true; // cannot reuse connection for further requests!
 		return stream;
 	}
@@ -1187,9 +1288,8 @@ final class HTTPClientResponse : HTTPResponse {
 		enforce(resNewProto, "Server did not send an Upgrade header");
 		enforce(!new_protocol.length || !icmp(*resNewProto, new_protocol),
 			"Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
-		scope stream = createConnectionProxyStream(m_client.m_stream, m_client.m_conn);
-		m_client.m_responding = false;
-		m_client = null;
+		auto stream = createConnectionProxyStream(m_client.m_stream, m_client.m_conn);
+		scope (exit) () @trusted { destroy(stream); } ();
 		m_closeConn = true;
 		del(stream);
 	}

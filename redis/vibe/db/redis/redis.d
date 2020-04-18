@@ -1,7 +1,7 @@
 /**
 	Redis database client implementation.
 
-	Copyright: © 2012-2016 RejectedSoftware e.K.
+	Copyright: © 2012-2016 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger, Sönke Ludwig, Michael Eisendle, Etienne Cimon
 */
@@ -58,7 +58,6 @@ RedisClient connectRedis(string host, ushort port = RedisClient.defaultPort)
 
 	Params:
 		url = Redis URI scheme for a Redis database instance
-		host_or_url = Can either be a host name, in which case the default port will be used, or a URL with the redis:// scheme.
 
 	Returns:
 		A new RedisDatabase instance that can be used to access the database.
@@ -128,6 +127,22 @@ final class RedisClient {
 	{
 		m_connections = new ConnectionPool!RedisConnection({
 			return new RedisConnection(host, port);
+		});
+	}
+
+	/** Release all connections that are not in use. Call before exiting the
+	 * program to avoid relying on the GC to clean up the sockets.
+	 */
+	void releaseUnusedConnections() @safe
+	{
+		// the try/catch in this is for the old vibe.d:core library, not
+		// necessary in vibe-core, but we have to work with both.
+		m_connections.removeUnused((conn) @safe nothrow {
+			try {
+                 conn.m_conn.close();
+			 } catch(Exception e) {
+				 logDebug("Failed to close unused Redis connection: %s", e.msg);
+			 }
 		});
 	}
 
@@ -1062,14 +1077,9 @@ final class RedisSubscriberImpl {
 			logTrace("Redis listener exiting");
 			// More publish commands may be sent to this connection after recycling it, so we
 			// actively destroy it
-			Action act;
-			// wait for the listener helper to send its stop message
-			while (act != Action.STOP)
-				act = () @trusted { return receiveOnly!Action(); } ();
 			m_lockedConnection.conn.close();
 			m_lockedConnection.destroy();
 			m_listening = false;
-			return;
 		}
 		// http://redis.io/topics/pubsub
 		/**
@@ -1166,23 +1176,31 @@ final class RedisSubscriberImpl {
 		}
 
 		// Waits for data and advises the handler
-		m_listenerHelper = runTask( {
-			while(true) {
-				if (!m_stop && m_lockedConnection.conn && m_lockedConnection.conn.waitForData(100.msecs)) {
-					// We check every 5 seconds if this task should stay active
-					if (m_stop)	break;
-					else if (m_lockedConnection.conn && !m_lockedConnection.conn.dataAvailableForRead) continue;
-					// Data has arrived, this task is in charge of notifying the main handler loop
-					logTrace("Notify data arrival");
+		m_listenerHelper = runTask({
+			loop: while(true) {
+				if (m_stop || !m_lockedConnection.conn) break;
 
-					() @trusted { receiveTimeout(0.seconds, (Variant v) {}); } (); // clear message queue
-					() @trusted { m_listener.send(Action.DATA); } ();
-					if (!() @trusted { return receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }); } ())
-						assert(false);
+				const waitResult = m_lockedConnection.conn.waitForDataEx(100.msecs);
+				if (m_stop) break;
 
-				} else if (m_stop || !m_lockedConnection.conn) break;
-				logTrace("No data arrival in 100 ms...");
+				final switch (waitResult) {
+					case WaitForDataStatus.noMoreData:
+						break loop;
+					case WaitForDataStatus.timeout:
+						logTrace("No data arrival in 100 ms...");
+						continue loop;
+					case WaitForDataStatus.dataAvailable:
+				}
+
+				// Data has arrived, this task is in charge of notifying the main handler loop
+				logTrace("Notify data arrival");
+
+				() @trusted { receiveTimeout(0.seconds, (Variant v) {}); } (); // clear message queue
+				() @trusted { m_listener.send(Action.DATA); } ();
+				if (!() @trusted { return receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }); } ())
+					assert(false);
 			}
+
 			logTrace("Listener Helper exit.");
 			() @trusted { m_listener.send(Action.STOP); } ();
 		} );

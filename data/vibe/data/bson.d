@@ -1,7 +1,7 @@
 /**
 	BSON serialization and value handling.
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	Copyright: © 2012-2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -423,9 +423,14 @@ struct Bson {
 		else static if( is(T == BsonObjectID) ){ checkType(Type.objectID); return BsonObjectID(m_data[0 .. 12]); }
 		else static if( is(T == bool) ){ checkType(Type.bool_); return m_data[0] != 0; }
 		else static if( is(T == BsonDate) ){ checkType(Type.date); return BsonDate(fromBsonData!long(m_data)); }
+		else static if( is(T == SysTime) ){
+			checkType(Type.date);
+			string data = cast(string)m_data[4 .. 4+fromBsonData!int(m_data)-1];
+			return SysTime.fromISOString(data);
+		}
 		else static if( is(T == BsonRegex) ){
 			checkType(Type.regex);
-			auto d = m_data;
+			auto d = m_data[0 .. $];
 			auto expr = skipCString(d);
 			auto options = skipCString(d);
 			return BsonRegex(expr, options);
@@ -443,6 +448,10 @@ struct Bson {
 			enforce(bbd.type == BsonBinData.Type.uuid, "BsonBinData value is type '"~to!string(bbd.type)~"', expected to be uuid");
 			const ubyte[16] b = bbd.rawData;
 			return UUID(b);
+		}
+		else static if( is(T == SysTime) ) {
+			checkType(Type.date);
+			return BsonDate(fromBsonData!long(m_data)).toSysTime();
 		}
 		else static assert(false, "Cannot cast "~typeof(this).stringof~" to '"~T.stringof~"'.");
 	}
@@ -1054,11 +1063,17 @@ struct BsonDate {
 	*/
 	string toString() const { return toSysTime().toISOExtString(); }
 
-	/* Converts to a SysTime.
+	/* Converts to a SysTime using UTC timezone.
 	*/
 	SysTime toSysTime() const {
+		return toSysTime(UTC());
+	}
+
+	/* Converts to a SysTime with a given timezone.
+	*/
+	SysTime toSysTime(immutable TimeZone tz) const {
 		auto zero = unixTimeToStdTime(0);
-		return SysTime(zero + m_time * 10_000L, UTC());
+		return SysTime(zero + m_time * 10_000L, tz);
 	}
 
 	/** Allows relational and equality comparisons.
@@ -1159,7 +1174,7 @@ struct BsonRegex {
 
 	See_Also: `deserializeBson`
 */
-Bson serializeToBson(T)(T value, ubyte[] buffer = null)
+Bson serializeToBson(T)(auto ref T value, ubyte[] buffer = null)
 {
 	return serialize!BsonSerializer(value, buffer);
 }
@@ -1223,19 +1238,19 @@ unittest {
 @safe unittest {
 	static struct A { int value; static A fromJson(Json val) @safe { return A(val.get!int); } Json toJson() const @safe { return Json(value); } Bson toBson() { return Bson(); } }
 	static assert(!isStringSerializable!A && isJsonSerializable!A && !isBsonSerializable!A);
-	static assert(!isStringSerializable!(const(A)) && !isJsonSerializable!(const(A)) && !isBsonSerializable!(const(A)));
+	static assert(!isStringSerializable!(const(A)) && isJsonSerializable!(const(A)) && !isBsonSerializable!(const(A)));
 //	assert(serializeToBson(const A(123)) == Bson(123));
 //	assert(serializeToBson(A(123))       == Bson(123));
 
 	static struct B { int value; static B fromBson(Bson val) @safe { return B(val.get!int); } Bson toBson() const @safe { return Bson(value); } Json toJson() { return Json(); } }
 	static assert(!isStringSerializable!B && !isJsonSerializable!B && isBsonSerializable!B);
-	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && !isBsonSerializable!(const(B)));
+	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && isBsonSerializable!(const(B)));
 	assert(serializeToBson(const B(123)) == Bson(123));
 	assert(serializeToBson(B(123))       == Bson(123));
 
 	static struct C { int value; static C fromString(string val) @safe { return C(val.to!int); } string toString() const @safe { return value.to!string; } Json toJson() { return Json(); } }
 	static assert(isStringSerializable!C && !isJsonSerializable!C && !isBsonSerializable!C);
-	static assert(!isStringSerializable!(const(C)) && !isJsonSerializable!(const(C)) && !isBsonSerializable!(const(C)));
+	static assert(isStringSerializable!(const(C)) && !isJsonSerializable!(const(C)) && !isBsonSerializable!(const(C)));
 	assert(serializeToBson(const C(123)) == Bson("123"));
 	assert(serializeToBson(C(123))       == Bson("123"));
 
@@ -1248,7 +1263,7 @@ unittest {
 	// test if const(class) is serializable
 	static class E { int value; this(int v) @safe { value = v; } static E fromBson(Bson val) @safe { return new E(val.get!int); } Bson toBson() const @safe { return Bson(value); } Json toJson() { return Json(); } }
 	static assert(!isStringSerializable!E && !isJsonSerializable!E && isBsonSerializable!E);
-	static assert(!isStringSerializable!(const(E)) && !isJsonSerializable!(const(E)) && !isBsonSerializable!(const(E)));
+	static assert(!isStringSerializable!(const(E)) && !isJsonSerializable!(const(E)) && isBsonSerializable!(const(E)));
 	assert(serializeToBson(new const E(123)) == Bson(123));
 	assert(serializeToBson(new E(123))       == Bson(123));
 }
@@ -1368,6 +1383,14 @@ unittest { // issue #793
 	assert(bson[0].type == Bson.Type.string && bson[0].get!string == "t");
 }
 
+@safe unittest { // issue #2212
+	auto bsonRegex = Bson(BsonRegex(".*", "i"));
+	auto parsedRegex = bsonRegex.get!BsonRegex;
+	assert(bsonRegex.type == Bson.Type.regex);
+	assert(parsedRegex.expression == ".*");
+	assert(parsedRegex.options == "i");
+}
+
 unittest
 {
 	UUID uuid = UUID("35399104-fbc9-4c08-bbaf-65a5efe6f5f2");
@@ -1452,38 +1475,38 @@ struct BsonSerializer {
 	void beginWriteArrayEntry(Traits)(size_t idx) { m_entryIndex = idx; }
 	void endWriteArrayEntry(Traits)(size_t idx) {}
 
-	// auto ref does't work for DMD 2.064
-	void writeValue(Traits, T)(/*auto ref const*/ in T value) { writeValueH!(T, true)(value); }
+	void writeValue(Traits, T)(auto ref T value) { writeValueH!(T, true)(value); }
 
-	private void writeValueH(T, bool write_header)(/*auto ref const*/ in T value)
+	private void writeValueH(T, bool write_header)(auto ref T value)
 	{
+		alias UT = Unqual!T;
 		static if (write_header) writeCompositeEntryHeader(getBsonTypeID(value));
 
-		static if (is(T == Bson)) { m_dst.put(value.data); }
-		else static if (is(T == Json)) { m_dst.put(Bson(value).data); } // FIXME: use .writeBsonValue
-		else static if (is(T == typeof(null))) {}
-		else static if (is(T == string)) { m_dst.put(toBsonData(cast(uint)value.length+1)); m_dst.putCString(value); }
-		else static if (is(T == BsonBinData)) { m_dst.put(toBsonData(cast(int)value.rawData.length)); m_dst.put(value.type); m_dst.put(value.rawData); }
-		else static if (is(T == BsonObjectID)) { m_dst.put(value.m_bytes[]); }
-		else static if (is(T == BsonDate)) { m_dst.put(toBsonData(value.m_time)); }
-		else static if (is(T == SysTime)) { m_dst.put(toBsonData(BsonDate(value).m_time)); }
-		else static if (is(T == BsonRegex)) { m_dst.putCString(value.expression); m_dst.putCString(value.options); }
-		else static if (is(T == BsonTimestamp)) { m_dst.put(toBsonData(value.m_time)); }
-		else static if (is(T == bool)) { m_dst.put(cast(ubyte)(value ? 0x01 : 0x00)); }
-		else static if (is(T : int) && isIntegral!T) { m_dst.put(toBsonData(cast(int)value)); }
-		else static if (is(T : long) && isIntegral!T) { m_dst.put(toBsonData(value)); }
-		else static if (is(T : double) && isFloatingPoint!T) { m_dst.put(toBsonData(cast(double)value)); }
-		else static if (is(T == UUID)) { m_dst.put(Bson(value).data); }
-		else static if (isBsonSerializable!T) {
+		static if (is(UT == Bson)) { m_dst.put(value.data); }
+		else static if (is(UT == Json)) { m_dst.put(Bson(value).data); } // FIXME: use .writeBsonValue
+		else static if (is(UT == typeof(null))) {}
+		else static if (is(UT == string)) { m_dst.put(toBsonData(cast(uint)value.length+1)); m_dst.putCString(value); }
+		else static if (is(UT == BsonBinData)) { m_dst.put(toBsonData(cast(int)value.rawData.length)); m_dst.put(value.type); m_dst.put(value.rawData); }
+		else static if (is(UT == BsonObjectID)) { m_dst.put(value.m_bytes[]); }
+		else static if (is(UT == BsonDate)) { m_dst.put(toBsonData(value.m_time)); }
+		else static if (is(UT == SysTime)) { m_dst.put(toBsonData(BsonDate(value).m_time)); }
+		else static if (is(UT == BsonRegex)) { m_dst.putCString(value.expression); m_dst.putCString(value.options); }
+		else static if (is(UT == BsonTimestamp)) { m_dst.put(toBsonData(value.m_time)); }
+		else static if (is(UT == bool)) { m_dst.put(cast(ubyte)(value ? 0x01 : 0x00)); }
+		else static if (is(UT : int) && isIntegral!UT) { m_dst.put(toBsonData(cast(int)value)); }
+		else static if (is(UT : long) && isIntegral!UT) { m_dst.put(toBsonData(value)); }
+		else static if (is(UT : double) && isFloatingPoint!UT) { m_dst.put(toBsonData(cast(double)value)); }
+		else static if (is(UT == UUID)) { m_dst.put(Bson(value).data); }
+		else static if (isBsonSerializable!UT) {
 			static if (!__traits(compiles, () @safe { return value.toBson(); } ()))
 				pragma(msg, "Non-@safe toBson/fromBson methods are deprecated - annotate "~T.stringof~".toBson() with @safe.");
 			m_dst.put(() @trusted { return value.toBson(); } ().data);
-		} else static if (isJsonSerializable!T) {
+		} else static if (isJsonSerializable!UT) {
 			static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
-				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
+				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~UT.stringof~".toJson() with @safe.");
 			m_dst.put(Bson(() @trusted { return value.toJson(); } ()).data);
-		} else static if (is(T : const(ubyte)[])) { writeValueH!(BsonBinData, false)(BsonBinData(BsonBinData.Type.generic, value.idup)); }
-		else static assert(false, "Unsupported type: " ~ T.stringof);
+		} else static if (is(UT : const(ubyte)[])) { writeValueH!(BsonBinData, false)(BsonBinData(BsonBinData.Type.generic, value.idup)); }
+		else static assert(false, "Unsupported type: " ~ UT.stringof);
 	}
 
 	private void writeCompositeEntryHeader(Bson.Type tp)
@@ -1590,31 +1613,32 @@ struct BsonSerializer {
 		return false;
 	}
 
-	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(/*auto ref const*/ in T value)
+	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(auto ref T value)
 	@safe {
+		alias UT = Unqual!T;
 		Bson.Type tp;
 		static if (is(T == Bson)) tp = value.type;
-		else static if (is(T == Json)) tp = jsonTypeToBsonType(value.type);
-		else static if (is(T == typeof(null))) tp = Bson.Type.null_;
-		else static if (is(T == string)) tp = Bson.Type.string;
-		else static if (is(T == BsonBinData)) tp = Bson.Type.binData;
-		else static if (is(T == BsonObjectID)) tp = Bson.Type.objectID;
-		else static if (is(T == BsonDate)) tp = Bson.Type.date;
-		else static if (is(T == SysTime)) tp = Bson.Type.date;
-		else static if (is(T == BsonRegex)) tp = Bson.Type.regex;
-		else static if (is(T == BsonTimestamp)) tp = Bson.Type.timestamp;
-		else static if (is(T == bool)) tp = Bson.Type.bool_;
-		else static if (isIntegral!T && is(T : int)) tp = Bson.Type.int_;
-		else static if (isIntegral!T && is(T : long)) tp = Bson.Type.long_;
-		else static if (isFloatingPoint!T && is(T : double)) tp = Bson.Type.double_;
-		else static if (isBsonSerializable!T) tp = value.toBson().type; // FIXME: this is highly inefficient
-		else static if (isJsonSerializable!T) tp = jsonTypeToBsonType(value.toJson().type); // FIXME: this is highly inefficient
-		else static if (is(T == UUID)) tp = Bson.Type.binData;
-		else static if (is(T : const(ubyte)[])) tp = Bson.Type.binData;
-		else static if (accept_ao && isArray!T) tp = Bson.Type.array;
-		else static if (accept_ao && isAssociativeArray!T) tp = Bson.Type.object;
-		else static if (accept_ao && (is(T == class) || is(T == struct))) tp = Bson.Type.object;
-		else static assert(false, "Unsupported type: " ~ T.stringof);
+		else static if (is(UT == Json)) tp = jsonTypeToBsonType(value.type);
+		else static if (is(UT == typeof(null))) tp = Bson.Type.null_;
+		else static if (is(UT == string)) tp = Bson.Type.string;
+		else static if (is(UT == BsonBinData)) tp = Bson.Type.binData;
+		else static if (is(UT == BsonObjectID)) tp = Bson.Type.objectID;
+		else static if (is(UT == BsonDate)) tp = Bson.Type.date;
+		else static if (is(UT == SysTime)) tp = Bson.Type.date;
+		else static if (is(UT == BsonRegex)) tp = Bson.Type.regex;
+		else static if (is(UT == BsonTimestamp)) tp = Bson.Type.timestamp;
+		else static if (is(UT == bool)) tp = Bson.Type.bool_;
+		else static if (isIntegral!UT && is(UT : int)) tp = Bson.Type.int_;
+		else static if (isIntegral!UT && is(UT : long)) tp = Bson.Type.long_;
+		else static if (isFloatingPoint!UT && is(UT : double)) tp = Bson.Type.double_;
+		else static if (isBsonSerializable!UT) tp = value.toBson().type; // FIXME: this is highly inefficient
+		else static if (isJsonSerializable!UT) tp = jsonTypeToBsonType(value.toJson().type); // FIXME: this is highly inefficient
+		else static if (is(UT == UUID)) tp = Bson.Type.binData;
+		else static if (is(UT : const(ubyte)[])) tp = Bson.Type.binData;
+		else static if (accept_ao && isArray!UT) tp = Bson.Type.array;
+		else static if (accept_ao && isAssociativeArray!UT) tp = Bson.Type.object;
+		else static if (accept_ao && (is(UT == class) || is(UT == struct))) tp = Bson.Type.object;
+		else static assert(false, "Unsupported type: " ~ UT.stringof);
 		return tp;
 	}
 }
@@ -1699,6 +1723,19 @@ unittest
 	assert(serializeToBson(jsvalue).toJson() == jsvalue);
 }
 
+unittest
+{
+	static struct Pipeline(ARGS...) { @asArray ARGS pipeline; }
+	auto getPipeline(ARGS...)(ARGS args) { return Pipeline!ARGS(args); }
+
+	string[string] a = ["foo":"bar"];
+	int b = 42;
+
+	auto fields = getPipeline(a, b).serializeToBson()["pipeline"].get!(Bson[]);
+	assert(fields[0]["foo"].get!string == "bar");
+	assert(fields[1].get!int == 42);
+}
+
 private string skipCString(ref bdata_t data)
 @safe {
 	auto idx = data.countUntil(0);
@@ -1752,4 +1789,4 @@ pure @safe {
 }
 
 /// private
-package template isBsonSerializable(T) { enum isBsonSerializable = is(typeof(T.init.toBson()) == Bson) && is(typeof(T.fromBson(Bson())) == T); }
+package template isBsonSerializable(T) { enum isBsonSerializable = is(typeof(T.init.toBson()) : Bson) && is(typeof(T.fromBson(Bson())) : T); }

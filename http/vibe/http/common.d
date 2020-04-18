@@ -1,7 +1,7 @@
 /**
 	Common classes for HTTP clients and servers.
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	Copyright: © 2012-2015 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -16,6 +16,7 @@ import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
 import vibe.utils.array;
+import vibe.utils.dictionarylist;
 import vibe.internal.allocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
@@ -30,7 +31,7 @@ import std.format;
 import std.range : isOutputRange;
 import std.string;
 import std.typecons;
-import std.uni: asLowerCase;
+import std.uni: asLowerCase, sicmp;
 
 
 enum HTTPVersion {
@@ -279,6 +280,8 @@ class HTTPRequest {
 class HTTPResponse {
 	@safe:
 
+	protected DictionaryList!Cookie m_cookies;
+
 	public {
 		/// The protocol version of the response - should not be changed
 		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
@@ -296,7 +299,7 @@ class HTTPResponse {
 		InetHeaderMap headers;
 
 		/// All cookies that shall be set on the client for this request
-		Cookie[string] cookies;
+		@property ref DictionaryList!Cookie cookies() { return m_cookies; }
 	}
 
 	public override string toString()
@@ -320,7 +323,7 @@ class HTTPResponse {
 	Throwing this exception from within a request handler will produce a matching error page.
 */
 class HTTPStatusException : Exception {
-	@safe:
+	pure nothrow @safe @nogc:
 
 	private {
 		int m_status;
@@ -328,7 +331,7 @@ class HTTPStatusException : Exception {
 
 	this(int status, string message = null, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
-		super(message != "" ? message : httpStatusText(status), file, line, next);
+		super(message.length ? message : httpStatusText(status), file, line, next);
 		m_status = status;
 	}
 
@@ -571,8 +574,13 @@ string randomMultipartBoundary()
 	return ret[].idup;
 }
 
+/**
+ * Returns:
+ *     The version string corresponding to the `ver`,
+ *     suitable for usage in the start line of the request.
+ */
 string getHTTPVersionString(HTTPVersion ver)
-@safe nothrow {
+nothrow pure @nogc @safe {
 	final switch(ver){
 		case HTTPVersion.HTTP_1_0: return "HTTP/1.0";
 		case HTTPVersion.HTTP_1_1: return "HTTP/1.1";
@@ -582,14 +590,11 @@ string getHTTPVersionString(HTTPVersion ver)
 
 HTTPVersion parseHTTPVersion(ref string str)
 @safe {
-	enforceBadRequest(str.startsWith("HTTP/"));
-	str = str[5 .. $];
-	int majorVersion = parse!int(str);
-	enforceBadRequest(str.startsWith("."));
-	str = str[1 .. $];
+	enforceBadRequest(str.startsWith("HTTP/1."));
+	str = str[7 .. $];
 	int minorVersion = parse!int(str);
 
-	enforceBadRequest( majorVersion == 1 && (minorVersion == 0 || minorVersion == 1) );
+	enforceBadRequest( minorVersion == 0 || minorVersion == 1 );
 	return minorVersion == 0 ? HTTPVersion.HTTP_1_0 : HTTPVersion.HTTP_1_1;
 }
 
@@ -844,6 +849,82 @@ FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_s
 	return FreeListRef!ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
 }
 
+/// Parses the cookie from a header field, returning the name of the cookie.
+/// Implements an algorithm equivalent to https://tools.ietf.org/html/rfc6265#section-5.2
+/// Returns: the cookie name as return value, populates the dst argument or allocates on the GC for the tuple overload.
+string parseHTTPCookie(string header_string, scope Cookie dst)
+@safe
+in {
+	assert(dst !is null);
+} do {
+	if (!header_string.length)
+		return typeof(return).init;
+
+	auto parts = header_string.splitter(';');
+	auto idx = parts.front.indexOf('=');
+	if (idx == -1)
+		return typeof(return).init;
+
+	auto name = parts.front[0 .. idx].strip();
+	dst.m_value = parts.front[name.length + 1 .. $].strip();
+	parts.popFront();
+
+	if (!name.length)
+		return typeof(return).init;
+
+	foreach(part; parts) {
+		if (!part.length)
+			continue;
+
+		idx = part.indexOf('=');
+		if (idx == -1) {
+			idx = part.length;
+		}
+		auto key = part[0 .. idx].strip();
+		auto value = part[min(idx + 1, $) .. $].strip();
+
+		try {
+			if (key.sicmp("httponly") == 0) {
+				dst.m_httpOnly = true;
+			} else if (key.sicmp("secure") == 0) {
+				dst.m_secure = true;
+			} else if (key.sicmp("expires") == 0) {
+				// RFC 822 got updated by RFC 1123 (which is to be used) but is valid for this
+				// this parsing is just for validation
+				parseRFC822DateTimeString(value);
+				dst.m_expires = value;
+			} else if (key.sicmp("max-age") == 0) {
+				if (value.length && value[0] != '-')
+					dst.m_maxAge = value.to!long;
+			} else if (key.sicmp("domain") == 0) {
+				if (value.length && value[0] == '.')
+					value = value[1 .. $]; // the leading . must be stripped (5.2.3)
+
+				enforce!ConvException(value.all!(a => a >= 32), "Cookie Domain must not contain any control characters");
+				dst.m_domain = value.toLower; // must be lower (5.2.3)
+			} else if (key.sicmp("path") == 0) {
+				if (value.length && value[0] == '/') {
+					enforce!ConvException(value.all!(a => a >= 32), "Cookie Path must not contain any control characters");
+					dst.m_path = value;
+				} else {
+					dst.m_path = null;
+				}
+			} // else extension value...
+		} catch (DateTimeException) {
+		} catch (ConvException) {
+		}
+		// RFC 6265 says to ignore invalid values on all of these fields
+	}
+	return name;
+}
+
+/// ditto
+Tuple!(string, Cookie) parseHTTPCookie(string header_string)
+@safe {
+	Cookie cookie = new Cookie();
+	auto name = parseHTTPCookie(header_string, cookie);
+	return tuple(name, cookie);
+}
 
 final class Cookie {
 	@safe:
@@ -856,12 +937,19 @@ final class Cookie {
 		long m_maxAge;
 		bool m_secure;
 		bool m_httpOnly;
+		SameSite m_sameSite;
 	}
 
 	enum Encoding {
 		url,
 		raw,
 		none = raw
+	}
+
+	enum SameSite {
+		default_,
+		lax,
+		strict,
 	}
 
 	/// Cookie payload
@@ -914,6 +1002,12 @@ final class Cookie {
 	/// ditto
 	@property bool httpOnly() const { return m_httpOnly; }
 
+	/** Prevent cross-site request forgery.
+	*/
+	@property void sameSite(Cookie.SameSite value) { m_sameSite = value; }
+	/// ditto
+	@property Cookie.SameSite sameSite() const { return m_sameSite; }
+
 	/** Sets the "expires" and "max-age" attributes to limit the life time of
 		the cookie.
 	*/
@@ -962,6 +1056,12 @@ final class Cookie {
 		if (this.maxAge) dst.formattedWrite("; Max-Age=%s", this.maxAge);
 		if (this.secure) dst.put("; Secure");
 		if (this.httpOnly) dst.put("; HttpOnly");
+		with(Cookie.SameSite)
+		final switch(this.sameSite) {
+			case default_: break;
+			case lax: dst.put("; SameSite=Lax"); break;
+			case strict: dst.put("; SameSite=Strict"); break;
+		}
 	}
 
 	private static void validateValue(string value)
@@ -991,6 +1091,43 @@ unittest {
 	assertThrown(c.value);
 
 	assertThrown(c.setValue("foo;bar", Cookie.Encoding.raw));
+
+	auto tup = parseHTTPCookie("foo=bar; HttpOnly; Secure; Expires=Wed, 09 Jun 2021 10:18:14 GMT; Max-Age=60000; Domain=foo.com; Path=/users");
+	assert(tup[0] == "foo");
+	assert(tup[1].value == "bar");
+	assert(tup[1].httpOnly == true);
+	assert(tup[1].secure == true);
+	assert(tup[1].expires == "Wed, 09 Jun 2021 10:18:14 GMT");
+	assert(tup[1].maxAge == 60000L);
+	assert(tup[1].domain == "foo.com");
+	assert(tup[1].path == "/users");
+
+	tup = parseHTTPCookie("SESSIONID=0123456789ABCDEF0123456789ABCDEF; Path=/site; HttpOnly");
+	assert(tup[0] == "SESSIONID");
+	assert(tup[1].value == "0123456789ABCDEF0123456789ABCDEF");
+	assert(tup[1].httpOnly == true);
+	assert(tup[1].secure == false);
+	assert(tup[1].expires == "");
+	assert(tup[1].maxAge == 0);
+	assert(tup[1].domain == "");
+	assert(tup[1].path == "/site");
+
+	tup = parseHTTPCookie("invalid");
+	assert(!tup[0].length);
+
+	tup = parseHTTPCookie("valid=");
+	assert(tup[0] == "valid");
+	assert(tup[1].value == "");
+
+	tup = parseHTTPCookie("valid=;Path=/bar;Path=foo;Expires=14   ; Something   ; Domain=..example.org");
+	assert(tup[0] == "valid");
+	assert(tup[1].value == "");
+	assert(tup[1].httpOnly == false);
+	assert(tup[1].secure == false);
+	assert(tup[1].expires == "");
+	assert(tup[1].maxAge == 0);
+	assert(tup[1].domain == ".example.org"); // spec says you must strip only the first leading dot
+	assert(tup[1].path == "");
 }
 
 
