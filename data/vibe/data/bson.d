@@ -132,10 +132,22 @@ struct Bson {
 	}
 
 	/// Returns a new, empty Bson value of type Object.
-	static @property Bson emptyObject() { return Bson(cast(Bson[string])null); }
+	static @property Bson emptyObject()
+	{
+		Bson ret;
+		ret.m_type = Type.object;
+		ret.m_data = [5, 0, 0, 0, 0];
+		return ret;
+	}
 
 	/// Returns a new, empty Bson value of type Array.
-	static @property Bson emptyArray() { return Bson(cast(Bson[])null); }
+	static @property Bson emptyArray()
+	{
+		Bson ret;
+		ret.m_type = Type.array;
+		ret.m_data = [5, 0, 0, 0, 0];
+		return ret;
+	}
 
 	private {
 		Type m_type = Type.undefined;
