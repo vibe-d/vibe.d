@@ -786,7 +786,7 @@ final class HTTPClientRequest : HTTPRequest {
 		FixedAppender!(string, 22) m_contentLengthBuffer;
 		TCPConnection m_rawConn;
 		TLSCertificateInformation m_peerCertificate;
-		bool m_writtenPart = false;
+		string m_multipartBoundary;
 	}
 
 
@@ -894,56 +894,85 @@ final class HTTPClientRequest : HTTPRequest {
 
 	/**
 		Writes the body as multipart request that can upload files.
+
+		Also sets the `Content-Length` if it can be calculated.
 	 */
-	void writePart(MultiPartBody part)
+	void writeMultiPartBody(MultiPartBody part)
 	{
-		auto boundary = randomMultipartBoundary;
+		string boundary = randomMultipartBoundary();
 		auto length = part.length(boundary);
-		headers["Content-Type"] = part.contentType ~ "; boundary=\"" ~ boundary ~ "\"";
 		if (length != 0)
 			headers["Content-Length"] = length.to!string;
-		else
-			headers["Transfer-Encoding"] = "identity";
+		headers["Content-Type"] = part.contentType ~ "; boundary=\"" ~ boundary ~ "\"";
+
+		// call part.write directly instead of begin/write/finalize because it
+		// also calculates the length for us and expects it to write itself.
 		part.write(boundary, bodyWriter);
 		finalize();
 	}
 
 	/**
-		Partially writes the body with a multipart.
-		You need to supply a boundary which is a random string that should not occur in the content.
-		The boundary can be generated using `vibe.http.common.randomMultipartBoundary` and must always be the same in one request.
-	 */
-	void writePart(MultiPart part, string boundary)
+		Starts manually writing a multipart request with `writePart` calls
+		following this call and finalizing using `finalizeMultiPart`.
+
+		This API is for manually writing out the parts, use `writeMultiPartBody`
+		to do it all in one step instead.
+
+		Sets the content type to the given content type with the boundary.
+
+		Params:
+			preamble = Text to write in the preamble. It is ignored by HTTP
+				servers but can be used for example to include additional
+				information when writing a mail to a non multipart conforming
+				reader for the user to see at the start.
+			boundary = The multipart boundary to use to separate the different
+				parts. If this is null or empty, this function will
+				automatically generate a cryptographically secure random
+				boundary to separate the parts. May be at most 70 characters,
+				otherwise it will be trimmed.
+	*/
+	void beginMultiPart(string content_type = "multipart/form-data", string preamble = null, string boundary = null)
 	{
+		if (!boundary.length)
+			boundary = randomMultipartBoundary;
+
 		if (boundary.length > 70) {
 			logTrace("Boundary '%s' is longer than 70 characters, truncating", boundary);
-			boundary.length = 70;
+			boundary = boundary[0 .. 70];
 		}
 
-		if (m_writtenPart)
-			bodyWriter.write(boundary);
-
 		if ("Content-Type" !in headers)
-			headers["Content-Type"] = "multipart/form-data; boundary=\"" ~ boundary ~ "\"";
+			headers["Content-Type"] = content_type ~ "; boundary=\"" ~ boundary ~ "\"";
 
-		boundary = "--" ~ boundary;
-		bodyWriter.write(boundary);
-		bodyWriter.write("\r\n");
-		foreach (k, v; part.headers)
-			bodyWriter.write(k ~ ": " ~ v ~ "\r\n");
-		bodyWriter.write("\r\n");
-		pipe(part.content, bodyWriter);
-		bodyWriter.write("\r\n");
-		m_writtenPart = true;
+		m_multipartBoundary = boundary;
+
+		if (preamble.length) {
+			bodyWriter.write(preamble);
+			bodyWriter.write("\r\n");
+		}
 	}
 
 	/**
-		Finishes writing a multipart response by sending the ending boundary and finalizing the request.
+		Partially writes the body with a multipart. If you plan to manually
+		write all parts using writePart you need to start with `beginMultiPart`
+		and end with `finalizeMultiPart`.
+
+		Alternatively you can use `writeMultiPartBody` to do everything in one
+		step.
 	 */
-	void finalizePart(string boundary, string epilogue = null)
+	void writePart(MultiPart part)
+	{
+		part.write(bodyWriter, m_multipartBoundary);
+	}
+
+	/**
+		Finishes writing a multipart response by sending the ending boundary and
+		finalizing the request.
+	 */
+	void finalizeMultiPart(string epilogue = null)
 	{
 		bodyWriter.write("--");
-		bodyWriter.write(boundary);
+		bodyWriter.write(m_multipartBoundary);
 		bodyWriter.write("--\r\n");
 		if (epilogue.length)
 		{
@@ -955,12 +984,15 @@ final class HTTPClientRequest : HTTPRequest {
 
 	///
 	unittest {
+		import vibe.core.file : openFile;
+		import vibe.http.common : MultiPart, MultiPartBody;
+
 		void test(HTTPClientRequest req) {
 			MultiPartBody part = new MultiPartBody;
 			part.parts ~= MultiPart.formData("name", "bob");
 			part.parts ~= MultiPart.singleFile("picture", "picture.png", "image/png", openFile("res/profilepicture.png"));
-			part.parts ~= MultiPart.singleFile("upload", Path("file.zip")); // auto read & mime detection from filename
-			req.writePart(part);
+			part.parts ~= MultiPart.singleFile("upload", NativePath("file.zip")); // auto read & mime detection from filename
+			req.writeMultiPartBody(part);
 		}
 	}
 
