@@ -169,7 +169,9 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 			cmd["createIndexes"] = m_name;
 			Bson[] indexes;
 			foreach (model; models) {
-				IndexOptions opt_dup = model.options;
+				// trusted to support old compilers which think opt_dup has
+				// longer lifetime than model.options
+				IndexOptions opt_dup = (() @trusted => model.options)();
 				enforceWireVersionConstraints(opt_dup, conn.description.maxWireVersion);
 				Bson index = serializeToBson(opt_dup);
 				index["key"] = model.keys;
@@ -182,7 +184,9 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 				~ reply["errmsg"].opt!string);
 		} else {
 			foreach (model; models) {
-				IndexOptions opt_dup = model.options;
+				// trusted to support old compilers which think opt_dup has
+				// longer lifetime than model.options
+				IndexOptions opt_dup = (() @trusted => model.options)();
 				enforceWireVersionConstraints(opt_dup, WireVersion.old);
 				Bson doc = serializeToBson(opt_dup);
 				doc["v"] = 1;
@@ -238,12 +242,9 @@ enum IndexFlags {
 	ExpireAfterSeconds = expireAfterSeconds, /// Deprecated compatibility alias, use `expireAfterSeconds` instead.
 }
 
-// workaround for old dmd versions
-private enum Bson bsonEmptyObject = Bson(Bson.Type.object, cast(ubyte[]) [5,0,0,0,0]);
-
 struct IndexModel
 {
-	Bson keys = bsonEmptyObject;
+	Bson keys = Bson.emptyObject;
 	IndexOptions options;
 
 	/**
