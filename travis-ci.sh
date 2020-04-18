@@ -91,6 +91,10 @@ if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
             fi
 
             kill $MONGOPID
+
+            while kill -0 $MONGOPID; do 
+                sleep 1
+            done
         fi
     done
 fi
