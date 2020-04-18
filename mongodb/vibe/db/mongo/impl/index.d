@@ -238,10 +238,12 @@ enum IndexFlags {
 	ExpireAfterSeconds = expireAfterSeconds, /// Deprecated compatibility alias, use `expireAfterSeconds` instead.
 }
 
+// workaround for old dmd versions
+private enum Bson bsonEmptyObject = Bson(Bson.Type.object, cast(ubyte[]) [5,0,0,0,0]);
 
 struct IndexModel
 {
-	Bson keys = Bson.emptyObject;
+	Bson keys = bsonEmptyObject;
 	IndexOptions options;
 
 	/**
