@@ -442,7 +442,7 @@ final class MultiPart
 		const type = getMimeTypeForFile(file.toString);
 		const binary = !type.startsWith("text/");
 		auto f = openFile(file, FileMode.read);
-		return singleFile(field_name, file.head.name, type, f, binary, f.size);
+		return singleFile(field_name, file.head.name, type, f, binary, cast(size_t) f.size);
 	}
 
 	/**
@@ -504,7 +504,7 @@ final class MultiPart
 		const type = getMimeTypeForFile(file.toString);
 		const binary = !type.startsWith("text/");
 		auto f = openFile(file, FileMode.read);
-		return multipleFilesPart(file.head.name, type, f, binary, f.size);
+		return multipleFilesPart(file.head.name, type, f, binary, cast(size_t) f.size);
 	}
 
 	/**
