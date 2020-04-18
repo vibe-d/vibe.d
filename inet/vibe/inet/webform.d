@@ -338,6 +338,399 @@ private bool parseMultipartFormPart(InputStream)(InputStream stream, ref FormFie
 }
 
 /**
+	Represents a single part in a multipart message. Each part can have its own
+	headers to specify handling of the part for the receiver.
+
+	Use $(LREF MultiPartBody) to manage a collection of parts.
+*/
+final class MultiPart
+{
+	import vibe.stream.memory : createMemoryStream;
+
+	/// Headers for this part of the multipart data.
+	InetHeaderMap headers;
+
+	private
+	{
+		InputStreamProxy m_content;
+		size_t m_contentLength;
+	}
+
+	@safe:
+
+	/**
+		Sets the content stream & length to the given parameters.
+
+		Params:
+			stream = the input stream to read from when writing the MultiPart.
+			exact_content_length = Set to the content length in bytes to allow
+				calculation of the `Content-Length` header. Leave 0 to omit.
+	*/
+	void setContent(InputStream)(InputStream stream,
+		size_t exact_content_length = 0)
+		if (isInputStream!InputStream)
+	{
+		import vibe.internal.interfaceproxy : interfaceProxy;
+
+		m_content = interfaceProxy!(.InputStream)(stream);
+		m_contentLength = exact_content_length;
+	}
+
+	/**
+		Returns the content stream, wrapped as InputStreamProxy as previously
+		set from setContent or from the static constructing methods.
+	*/
+	inout(InputStreamProxy) content() @property inout
+	{
+		return m_content;
+	}
+
+	/**
+		Sets a form-data field with the given name to a static value.
+
+		Params:
+			field_name = The field name for example as defined in a HTML form.
+			stream = An InputStream that contains the value for this field.
+			value = A fixed value string that contains the value for this field.
+			content = A fixed value that contains the value for this field.
+			content_type = The content type of the value. If set to empty string
+				no content type will be sent.
+			binary = Set to true to set Content-Transfer-Encoding to binary.
+			exact_content_length = Exact length of what the stream will evaluate
+				to in bytes. Used for Content-Length calculation if given.
+	*/
+	static MultiPart formData(InputStream)(string field_name, InputStream stream,
+		string content_type = "text/plain; charset=\"utf-8\"", bool binary = false,
+		size_t exact_content_length = 0)
+		if (isInputStream!InputStream)
+	{
+		auto ret = new MultiPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
+		if (content_type.length)
+			ret.headers["Content-Type"] = content_type;
+		if (binary)
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.setContent(stream, exact_content_length);
+		return ret;
+	}
+
+	/// ditto
+	static MultiPart formData(string field_name, string value,
+		string content_type = "text/plain; charset=\"utf-8\"")
+	{
+		return formData(field_name, createMemoryStream(cast(ubyte[]) value.dup, false),
+			content_type, false, value.length);
+	}
+
+	/// ditto
+	static MultiPart formData(string field_name, ubyte[] content,
+		string content_type = "application/octet-stream")
+	{
+		return formData(field_name, createMemoryStream(cast(ubyte[]) content, false),
+			content_type, true, content.length);
+	}
+
+	/**
+		Helper function directly reading from a file calling singleFile with the
+		InputStream parameter and content length set.
+	*/
+	static MultiPart singleFile(string field_name, NativePath file)
+	{
+		import vibe.inet.mimetypes : getMimeTypeForFile;
+		import vibe.core.file : openFile, FileMode;
+
+		const type = getMimeTypeForFile(file.toString);
+		const binary = !type.startsWith("text/");
+		auto f = openFile(file, FileMode.read);
+		return singleFile(field_name, file.head.name, type, f, binary, f.size);
+	}
+
+	/**
+		Sets a form-data field with the given name and a filename which is set
+		inside the Content-Disposition header and a value.
+
+		Params:
+			field_name = The field name for example as defined in a HTML form.
+			filename = The filename (without path) to set for this field.
+			stream = An InputStream that represents the content of the file.
+			content = The fixed content of the file.
+			content_type = The content type of the file. If set to empty string
+				no content type will be sent.
+			binary = Set to true to set Content-Transfer-Encoding to binary.
+			exact_content_length = Exact length of what the stream will evaluate
+				to in bytes. Used for Content-Length calculation if given.
+	*/
+	static MultiPart singleFile(InputStream)(string field_name, string filename,
+		string content_type, InputStream stream, bool binary = true,
+		size_t exact_content_length = 0)
+		if (isInputStream!InputStream)
+	{
+		auto ret = new MultiPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
+		if (content_type.length)
+			ret.headers["Content-Type"] = content_type;
+		if (binary)
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.setContent(stream, exact_content_length);
+		return ret;
+	}
+
+	/// ditto
+	static MultiPart singleFile(string field_name, string filename,
+		string content_type, string content)
+	{
+		return singleFile(field_name, filename, content_type,
+			createMemoryStream(cast(ubyte[]) content.dup, false), false,
+			content.length);
+	}
+
+	/// ditto
+	static MultiPart singleFile(string field_name, string filename,
+		string content_type, ubyte[] content)
+	{
+		return singleFile(field_name, filename, content_type,
+			createMemoryStream(content, false), true, content.length);
+	}
+
+	/**
+		Helper function directly reading from a file calling multipleFilesPart
+		with the InputStream parameter and content length set.
+	*/
+	static MultiPart multipleFilesPart(NativePath file)
+	{
+		import vibe.inet.mimetypes : getMimeTypeForFile;
+		import vibe.core.file : openFile, FileMode;
+
+		const type = getMimeTypeForFile(file.toString);
+		const binary = !type.startsWith("text/");
+		auto f = openFile(file, FileMode.read);
+		return multipleFilesPart(file.head.name, type, f, binary, f.size);
+	}
+
+	/**
+		Creates a part for a multi-file form field to store multiple files in a
+		single part. Store all multipleFilesPart MultiParts inside a
+		MultiPartBody and use multipleFiles to associate them all with a single
+		form field.
+
+		Params:
+			filename = The filename (without path) to set for this file.
+			stream = An InputStream that represents the content of the file.
+			content = The fixed content of the file.
+			content_type = The content type of the file. If set to empty string
+				no content type will be sent.
+			binary = Set to true to set Content-Transfer-Encoding to binary.
+			exact_content_length = Exact length of what the stream will evaluate
+				to in bytes. Used for Content-Length calculation if given.
+	*/
+	static MultiPart multipleFilesPart(InputStream)(string filename,
+		string content_type, InputStream stream, bool binary = false,
+		size_t exact_content_length = 0)
+		if (isInputStream!InputStream)
+	{
+		auto ret = new MultiPart();
+		ret.headers["Content-Disposition"] = "file; filename=\"" ~ filename ~ "\"";
+		if (content_type.length)
+			ret.headers["Content-Type"] = content_type;
+		if (binary)
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		ret.setContent(stream, exact_content_length);
+		return ret;
+	}
+
+	/// ditto
+	static MultiPart multipleFilesPart(string filename, string content_type,
+		string content)
+	{
+		return multipleFilesPart(filename, content_type,
+			createMemoryStream((() @trusted => cast(ubyte[]) content)(), false),
+			false, content.length);
+	}
+
+	/// ditto
+	static MultiPart multipleFilesPart(string filename, string content_type,
+		ubyte[] content)
+	{
+		return multipleFilesPart(filename, content_type,
+			createMemoryStream(content, false), true, content.length);
+	}
+
+	/**
+		Creates a field containing multiple values of different kinds inside it
+		using `multipart/mixed`. Useful for example to attach multiple files
+		inside a mail multipart.
+
+		You may for example use this to represent a multipart/mixed type to
+		describe a specific file order of multiple files or you could use
+		multipart/alternative to represent different file type versions of the
+		same file for a mail program.
+
+		Params:
+			name = the field name to associate the mixed multipart to.
+			multipart = the MultiPartBody containing all the different parts to
+				attach.
+			boundary = The boundary to use to split the different parts inside
+				this nested multipart part. Do not use the same value as for the
+				parent MultiPartBody, instead generate a new one using
+				$(REF randomMultipartBoundary, vibe,http,common).
+			content_type = The subtype for this mixed multipart to have. Common
+				types include `multipart/mixed` or `multipart/alternative`.
+	*/
+	static MultiPart multipleFiles(string name, MultiPartBody multipart,
+		string boundary, string content_type = "multipart/mixed")
+	{
+		import vibe.stream.memory : createMemoryOutputStream;
+
+		auto ret = new MultiPart();
+		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ name ~ "\"";
+		ret.headers["Content-Type"] = content_type ~ "; boundary=\"" ~ boundary ~ "\"";
+		auto stream = createMemoryOutputStream();
+		multipart.write(boundary, stream);
+		ret.setContent(createMemoryStream(stream.data, false), stream.data.length);
+		return ret;
+	}
+
+	/**
+		Calculates the content length of this part in bytes including headers
+		and boundary length.
+
+		Returns: the length of this part in bytes or 0 if it couldn't be
+		determined.
+	*/
+	size_t getLength(string boundary) const
+	{
+		if (m_contentLength == 0)
+			return 0;
+
+		size_t length;
+		length += 4 + boundary.length; // --boundary\r\n
+		foreach (k, v; headers.byKeyValue)
+			length += 4 + k.length + v.length; // "key: value\r\n"
+		length += 2; // \r\n
+		length += m_contentLength;
+		length += 2; // \r\n
+		return length;
+	}
+
+	/**
+		Writes this MultiPart to the given output stream.
+
+		To use on a HTTPClient use the `writePart` method of `HTTPClientRequest`.
+	*/
+	void write(OutputStream)(OutputStream output, string boundary)
+		if (isOutputStream!OutputStream)
+	{
+		output.write("--");
+		output.write(boundary);
+		output.write("\r\n");
+		foreach (k, v; headers.byKeyValue) {
+			output.write(k);
+			output.write(": ");
+			output.write(v);
+			output.write("\r\n");
+		}
+		output.write("\r\n");
+		pipe(content, output);
+		output.write("\r\n");
+	}
+}
+
+/**
+	Collection container for multiple MultiPart parts, a content type and an
+	optional preamble/epilogue.
+
+	May represent attachments for emails, form data for HTTP requests or other
+	multipart internet messages.
+
+	Standards: $(LINK https://tools.ietf.org/html/rfc1521#section-7.2)
+*/
+final class MultiPartBody
+{
+	/**
+		The mime type of this multipart. For HTTP this is most usually
+		multipart/form-data to indicate this describing form fields.
+	*/
+	string contentType = "multipart/form-data";
+
+	/**
+		Extra information to send before/after the multipart data which is
+		usually ignored for server processing but allows to include text for
+		example for mail users with non-multipart-supporting mail clients for
+		instructions how to read this file.
+	*/
+	string preamble, epilogue;
+
+	/**
+		The full collection of parts that this multipart describes.
+	*/
+	MultiPart[] parts;
+
+	@safe:
+
+	/**
+		Computes the length of the parts, preamble, epilogue together in bytes
+		for sending `Content-Length` headers or calculating progress.
+
+		Returns: the number of bytes the content is gonna take up or `0` if it
+		cannot be determined in case a part is not a MemoryStream.
+	*/
+	size_t length(string boundary) const
+	{
+		import vibe.stream.memory : MemoryStream;
+
+		if (!parts.length)
+			return 0;
+
+		size_t length;
+		if (preamble.length)
+			length += preamble.length + 2; // \r\n
+		foreach (part; parts) {
+			const subLength = part.getLength(boundary);
+			if (subLength == 0)
+				return 0;
+			length += subLength;
+		}
+		length += boundary.length + 6; // "--boundary--\r\n"
+		if (epilogue.length)
+			length += epilogue.length + 2;
+		return length;
+	}
+
+	/**
+		Writes the full multipart body to the given output stream with the given
+		multipart boundary. A secure random boundary can be obtained through
+		$(REF randomMultipartBoundary, vibe,http,common).
+
+		If you want to send the MultiPartBody in a HTTP request, it is
+		recommended to use $(REF writePart, vibe,http,client,HTTPClientRequest).
+	*/
+	void write(T)(string boundary, T output)
+		if (isOutputStream!T)
+	{
+		import vibe.core.stream : pipe;
+
+		if (!parts.length)
+			return;
+
+		if (preamble.length) {
+			output.write(preamble);
+			output.write("\r\n");
+		}
+		foreach (part; parts) {
+			part.write(output, boundary);
+		}
+		output.write("--");
+		output.write(boundary);
+		output.write("--\r\n");
+		if (epilogue.length)
+		{
+			output.write(epilogue);
+			output.write("\r\n");
+		}
+	}
+}
+
+/**
 	Encodes a Key-Value map into a form URL encoded string.
 
 	Writes to the $(D OutputRange) an application/x-www-form-urlencoded MIME formatted string,

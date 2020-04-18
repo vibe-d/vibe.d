@@ -17,6 +17,7 @@ import vibe.core.log;
 import vibe.data.json;
 import vibe.inet.message;
 import vibe.inet.url;
+import vibe.inet.webform : MultiPart, MultiPartBody;
 import vibe.stream.counting;
 import vibe.stream.tls;
 import vibe.stream.operations;
@@ -985,7 +986,7 @@ final class HTTPClientRequest : HTTPRequest {
 	///
 	unittest {
 		import vibe.core.file : openFile;
-		import vibe.http.common : MultiPart, MultiPartBody;
+		import vibe.inet.webform : MultiPart, MultiPartBody;
 
 		void test(HTTPClientRequest req) {
 			MultiPartBody part = new MultiPartBody;
