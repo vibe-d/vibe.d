@@ -22,7 +22,7 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 	deprecated("This is a legacy API, call createIndexes instead")
 	void ensureIndex(scope const(Tuple!(string, int))[] field_orders, IndexFlags flags = IndexFlags.none, Duration expire_time = 0.seconds)
 	@safe {
-		scope IndexModel[] models = new IndexModel[field_orders.length];
+		IndexModel[1] models;
 		IndexOptions options;
 		if (flags & IndexFlags.unique) options.unique = true;
 		if (flags & IndexFlags.dropDuplicates) options.dropDups = true;
@@ -30,8 +30,9 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 		if (flags & IndexFlags.sparse) options.sparse = true;
 		if (flags & IndexFlags.expireAfterSeconds) options.expireAfter = expire_time;
 
+		models[0].options = options;
 		foreach (field; field_orders) {
-			models ~= IndexModel().add(field[0], field[1]).withOptions(options);
+			models[0].add(field[0], field[1]);
 		}
 		createIndexes(models);
 	}
