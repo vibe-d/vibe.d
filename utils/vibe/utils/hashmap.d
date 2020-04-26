@@ -97,7 +97,9 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey, Allocator = IAl
 		{
 			import std.algorithm.mutation : move;
 			this.key = cast(UnConst!Key)key;
-			this.value = value.move;
+			static if (is(typeof(value.move)))
+				this.value = value.move;
+			else this.value = value;
 		}
 	}
 	private {
@@ -161,7 +163,9 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey, Allocator = IAl
 				}
 				r = Traits.hashOf(m_table[i].key) & (m_table.length-1);
 			} while ((j<r && r<=i) || (i<j && j<r) || (r<=i && i<j));
-			m_table[j] = m_table[i].move;
+			static if (is(typeof(m_table[i].move)))
+				m_table[j] = m_table[i].move;
+			else m_table[j] = m_table[i];
 		}
 	}
 
