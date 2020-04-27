@@ -88,6 +88,21 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 		dropIndex(keys.name, options);
 	}
 
+	///
+	@safe unittest
+	{
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			auto primarykey = IndexModel()
+					.add("name", 1)
+					.add("primarykey", -1);
+			coll.dropIndex(primarykey);
+		}
+	}
+
 	/// Drops all indexes in the collection.
 	void dropIndexes(DropIndexOptions options = DropIndexOptions.init)
 	@safe {
@@ -125,6 +140,18 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 		}
 	}
 
+	///
+	@safe unittest
+	{
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			coll.dropIndexes(["name_1_primarykey_-1"]);
+		}
+	}
+
 	/**
 		Convenience method for creating a single index. Calls `createIndexes`
 
@@ -152,6 +179,30 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 		IndexModel[1] model;
 		model[0] = keys;
 		return createIndexes(model[], options)[0];
+	}
+
+	///
+	@safe unittest
+	{
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+
+			// simple ascending name, descending primarykey compound-index
+			coll.createIndex(["name": 1, "primarykey": -1]);
+
+			IndexOptions textOptions = {
+				// pick language from another field called "idioma"
+				languageOverride: "idioma"
+			};
+			auto textIndex = IndexModel()
+					.withOptions(textOptions)
+					.add("comments", IndexType.text);
+			// more complex text index in DB with independent language
+			coll.createIndex(textIndex);
+		}
 	}
 
 	/**
@@ -220,6 +271,20 @@ mixin template MongoCollectionIndexStandardAPIImpl()
 			return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
 		} else {
 			return database["system.indexes"].find!R();
+		}
+	}
+
+	///
+	@safe unittest
+	{
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+
+			foreach (index; coll.listIndexes())
+				logInfo("index %s: %s", index["name"].get!string, index);
 		}
 	}
 
