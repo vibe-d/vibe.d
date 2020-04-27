@@ -131,12 +131,15 @@ struct Bson {
 		MaxKey = maxKey           /// Compatibility alias - will be deprecated soon.
 	}
 
+	// length + 0 byte end for empty lists (map, array)
+	private static immutable ubyte[] emptyListBytes = [5, 0, 0, 0, 0];
+
 	/// Returns a new, empty Bson value of type Object.
 	static @property Bson emptyObject()
 	{
 		Bson ret;
 		ret.m_type = Type.object;
-		ret.m_data = [5, 0, 0, 0, 0];
+		ret.m_data = emptyListBytes;
 		return ret;
 	}
 
@@ -145,7 +148,7 @@ struct Bson {
 	{
 		Bson ret;
 		ret.m_type = Type.array;
-		ret.m_data = [5, 0, 0, 0, 0];
+		ret.m_data = emptyListBytes;
 		return ret;
 	}
 
