@@ -187,9 +187,8 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 		// Ignore special members, such as ctor, dtors, postblit, and opAssign,
 		// and object default methods and fields.
 		// See https://github.com/vibe-d/vibe.d/issues/2438
-		static if (M != "__ctor" && M != "__dtor" && M != "__xdtor" &&
-				   M != "__postblit" && M != "__xpostblit" && M != "opAssign" &&
-				   !is(typeof(__traits(getMember, Object, M))))
+		static if (!is(typeof(__traits(getMember, Object, M)))
+			&& (M.length < 2 || M[0 .. 2] != "__"))
 		{
 			foreach (overload; MemberFunctionsTuple!(C, M)) {
 				alias RT = ReturnType!overload;
