@@ -12,6 +12,9 @@ import std.format : format;
 // TODO: test the various parameter and return type combinations, as well as all attributes
 
 class Service {
+	// https://github.com/vibe-d/vibe.d/issues/2438
+	this(string configuration) {}
+
 	@noRoute void getFoo(HTTPServerResponse res) { res.writeBody("oops"); }
 	void getBar(HTTPServerResponse res) { res.writeBody("ok"); }
 	string getString() { return "string"; }
@@ -23,7 +26,7 @@ shared static this()
 	settings.port = 0;
 	settings.bindAddresses = ["127.0.0.1"];
 	auto router = new URLRouter;
-	router.registerWebInterface(new Service);
+	router.registerWebInterface(new Service("Vibe.d rocks!"));
 	immutable serverAddr = listenHTTP(settings, router).bindAddresses[0];
 
 	runTask({
