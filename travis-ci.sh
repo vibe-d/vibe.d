@@ -26,7 +26,6 @@ fi
 
 if [[ $PARTS =~ (^|,)unittests(,|$) ]]; then
     dub test :data --compiler=$DC $DUB_ARGS
-    dub test :core --compiler=$DC $DUB_ARGS
     dub test :mongodb --compiler=$DC $DUB_ARGS
     dub test :redis --compiler=$DC $DUB_ARGS
     dub test :web --compiler=$DC $DUB_ARGS
