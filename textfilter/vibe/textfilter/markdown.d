@@ -171,6 +171,27 @@ enum MarkdownFlags {
 	*/
 	attributes = 1<<6,
 
+	/** Recognize figure definitions
+
+		Figures can be defined using a modified list syntax:
+
+		```
+		- %%%
+			This is the figure content
+
+			- ###
+				This is optional caption content
+		```
+
+		Just like for lists, arbitrary blocks can be nested within figure and
+		figure caption blocks. If only a single paragraph is present within a
+		figure caption block, the paragraph text will be emitted without the
+		surrounding `<p>` tags. The same is true for figure blocks that contain
+		only a single paragraph and any number of additional figure caption
+		blocks.
+	*/
+	figures = 1<<7,
+
 	/** Support only standard Markdown features
 
 		Note that the parser is not fully CommonMark compliant at the moment,
@@ -317,7 +338,9 @@ private enum BlockType {
 	UList,
 	ListItem,
 	Code,
-	Quote
+	Quote,
+	figure,
+	figureCaption
 }
 
 private struct Block {
@@ -344,6 +367,7 @@ private enum Alignment {
 private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, scope MarkdownSettings settings)
 pure @safe {
 	import std.conv : to;
+	import std.algorithm.comparison : among;
 
 	if( base_indent.length == 0 ) root.type = BlockType.Text;
 	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
@@ -448,6 +472,20 @@ pure @safe {
 				case LineType.UList:
 				case LineType.OList:
 					b.type = ln.type == LineType.UList ? BlockType.UList : BlockType.OList;
+
+					if (settings.flags & MarkdownFlags.figures && ln.type == LineType.UList) {
+						auto suffix = removeListPrefix(ln.text, ln.type);
+						if (suffix == "###") b.type = BlockType.figureCaption;
+						else if (suffix == "%%%") b.type = BlockType.figure;
+					}
+
+					if (b.type.among(BlockType.figure, BlockType.figureCaption) && !lines.empty) {
+						auto itemindent = base_indent ~ IndentType.White;
+						lines.popFront();
+						parseBlocks(b, lines, itemindent, settings);
+						break;
+					}
+
 					auto itemindent = base_indent ~ IndentType.White;
 					bool firstItem = true, paraMode = false;
 					while(!lines.empty && lines.front.type == ln.type && lines.front.indent == base_indent ){
@@ -455,7 +493,7 @@ pure @safe {
 						itm.text = skipText(lines, itemindent);
 						itm.text[0] = removeListPrefix(itm.text[0], ln.type);
 
-						// emit <p></p> if there are blank lines between the items
+						// emit <p>...</p> if there are blank lines between the items
 						if( firstItem && !lines.empty && lines.front.type == LineType.Blank )
 							paraMode = true;
 						firstItem = false;
@@ -511,6 +549,7 @@ pure @safe {
 		}
 	}
 }
+
 
 private string[] skipText(ref Line[] lines, IndentType[] indent)
 pure @safe {
@@ -640,6 +679,26 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			foreach(b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			dst.put("</blockquote>\n");
+			break;
+		case BlockType.figure:
+			dst.put("<figure>");
+			bool omit_para = block.blocks.count!(b => b.type != BlockType.figureCaption) == 1;
+			foreach (b; block.blocks) {
+				if (b.type == BlockType.Paragraph && omit_para) {
+					writeMarkdownEscaped(dst, b, links, settings);
+				} else writeBlock(dst, b, links, settings);
+			}
+			dst.put("</figure>\n");
+			break;
+		case BlockType.figureCaption:
+			dst.put("<figcaption>");
+			if (block.blocks.length == 1 && block.blocks[0].type == BlockType.Paragraph) {
+				writeMarkdownEscaped(dst, block.blocks[0], links, settings);
+			} else {
+				foreach (b; block.blocks)
+					writeBlock(dst, b, links, settings);
+			}
+			dst.put("</figcaption>\n");
 			break;
 	}
 }
@@ -1562,4 +1621,15 @@ private struct Link {
 @safe unittest { // issue #2132 - table with more columns in body goes out of array bounds
 	assert(filterMarkdown("| a | b |\n|--------|--------|\n|   c    | d  | e |", MarkdownFlags.tables) ==
 		"<table>\n<tr><th>a</th><th>b</th></tr>\n<tr><td>c</td><td>d</td><td>e</td></tr>\n</table>\n");
+}
+
+@safe unittest { // figures
+	assert (filterMarkdown("- %%%\n\tfoo\n\n\t- ###\n\t\tbar", MarkdownFlags.figures) ==
+		"<figure>foo\n<figcaption>bar\n</figcaption>\n</figure>\n");
+	assert (filterMarkdown("- %%%\n\tfoo\n\n\tbar\n\n\t- ###\n\t\tbaz", MarkdownFlags.figures) ==
+		"<figure><p>foo\n</p>\n<p>bar\n</p>\n<figcaption>baz\n</figcaption>\n</figure>\n");
+	assert(filterMarkdown("- %%%\n\tfoo\n\n\t- ###\n\t\tbar\n\n\t\tbaz", MarkdownFlags.figures) ==
+		"<figure>foo\n<figcaption><p>bar\n</p>\n<p>baz\n</p>\n</figcaption>\n</figure>\n");
+	assert (filterMarkdown("- %%%\n\t1. foo\n\t2. bar\n\n\t- ###\n\t\tbaz", MarkdownFlags.figures) ==
+		"<figure><ol>\n<li>foo\n</li>\n<li>bar\n</li>\n</ol>\n<figcaption>baz\n</figcaption>\n</figure>\n");
 }
