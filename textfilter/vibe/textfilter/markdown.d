@@ -135,15 +135,51 @@ final class MarkdownSettings {
 }
 
 enum MarkdownFlags {
+	/** Same as `vanillaMarkdown`
+	*/
 	none = 0,
+
+	/** Convert line breaks into hard line breaks in the output
+
+		This option is useful when operating on text that may be formatted as
+		plain text, without having Markdown in mind, while still improving
+		the appearance of the text in many cases. A common example would be
+		to format e-mails or newsgroup posts.
+	*/
 	keepLineBreaks = 1<<0,
+
+	/** Support fenced code blocks.
+	*/
 	backtickCodeBlocks = 1<<1,
+
+	/** Disable support for embedded HTML
+	*/
 	noInlineHtml = 1<<2,
 	//noLinks = 1<<3,
 	//allowUnsafeHtml = 1<<4,
+
+	/** Support table definitions
+
+		The syntax is based on Markdown Extra and GitHub flavored Markdown.
+	*/
 	tables = 1<<5,
+
+	/** Support HTML attributes after links
+
+		Links or images directly followed by `{ … }` allow regular HTML
+		attributes to added to the generated HTML element.
+	*/
 	attributes = 1<<6,
+
+	/** Support only standard Markdown features
+
+		Note that the parser is not fully CommonMark compliant at the moment,
+		but this is the general idea behind this option.
+	*/
 	vanillaMarkdown = none,
+
+	/** Default set of flags suitable for use within an online forum
+	*/
 	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml|tables
 }
 
