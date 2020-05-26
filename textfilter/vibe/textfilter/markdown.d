@@ -90,7 +90,7 @@ Section[] getMarkdownOutline(string markdown_source, scope MarkdownSettings sett
 	Section root;
 
 	foreach (ref sb; root_block.blocks) {
-		if (sb.type == BlockType.Header) {
+		if (sb.type == BlockType.header) {
 			auto s = &root;
 			while (true) {
 				if (s.subSections.length == 0) break;
@@ -107,7 +107,7 @@ Section[] getMarkdownOutline(string markdown_source, scope MarkdownSettings sett
 ///
 unittest {
 	import std.conv : to;
-	assert(getMarkdownOutline("## first\n## second\n### third\n# fourth\n### fifth") ==
+	assert (getMarkdownOutline("## first\n## second\n### third\n# fourth\n### fifth") ==
 		[
 			Section(2, " first", "first"),
 			Section(2, " second", "second", [
@@ -135,15 +135,72 @@ final class MarkdownSettings {
 }
 
 enum MarkdownFlags {
+	/** Same as `vanillaMarkdown`
+	*/
 	none = 0,
+
+	/** Convert line breaks into hard line breaks in the output
+
+		This option is useful when operating on text that may be formatted as
+		plain text, without having Markdown in mind, while still improving
+		the appearance of the text in many cases. A common example would be
+		to format e-mails or newsgroup posts.
+	*/
 	keepLineBreaks = 1<<0,
+
+	/** Support fenced code blocks.
+	*/
 	backtickCodeBlocks = 1<<1,
+
+	/** Disable support for embedded HTML
+	*/
 	noInlineHtml = 1<<2,
 	//noLinks = 1<<3,
 	//allowUnsafeHtml = 1<<4,
+
+	/** Support table definitions
+
+		The syntax is based on Markdown Extra and GitHub flavored Markdown.
+	*/
 	tables = 1<<5,
+
+	/** Support HTML attributes after links
+
+		Links or images directly followed by `{ … }` allow regular HTML
+		attributes to added to the generated HTML element.
+	*/
 	attributes = 1<<6,
+
+	/** Recognize figure definitions
+
+		Figures can be defined using a modified list syntax:
+
+		```
+		- %%%
+			This is the figure content
+
+			- ###
+				This is optional caption content
+		```
+
+		Just like for lists, arbitrary blocks can be nested within figure and
+		figure caption blocks. If only a single paragraph is present within a
+		figure caption block, the paragraph text will be emitted without the
+		surrounding `<p>` tags. The same is true for figure blocks that contain
+		only a single paragraph and any number of additional figure caption
+		blocks.
+	*/
+	figures = 1<<7,
+
+	/** Support only standard Markdown features
+
+		Note that the parser is not fully CommonMark compliant at the moment,
+		but this is the general idea behind this option.
+	*/
 	vanillaMarkdown = none,
+
+	/** Default set of flags suitable for use within an online forum
+	*/
 	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml|tables
 }
 
@@ -159,22 +216,22 @@ private {
 }
 
 private enum IndentType {
-	White,
-	Quote
+	white,
+	quote
 }
 
 private enum LineType {
-	Undefined,
-	Blank,
-	Plain,
-	Hline,
-	AtxHeader,
-	SetextHeader,
-	TableSeparator,
-	UList,
-	OList,
-	HtmlBlock,
-	CodeBlockDelimiter
+	undefined,
+	blank,
+	plain,
+	hline,
+	atxHeader,
+	setextHeader,
+	tableSeparator,
+	uList,
+	oList,
+	htmlBlock,
+	codeBlockDelimiter
 }
 
 private struct Line {
@@ -185,15 +242,15 @@ private struct Line {
 
 	string unindent(size_t n)
 	pure @safe {
-		assert(n <= indent.length);
+		assert (n <= indent.length);
 		string ln = text;
-		foreach( i; 0 .. n ){
+		foreach (i; 0 .. n) {
 			final switch(indent[i]){
-				case IndentType.White:
-					if( ln[0] == ' ' ) ln = ln[4 .. $];
+				case IndentType.white:
+					if (ln[0] == ' ') ln = ln[4 .. $];
 					else ln = ln[1 .. $];
 					break;
-				case IndentType.Quote:
+				case IndentType.quote:
 					ln = ln.stripLeft()[1 .. $];
 					if (ln.startsWith(' '))
 						ln.popFront();
@@ -214,16 +271,16 @@ pure @safe {
 		Line lninfo;
 		lninfo.text = ln;
 
-		while( ln.length > 0 ){
-			if( ln[0] == '\t' ){
-				lninfo.indent ~= IndentType.White;
+		while (ln.length > 0) {
+			if (ln[0] == '\t') {
+				lninfo.indent ~= IndentType.white;
 				ln.popFront();
-			} else if( ln.startsWith("    ") ){
-				lninfo.indent ~= IndentType.White;
+			} else if (ln.startsWith("    ")) {
+				lninfo.indent ~= IndentType.white;
 				ln.popFrontN(4);
 			} else {
-				if( ln.stripLeft().startsWith(">") ){
-					lninfo.indent ~= IndentType.Quote;
+				if (ln.stripLeft().startsWith(">")) {
+					lninfo.indent ~= IndentType.quote;
 					ln = ln.stripLeft();
 					ln.popFront();
 					if (ln.startsWith(' '))
@@ -233,16 +290,19 @@ pure @safe {
 		}
 		lninfo.unindented = ln;
 
-		if( (settings.flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
-		else if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
-		else if( isSetextHeaderLine(ln) ) lninfo.type = LineType.SetextHeader;
-		else if( (settings.flags & MarkdownFlags.tables) && isTableSeparatorLine(ln) ) lninfo.type = LineType.TableSeparator;
-		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
-		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
-		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
-		else if( isLineBlank(ln) ) lninfo.type = LineType.Blank;
-		else if( !(settings.flags & MarkdownFlags.noInlineHtml) && isHtmlBlockLine(ln) ) lninfo.type = LineType.HtmlBlock;
-		else lninfo.type = LineType.Plain;
+		if ((settings.flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln))
+			lninfo.type = LineType.codeBlockDelimiter;
+		else if(isAtxHeaderLine(ln)) lninfo.type = LineType.atxHeader;
+		else if(isSetextHeaderLine(ln)) lninfo.type = LineType.setextHeader;
+		else if((settings.flags & MarkdownFlags.tables) && isTableSeparatorLine(ln))
+			lninfo.type = LineType.tableSeparator;
+		else if(isHlineLine(ln)) lninfo.type = LineType.hline;
+		else if(isOListLine(ln)) lninfo.type = LineType.oList;
+		else if(isUListLine(ln)) lninfo.type = LineType.uList;
+		else if(isLineBlank(ln)) lninfo.type = LineType.blank;
+		else if(!(settings.flags & MarkdownFlags.noInlineHtml) && isHtmlBlockLine(ln))
+			lninfo.type = LineType.htmlBlock;
+		else lninfo.type = LineType.plain;
 
 		ret ~= lninfo;
 	}
@@ -254,34 +314,36 @@ unittest {
 	auto s = new MarkdownSettings;
 	s.flags = MarkdownFlags.forumDefault;
 	auto lns = [">```D"];
-	assert(parseLines(lns, s) == [Line(LineType.CodeBlockDelimiter, [IndentType.Quote], lns[0], "```D")]);
+	assert (parseLines(lns, s) == [Line(LineType.codeBlockDelimiter, [IndentType.quote], lns[0], "```D")]);
 	lns = ["> ```D"];
-	assert(parseLines(lns, s) == [Line(LineType.CodeBlockDelimiter, [IndentType.Quote], lns[0], "```D")]);
+	assert (parseLines(lns, s) == [Line(LineType.codeBlockDelimiter, [IndentType.quote], lns[0], "```D")]);
 	lns = [">    ```D"];
-	assert(parseLines(lns, s) == [Line(LineType.CodeBlockDelimiter, [IndentType.Quote], lns[0], "   ```D")]);
+	assert (parseLines(lns, s) == [Line(LineType.codeBlockDelimiter, [IndentType.quote], lns[0], "   ```D")]);
 	lns = [">     ```D"];
-	assert(parseLines(lns, s) == [Line(LineType.CodeBlockDelimiter, [IndentType.Quote, IndentType.White], lns[0], "```D")]);
+	assert (parseLines(lns, s) == [Line(LineType.codeBlockDelimiter, [IndentType.quote, IndentType.white], lns[0], "```D")]);
 	lns = [">test"];
-	assert(parseLines(lns, s) == [Line(LineType.Plain, [IndentType.Quote], lns[0], "test")]);
+	assert (parseLines(lns, s) == [Line(LineType.plain, [IndentType.quote], lns[0], "test")]);
 	lns = ["> test"];
-	assert(parseLines(lns, s) == [Line(LineType.Plain, [IndentType.Quote], lns[0], "test")]);
+	assert (parseLines(lns, s) == [Line(LineType.plain, [IndentType.quote], lns[0], "test")]);
 	lns = [">    test"];
-	assert(parseLines(lns, s) == [Line(LineType.Plain, [IndentType.Quote], lns[0], "   test")]);
+	assert (parseLines(lns, s) == [Line(LineType.plain, [IndentType.quote], lns[0], "   test")]);
 	lns = [">     test"];
-	assert(parseLines(lns, s) == [Line(LineType.Plain, [IndentType.Quote, IndentType.White], lns[0], "test")]);
+	assert (parseLines(lns, s) == [Line(LineType.plain, [IndentType.quote, IndentType.white], lns[0], "test")]);
 }
 
 private enum BlockType {
-	Plain,
-	Text,
-	Paragraph,
-	Header,
-	Table,
-	OList,
-	UList,
-	ListItem,
-	Code,
-	Quote
+	plain,
+	text,
+	paragraph,
+	header,
+	table,
+	oList,
+	uList,
+	listItem,
+	code,
+	quote,
+	figure,
+	figureCaption
 }
 
 private struct Block {
@@ -308,30 +370,36 @@ private enum Alignment {
 private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, scope MarkdownSettings settings)
 pure @safe {
 	import std.conv : to;
+	import std.algorithm.comparison : among;
 
-	if( base_indent.length == 0 ) root.type = BlockType.Text;
-	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
+	if (base_indent.length == 0) root.type = BlockType.text;
+	else if (base_indent[$-1] == IndentType.quote) root.type = BlockType.quote;
 
-	while( !lines.empty ){
+	while (!lines.empty) {
 		auto ln = lines.front;
 
-		if( ln.type == LineType.Blank ){
+		if (ln.type == LineType.blank) {
 			lines.popFront();
 			continue;
 		}
 
-		if( ln.indent != base_indent ){
-			if( ln.indent.length < base_indent.length || ln.indent[0 .. base_indent.length] != base_indent )
+		if (ln.indent != base_indent) {
+			if (ln.indent.length < base_indent.length
+				|| ln.indent[0 .. base_indent.length] != base_indent)
+			{
 				return;
+			}
 
-			auto cindent = base_indent ~ IndentType.White;
-			if( ln.indent == cindent ){
+			auto cindent = base_indent ~ IndentType.white;
+			if (ln.indent == cindent) {
 				Block cblock;
-				cblock.type = BlockType.Code;
-				while( !lines.empty && (lines.front.unindented.strip.empty ||
-					lines.front.indent.length >= cindent.length	&& lines.front.indent[0 .. cindent.length] == cindent))
+				cblock.type = BlockType.code;
+				while (!lines.empty && (lines.front.unindented.strip.empty
+					|| lines.front.indent.length >= cindent.length
+					&& lines.front.indent[0 .. cindent.length] == cindent))
 				{
-					cblock.text ~= lines.front.indent.length >= cindent.length ? lines.front.unindent(cindent.length) : "";
+					cblock.text ~= lines.front.indent.length >= cindent.length
+						? lines.front.unindent(cindent.length) : "";
 					lines.popFront();
 				}
 				root.blocks ~= cblock;
@@ -342,13 +410,13 @@ pure @safe {
 			}
 		} else {
 			Block b;
-			final switch(ln.type){
-				case LineType.Undefined: assert(false);
-				case LineType.Blank: assert(false);
-				case LineType.Plain:
-					if( lines.length >= 2 && lines[1].type == LineType.SetextHeader ){
+			final switch (ln.type) {
+				case LineType.undefined: assert (false);
+				case LineType.blank: assert (false);
+				case LineType.plain:
+					if (lines.length >= 2 && lines[1].type == LineType.setextHeader) {
 						auto setln = lines[1].unindented;
-						b.type = BlockType.Header;
+						b.type = BlockType.header;
 						b.text = [ln.unindented];
 						if (settings.flags & MarkdownFlags.attributes)
 							parseAttributeString(skipAttributes(b.text[0]), b.attributes);
@@ -356,11 +424,11 @@ pure @safe {
 							b.attributes ~= Attribute("id", asSlug(b.text[0]).to!string);
 						b.headerLevel = setln.strip()[0] == '=' ? 1 : 2;
 						lines.popFrontN(2);
-					} else if( lines.length >= 2 && lines[1].type == LineType.TableSeparator
-						&& ln.unindented.indexOf('|') >= 0 )
+					} else if (lines.length >= 2 && lines[1].type == LineType.tableSeparator
+						&& ln.unindented.indexOf('|') >= 0)
 					{
 						auto setln = lines[1].unindented;
-						b.type = BlockType.Table;
+						b.type = BlockType.table;
 						b.text = [ln.unindented];
 						foreach (c; getTableColumns(setln)) {
 							Alignment a = Alignment.none;
@@ -375,20 +443,20 @@ pure @safe {
 							lines.popFront();
 						}
 					} else {
-						b.type = BlockType.Paragraph;
+						b.type = BlockType.paragraph;
 						b.text = skipText(lines, base_indent);
 					}
 					break;
-				case LineType.Hline:
-					b.type = BlockType.Plain;
+				case LineType.hline:
+					b.type = BlockType.plain;
 					b.text = ["<hr>"];
 					lines.popFront();
 					break;
-				case LineType.AtxHeader:
-					b.type = BlockType.Header;
+				case LineType.atxHeader:
+					b.type = BlockType.header;
 					string hl = ln.unindented;
 					b.headerLevel = 0;
-					while( hl.length > 0 && hl[0] == '#' ){
+					while (hl.length > 0 && hl[0] == '#') {
 						b.headerLevel++;
 						hl = hl[1 .. $];
 					}
@@ -398,71 +466,91 @@ pure @safe {
 					if (!b.attributes.canFind!(a => a.attribute == "id"))
 						b.attributes ~= Attribute("id", asSlug(hl).to!string);
 
-					while( hl.length > 0 && (hl[$-1] == '#' || hl[$-1] == ' ') )
+					while (hl.length > 0 && (hl[$-1] == '#' || hl[$-1] == ' '))
 						hl = hl[0 .. $-1];
 					b.text = [hl];
 					lines.popFront();
 					break;
-				case LineType.SetextHeader:
+				case LineType.setextHeader:
 					lines.popFront();
 					break;
-				case LineType.TableSeparator:
+				case LineType.tableSeparator:
 					lines.popFront();
 					break;
-				case LineType.UList:
-				case LineType.OList:
-					b.type = ln.type == LineType.UList ? BlockType.UList : BlockType.OList;
-					auto itemindent = base_indent ~ IndentType.White;
+				case LineType.uList:
+				case LineType.oList:
+					b.type = ln.type == LineType.uList ? BlockType.uList : BlockType.oList;
+
+					if (settings.flags & MarkdownFlags.figures && ln.type == LineType.uList) {
+						auto suffix = removeListPrefix(ln.text, ln.type);
+						if (suffix == "###") b.type = BlockType.figureCaption;
+						else if (suffix == "%%%") b.type = BlockType.figure;
+					}
+
+					if (b.type.among(BlockType.figure, BlockType.figureCaption) && !lines.empty) {
+						auto itemindent = base_indent ~ IndentType.white;
+						lines.popFront();
+						parseBlocks(b, lines, itemindent, settings);
+						break;
+					}
+
+					auto itemindent = base_indent ~ IndentType.white;
 					bool firstItem = true, paraMode = false;
-					while(!lines.empty && lines.front.type == ln.type && lines.front.indent == base_indent ){
+					while (!lines.empty && lines.front.type == ln.type
+						&& lines.front.indent == base_indent)
+					{
 						Block itm;
 						itm.text = skipText(lines, itemindent);
 						itm.text[0] = removeListPrefix(itm.text[0], ln.type);
 
-						// emit <p></p> if there are blank lines between the items
-						if( firstItem && !lines.empty && lines.front.type == LineType.Blank )
+						// emit <p>...</p> if there are blank lines between the items
+						if (firstItem && !lines.empty && lines.front.type == LineType.blank)
 							paraMode = true;
 						firstItem = false;
-						if( paraMode ){
+						if (paraMode) {
 							Block para;
-							para.type = BlockType.Paragraph;
+							para.type = BlockType.paragraph;
 							para.text = itm.text;
 							itm.blocks ~= para;
 							itm.text = null;
 						}
 
 						parseBlocks(itm, lines, itemindent, settings);
-						itm.type = BlockType.ListItem;
+						itm.type = BlockType.listItem;
 						b.blocks ~= itm;
 					}
 					break;
-				case LineType.HtmlBlock:
+				case LineType.htmlBlock:
 					int nestlevel = 0;
 					auto starttag = parseHtmlBlockLine(ln.unindented);
-					if( !starttag.isHtmlBlock || !starttag.open )
+					if (!starttag.isHtmlBlock || !starttag.open)
 						break;
 
-					b.type = BlockType.Plain;
-					while(!lines.empty){
-						if( lines.front.indent.length < base_indent.length ) break;
-						if( lines.front.indent[0 .. base_indent.length] != base_indent ) break;
+					b.type = BlockType.plain;
+					while (!lines.empty) {
+						if (lines.front.indent.length < base_indent.length)
+							break;
+						if (lines.front.indent[0 .. base_indent.length] != base_indent)
+							break;
 
 						auto str = lines.front.unindent(base_indent.length);
 						auto taginfo = parseHtmlBlockLine(str);
 						b.text ~= lines.front.unindent(base_indent.length);
 						lines.popFront();
-						if( taginfo.isHtmlBlock && taginfo.tagName == starttag.tagName )
+						if (taginfo.isHtmlBlock && taginfo.tagName == starttag.tagName)
 							nestlevel += taginfo.open ? 1 : -1;
-						if( nestlevel <= 0 ) break;
+						if (nestlevel <= 0) break;
 					}
 					break;
-				case LineType.CodeBlockDelimiter:
+				case LineType.codeBlockDelimiter:
 					lines.popFront(); // TODO: get language from line
-					b.type = BlockType.Code;
-					while(!lines.empty){
-						if( lines.front.indent.length < base_indent.length ) break;
-						if( lines.front.indent[0 .. base_indent.length] != base_indent ) break;
-						if( lines.front.type == LineType.CodeBlockDelimiter ){
+					b.type = BlockType.code;
+					while (!lines.empty) {
+						if (lines.front.indent.length < base_indent.length)
+							break;
+						if (lines.front.indent[0 .. base_indent.length] != base_indent)
+							break;
+						if (lines.front.type == LineType.codeBlockDelimiter) {
 							lines.popFront();
 							break;
 						}
@@ -476,67 +564,77 @@ pure @safe {
 	}
 }
 
+
 private string[] skipText(ref Line[] lines, IndentType[] indent)
 pure @safe {
 	static bool matchesIndent(IndentType[] indent, IndentType[] base_indent)
 	{
-		if( indent.length > base_indent.length ) return false;
-		if( indent != base_indent[0 .. indent.length] ) return false;
+		if (indent.length > base_indent.length) return false;
+		if (indent != base_indent[0 .. indent.length]) return false;
 		sizediff_t qidx = -1;
-		foreach_reverse (i, tp; base_indent) if (tp == IndentType.Quote) { qidx = i; break; }
-		if( qidx >= 0 ){
+		foreach_reverse (i, tp; base_indent)
+			if (tp == IndentType.quote) {
+				qidx = i;
+				break;
+			}
+		if (qidx >= 0) {
 			qidx = base_indent.length-1 - qidx;
 			if( indent.length <= qidx ) return false;
 		}
 		return true;
 	}
 
+	// return value is used in variables that don't get bounds checks on the
+	// first element, so we should return at least one
 	if (lines.empty)
-		return [""]; // return value is used in variables that don't get bounds checks on the first element, so we should return at least one
+		return [""];
 
 	string[] ret;
 
-	while(true){
+	while (true) {
 		ret ~= lines.front.unindent(min(indent.length, lines.front.indent.length));
 		lines.popFront();
 
-		if( lines.empty || !matchesIndent(lines.front.indent, indent) || lines.front.type != LineType.Plain )
+		if (lines.empty || !matchesIndent(lines.front.indent, indent)
+			|| lines.front.type != LineType.plain)
+		{
 			return ret;
+		}
 	}
 }
 
 /// private
 private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links, scope MarkdownSettings settings)
 {
-	final switch(block.type){
-		case BlockType.Plain:
-			foreach( ln; block.text ){
+	final switch (block.type) {
+		case BlockType.plain:
+			foreach (ln; block.text) {
 				dst.put(ln);
 				dst.put("\n");
 			}
-			foreach(b; block.blocks)
+			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			break;
-		case BlockType.Text:
+		case BlockType.text:
 			writeMarkdownEscaped(dst, block, links, settings);
-			foreach(b; block.blocks)
+			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			break;
-		case BlockType.Paragraph:
-			assert(block.blocks.length == 0);
+		case BlockType.paragraph:
+			assert (block.blocks.length == 0);
 			dst.put("<p>");
 			writeMarkdownEscaped(dst, block, links, settings);
 			dst.put("</p>\n");
 			break;
-		case BlockType.Header:
-			assert(block.blocks.length == 0);
-			assert(block.text.length == 1);
+		case BlockType.header:
+			assert (block.blocks.length == 0);
+			assert (block.text.length == 1);
 			auto hlvl = block.headerLevel + (settings ? settings.headingBaseLevel-1 : 0);
 			dst.writeTag(block.attributes, "h", hlvl);
 			writeMarkdownEscaped(dst, block.text[0], links, settings);
 			dst.formattedWrite("</h%s>\n", hlvl);
 			break;
-		case BlockType.Table:
+		case BlockType.table:
 			import std.algorithm.iteration : splitter;
 
 			static string[Alignment.max+1] alstr = ["", " align=\"left\"", " align=\"right\"", " align=\"center\""];
@@ -570,40 +668,60 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			}
 			dst.put("</table>\n");
 			break;
-		case BlockType.OList:
+		case BlockType.oList:
 			dst.put("<ol>\n");
-			foreach(b; block.blocks)
+			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			dst.put("</ol>\n");
 			break;
-		case BlockType.UList:
+		case BlockType.uList:
 			dst.put("<ul>\n");
-			foreach(b; block.blocks)
+			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			dst.put("</ul>\n");
 			break;
-		case BlockType.ListItem:
+		case BlockType.listItem:
 			dst.put("<li>");
 			writeMarkdownEscaped(dst, block, links, settings);
-			foreach(b; block.blocks)
+			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			dst.put("</li>\n");
 			break;
-		case BlockType.Code:
-			assert(block.blocks.length == 0);
+		case BlockType.code:
+			assert (block.blocks.length == 0);
 			dst.put("<pre class=\"prettyprint\"><code>");
-			foreach(ln; block.text){
+			foreach (ln; block.text) {
 				filterHTMLEscape(dst, ln);
 				dst.put("\n");
 			}
 			dst.put("</code></pre>\n");
 			break;
-		case BlockType.Quote:
+		case BlockType.quote:
 			dst.put("<blockquote>");
 			writeMarkdownEscaped(dst, block, links, settings);
-			foreach(b; block.blocks)
+			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			dst.put("</blockquote>\n");
+			break;
+		case BlockType.figure:
+			dst.put("<figure>");
+			bool omit_para = block.blocks.count!(b => b.type != BlockType.figureCaption) == 1;
+			foreach (b; block.blocks) {
+				if (b.type == BlockType.paragraph && omit_para) {
+					writeMarkdownEscaped(dst, b, links, settings);
+				} else writeBlock(dst, b, links, settings);
+			}
+			dst.put("</figure>\n");
+			break;
+		case BlockType.figureCaption:
+			dst.put("<figcaption>");
+			if (block.blocks.length == 1 && block.blocks[0].type == BlockType.paragraph) {
+				writeMarkdownEscaped(dst, block.blocks[0], links, settings);
+			} else {
+				foreach (b; block.blocks)
+					writeBlock(dst, b, links, settings);
+			}
+			dst.put("</figcaption>\n");
 			break;
 	}
 }
@@ -634,15 +752,15 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 	}
 
 	bool br = ln.endsWith("  ");
-	while( ln.length > 0 ){
-		switch( ln[0] ){
+	while (ln.length > 0) {
+		switch (ln[0]) {
 			default:
 				dst.put(ln[0]);
 				ln = ln[1 .. $];
 				break;
 			case '\\':
-				if( ln.length >= 2 ){
-					switch(ln[1]){
+				if (ln.length >= 2) {
+					switch (ln[1]) {
 						default:
 							dst.put(ln[0 .. 2]);
 							ln = ln[2 .. $];
@@ -661,7 +779,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 			case '_':
 			case '*':
 				string text;
-				if( auto em = parseEmphasis(ln, text) ){
+				if (auto em = parseEmphasis(ln, text)) {
 					dst.put(em == 1 ? "<em>" : em == 2 ? "<strong>" : "<strong><em>");
 					filterHTMLEscape(dst, text, HTMLEscapeFlags.escapeMinimal);
 					dst.put(em == 1 ? "</em>" : em == 2 ? "</strong>": "</em></strong>");
@@ -672,7 +790,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				break;
 			case '`':
 				string code;
-				if( parseInlineCode(ln, code) ){
+				if (parseInlineCode(ln, code)) {
 					dst.put("<code class=\"prettyprint\">");
 					filterHTMLEscape(dst, code, HTMLEscapeFlags.escapeMinimal);
 					dst.put("</code>");
@@ -718,13 +836,13 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				}
 				break;
 			case '>':
-				if( settings.flags & MarkdownFlags.noInlineHtml ) dst.put("&gt;");
+				if (settings.flags & MarkdownFlags.noInlineHtml) dst.put("&gt;");
 				else dst.put(ln[0]);
 				ln = ln[1 .. $];
 				break;
 			case '<':
 				string url;
-				if( parseAutoLink(ln, url) ){
+				if (parseAutoLink(ln, url)) {
 					bool is_email = url.startsWith("mailto:");
 					dst.put("<a href=\"");
 					if (is_email) filterHTMLAllEscape(dst, url);
@@ -742,7 +860,8 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 						dst.put("<br/>");
 						ln = ln[5 .. $];
 					} else {
-						if( settings.flags & MarkdownFlags.noInlineHtml ) dst.put("&lt;");
+						if (settings.flags & MarkdownFlags.noInlineHtml)
+							dst.put("&lt;");
 						else dst.put(ln[0]);
 						ln = ln[1 .. $];
 					}
@@ -750,7 +869,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				break;
 		}
 	}
-	if( br ) dst.put("<br/>");
+	if (br) dst.put("<br/>");
 }
 
 private void writeTag(R, ARGS...)(ref R dst, string name, ARGS name_additions)
@@ -779,13 +898,13 @@ pure @safe {
 private bool isSetextHeaderLine(string ln)
 pure @safe {
 	ln = stripLeft(ln);
-	if( ln.length < 1 ) return false;
-	if( ln[0] == '=' ){
-		while(!ln.empty && ln.front == '=') ln.popFront();
+	if (ln.length < 1) return false;
+	if (ln[0] == '=') {
+		while (!ln.empty && ln.front == '=') ln.popFront();
 		return allOf(ln, " \t");
 	}
-	if( ln[0] == '-' ){
-		while(!ln.empty && ln.front == '-') ln.popFront();
+	if (ln[0] == '-') {
+		while (!ln.empty && ln.front == '-') ln.popFront();
 		return allOf(ln, " \t");
 	}
 	return false;
@@ -795,8 +914,8 @@ private bool isAtxHeaderLine(string ln)
 pure @safe {
 	ln = stripLeft(ln);
 	size_t i = 0;
-	while( i < ln.length && ln[i] == '#' ) i++;
-	if( i < 1 || i > 6 || i >= ln.length ) return false;
+	while (i < ln.length && ln[i] == '#') i++;
+	if (i < 1 || i > 6 || i >= ln.length) return false;
 	return ln[i] == ' ';
 }
 
@@ -836,9 +955,9 @@ pure @safe {
 
 private bool isHlineLine(string ln)
 pure @safe {
-	if( allOf(ln, " -") && count(ln, '-') >= 3 ) return true;
-	if( allOf(ln, " *") && count(ln, '*') >= 3 ) return true;
-	if( allOf(ln, " _") && count(ln, '_') >= 3 ) return true;
+	if (allOf(ln, " -") && count(ln, '-') >= 3) return true;
+	if (allOf(ln, " *") && count(ln, '*') >= 3) return true;
+	if (allOf(ln, " _") && count(ln, '_') >= 3) return true;
 	return false;
 }
 
@@ -851,7 +970,7 @@ private size_t getQuoteLevel(string ln)
 pure @safe {
 	size_t level = 0;
 	ln = stripLeft(ln);
-	while( ln.length > 0 && ln[0] == '>' ){
+	while (ln.length > 0 && ln[0] == '>') {
 		level++;
 		ln = stripLeft(ln[1 .. $]);
 	}
@@ -870,27 +989,27 @@ pure @safe {
 private bool isOListLine(string ln)
 pure @safe {
 	ln = stripLeft(ln);
-	if( ln.length < 1 ) return false;
-	if( ln[0] < '0' || ln[0] > '9' ) return false;
+	if (ln.length < 1) return false;
+	if (ln[0] < '0' || ln[0] > '9') return false;
 	ln = ln[1 .. $];
-	while( ln.length > 0 && ln[0] >= '0' && ln[0] <= '9' )
+	while (ln.length > 0 && ln[0] >= '0' && ln[0] <= '9')
 		ln = ln[1 .. $];
-	if( ln.length < 2 ) return false;
-	if( ln[0] != '.' ) return false;
-	if( ln[1] != ' ' && ln[1] != '\t' )
+	if (ln.length < 2) return false;
+	if (ln[0] != '.') return false;
+	if (ln[1] != ' ' && ln[1] != '\t')
 		return false;
 	return true;
 }
 
 private string removeListPrefix(string str, LineType tp)
 pure @safe {
-	switch(tp){
-		default: assert(false);
-		case LineType.OList: // skip bullets and output using normal escaping
+	switch (tp) {
+		default: assert (false);
+		case LineType.oList: // skip bullets and output using normal escaping
 			auto idx = str.indexOf('.');
-			assert(idx > 0);
+			assert (idx > 0);
 			return str[idx+1 .. $].stripLeft();
-		case LineType.UList:
+		case LineType.uList:
 			return stripLeft(str.stripLeft()[1 .. $]);
 	}
 }
@@ -909,24 +1028,24 @@ pure @safe {
 	ret.open = true;
 
 	ln = strip(ln);
-	if( ln.length < 3 ) return ret;
-	if( ln[0] != '<' ) return ret;
-	if( ln[1] == '/' ){
+	if (ln.length < 3) return ret;
+	if (ln[0] != '<') return ret;
+	if (ln[1] == '/') {
 		ret.open = false;
 		ln = ln[1 .. $];
 	}
 	import std.ascii : isAlpha;
-	if( !isAlpha(ln[1]) ) return ret;
+	if (!isAlpha(ln[1])) return ret;
 	ln = ln[1 .. $];
 	size_t idx = 0;
-	while( idx < ln.length && ln[idx] != ' ' && ln[idx] != '>' )
+	while (idx < ln.length && ln[idx] != ' ' && ln[idx] != '>')
 		idx++;
 	ret.tagName = ln[0 .. idx];
 	ln = ln[idx .. $];
 
 	auto eidx = ln.indexOf('>');
-	if( eidx < 0 ) return ret;
-	if( eidx != ln.length-1 ) return ret;
+	if (eidx < 0) return ret;
+	if (eidx != ln.length-1) return ret;
 
 	if (!s_blockTags.canFind(ret.tagName)) return ret;
 
@@ -963,29 +1082,29 @@ pure @safe {
 
 private string unindentLine(string ln)
 pure @safe {
-	if( ln.startsWith("\t") ) return ln[1 .. $];
-	if( ln.startsWith("    ") ) return ln[4 .. $];
-	assert(false);
+	if (ln.startsWith("\t")) return ln[1 .. $];
+	if (ln.startsWith("    ")) return ln[4 .. $];
+	assert (false);
 }
 
 private int parseEmphasis(ref string str, ref string text)
 pure @safe {
 	string pstr = str;
-	if( pstr.length < 3 ) return false;
+	if (pstr.length < 3) return false;
 
 	string ctag;
-	if( pstr.startsWith("***") ) ctag = "***";
-	else if( pstr.startsWith("**") ) ctag = "**";
-	else if( pstr.startsWith("*") ) ctag = "*";
-	else if( pstr.startsWith("___") ) ctag = "___";
-	else if( pstr.startsWith("__") ) ctag = "__";
-	else if( pstr.startsWith("_") ) ctag = "_";
+	if (pstr.startsWith("***")) ctag = "***";
+	else if (pstr.startsWith("**")) ctag = "**";
+	else if (pstr.startsWith("*")) ctag = "*";
+	else if (pstr.startsWith("___")) ctag = "___";
+	else if (pstr.startsWith("__")) ctag = "__";
+	else if (pstr.startsWith("_")) ctag = "_";
 	else return false;
 
 	pstr = pstr[ctag.length .. $];
 
 	auto cidx = () @trusted { return pstr.indexOf(ctag); }();
-	if( cidx < 1 ) return false;
+	if (cidx < 1) return false;
 
 	text = pstr[0 .. cidx];
 
@@ -996,15 +1115,15 @@ pure @safe {
 private bool parseInlineCode(ref string str, ref string code)
 pure @safe {
 	string pstr = str;
-	if( pstr.length < 3 ) return false;
+	if (pstr.length < 3) return false;
 	string ctag;
-	if( pstr.startsWith("``") ) ctag = "``";
-	else if( pstr.startsWith("`") ) ctag = "`";
+	if (pstr.startsWith("``")) ctag = "``";
+	else if (pstr.startsWith("`")) ctag = "`";
 	else return false;
 	pstr = pstr[ctag.length .. $];
 
 	auto cidx = () @trusted { return pstr.indexOf(ctag); }();
-	if( cidx < 1 ) return false;
+	if (cidx < 1) return false;
 
 	code = pstr[0 .. cidx];
 	str = pstr[cidx+ctag.length .. $];
@@ -1014,31 +1133,31 @@ pure @safe {
 private bool parseLink(ref string str, ref Link dst, scope const(LinkRef[string]) linkrefs, scope Attribute[]* attributes)
 pure @safe {
 	string pstr = str;
-	if( pstr.length < 3 ) return false;
+	if (pstr.length < 3) return false;
 	// ignore img-link prefix
-	if( pstr[0] == '!' ) pstr = pstr[1 .. $];
+	if (pstr[0] == '!') pstr = pstr[1 .. $];
 
 	// parse the text part [text]
-	if( pstr[0] != '[' ) return false;
+	if (pstr[0] != '[') return false;
 	auto cidx = pstr.matchBracket();
-	if( cidx < 1 ) return false;
+	if (cidx < 1) return false;
 	string refid;
 	dst.text = pstr[1 .. cidx];
 	pstr = pstr[cidx+1 .. $];
 
 	// parse either (link '['"title"']') or '[' ']'[refid]
-	if( pstr.length < 2 ) return false;
-	if( pstr[0] == '('){
+	if (pstr.length < 2) return false;
+	if (pstr[0] == '(') {
 		cidx = pstr.matchBracket();
-		if( cidx < 1 ) return false;
+		if (cidx < 1) return false;
 		auto inner = pstr[1 .. cidx];
 		immutable qidx = inner.indexOf('"');
 		import std.ascii : isWhite;
-		if( qidx > 1 && inner[qidx - 1].isWhite()){
+		if (qidx > 1 && inner[qidx - 1].isWhite()) {
 			dst.url = inner[0 .. qidx].stripRight();
 			immutable len = inner[qidx .. $].lastIndexOf('"');
-			if( len == 0 ) return false;
-			assert(len > 0);
+			if (len == 0) return false;
+			assert (len > 0);
 			dst.title = inner[qidx + 1 .. qidx + len];
 		} else {
 			dst.url = inner.stripRight();
@@ -1058,19 +1177,19 @@ pure @safe {
 			}
 		}
 	} else {
-		if( pstr[0] == ' ' ) pstr = pstr[1 .. $];
-		if( pstr[0] != '[' ) return false;
+		if (pstr[0] == ' ') pstr = pstr[1 .. $];
+		if (pstr[0] != '[') return false;
 		pstr = pstr[1 .. $];
 		cidx = pstr.indexOf(']');
-		if( cidx < 0 ) return false;
-		if( cidx == 0 ) refid = dst.text;
+		if (cidx < 0) return false;
+		if (cidx == 0) refid = dst.text;
 		else refid = pstr[0 .. cidx];
 		pstr = pstr[cidx+1 .. $];
 	}
 
-	if( refid.length > 0 ){
+	if (refid.length > 0) {
 		auto pr = toLower(refid) in linkrefs;
-		if( !pr ){
+		if (!pr) {
 			debug if (!__ctfe) logDebug("[LINK REF NOT FOUND: '%s'", refid);
 			return false;
 		}
@@ -1088,8 +1207,8 @@ pure @safe {
 	static void testLink(string s, Link exp, in LinkRef[string] refs)
 	{
 		Link link;
-		assert(parseLink(s, link, refs, null), s);
-		assert(link == exp);
+		assert (parseLink(s, link, refs, null), s);
+		assert (link == exp);
 	}
 	LinkRef[string] refs;
 	refs["ref"] = LinkRef("ref", "target", "title");
@@ -1126,7 +1245,7 @@ pure @safe {
 	];
 	Link link;
 	foreach (s; failing)
-		assert(!parseLink(s, link, refs, null), s);
+		assert (!parseLink(s, link, refs, null), s);
 }
 
 @safe unittest { // attributes
@@ -1135,9 +1254,9 @@ pure @safe {
 		Link lnk;
 		Attribute[] atts;
 		parseLink(s, lnk, refs, parse_atts ? () @trusted { return &atts; } () : null);
-		assert(lnk == explnk);
-		assert(s == exprem);
-		assert(atts == expatts);
+		assert (lnk == explnk);
+		assert (s == exprem);
+		assert (atts == expatts);
 	}
 
 	test("[foo](bar){.baz}", null, false, "{.baz}", Link("foo", "bar", ""));
@@ -1180,13 +1299,13 @@ unittest {
 		string strcpy = str;
 		string outurl;
 		if (!expected) {
-			assert(!parseAutoLink(strcpy, outurl));
-			assert(outurl.length == 0);
-			assert(strcpy == str);
+			assert (!parseAutoLink(strcpy, outurl));
+			assert (outurl.length == 0);
+			assert (strcpy == str);
 		} else {
-			assert(parseAutoLink(strcpy, outurl));
-			assert(outurl == url);
-			assert(strcpy.length == 0);
+			assert (parseAutoLink(strcpy, outurl));
+			assert (outurl == url);
+			assert (strcpy.length == 0);
 		}
 	}
 
@@ -1216,8 +1335,8 @@ unittest {
 	void test(string inp, string outp, string att)
 	{
 		auto ratt = skipAttributes(inp);
-		assert(ratt == att, ratt);
-		assert(inp == outp, inp);
+		assert (ratt == att, ratt);
+		assert (inp == outp, inp);
 	}
 
 	test(" foo ", " foo ", null);
@@ -1255,7 +1374,7 @@ unittest {
 	{
 		Attribute[] res;
 		parseAttributeString(str, res);
-		assert(res == atts, format("%s: %s", str, res));
+		assert (res == atts, format("%s: %s", str, res));
 	}
 
 	test("");
@@ -1277,33 +1396,33 @@ pure @safe {
 	//   [refid] <link> "opt text"
 	//   "opt text", 'opt text', (opt text)
 	//   line must not be indented
-	foreach( lnidx, ln; lines ){
-		if( isLineIndented(ln) ) continue;
+	foreach (lnidx, ln; lines) {
+		if (isLineIndented(ln)) continue;
 		ln = strip(ln);
-		if( !ln.startsWith("[") ) continue;
+		if (!ln.startsWith("[")) continue;
 		ln = ln[1 .. $];
 
 		auto idx = () @trusted { return ln.indexOf("]:"); }();
-		if( idx < 0 ) continue;
+		if (idx < 0) continue;
 		string refid = ln[0 .. idx];
 		ln = stripLeft(ln[idx+2 .. $]);
 
 		string attstr = ln.skipAttributes();
 
 		string url;
-		if( ln.startsWith("<") ){
+		if (ln.startsWith("<")) {
 			idx = ln.indexOf('>');
-			if( idx < 0 ) continue;
+			if (idx < 0) continue;
 			url = ln[1 .. idx];
 			ln = ln[idx+1 .. $];
 		} else {
 			idx = ln.indexOf(' ');
-			if( idx > 0 ){
+			if (idx > 0) {
 				url = ln[0 .. idx];
 				ln = ln[idx+1 .. $];
 			} else {
 				idx = ln.indexOf('\t');
-				if( idx < 0 ){
+				if (idx < 0) {
 					url = ln;
 					ln = ln[$ .. $];
 				} else {
@@ -1315,9 +1434,13 @@ pure @safe {
 		ln = stripLeft(ln);
 
 		string title;
-		if( ln.length >= 3 ){
-			if( ln[0] == '(' && ln[$-1] == ')' || ln[0] == '\"' && ln[$-1] == '\"' || ln[0] == '\'' && ln[$-1] == '\'' )
+		if (ln.length >= 3) {
+			if (ln[0] == '(' && ln[$-1] == ')'
+				|| ln[0] == '\"' && ln[$-1] == '\"'
+				|| ln[0] == '\'' && ln[$-1] == '\'' )
+			{
 				title = ln[1 .. $-1];
+			}
 		}
 
 		LinkRef lref;
@@ -1334,8 +1457,8 @@ pure @safe {
 	// remove all lines containing references
 	auto nonreflines = appender!(string[])();
 	nonreflines.reserve(lines.length);
-	foreach( i, ln; lines )
-		if( i !in reflines )
+	foreach (i, ln; lines)
+		if (i !in reflines)
 			nonreflines.put(ln);
 	lines = nonreflines.data();
 
@@ -1411,11 +1534,11 @@ auto asSlug(R)(R text)
 
 unittest {
 	import std.algorithm : equal;
-	assert("".asSlug.equal(""));
-	assert(".,-".asSlug.equal(""));
-	assert("abc".asSlug.equal("abc"));
-	assert("aBc123".asSlug.equal("abc123"));
-	assert("....aBc...123...".asSlug.equal("abc-123"));
+	assert ("".asSlug.equal(""));
+	assert (".,-".asSlug.equal(""));
+	assert ("abc".asSlug.equal("abc"));
+	assert ("aBc123".asSlug.equal("abc123"));
+	assert ("....aBc...123...".asSlug.equal("abc-123"));
 }
 
 private struct LinkRef {
@@ -1432,98 +1555,109 @@ private struct Link {
 }
 
 @safe unittest { // alt and title attributes
-	assert(filterMarkdown("![alt](http://example.org/image)")
+	assert (filterMarkdown("![alt](http://example.org/image)")
 		== "<p><img src=\"http://example.org/image\" alt=\"alt\">\n</p>\n");
-	assert(filterMarkdown("![alt](http://example.org/image \"Title\")")
+	assert (filterMarkdown("![alt](http://example.org/image \"Title\")")
 		== "<p><img src=\"http://example.org/image\" alt=\"alt\" title=\"Title\">\n</p>\n");
 }
 
 @safe unittest { // complex links
-	assert(filterMarkdown("their [install\ninstructions](<http://www.brew.sh>) and")
+	assert (filterMarkdown("their [install\ninstructions](<http://www.brew.sh>) and")
 		== "<p>their <a href=\"http://www.brew.sh\">install\ninstructions</a> and\n</p>\n");
-	assert(filterMarkdown("[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.png)](https://travis-ci.org/rejectedsoftware/vibe.d)")
+	assert (filterMarkdown("[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.png)](https://travis-ci.org/rejectedsoftware/vibe.d)")
 		== "<p><a href=\"https://travis-ci.org/rejectedsoftware/vibe.d\"><img src=\"https://travis-ci.org/rejectedsoftware/vibe.d.png\" alt=\"Build Status\"></a>\n</p>\n");
 }
 
 @safe unittest { // check CTFE-ability
 	enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");
-	assert(res == "<h3 id=\"some-markdown\"> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
+	assert (res == "<h3 id=\"some-markdown\"> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
 }
 
 @safe unittest { // correct line breaks in restrictive mode
 	auto res = filterMarkdown("hello\nworld", MarkdownFlags.forumDefault);
-	assert(res == "<p>hello<br/>world\n</p>\n", res);
+	assert (res == "<p>hello<br/>world\n</p>\n", res);
 }
 
 /*@safe unittest { // code blocks and blockquotes
-	assert(filterMarkdown("\tthis\n\tis\n\tcode") ==
+	assert (filterMarkdown("\tthis\n\tis\n\tcode") ==
 		"<pre><code>this\nis\ncode</code></pre>\n");
-	assert(filterMarkdown("    this\n    is\n    code") ==
+	assert (filterMarkdown("    this\n    is\n    code") ==
 		"<pre><code>this\nis\ncode</code></pre>\n");
-	assert(filterMarkdown("    this\n    is\n\tcode") ==
+	assert (filterMarkdown("    this\n    is\n\tcode") ==
 		"<pre><code>this\nis</code></pre>\n<pre><code>code</code></pre>\n");
-	assert(filterMarkdown("\tthis\n\n\tcode") ==
+	assert (filterMarkdown("\tthis\n\n\tcode") ==
 		"<pre><code>this\n\ncode</code></pre>\n");
-	assert(filterMarkdown("\t> this") ==
+	assert (filterMarkdown("\t> this") ==
 		"<pre><code>&gt; this</code></pre>\n");
-	assert(filterMarkdown(">     this") ==
+	assert (filterMarkdown(">     this") ==
 		"<blockquote><pre><code>this</code></pre></blockquote>\n");
-	assert(filterMarkdown(">     this\n    is code") ==
+	assert (filterMarkdown(">     this\n    is code") ==
 		"<blockquote><pre><code>this\nis code</code></pre></blockquote>\n");
 }*/
 
 @safe unittest {
-	assert(filterMarkdown("## Hello, World!") == "<h2 id=\"hello-world\"> Hello, World!</h2>\n", filterMarkdown("## Hello, World!"));
+	assert (filterMarkdown("## Hello, World!") == "<h2 id=\"hello-world\"> Hello, World!</h2>\n", filterMarkdown("## Hello, World!"));
 }
 
 @safe unittest { // tables
-	assert(filterMarkdown("foo|bar\n---|---", MarkdownFlags.tables)
+	assert (filterMarkdown("foo|bar\n---|---", MarkdownFlags.tables)
 		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n</table>\n");
-	assert(filterMarkdown(" *foo* | bar \n---|---\n baz|bam", MarkdownFlags.tables)
+	assert (filterMarkdown(" *foo* | bar \n---|---\n baz|bam", MarkdownFlags.tables)
 		== "<table>\n<tr><th><em>foo</em></th><th>bar</th></tr>\n<tr><td>baz</td><td>bam</td></tr>\n</table>\n");
-	assert(filterMarkdown("|foo|bar|\n---|---\n baz|bam", MarkdownFlags.tables)
+	assert (filterMarkdown("|foo|bar|\n---|---\n baz|bam", MarkdownFlags.tables)
 		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td><td>bam</td></tr>\n</table>\n");
-	assert(filterMarkdown("foo|bar\n|---|---|\nbaz|bam", MarkdownFlags.tables)
+	assert (filterMarkdown("foo|bar\n|---|---|\nbaz|bam", MarkdownFlags.tables)
 		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td><td>bam</td></tr>\n</table>\n");
-	assert(filterMarkdown("foo|bar\n---|---\n|baz|bam|", MarkdownFlags.tables)
+	assert (filterMarkdown("foo|bar\n---|---\n|baz|bam|", MarkdownFlags.tables)
 		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td><td>bam</td></tr>\n</table>\n");
-	assert(filterMarkdown("foo|bar|baz\n:---|---:|:---:\n|baz|bam|bap|", MarkdownFlags.tables)
+	assert (filterMarkdown("foo|bar|baz\n:---|---:|:---:\n|baz|bam|bap|", MarkdownFlags.tables)
 		== "<table>\n<tr><th align=\"left\">foo</th><th align=\"right\">bar</th><th align=\"center\">baz</th></tr>\n"
 		~ "<tr><td align=\"left\">baz</td><td align=\"right\">bam</td><td align=\"center\">bap</td></tr>\n</table>\n");
-	assert(filterMarkdown(" |bar\n---|---", MarkdownFlags.tables)
+	assert (filterMarkdown(" |bar\n---|---", MarkdownFlags.tables)
 		== "<table>\n<tr><th></th><th>bar</th></tr>\n</table>\n");
-	assert(filterMarkdown("foo|bar\n---|---\nbaz|", MarkdownFlags.tables)
+	assert (filterMarkdown("foo|bar\n---|---\nbaz|", MarkdownFlags.tables)
 		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td></tr>\n</table>\n");
 }
 
 @safe unittest { // issue #1527 - blank lines in code blocks
-	assert(filterMarkdown("    foo\n\n    bar\n") ==
+	assert (filterMarkdown("    foo\n\n    bar\n") ==
 		"<pre class=\"prettyprint\"><code>foo\n\nbar\n</code></pre>\n");
 }
 
 @safe unittest {
-	assert(filterMarkdown("> ```\r\n> test\r\n> ```", MarkdownFlags.forumDefault) ==
+	assert (filterMarkdown("> ```\r\n> test\r\n> ```", MarkdownFlags.forumDefault) ==
 		"<blockquote><pre class=\"prettyprint\"><code>test\n</code></pre>\n</blockquote>\n");
 }
 
 @safe unittest { // issue #1845 - malicious URI targets
-	assert(filterMarkdown("[foo](javascript:foo) ![bar](javascript:bar) <javascript:baz>", MarkdownFlags.forumDefault) ==
+	assert (filterMarkdown("[foo](javascript:foo) ![bar](javascript:bar) <javascript:baz>", MarkdownFlags.forumDefault) ==
 		"<p><a href=\"#\">foo</a> <img src=\"#\" alt=\"bar\"> <a href=\"#\">javascript:baz</a>\n</p>\n");
-	assert(filterMarkdown("[foo][foo] ![foo][foo]\n[foo]: javascript:foo", MarkdownFlags.forumDefault) ==
+	assert (filterMarkdown("[foo][foo] ![foo][foo]\n[foo]: javascript:foo", MarkdownFlags.forumDefault) ==
 		"<p><a href=\"#\">foo</a> <img src=\"#\" alt=\"foo\">\n</p>\n");
-	assert(filterMarkdown("[foo](javascript%3Abar)", MarkdownFlags.forumDefault) ==
+	assert (filterMarkdown("[foo](javascript%3Abar)", MarkdownFlags.forumDefault) ==
 		"<p><a href=\"javascript%3Abar\">foo</a>\n</p>\n");
 
 	// extra XSS regression tests
-	assert(filterMarkdown("[<script></script>](bar)", MarkdownFlags.forumDefault) ==
+	assert (filterMarkdown("[<script></script>](bar)", MarkdownFlags.forumDefault) ==
 		"<p><a href=\"bar\">&lt;script&gt;&lt;/script&gt;</a>\n</p>\n");
-	assert(filterMarkdown("[foo](\"><script></script><span foo=\")", MarkdownFlags.forumDefault) ==
+	assert (filterMarkdown("[foo](\"><script></script><span foo=\")", MarkdownFlags.forumDefault) ==
 		"<p><a href=\"&quot;&gt;&lt;script&gt;&lt;/script&gt;&lt;span foo=&quot;\">foo</a>\n</p>\n");
-	assert(filterMarkdown("[foo](javascript&#58;bar)", MarkdownFlags.forumDefault) ==
+	assert (filterMarkdown("[foo](javascript&#58;bar)", MarkdownFlags.forumDefault) ==
 		"<p><a href=\"javascript&amp;#58;bar\">foo</a>\n</p>\n");
 }
 
 @safe unittest { // issue #2132 - table with more columns in body goes out of array bounds
-	assert(filterMarkdown("| a | b |\n|--------|--------|\n|   c    | d  | e |", MarkdownFlags.tables) ==
+	assert (filterMarkdown("| a | b |\n|--------|--------|\n|   c    | d  | e |", MarkdownFlags.tables) ==
 		"<table>\n<tr><th>a</th><th>b</th></tr>\n<tr><td>c</td><td>d</td><td>e</td></tr>\n</table>\n");
+}
+
+@safe unittest { // figures
+	assert (filterMarkdown("- %%%\n\tfoo\n\n\t- ###\n\t\tbar", MarkdownFlags.figures) ==
+		"<figure>foo\n<figcaption>bar\n</figcaption>\n</figure>\n");
+	assert (filterMarkdown("- %%%\n\tfoo\n\n\tbar\n\n\t- ###\n\t\tbaz", MarkdownFlags.figures) ==
+		"<figure><p>foo\n</p>\n<p>bar\n</p>\n<figcaption>baz\n</figcaption>\n</figure>\n");
+	assert (filterMarkdown("- %%%\n\tfoo\n\n\t- ###\n\t\tbar\n\n\t\tbaz", MarkdownFlags.figures) ==
+		"<figure>foo\n<figcaption><p>bar\n</p>\n<p>baz\n</p>\n</figcaption>\n</figure>\n");
+	assert (filterMarkdown("- %%%\n\t1. foo\n\t2. bar\n\n\t- ###\n\t\tbaz", MarkdownFlags.figures) ==
+		"<figure><ol>\n<li>foo\n</li>\n<li>bar\n</li>\n</ol>\n<figcaption>baz\n</figcaption>\n</figure>\n");
 }
