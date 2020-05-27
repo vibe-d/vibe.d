@@ -230,6 +230,8 @@ private enum LineType {
 	tableSeparator,
 	uList,
 	oList,
+	figure,
+	figureCaption,
 	htmlBlock,
 	codeBlockDelimiter
 }
@@ -298,8 +300,14 @@ pure @safe {
 			lninfo.type = LineType.tableSeparator;
 		else if(isHlineLine(ln)) lninfo.type = LineType.hline;
 		else if(isOListLine(ln)) lninfo.type = LineType.oList;
-		else if(isUListLine(ln)) lninfo.type = LineType.uList;
-		else if(isLineBlank(ln)) lninfo.type = LineType.blank;
+		else if(isUListLine(ln)) {
+			if (settings.flags & MarkdownFlags.figures) {
+				auto suff = removeListPrefix(ln, LineType.uList);
+				if (suff == "%%%") lninfo.type = LineType.figure;
+				else if (suff == "###") lninfo.type = LineType.figureCaption;
+				else lninfo.type = LineType.uList;
+			} else lninfo.type = LineType.uList;
+		} else if(isLineBlank(ln)) lninfo.type = LineType.blank;
 		else if(!(settings.flags & MarkdownFlags.noInlineHtml) && isHtmlBlockLine(ln))
 			lninfo.type = LineType.htmlBlock;
 		else lninfo.type = LineType.plain;
@@ -477,22 +485,18 @@ pure @safe {
 				case LineType.tableSeparator:
 					lines.popFront();
 					break;
+				case LineType.figure:
+				case LineType.figureCaption:
+					b.type = ln.type == LineType.figure
+						? BlockType.figure : BlockType.figureCaption;
+
+					auto itemindent = base_indent ~ IndentType.white;
+					lines.popFront();
+					parseBlocks(b, lines, itemindent, settings);
+					break;
 				case LineType.uList:
 				case LineType.oList:
 					b.type = ln.type == LineType.uList ? BlockType.uList : BlockType.oList;
-
-					if (settings.flags & MarkdownFlags.figures && ln.type == LineType.uList) {
-						auto suffix = removeListPrefix(ln.text, ln.type);
-						if (suffix == "###") b.type = BlockType.figureCaption;
-						else if (suffix == "%%%") b.type = BlockType.figure;
-					}
-
-					if (b.type.among(BlockType.figure, BlockType.figureCaption) && !lines.empty) {
-						auto itemindent = base_indent ~ IndentType.white;
-						lines.popFront();
-						parseBlocks(b, lines, itemindent, settings);
-						break;
-					}
 
 					auto itemindent = base_indent ~ IndentType.white;
 					bool firstItem = true, paraMode = false;
@@ -504,8 +508,11 @@ pure @safe {
 						itm.text[0] = removeListPrefix(itm.text[0], ln.type);
 
 						// emit <p>...</p> if there are blank lines between the items
-						if (firstItem && !lines.empty && lines.front.type == LineType.blank)
-							paraMode = true;
+						if (firstItem && !lines.empty && lines.front.type == LineType.blank) {
+							lines.popFront();
+							if (!lines.empty && lines.front.type == ln.type)
+								paraMode = true;
+						}
 						firstItem = false;
 						if (paraMode) {
 							Block para;
@@ -1651,7 +1658,22 @@ private struct Link {
 		"<table>\n<tr><th>a</th><th>b</th></tr>\n<tr><td>c</td><td>d</td><td>e</td></tr>\n</table>\n");
 }
 
+@safe unittest { // lists
+	assert (filterMarkdown("- foo\n- bar") ==
+		"<ul>\n<li>foo\n</li>\n<li>bar\n</li>\n</ul>\n");
+	assert (filterMarkdown("- foo\n\n- bar") ==
+		"<ul>\n<li><p>foo\n</p>\n</li>\n<li><p>bar\n</p>\n</li>\n</ul>\n");
+	assert (filterMarkdown("1. foo\n2. bar") ==
+		"<ol>\n<li>foo\n</li>\n<li>bar\n</li>\n</ol>\n");
+	assert (filterMarkdown("1. foo\n\n2. bar") ==
+		"<ol>\n<li><p>foo\n</p>\n</li>\n<li><p>bar\n</p>\n</li>\n</ol>\n");
+}
+
 @safe unittest { // figures
+	assert (filterMarkdown("- %%%") == "<ul>\n<li>%%%\n</li>\n</ul>\n");
+	assert (filterMarkdown("- ###") == "<ul>\n<li>###\n</li>\n</ul>\n");
+	assert (filterMarkdown("- %%%", MarkdownFlags.figures) == "<figure></figure>\n");
+	assert (filterMarkdown("- ###", MarkdownFlags.figures) == "<figcaption></figcaption>\n");
 	assert (filterMarkdown("- %%%\n\tfoo\n\n\t- ###\n\t\tbar", MarkdownFlags.figures) ==
 		"<figure>foo\n<figcaption>bar\n</figcaption>\n</figure>\n");
 	assert (filterMarkdown("- %%%\n\tfoo\n\n\tbar\n\n\t- ###\n\t\tbaz", MarkdownFlags.figures) ==
@@ -1660,4 +1682,6 @@ private struct Link {
 		"<figure>foo\n<figcaption><p>bar\n</p>\n<p>baz\n</p>\n</figcaption>\n</figure>\n");
 	assert (filterMarkdown("- %%%\n\t1. foo\n\t2. bar\n\n\t- ###\n\t\tbaz", MarkdownFlags.figures) ==
 		"<figure><ol>\n<li>foo\n</li>\n<li>bar\n</li>\n</ol>\n<figcaption>baz\n</figcaption>\n</figure>\n");
+	assert (filterMarkdown("- foo\n- %%%", MarkdownFlags.figures) == "<ul>\n<li>foo\n</li>\n</ul>\n<figure></figure>\n");
+	assert (filterMarkdown("- foo\n\n- %%%", MarkdownFlags.figures) == "<ul>\n<li>foo\n</li>\n</ul>\n<figure></figure>\n");
 }
