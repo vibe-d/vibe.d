@@ -71,9 +71,9 @@ configuration "openssl" {
 		if (!opensslVersion.length)
 		{
 			 writeln("\tWarning: Could not find OpenSSL version via pkg-config nor by calling the openssl binary.");
-			 writeln("\tAssuming version 1.0.0.");
+			 writeln("\tAssuming version 1.1.0.");
 			 writeln("\tYou might need to export PKG_CONFIG_PATH or install the openssl package if you have a library-only package.");
-			 opensslVersion = "1.0.0";
+			 opensslVersion = "1.1.0";
 		}
 		auto data = text("module openssl_version;\nenum OPENSSL_VERSION=\"", opensslVersion, "\";\n");
 		auto output = dir.buildPath("openssl_version.d");
