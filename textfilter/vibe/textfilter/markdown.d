@@ -788,7 +788,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				string text;
 				if (auto em = parseEmphasis(ln, text)) {
 					dst.put(em == 1 ? "<em>" : em == 2 ? "<strong>" : "<strong><em>");
-					filterHTMLEscape(dst, text, HTMLEscapeFlags.escapeMinimal);
+					dst.put(text);
 					dst.put(em == 1 ? "</em>" : em == 2 ? "</strong>": "</em></strong>");
 				} else {
 					dst.put(ln[0]);
@@ -1684,4 +1684,10 @@ private struct Link {
 		"<figure><ol>\n<li>foo\n</li>\n<li>bar\n</li>\n</ol>\n<figcaption>baz\n</figcaption>\n</figure>\n");
 	assert (filterMarkdown("- foo\n- %%%", MarkdownFlags.figures) == "<ul>\n<li>foo\n</li>\n</ul>\n<figure></figure>\n");
 	assert (filterMarkdown("- foo\n\n- %%%", MarkdownFlags.figures) == "<ul>\n<li>foo\n</li>\n</ul>\n<figure></figure>\n");
+}
+
+@safe unittest { // HTML entities
+	assert(filterMarkdown("&nbsp;") == "<p>&nbsp;\n</p>\n");
+	assert(filterMarkdown("*&nbsp;*") == "<p><em>&nbsp;</em>\n</p>\n");
+	assert(filterMarkdown("`&nbsp;`") == "<p><code class=\"prettyprint\">&amp;nbsp;</code>\n</p>\n");
 }
