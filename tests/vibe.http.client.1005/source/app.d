@@ -28,7 +28,7 @@ void main(string[] args)
 
 	requestHTTP("http://127.0.0.1:11005",
 		(scope req) {
-			MultiPartBody part = new MultiPartBody;
+			MultiPartBody part;
 			part.parts ~= MultiPart.formData("name", "bob");
 			auto memStream = createMemoryStream(cast(ubyte[]) "Totally\0a\0PNG\0file.", false);
 			part.parts ~= MultiPart.singleFile("picture", "picture.png", "image/png", memStream, true);

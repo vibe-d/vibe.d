@@ -343,7 +343,8 @@ private bool parseMultipartFormPart(InputStream)(InputStream stream, ref FormFie
 
 	Use $(LREF MultiPartBody) to manage a collection of parts.
 */
-final class MultiPart
+struct MultiPartField(ContentInputStream)
+	if (isInputStream!ContentInputStream)
 {
 	import vibe.stream.memory : createMemoryStream;
 
@@ -352,7 +353,7 @@ final class MultiPart
 
 	private
 	{
-		InputStreamProxy m_content;
+		ContentInputStream m_content;
 		size_t m_contentLength;
 	}
 
@@ -366,9 +367,18 @@ final class MultiPart
 			exact_content_length = Set to the content length in bytes to allow
 				calculation of the `Content-Length` header. Leave 0 to omit.
 	*/
-	void setContent(InputStream)(InputStream stream,
-		size_t exact_content_length = 0)
-		if (isInputStream!InputStream)
+	void setContent(InputStream)(InputStream stream, size_t exact_content_length = 0)
+		if (is(InputStream == ContentInputStream))
+	{
+		m_content = stream;
+		m_contentLength = exact_content_length;
+	}
+
+	/// ditto
+	void setContent(InputStream)(InputStream stream, size_t exact_content_length = 0)
+		if (!is(InputStream == InputStreamProxy)
+			&& is(ContentInputStream == InputStreamProxy)
+			&& isInputStream!InputStream)
 	{
 		import vibe.internal.interfaceproxy : interfaceProxy;
 
@@ -377,10 +387,10 @@ final class MultiPart
 	}
 
 	/**
-		Returns the content stream, wrapped as InputStreamProxy as previously
-		set from setContent or from the static constructing methods.
+		Returns the content stream, as previously set from setContent or from
+		the static constructing methods.
 	*/
-	inout(InputStreamProxy) content() @property inout
+	const(ContentInputStream) content() @property const
 	{
 		return m_content;
 	}
@@ -399,12 +409,12 @@ final class MultiPart
 			exact_content_length = Exact length of what the stream will evaluate
 				to in bytes. Used for Content-Length calculation if given.
 	*/
-	static MultiPart formData(InputStream)(string field_name, InputStream stream,
+	static typeof(this) formData(InputStream)(string field_name, InputStream stream,
 		string content_type = "text/plain; charset=\"utf-8\"", bool binary = false,
 		size_t exact_content_length = 0)
 		if (isInputStream!InputStream)
 	{
-		auto ret = new MultiPart();
+		MultiPartField!ContentInputStream ret;
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
 		if (content_type.length)
 			ret.headers["Content-Type"] = content_type;
@@ -415,7 +425,7 @@ final class MultiPart
 	}
 
 	/// ditto
-	static MultiPart formData(string field_name, string value,
+	static typeof(this) formData(string field_name, string value,
 		string content_type = "text/plain; charset=\"utf-8\"")
 	{
 		return formData(field_name, createMemoryStream(cast(ubyte[]) value.dup, false),
@@ -423,7 +433,7 @@ final class MultiPart
 	}
 
 	/// ditto
-	static MultiPart formData(string field_name, ubyte[] content,
+	static typeof(this) formData(string field_name, ubyte[] content,
 		string content_type = "application/octet-stream")
 	{
 		return formData(field_name, createMemoryStream(cast(ubyte[]) content, false),
@@ -434,7 +444,7 @@ final class MultiPart
 		Helper function directly reading from a file calling singleFile with the
 		InputStream parameter and content length set.
 	*/
-	static MultiPart singleFile(string field_name, NativePath file)
+	static typeof(this) singleFile(string field_name, NativePath file)
 	{
 		import vibe.inet.mimetypes : getMimeTypeForFile;
 		import vibe.core.file : openFile, FileMode;
@@ -460,12 +470,12 @@ final class MultiPart
 			exact_content_length = Exact length of what the stream will evaluate
 				to in bytes. Used for Content-Length calculation if given.
 	*/
-	static MultiPart singleFile(InputStream)(string field_name, string filename,
+	static typeof(this) singleFile(InputStream)(string field_name, string filename,
 		string content_type, InputStream stream, bool binary = true,
 		size_t exact_content_length = 0)
 		if (isInputStream!InputStream)
 	{
-		auto ret = new MultiPart();
+		MultiPartField!ContentInputStream ret;
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"; filename=\"" ~ filename ~ "\"";
 		if (content_type.length)
 			ret.headers["Content-Type"] = content_type;
@@ -476,7 +486,7 @@ final class MultiPart
 	}
 
 	/// ditto
-	static MultiPart singleFile(string field_name, string filename,
+	static typeof(this) singleFile(string field_name, string filename,
 		string content_type, string content)
 	{
 		return singleFile(field_name, filename, content_type,
@@ -485,7 +495,7 @@ final class MultiPart
 	}
 
 	/// ditto
-	static MultiPart singleFile(string field_name, string filename,
+	static typeof(this) singleFile(string field_name, string filename,
 		string content_type, ubyte[] content)
 	{
 		return singleFile(field_name, filename, content_type,
@@ -496,7 +506,7 @@ final class MultiPart
 		Helper function directly reading from a file calling multipleFilesPart
 		with the InputStream parameter and content length set.
 	*/
-	static MultiPart multipleFilesPart(NativePath file)
+	static typeof(this) multipleFilesPart(NativePath file)
 	{
 		import vibe.inet.mimetypes : getMimeTypeForFile;
 		import vibe.core.file : openFile, FileMode;
@@ -523,12 +533,12 @@ final class MultiPart
 			exact_content_length = Exact length of what the stream will evaluate
 				to in bytes. Used for Content-Length calculation if given.
 	*/
-	static MultiPart multipleFilesPart(InputStream)(string filename,
+	static typeof(this) multipleFilesPart(InputStream)(string filename,
 		string content_type, InputStream stream, bool binary = false,
 		size_t exact_content_length = 0)
 		if (isInputStream!InputStream)
 	{
-		auto ret = new MultiPart();
+		MultiPartField!ContentInputStream ret;
 		ret.headers["Content-Disposition"] = "file; filename=\"" ~ filename ~ "\"";
 		if (content_type.length)
 			ret.headers["Content-Type"] = content_type;
@@ -539,7 +549,7 @@ final class MultiPart
 	}
 
 	/// ditto
-	static MultiPart multipleFilesPart(string filename, string content_type,
+	static typeof(this) multipleFilesPart(string filename, string content_type,
 		string content)
 	{
 		return multipleFilesPart(filename, content_type,
@@ -548,7 +558,7 @@ final class MultiPart
 	}
 
 	/// ditto
-	static MultiPart multipleFilesPart(string filename, string content_type,
+	static typeof(this) multipleFilesPart(string filename, string content_type,
 		ubyte[] content)
 	{
 		return multipleFilesPart(filename, content_type,
@@ -576,12 +586,12 @@ final class MultiPart
 			content_type = The subtype for this mixed multipart to have. Common
 				types include `multipart/mixed` or `multipart/alternative`.
 	*/
-	static MultiPart multipleFiles(string name, MultiPartBody multipart,
+	static typeof(this) multipleFiles(string name, MultiPartBody multipart,
 		string boundary, string content_type = "multipart/mixed")
 	{
 		import vibe.stream.memory : createMemoryOutputStream;
 
-		auto ret = new MultiPart();
+		MultiPartField!ContentInputStream ret;
 		ret.headers["Content-Disposition"] = "form-data; name=\"" ~ name ~ "\"";
 		ret.headers["Content-Type"] = content_type ~ "; boundary=\"" ~ boundary ~ "\"";
 		auto stream = createMemoryOutputStream();
@@ -630,10 +640,12 @@ final class MultiPart
 			output.write("\r\n");
 		}
 		output.write("\r\n");
-		pipe(content, output);
+		pipe(m_content, output);
 		output.write("\r\n");
 	}
 }
+
+alias MultiPart = MultiPartField!InputStreamProxy;
 
 /**
 	Collection container for multiple MultiPart parts, a content type and an
@@ -644,7 +656,7 @@ final class MultiPart
 
 	Standards: $(LINK https://tools.ietf.org/html/rfc1521#section-7.2)
 */
-final class MultiPartBody
+struct MultiPartBody
 {
 	/**
 		The mime type of this multipart. For HTTP this is most usually

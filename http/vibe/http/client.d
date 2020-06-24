@@ -954,16 +954,45 @@ final class HTTPClientRequest : HTTPRequest {
 	}
 
 	/**
-		Partially writes the body with a multipart. If you plan to manually
-		write all parts using writePart you need to start with `beginMultiPart`
-		and end with `finalizeMultiPart`.
+		Writes a single multipart part, which is essentially one input in a form
+		request which can contain headers to specify what it is. You need to
+		start with `beginMultiPart` and end with `finalizeMultiPart` with this
+		API.
 
 		Alternatively you can use `writeMultiPartBody` to do everything in one
 		step.
 	 */
-	void writePart(MultiPart part)
+	void writePart(InputStream)(string field_name, InputStream data,
+		string content_type = "text/plain; charset=\"utf-8\"", bool binary = false)
+		if (isInputStream!InputStream)
 	{
-		part.write(bodyWriter, m_multipartBoundary);
+		scope InetHeaderMap headers;
+		headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
+		if (content_type.length)
+			ret.headers["Content-Type"] = content_type;
+		if (binary)
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		writePart(data, headers);
+	}
+
+	/// ditto
+	void writePart(InputStream)(InputStream data, scope const ref InetHeaderMap headers)
+		if (isInputStream!InputStream)
+	{
+		assert(m_multipartBoundary.length, "need to call beginMultiPart and finalizeMultiPart with writePart");
+
+		bodyWriter.write("--");
+		bodyWriter.write(m_multipartBoundary);
+		bodyWriter.write("\r\n");
+		foreach (k, v; headers.byKeyValue) {
+			bodyWriter.write(k);
+			bodyWriter.write(": ");
+			bodyWriter.write(v);
+			bodyWriter.write("\r\n");
+		}
+		bodyWriter.write("\r\n");
+		pipe(data, bodyWriter);
+		bodyWriter.write("\r\n");
 	}
 
 	/**
@@ -980,6 +1009,7 @@ final class HTTPClientRequest : HTTPRequest {
 			bodyWriter.write(epilogue);
 			bodyWriter.write("\r\n");
 		}
+		m_multipartBoundary = null;
 		finalize();
 	}
 
@@ -1054,6 +1084,9 @@ final class HTTPClientRequest : HTTPRequest {
 		// test if already finalized
 		if (m_headerWritten && !m_bodyWriter)
 			return;
+
+		assert(!m_multipartBoundary.length,
+			"Closed HTTPClientRequest without calling finalizeMultiPart but called beginMultiPart");
 
 		// force the request to be sent
 		if (!m_headerWritten) writeHeader();
