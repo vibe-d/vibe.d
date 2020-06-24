@@ -435,7 +435,282 @@ struct MongoCollection {
 		}
 	}
 
-	mixin MongoCollectionIndexStandardAPIImpl;
+	/*
+		following MongoDB standard API for the Index Management specification:
+
+		Standards: https://github.com/mongodb/specifications/blob/0c6e56141c867907aacf386e0cbe56d6562a0614/source/index-management.rst#standard-api
+	*/
+
+	deprecated("This is a legacy API, call createIndexes instead")
+	void ensureIndex(scope const(Tuple!(string, int))[] field_orders, IndexFlags flags = IndexFlags.none, Duration expire_time = 0.seconds)
+	@safe {
+		IndexModel[1] models;
+		IndexOptions options;
+		if (flags & IndexFlags.unique) options.unique = true;
+		if (flags & IndexFlags.dropDuplicates) options.dropDups = true;
+		if (flags & IndexFlags.background) options.background = true;
+		if (flags & IndexFlags.sparse) options.sparse = true;
+		if (flags & IndexFlags.expireAfterSeconds) options.expireAfter = expire_time;
+
+		models[0].options = options;
+		foreach (field; field_orders) {
+			models[0].add(field[0], field[1]);
+		}
+		createIndexes(models);
+	}
+
+	deprecated("This is a legacy API, call createIndexes instead. This API is not recommended to be used because of unstable dictionary ordering.")
+	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.none, ulong expireAfterSeconds = 0)
+	@safe {
+		Tuple!(string, int)[] orders;
+		foreach (k, v; field_orders)
+			orders ~= tuple(k, v);
+		ensureIndex(orders, flags, expireAfterSeconds.seconds);
+	}
+
+	/**
+		Drops a single index from the collection by the index name.
+
+		Throws: `Exception` if it is attempted to pass in `*`.
+		Use dropIndexes() to remove all indexes instead.
+	*/
+	void dropIndex(string name, DropIndexOptions options = DropIndexOptions.init)
+	@safe {
+		if (name == "*")
+			throw new Exception("Attempted to remove single index with '*'");
+
+		static struct CMD {
+			string dropIndexes;
+			string index;
+		}
+
+		CMD cmd;
+		cmd.dropIndexes = m_name;
+		cmd.index = name;
+		auto reply = database.runCommand(cmd);
+		enforce(reply["ok"].get!double == 1, "dropIndex command failed: "~reply["errmsg"].opt!string);
+	}
+
+	/// ditto
+	void dropIndex(T)(T keys,
+		IndexOptions indexOptions = IndexOptions.init,
+		DropIndexOptions options = DropIndexOptions.init)
+	@safe if (!is(Unqual!T == IndexModel))
+	{
+		IndexModel model;
+		model.keys = serializeToBson(keys);
+		model.options = indexOptions;
+		dropIndex(model.name, options);
+	}
+
+	/// ditto
+	void dropIndex(const IndexModel keys,
+		DropIndexOptions options = DropIndexOptions.init)
+	@safe {
+		dropIndex(keys.name, options);
+	}
+
+	///
+	@safe unittest
+	{
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			auto primarykey = IndexModel()
+					.add("name", 1)
+					.add("primarykey", -1);
+			coll.dropIndex(primarykey);
+		}
+	}
+
+	/// Drops all indexes in the collection.
+	void dropIndexes(DropIndexOptions options = DropIndexOptions.init)
+	@safe {
+		static struct CMD {
+			string dropIndexes;
+			string index;
+		}
+
+		CMD cmd;
+		cmd.dropIndexes = m_name;
+		cmd.index = "*";
+		auto reply = database.runCommand(cmd);
+		enforce(reply["ok"].get!double == 1, "dropIndexes command failed: "~reply["errmsg"].opt!string);
+	}
+
+	/// Unofficial API extension, more efficient multi-index removal on
+	/// MongoDB 4.2+
+	void dropIndexes(string[] names, DropIndexOptions options = DropIndexOptions.init)
+	@safe {
+		MongoConnection conn = m_client.lockConnection();
+		if (conn.description.satisfiesVersion(WireVersion.v42)) {
+			static struct CMD {
+				string dropIndexes;
+				string[] index;
+			}
+
+			CMD cmd;
+			cmd.dropIndexes = m_name;
+			cmd.index = names;
+			auto reply = database.runCommand(cmd);
+			enforce(reply["ok"].get!double == 1, "dropIndexes command failed: "~reply["errmsg"].opt!string);
+		} else {
+			foreach (name; names)
+				dropIndex(name);
+		}
+	}
+
+	///
+	@safe unittest
+	{
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			coll.dropIndexes(["name_1_primarykey_-1"]);
+		}
+	}
+
+	/**
+		Convenience method for creating a single index. Calls `createIndexes`
+
+		Supports any kind of document for template parameter T or a IndexModel.
+
+		Params:
+			keys = a IndexModel or type with integer or string fields indicating
+				index direction or index type.
+	*/
+	string createIndex(T)(T keys,
+		IndexOptions indexOptions = IndexOptions.init,
+		CreateIndexOptions options = CreateIndexOptions.init)
+	@safe if (!is(Unqual!T == IndexModel))
+	{
+		IndexModel[1] model;
+		model[0].keys = serializeToBson(keys);
+		model[0].options = indexOptions;
+		return createIndexes(model[], options)[0];
+	}
+
+	/// ditto
+	string createIndex(const IndexModel keys,
+		CreateIndexOptions options = CreateIndexOptions.init)
+	@safe {
+		IndexModel[1] model;
+		model[0] = keys;
+		return createIndexes(model[], options)[0];
+	}
+
+	///
+	@safe unittest
+	{
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+
+			// simple ascending name, descending primarykey compound-index
+			coll.createIndex(["name": 1, "primarykey": -1]);
+
+			IndexOptions textOptions = {
+				// pick language from another field called "idioma"
+				languageOverride: "idioma"
+			};
+			auto textIndex = IndexModel()
+					.withOptions(textOptions)
+					.add("comments", IndexType.text);
+			// more complex text index in DB with independent language
+			coll.createIndex(textIndex);
+		}
+	}
+
+	/**
+		Builds one or more indexes in the collection.
+
+		See_Also: $(LINK https://docs.mongodb.com/manual/reference/command/createIndexes/)
+	*/
+	string[] createIndexes(scope const(IndexModel)[] models,
+		CreateIndexesOptions options = CreateIndexesOptions.init)
+	@safe {
+		string[] keys = new string[models.length];
+
+		MongoConnection conn = m_client.lockConnection();
+		if (conn.description.satisfiesVersion(WireVersion.v26)) {
+			Bson cmd = Bson.emptyObject;
+			cmd["createIndexes"] = m_name;
+			Bson[] indexes;
+			foreach (model; models) {
+				// trusted to support old compilers which think opt_dup has
+				// longer lifetime than model.options
+				IndexOptions opt_dup = (() @trusted => model.options)();
+				enforceWireVersionConstraints(opt_dup, conn.description.maxWireVersion);
+				Bson index = serializeToBson(opt_dup);
+				index["key"] = model.keys;
+				index["name"] = model.name;
+				indexes ~= index;
+			}
+			cmd["indexes"] = Bson(indexes);
+			auto reply = database.runCommand(cmd);
+			enforce(reply["ok"].get!double == 1, "createIndex command failed: "
+				~ reply["errmsg"].opt!string);
+		} else {
+			foreach (model; models) {
+				// trusted to support old compilers which think opt_dup has
+				// longer lifetime than model.options
+				IndexOptions opt_dup = (() @trusted => model.options)();
+				enforceWireVersionConstraints(opt_dup, WireVersion.old);
+				Bson doc = serializeToBson(opt_dup);
+				doc["v"] = 1;
+				doc["key"] = model.keys;
+				doc["ns"] = m_fullPath;
+				doc["name"] = model.name;
+				database["system.indexes"].insert(doc);
+			}
+		}
+
+		return keys;
+	}
+
+	/**
+		Returns an array that holds a list of documents that identify and describe the existing indexes on the collection. 
+	*/
+	MongoCursor!R listIndexes(R = Bson)() 
+	@safe {
+		MongoConnection conn = m_client.lockConnection();
+		if (conn.description.satisfiesVersion(WireVersion.v30)) {
+			static struct CMD {
+				string listIndexes;
+			}
+
+			CMD cmd;
+			cmd.listIndexes = m_name;
+
+			auto reply = database.runCommand(cmd);
+			enforce(reply["ok"].get!double == 1, "getIndexes command failed: "~reply["errmsg"].opt!string);
+			return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
+		} else {
+			return database["system.indexes"].find!R();
+		}
+	}
+
+	///
+	@safe unittest
+	{
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+
+			foreach (index; coll.listIndexes())
+				logInfo("index %s: %s", index["name"].get!string, index);
+		}
+	}
+
+	deprecated("Please use the standard API name 'listIndexes'") alias getIndexes = listIndexes;
 
 	/**
 		Removes a collection or view from the database. The method also removes any indexes associated with the dropped collection.
