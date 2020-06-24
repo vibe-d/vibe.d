@@ -44,7 +44,7 @@ struct IndexModel
 
 		Returns: this IndexModel instance (caller)
 	*/
-	ref IndexModel add(string field, int direction)
+	ref IndexModel add(string field, int direction) return
 	@safe {
 		// bson objects keep order
 		keys[field] = Bson(direction);
@@ -61,7 +61,7 @@ struct IndexModel
 
 		Returns: this IndexModel instance (caller)
 	*/
-	ref IndexModel add(string field, string type)
+	ref IndexModel add(string field, string type) return
 	@safe {
 		// bson objects keep order
 		keys[field] = Bson(type);
@@ -73,7 +73,7 @@ struct IndexModel
 
 		Returns: this IndexModel instance (caller)
 	*/
-	ref IndexModel withOptions(IndexOptions options)
+	ref IndexModel withOptions(IndexOptions options) return
 	@safe {
 		this.options = options;
 		return this;
