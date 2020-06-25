@@ -7,6 +7,8 @@
 */
 module vibe.db.mongo.flags;
 
+deprecated public import vibe.db.mongo.impl.index : IndexFlags;
+
 enum UpdateFlags {
 	none         = 0,    /// Normal update of a single document.
 	upsert       = 1<<0, /// Creates a document if none exists.
@@ -15,22 +17,6 @@ enum UpdateFlags {
 	None = none, /// Deprecated compatibility alias
 	Upsert = upsert, /// Deprecated compatibility alias
 	MultiUpdate = multiUpdate /// Deprecated compatibility alias
-}
-
-enum IndexFlags {
-	none = 0,
-	unique = 1<<0,
-	dropDuplicates = 1<<2,
-	background = 1<<3,
-	sparse = 1<<4,
-	expireAfterSeconds = 1<<5,
-
-	None = none, /// Deprecated compatibility alias, use `none` instead.
-	Unique = unique, /// Deprecated compatibility alias, use `unique` instead.
-	DropDuplicates = dropDuplicates, /// Deprecated compatibility alias, use `dropDuplicates` instead.
-	Background = background, /// Deprecated compatibility alias, use `background` instead.
-	Sparse = sparse, /// Deprecated compatibility alias, use `sparse` instead.
-	ExpireAfterSeconds = expireAfterSeconds, /// Deprecated compatibility alias, use `expireAfterSeconds` instead.
 }
 
 enum InsertFlags {
