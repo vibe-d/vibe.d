@@ -13,6 +13,7 @@ import vibe.db.redis.redis;
 import vibe.db.redis.types;
 
 import core.time : msecs, seconds;
+import std.typecons : Tuple;
 
 
 /**
