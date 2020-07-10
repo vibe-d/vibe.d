@@ -78,7 +78,7 @@ template getSymbols(T)
 			alias Implementation = TypeTuple!();
 	}
 
-	alias getSymbols = NoDuplicates!(Implementation!T);
+	alias getSymbols = NoDuplicates!(staticMap!(Unqual, Implementation!T));
 }
 
 ///
