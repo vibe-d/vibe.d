@@ -1,26 +1,83 @@
-﻿Changelog
+Changelog
 =========
 
-v0.9.0 - 2020-01-
+v0.9.0 - 2020-07-26
 -------------------
 
-Removes all legacy drivers (libevent, win32, libasync) and fully relies on
-vibe-core instead.
+Removes all legacy drivers (libevent, win32, libasync) and now fully relies on
+vibe-core instead. MongoDB authentication and index management has been brought
+up-to-date and several OpenSSL build issues have been solved.
+
+
+### Features and improvements ###
 
 - Removed all legacy vibe-d:core drivers (libevent, libasync, win32) - vibe-core is the only core implementation now
-- Updated OpenSSL Windows binaries to 1.1.1d - [pull #2395][issue2395]
-- Fixed OpenSSL linking on macOS Catalina - [pull #2379][issue2379]
-- Enabled the manual "openssl-1.1" configuration on Windows - [pull #2392][issue2392]
-- Added `RedisClient.removeUnusedConnections` (by Steven Schveighoffer) - [pull #2372][issue2372]
-- Removed unnecessary HTML attribues from ":css" and ":javascript" Diet filters (by Beyarz) - [pull #2384][issue2384]
-- Added `connectWebSocketEx` to allow customizing the initial HTTP request - [pull #2390][issue2390]
-- Allow LF newlines in addition to CRLF in `parseRFC5322Header` to make it more robust outside of the standard (by Tomáš Chaloupka) - [pull #2362][issue2362]
 - Removed the deprecated simple password hash functions and deprecated the `vibe.crypto.passwordhash` module (by Hiroki Noda aka kubo39) - [pull #2365][issue2365]
+- Removed deprecated `HTTPServerOption` members (by Hiroki Noda aka kubo39) - [pull #2413][issue2413]
+- OpenSSL build improvements
+	- Updated OpenSSL Windows binaries to 1.1.1d - [pull #2395][issue2395]
+	- Fixed OpenSSL linking on macOS Catalina - [pull #2379][issue2379]
+	- Enabled the manual "openssl-1.1" configuration on Windows - [pull #2392][issue2392]
+	- Improved the OpenSSL version detection mechanism (by Mathias Lang aka Geod24) - [pull #2401][issue2401], [pull #2448][issue2448]
+- Added an (optional) syntax to define figures to the Markdown parser - [pull #2446][issue2446], [pull #2447][issue2447]
+- Added `RedisClient.removeUnusedConnections` (by Steven Schveighoffer) - [pull #2372][issue2372]
+- Added a new index management API to `MongoCollection` that works on modern MongoDB versions (by Jan Jurzitza aka WebFreak001) - [pull #2433][issue2433]
+- Added `connectWebSocketEx` to allow customizing the initial HTTP request - [pull #2390][issue2390]
+- Added `@embedNullable` in order to allow optional serialization of `Nullable` fields (by Jan Jurzitza aka WebFreak001) - [issue #1541][issue1541], [pull #2405][issue2405]
+- Added the possibility to serialize `SysTime` as `BsonDate` in the BSON serializer (by Fredrik Söderström aka tirithen) - [pull #2420][issue2420]
+- The MongoDB driver now performs a handshake and stores server information (by Jan Jurzitza aka WebFreak001) - [pull #2201][issue2201]
+- Improved the MongoDB authentication logic and API, as well as the documentation (by Jan Jurzitza aka WebFreak001) - [pull #2422][issue2422]
+- Allow LF newlines in addition to CRLF in `parseRFC5322Header` to make it more robust outside of the standard (by Tomáš Chaloupka) - [pull #2362][issue2362]
 - Informational replies are handled properly in the HTTP client (by Tomáš Chaloupka) - [pull #2352][issue2352]
+- Removed unnecessary HTML attributes from ":css" and ":javascript" Diet filters (by Beyarz) - [pull #2384][issue2384]
+- `createTestHTTPServerResponse` can now be configured to return only the logical response data instead of the raw protocol data - [pull #2453][issue2453]
+- `URL` is now `nothrow` in most places - [pull #2430][issue2430]
+- `HashMap` now supports key types that cannot be moved as `key.move` - [pull #2435][issue2435]
+
+
+### Bug fixes ###
 
 - Fixed `connectWebSocket` to actually use the supplied `settings` parameter - [pull #2390][issue2390]
 - Fixed a malformed WebSocket close packet and handles disconnect errors gracefully (by v1ne) - [pull #2337][issue2337]
 - Fixed a possible WebSocket connection leak in case of read errors (by Benjamin Schaaf) - [pull #2364][issue2364]
+- Fixed an infinite loop in case the Redis connection gets terminated unexpectedly (by Yazan Dabain aka yazd) - [pull #2407][issue2407]
+- Fixed detection of half-closed connections in the HTTP client to avoid writing a request that is guaranteed to fail - [pull #2421][issue2421]
+- Fixed a bogus compile error for web interfaces with parameterized constructors on the latest compiler versions (by Mathias Lang aka Geod24) - [issue #2438][issue2438], [pull #2439][issue2439]
+- Fixed parsing of arrays of structs as parameters in the web interface generator - [pull #2457][issue2457]
+- Fixed HTML escaping rules within Markdown emphasized text - [pull #2450][issue2450]
+
+
+[issue1541]: https://github.com/vibe-d/vibe.d/issues/1541
+[issue2201]: https://github.com/vibe-d/vibe.d/issues/2201
+[issue2337]: https://github.com/vibe-d/vibe.d/issues/2337
+[issue2352]: https://github.com/vibe-d/vibe.d/issues/2352
+[issue2362]: https://github.com/vibe-d/vibe.d/issues/2362
+[issue2364]: https://github.com/vibe-d/vibe.d/issues/2364
+[issue2365]: https://github.com/vibe-d/vibe.d/issues/2365
+[issue2372]: https://github.com/vibe-d/vibe.d/issues/2372
+[issue2379]: https://github.com/vibe-d/vibe.d/issues/2379
+[issue2384]: https://github.com/vibe-d/vibe.d/issues/2384
+[issue2390]: https://github.com/vibe-d/vibe.d/issues/2390
+[issue2392]: https://github.com/vibe-d/vibe.d/issues/2392
+[issue2395]: https://github.com/vibe-d/vibe.d/issues/2395
+[issue2401]: https://github.com/vibe-d/vibe.d/issues/2401
+[issue2405]: https://github.com/vibe-d/vibe.d/issues/2405
+[issue2407]: https://github.com/vibe-d/vibe.d/issues/2407
+[issue2413]: https://github.com/vibe-d/vibe.d/issues/2413
+[issue2420]: https://github.com/vibe-d/vibe.d/issues/2420
+[issue2421]: https://github.com/vibe-d/vibe.d/issues/2421
+[issue2422]: https://github.com/vibe-d/vibe.d/issues/2422
+[issue2430]: https://github.com/vibe-d/vibe.d/issues/2430
+[issue2433]: https://github.com/vibe-d/vibe.d/issues/2433
+[issue2435]: https://github.com/vibe-d/vibe.d/issues/2435
+[issue2438]: https://github.com/vibe-d/vibe.d/issues/2438
+[issue2439]: https://github.com/vibe-d/vibe.d/issues/2439
+[issue2446]: https://github.com/vibe-d/vibe.d/issues/2446
+[issue2447]: https://github.com/vibe-d/vibe.d/issues/2447
+[issue2448]: https://github.com/vibe-d/vibe.d/issues/2448
+[issue2450]: https://github.com/vibe-d/vibe.d/issues/2450
+[issue2453]: https://github.com/vibe-d/vibe.d/issues/2453
+[issue2457]: https://github.com/vibe-d/vibe.d/issues/2457
 
 
 v0.8.6 - 2019-10-03
