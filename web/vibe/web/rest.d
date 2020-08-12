@@ -207,11 +207,15 @@
 		}
 		---
 
-	Parameter_passing:
-		By default, parameter are passed via different methods depending on the
-		type of request. For POST and PATCH requests, they are passed via the
-		body as a JSON object, while for GET and PUT they are passed via the
-		query string.
+	Parameters:
+		Function parameters may be populated from the route, query string,
+		request body, or headers. They may optionally affect the route URL itself.
+
+		By default, parameters are passed differently depending on the type of
+		request (i.e., HTTP method). For GET and PUT, parameters are passed
+		via the query string (`<route>?paramA=valueA[?paramB=...]`),
+		while for POST and PATCH, they are passed via the request body
+		as a JSON object.
 
 		The default behavior can be overridden using one of the following annotations:
 
@@ -246,13 +250,33 @@
 		}
 		----
 
+		Further, how function parameters are named may affect the route:
+
+		$(UL
+			$(LI If the first parameter is named `id`, this is interpreted as a
+				leading route component. For example, `getName(int id)` becomes
+				`/:id/name`.)
+				$(B Note that this style of parameter-based URL routing is
+				different than in many other web frameworks, ) where instead
+				this example would be routed as `/name/:id`.
+			$(LI Parameters with leading underscores (e.g. `_slug`) are also
+				interpreted as a route component, but only in the presence of
+				a @path UDA annotation. See Manual endpoint specification above.
+			$(LI Other function parameters do not affect or come from the path
+				 portion of the URL, and are are passed according to the default
+				 rules above: query string for GET and PUT; request body JSON
+				 for POST and PATCH.)
+		)
+
+
 	Default_values:
 		Parameters with default values behave as optional parameters. If one is
 		set in the interface declaration of a method, the client can omit a
 		value for the corresponding field in the request and the default value
 		is used instead.
 
-		Note that this can suffer from DMD bug #14369 (Vibe.d: #1043).
+		Note that if default parameters are not evaluable by CTFE, compilation
+		may fail due to DMD bug #14369 (Vibe.d tracking issue: #1043).
 
 	Aggregates:
 		When passing aggregates as parameters, those are serialized differently
