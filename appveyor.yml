@@ -2,10 +2,10 @@ platform: x64
 environment:
  matrix:
   - DC: dmd
-    DVersion: 2.091.0
+    DVersion: 2.093.1
     arch: x64
   - DC: dmd
-    DVersion: 2.091.0
+    DVersion: 2.093.1
     arch: x86_mscoff
   - DC: dmd
     DVersion: 2.090.1
@@ -17,7 +17,7 @@ environment:
     DVersion: 2.088.1
     arch: x64
   - DC: dmd
-    DVersion: 2.077.1
+    DVersion: 2.083.1
     arch: x86_mscoff
   - DC: ldc
     DVersion: 1.20.1
@@ -34,9 +34,6 @@ environment:
   - DC: ldc
     DVersion: 1.16.0
     arch: x86
-  - DC: ldc
-    DVersion: 1.7.0
-    arch: x64
 
 branches:
   only:

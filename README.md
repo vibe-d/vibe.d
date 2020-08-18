@@ -48,42 +48,16 @@ Alternatively, you can quickstart with examples directly on [![Open on run.dlang
 Support
 -------
 
-Vibe.d aims to support at least the 5 latest minor releases of D.
-At the moment, the following compilers are supported and tested:
+Vibe.d supports the 10 latest minor releases of DMD.
+For example, if the current version is v2.090.1,
+then v2.089.x, v2.088.x, ... v2.080.x are supported.
+Note that support for patch release is desireable,
+but only support for the last patch in a minor is guaranteed.
 
-- DMD 2.087.1
-- DMD 2.086.1
-- DMD 2.085.0
-- DMD 2.084.0
-- DMD 2.077.1
-- LDC 1.17.0 (FE: 2.087.1)
-- LDC 1.16.0 (FE: 2.086.1)
-- LDC 1.15.0 (FE: 2.085.1)
-- LDC 1.14.0 (FE: 2.084.1)
-- LDC 1.7.0 (FE: 2.077.1)
-
-
-Up to 0.8.6:
-- DMD 2.076.1
-- LDC 1.6.0 (FE: 2.076.1)
-
-Up to 0.8.4:
-- DMD 2.075.1
-- DMD 2.074.1
-- LDC 1.5.0 (FE: 2.075.1)
-- LDC 1.4.0 (FE: 2.074.1)
-
-Up to 0.8.3:
-- DMD 2.073.2
-- LDC 1.3.0 (FE: 2.073.2)
-
-Up to 0.8.2:
-- DMD 2.072.2
-- LDC 1.2.0 (FE: 2.072.2)
-
-Up to 0.8.1:
-- DMD 2.071.2
-- LDC 1.1.1 (FE: 2.071.2)
+Additionally, Vibe.d supports all LDC versions that implement
+the version of a supported frontend (e.g. by the previous rule
+[LDC v1.20.0](https://github.com/ldc-developers/ldc/releases/tag/v1.20.0)
+implements v2.090.1 and would be supported).
 
 
 Installation
