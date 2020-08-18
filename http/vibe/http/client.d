@@ -678,7 +678,8 @@ final class HTTPClient {
 					use_dns = true;
 				}
 
-				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, m_settings.dnsAddressFamily, use_dns);
+				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, m_settings.dnsAddressFamily, use_dns,
+					m_settings.connectTimeout);
 				proxyAddr.port = m_settings.proxyURL.port;
 				m_conn = connectTCPWithTimeout(proxyAddr, m_settings.networkInterface, m_settings.connectTimeout);
 			}
@@ -700,13 +701,13 @@ final class HTTPClient {
 						() @trusted { strcpy(cast(char*)s.sun_path.ptr,m_server.toStringz()); } ();
 					} else
 					{
-						addr = resolveHost(m_server, m_settings.dnsAddressFamily);
+						addr = resolveHost(m_server, m_settings.dnsAddressFamily, true, m_settings.connectTimeout);
 						addr.port = m_port;
 					}
 					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.connectTimeout);
 				} else
 				{
-					auto addr = resolveHost(m_server, m_settings.dnsAddressFamily);
+					auto addr = resolveHost(m_server, m_settings.dnsAddressFamily, true, m_settings.connectTimeout);
 					addr.port = m_port;
 					m_conn = connectTCPWithTimeout(addr, m_settings.networkInterface, m_settings.connectTimeout);
 				}
