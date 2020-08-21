@@ -1,6 +1,18 @@
 Changelog
 =========
 
+v0.9.1 - 2020-08-21
+-------------------
+
+With this release, timeout with `resolveHost` (DNS query) will work correctly.
+This requires `vibe-core` v1.9.4 and `eventcore` v0.9.8.
+
+- Reduce supported versions to the last 10 releases - [pull #2465][issue2465]
+- Use a timeout in the call to resolveHost - [pull #2466][issue2466]
+
+[issue2465]: https://github.com/vibe-d/vibe.d/issues/2465
+[issue2466]: https://github.com/vibe-d/vibe.d/issues/2466
+
 v0.9.0 - 2020-07-26
 -------------------
 
