@@ -31,6 +31,39 @@ string adjustMethodStyle(string name, MethodStyle style)
 
 	import std.uni;
 
+	string separate(char separator, bool upper_case)
+	{
+		string ret;
+		size_t start = 0, i = 0;
+		while (i < name.length) {
+			// skip acronyms
+			while (i < name.length && (i+1 >= name.length || (name[i+1] >= 'A' && name[i+1] <= 'Z'))) {
+				std.utf.decode(name, i);
+			}
+
+			// skip the main (lowercase) part of a word
+			while (i < name.length && !(name[i] >= 'A' && name[i] <= 'Z')) {
+				std.utf.decode(name, i);
+			}
+
+			// add a single word
+			if( ret.length > 0 ) {
+				ret ~= separator;
+			}
+			ret ~= name[start .. i];
+
+			// quick skip the capital and remember the start of the next word
+			start = i;
+			if (i < name.length) {
+				std.utf.decode(name, i);
+			}
+		}
+		if (start < name.length) {
+			ret ~= separator ~ name[start .. $];
+		}
+		return upper_case ? std.string.toUpper(ret) : std.string.toLower(ret);
+	}
+
 	final switch(style) {
 		case MethodStyle.unaltered:
 			return name;
@@ -62,42 +95,14 @@ string adjustMethodStyle(string name, MethodStyle style)
 			return std.string.toLower(name);
 		case MethodStyle.upperCase:
 			return std.string.toUpper(name);
-		case MethodStyle.lowerUnderscored:
-		case MethodStyle.upperUnderscored:
-			string ret;
-			size_t start = 0, i = 0;
-			while (i < name.length) {
-				// skip acronyms
-				while (i < name.length && (i+1 >= name.length || (name[i+1] >= 'A' && name[i+1] <= 'Z'))) {
-					std.utf.decode(name, i);
-				}
-
-				// skip the main (lowercase) part of a word
-				while (i < name.length && !(name[i] >= 'A' && name[i] <= 'Z')) {
-					std.utf.decode(name, i);
-				}
-
-				// add a single word
-				if( ret.length > 0 ) {
-					ret ~= "_";
-				}
-				ret ~= name[start .. i];
-
-				// quick skip the capital and remember the start of the next word
-				start = i;
-				if (i < name.length) {
-					std.utf.decode(name, i);
-				}
-			}
-			if (start < name.length) {
-				ret ~= "_" ~ name[start .. $];
-			}
-			return style == MethodStyle.lowerUnderscored ?
-				std.string.toLower(ret) : std.string.toUpper(ret);
+		case MethodStyle.lowerUnderscored: return separate('_', false);
+		case MethodStyle.upperUnderscored: return separate('_', true);
+		case MethodStyle.lowerDashed: return separate('-', false);
+		case MethodStyle.upperDashed: return separate('-', true);
 	}
 }
 
-@safe unittest
+unittest
 {
 	assert(adjustMethodStyle("methodNameTest", MethodStyle.unaltered) == "methodNameTest");
 	assert(adjustMethodStyle("methodNameTest", MethodStyle.camelCase) == "methodNameTest");
@@ -113,6 +118,8 @@ string adjustMethodStyle(string name, MethodStyle style)
 	assert(adjustMethodStyle("MethodNameTest", MethodStyle.upperCase) == "METHODNAMETEST");
 	assert(adjustMethodStyle("MethodNameTest", MethodStyle.lowerUnderscored) == "method_name_test");
 	assert(adjustMethodStyle("MethodNameTest", MethodStyle.upperUnderscored) == "METHOD_NAME_TEST");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.lowerDashed) == "method-name-test");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.upperDashed) == "METHOD-NAME-TEST");
 	assert(adjustMethodStyle("Q", MethodStyle.lowerUnderscored) == "q");
 	assert(adjustMethodStyle("getHTML", MethodStyle.lowerUnderscored) == "get_html");
 	assert(adjustMethodStyle("getHTMLEntity", MethodStyle.lowerUnderscored) == "get_html_entity");
@@ -609,6 +616,10 @@ enum MethodStyle
 	lowerUnderscored,
 	/// UPPER_CASE_NAMING
 	upperUnderscored,
+	/// lower-case-naming
+	lowerDashed,
+	/// UPPER-CASE-NAMING
+	upperDashed,
 
 	/// deprecated
 	Unaltered = unaltered,
