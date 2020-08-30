@@ -43,7 +43,6 @@ d:
   - dmd-2.090.1,dub
   - dmd-2.085.0,dub # 2.085.1 has a regression
   - dmd-2.084.1,dub
-  - dmd-2.078.3,dub
   - dmd-beta,dub
 
 env:
