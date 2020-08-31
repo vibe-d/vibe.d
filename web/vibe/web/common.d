@@ -878,7 +878,7 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 			if (notSeen != -1)
 			{
 				err.field = style.getArrayFieldName(fieldname, notSeen);
-				err.text = "Missing form field.";
+				err.text = "Missing array form field entry.";
 				return ParamResult.error;
 			}
 		}
