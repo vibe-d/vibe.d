@@ -29,7 +29,7 @@ class HTTPLogger {
 		Appender!(char[]) m_lineAppender;
 	}
 
-	this(in HTTPServerSettings settings, string format)
+	this(const HTTPServerSettings settings, string format)
 	{
 		m_format = format;
 		m_settings = settings;

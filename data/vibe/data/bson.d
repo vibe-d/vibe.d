@@ -238,7 +238,7 @@ struct Bson {
 	/**
 		Assigns a D type to a BSON value.
 	*/
-	void opAssign(in Bson other)
+	void opAssign(const Bson other)
 	{
 		m_data = other.m_data;
 		m_type = other.m_type;
