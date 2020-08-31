@@ -24,7 +24,8 @@ struct DefaultHashMapTraits(Key) {
 			return () @trusted { return a is b ? true : (a !is null && (cast(Object) a).opEquals(cast(Object) b)); }();
 		else return a == b;
 	}
-	static size_t hashOf(in ref Key k)
+
+	static size_t hashOf(const scope ref Key k)
 	@safe {
 		static if (__traits(isFinalClass, Key) && &Unqual!Key.init.toHash is &Object.init.toHash)
 			return () @trusted { return cast(size_t)cast(void*)k; } ();
@@ -39,11 +40,11 @@ struct DefaultHashMapTraits(Key) {
 		else {
 			// evil casts to be able to get the most basic operations of
 			// HashMap nothrow and @nogc
-			static size_t hashWrapper(in ref Key k) {
+			static size_t hashWrapper(const scope ref Key k) {
 				static typeinfo = typeid(Key);
 				return typeinfo.getHash(&k);
 			}
-			static @nogc nothrow size_t properlyTypedWrapper(in ref Key k) { return 0; }
+			static @nogc nothrow size_t properlyTypedWrapper(const scope ref Key k) { return 0; }
 			return () @trusted { return (cast(typeof(&properlyTypedWrapper))&hashWrapper)(k); } ();
 		}
 	}
