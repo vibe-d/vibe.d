@@ -17,7 +17,8 @@ addons:
 branches:
   only:
   - master
-  - 0.7.x
+  - /^v\d+\.x\.x$/
+  - /^v\d+\.\d+\.x$/
 
 # Enable core dumps
 before_script:
