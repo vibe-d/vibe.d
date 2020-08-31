@@ -540,7 +540,7 @@ final class WebSocket {
 	 *	 rng = Source of entropy to use.  If null, assume we're a server socket
 	 *   client_res = For client sockets, the response object (keeps the http client locked until the socket is done)
 	 */
-	private this(ConnectionStream conn, in HTTPServerRequest request, HTTPServerResponse server_res, RandomNumberStream rng, HTTPClientResponse client_res)
+	private this(ConnectionStream conn, const HTTPServerRequest request, HTTPServerResponse server_res, RandomNumberStream rng, HTTPClientResponse client_res)
 	{
 		m_ownerTask = Task.getThis();
 		m_conn = conn;
