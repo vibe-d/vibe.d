@@ -1,6 +1,13 @@
 Changelog
 =========
 
+v0.9.2 - 2020-09-02
+-------------------
+
+- Add support for DMD v2.094.0's `-preview=in` - [pull #2472][issue2472]
+
+[issue2472]: https://github.com/vibe-d/vibe.d/issues/2472
+
 v0.9.1 - 2020-08-21
 -------------------
 
