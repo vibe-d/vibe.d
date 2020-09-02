@@ -712,7 +712,7 @@ class RestInterfaceClient(I) : I
 		 *     The Json object returned by the request
 		 */
 		Json request(HTTPMethod verb, string name,
-					 in ref InetHeaderMap hdrs, string query, string body_,
+					 const scope ref InetHeaderMap hdrs, string query, string body_,
 					 ref InetHeaderMap reqReturnHdrs,
 					 ref InetHeaderMap optReturnHdrs) const
 		{
@@ -1683,7 +1683,7 @@ private string generateRestClientMethods(I)()
 
 
 private auto executeClientMethod(I, size_t ridx, ARGS...)
-	(in ref RestInterface!I intf, scope void delegate(HTTPClientRequest) @safe request_filter,
+	(const scope ref RestInterface!I intf, scope void delegate(HTTPClientRequest) @safe request_filter,
 		scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter)
 {
 	import vibe.web.internal.rest.common : ParameterKind;
@@ -1828,7 +1828,7 @@ import vibe.http.client : HTTPClientRequest;
 private Json request(URL base_url,
 	scope void delegate(HTTPClientRequest) @safe request_filter,
 	scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter,
-	HTTPMethod verb, string path, in ref InetHeaderMap hdrs, string query,
+	HTTPMethod verb, string path, const scope ref InetHeaderMap hdrs, string query,
 	string body_, ref InetHeaderMap reqReturnHdrs,
 	ref InetHeaderMap optReturnHdrs, in HTTPClientSettings http_settings)
 @safe {
