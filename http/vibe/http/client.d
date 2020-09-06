@@ -294,7 +294,7 @@ unittest {
 		},
 		(scope res){
 			logInfo("Headers:");
-			foreach(key, ref value; res.headers) {
+			foreach (key, ref value; res.headers.byKeyValue) {
 				logInfo("%s: %s", key, value);
 			}
 			logInfo("Response: %s", res.bodyReader.readAllUTF8());

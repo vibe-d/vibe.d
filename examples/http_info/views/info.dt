@@ -4,19 +4,19 @@ html(lang="en")
 		title Info
 	body
 		h1 #{req.method} #{req.requestURL}
-		
+
 		h2 Headers
 		dl
-			- foreach( name, value; req.headers )
+			- foreach( name, value; req.headers.byKeyValue)
 				dt=name
 				dd=value
-				
+
 		h2 Cookies
 		dl
-			- foreach( name, value; req.cookies )
+			- foreach(name, value; req.cookies)
 				dt=name
 				dd=value
-				
+
 		h2 Session
 		- if (req.session)
 			ul
@@ -24,20 +24,20 @@ html(lang="en")
 					li=name
 		- else
 			p No session.
-			
+
 		h2 Query fields
 		p Query string: #{req.queryString}
 		dl
-			- foreach( name, value; req.query )
+			- foreach(name, value; req.query.byKeyValue)
 				dt=name
 				dd=value
-				
+
 		h2 Form Data
 		dl
-			- foreach( name, value; req.form )
+			- foreach( name, value; req.form.byKeyValue)
 				dt=name
 				dd=value
-				
+
 		form( action="/", method="POST" )
 			input(type="text", name="message")
 			input(type="submit")
