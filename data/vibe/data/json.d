@@ -256,7 +256,7 @@ struct Json {
 		Allows assignment of D values to a JSON value.
 	*/
 	ref Json opAssign(Json v) return
-	{
+	nothrow {
 		if (v.type != Type.bigInt)
 			runDestructors();
 		auto old_type = m_type;
@@ -279,16 +279,16 @@ struct Json {
 		return this;
 	}
 	/// ditto
-	void opAssign(typeof(null)) { runDestructors(); m_type = Type.null_; m_string = null; }
+	void opAssign(typeof(null)) nothrow { runDestructors(); m_type = Type.null_; m_string = null; }
 	/// ditto
-	bool opAssign(bool v) { runDestructors(); m_type = Type.bool_; m_bool = v; return v; }
+	bool opAssign(bool v) nothrow { runDestructors(); m_type = Type.bool_; m_bool = v; return v; }
 	/// ditto
-	int opAssign(int v) { runDestructors(); m_type = Type.int_; m_int = v; return v; }
+	int opAssign(int v) nothrow { runDestructors(); m_type = Type.int_; m_int = v; return v; }
 	/// ditto
-	long opAssign(long v) { runDestructors(); m_type = Type.int_; m_int = v; return v; }
+	long opAssign(long v) nothrow { runDestructors(); m_type = Type.int_; m_int = v; return v; }
 	/// ditto
 	BigInt opAssign(BigInt v)
-	{
+	nothrow {
 		if (m_type != Type.bigInt)
 			initBigInt();
 		m_type = Type.bigInt;
@@ -296,11 +296,11 @@ struct Json {
 		return v;
 	}
 	/// ditto
-	double opAssign(double v) { runDestructors(); m_type = Type.float_; m_float = v; return v; }
+	double opAssign(double v) nothrow { runDestructors(); m_type = Type.float_; m_float = v; return v; }
 	/// ditto
-	string opAssign(string v) { runDestructors(); m_type = Type.string; m_string = v; return v; }
+	string opAssign(string v) nothrow { runDestructors(); m_type = Type.string; m_string = v; return v; }
 	/// ditto
-	Json[] opAssign(Json[] v) {
+	Json[] opAssign(Json[] v) nothrow {
 		runDestructors();
 		m_type = Type.array;
 		m_array = v;
@@ -312,7 +312,7 @@ struct Json {
 	}
 	/// ditto
 	Json[string] opAssign(Json[string] v)
-	{
+	nothrow {
 		runDestructors();
 		m_type = Type.object;
 		m_object = v;
@@ -321,7 +321,7 @@ struct Json {
 	}
 
 	// used internally for UUID serialization support
-	private UUID opAssign(UUID v) { opAssign(v.toString()); return v; }
+	private UUID opAssign(UUID v) nothrow { opAssign(v.toString()); return v; }
 
 	/**
 		Allows removal of values from Type.Object Json objects.
@@ -331,13 +331,13 @@ struct Json {
 	/**
 		The current type id of this JSON object.
 	*/
-	@property Type type() const @safe { return m_type; }
+	@property Type type() const @safe nothrow { return m_type; }
 
 	/**
 		Clones a JSON value recursively.
 	*/
 	Json clone()
-	const {
+	const nothrow {
 		final switch (m_type) {
 			case Type.undefined: return Json.undefined;
 			case Type.null_: return Json(null);
@@ -348,13 +348,13 @@ struct Json {
 			case Type.string: return Json(m_string);
 			case Type.array:
 				Json[] ret;
-				foreach (v; this.byValue) ret ~= v.clone();
-
+				foreach (v; m_array) ret ~= v.clone();
 				return Json(ret);
 			case Type.object:
-				auto ret = Json.emptyObject;
-				foreach (name, v; this.byKeyValue) ret[name] = v.clone();
-				return ret;
+				Json[string] ret;
+				foreach (kv; m_object.byKeyValue)
+					ret[kv.key] = kv.value.clone();
+				return Json(ret);
 		}
 	}
 
@@ -530,7 +530,8 @@ struct Json {
 	/// ditto
 	@property auto byIndexValue() const { checkType!(Json[])("byIndexValue"); return zip(iota(0, m_array.length), m_array); }
 	/// Iterates over all values of an object or array.
-	@property auto byValue() @trusted {
+	@property auto byValue()
+	@trusted {
 		checkType!(Json[], Json[string])("byValue");
 		static struct Rng {
 			private {
@@ -539,16 +540,17 @@ struct Json {
 				typeof(Json.init.m_object.byValue) object;
 			}
 
-			bool empty() @trusted { if (isArray) return array.length == 0; else return object.empty; }
-			auto front() @trusted { if (isArray) return array[0]; else return object.front; }
-			void popFront() @trusted { if (isArray) array = array[1 .. $]; else object.popFront(); }
+			bool empty() @trusted nothrow { if (isArray) return array.length == 0; else return object.empty; }
+			auto front() @trusted nothrow { if (isArray) return array[0]; else return object.front; }
+			void popFront() @trusted nothrow { if (isArray) array = array[1 .. $]; else object.popFront(); }
 		}
 
 		if (m_type == Type.array) return Rng(true, m_array);
 		else return Rng(false, null, m_object.byValue);
 	}
 	/// ditto
-	@property auto byValue() const @trusted {
+	@property auto byValue()
+	const @trusted {
 		checkType!(Json[], Json[string])("byValue");
 		static struct Rng {
 		@safe:
@@ -558,9 +560,9 @@ struct Json {
 				typeof(const(Json).init.m_object.byValue) object;
 			}
 
-			bool empty() @trusted { if (isArray) return array.length == 0; else return object.empty; }
-			auto front() @trusted { if (isArray) return array[0]; else return object.front; }
-			void popFront() @trusted { if (isArray) array = array[1 .. $]; else object.popFront(); }
+			bool empty() @trusted nothrow { if (isArray) return array.length == 0; else return object.empty; }
+			auto front() @trusted nothrow { if (isArray) return array[0]; else return object.front; }
+			void popFront() @trusted nothrow { if (isArray) array = array[1 .. $]; else object.popFront(); }
 		}
 
 		if (m_type == Type.array) return Rng(true, m_array);
@@ -1207,7 +1209,7 @@ struct Json {
 	}
 
 	private void runDestructors()
-	{
+	nothrow {
 		if (m_type != Type.bigInt) return;
 
 		BigInt init_;
