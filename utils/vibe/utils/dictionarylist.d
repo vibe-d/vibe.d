@@ -347,6 +347,8 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		}
 		size_t idx;
 
+		@property Rng save() { return this; }
+
 		@property bool empty() const { return idx >= list.length; }
 		@property ref KVT front() {
 			if (idx < list.m_fieldCount)
