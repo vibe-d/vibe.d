@@ -1002,7 +1002,7 @@ nothrow {
 			static assert(is(typeof(T.fromStringValidate(str, &err.text)) == Nullable!T));
 			auto res = T.fromStringValidate(str, &err.text);
 			if (res.isNull()) return false;
-			dst.setVoid(res);
+			dst.setVoid(res.get);
 		} else static if (is(typeof(T.fromString(str)))) {
 			static assert(is(typeof(T.fromString(str)) == T));
 			dst.setVoid(T.fromString(str));
