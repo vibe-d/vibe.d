@@ -43,7 +43,7 @@ enum HTTPStatus {
 	requestEntityTooLarge        = 413,
 	requestURITooLarge           = 414,
 	unsupportedMediaType         = 415,
-	requestedrangenotsatisfiable = 416,
+	rangeNotSatisfiable          = 416,
 	expectationFailed            = 417,
 	tooManyRequests              = 429,
 	unavailableForLegalReasons   = 451,
@@ -61,6 +61,7 @@ enum HTTPStatus {
 	failedDependency             = 424,
 	insufficientStorage          = 507,
 
+	requestedrangenotsatisfiable = rangeNotSatisfiable, /// deprecated
 	Continue = continue_, /// deprecated
 	SwitchingProtocols = switchingProtocols, /// deprecated
 	OK = ok, /// deprecated
