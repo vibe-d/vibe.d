@@ -331,29 +331,27 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		try {
 			if (s[0].length) {
 				rangeStart = s[0].to!ulong;
-				rangeEnd = s[1].length ? s[1].to!ulong : dirent.size;
+				rangeEnd = s[1].length ? s[1].to!ulong : dirent.size-1;
 			} else if (s[1].length) {
-				rangeEnd = dirent.size;
-				auto len = s[1].to!ulong;
-				if (len >= rangeEnd)
-					rangeStart = 0;
-				else
-					rangeStart = rangeEnd - len;
+				rangeEnd = dirent.size-1;
+				rangeStart = dirent.size - min(s[1].to!ulong, dirent.size);
 			} else {
 				throw new HTTPStatusException(HTTPStatus.badRequest);
 			}
 		} catch (ConvException) {
 			throw new HTTPStatusException(HTTPStatus.badRequest);
 		}
-		if (rangeEnd > dirent.size)
-			rangeEnd = dirent.size;
-		if (rangeStart > rangeEnd)
-			rangeStart = rangeEnd;
-		if (rangeEnd)
-			rangeEnd--; // End is inclusive, so one less than length
+
+		if (rangeEnd >= dirent.size) rangeEnd = dirent.size-1;
+
+		if (rangeStart > rangeEnd) {
+			res.headers["Content-Range"] = "bytes */%s".format(dirent.size);
+			throw new HTTPStatusException(HTTPStatus.rangeNotSatisfiable);
+		}
+
 		// potential integer overflow with rangeEnd - rangeStart == size_t.max is intended. This only happens with empty files, the + 1 will then put it back to 0
 		res.headers["Content-Length"] = to!string(rangeEnd - rangeStart + 1);
-		res.headers["Content-Range"] = "bytes %s-%s/%s".format(rangeStart < rangeEnd ? rangeStart : rangeEnd, rangeEnd, dirent.size);
+		res.headers["Content-Range"] = "bytes %s-%s/%s".format(rangeStart, rangeEnd, dirent.size);
 		res.statusCode = HTTPStatus.partialContent;
 	} else
 		res.headers["Content-Length"] = dirent.size.to!string;
