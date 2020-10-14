@@ -636,10 +636,8 @@ final class HTTPClient {
 		scope(exit) m_requesting = false;
 
 		if (!m_conn || !m_conn.connected || m_conn.waitForDataEx(0.seconds) == WaitForDataStatus.noMoreData) {
-			if (m_conn) {
-				m_conn.close(); // make sure all resources are freed
-				m_conn = TCPConnection.init;
-			}
+			if (m_conn)
+				disconnect(); // make sure all resources are freed
 
 			if (m_settings.proxyURL.host !is null){
 
