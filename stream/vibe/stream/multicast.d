@@ -1,7 +1,7 @@
 /**
 	Multicasts an input stream to multiple output streams.
 
-	Copyright: © 2014-2016 Sönke Ludwig
+	Copyright: © 2014-2020 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Eric Cornelius
 */
@@ -12,9 +12,26 @@ import vibe.core.stream;
 
 import std.exception;
 
-MulticastStream createMulticastStream(scope OutputStream[] outputs...)
+
+/** Creates a new multicast stream based on the given set of output streams.
+*/
+MulticastStream createMulticastStream(OutputStreams...)(OutputStreams output_streams)
+{
+	import vibe.internal.interfaceproxy : asInterface;
+
+	OutputStream[OutputStreams.length] os;
+	foreach (i, O; OutputStreams)
+		os[i] = output_streams[i].asInterface!OutputStream;
+	return createMulticastStream(os[]);
+}
+/// ditto
+MulticastStream createMulticastStream(scope OutputStream[] outputs)
 {
 	return new MulticastStream(outputs, true);
+}
+
+unittest {
+	auto s = createMulticastStream(nullSink, nullSink);
 }
 
 
