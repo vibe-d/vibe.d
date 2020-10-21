@@ -15,66 +15,53 @@ import std.exception;
 
 /** Creates a new multicast stream based on the given set of output streams.
 */
-MulticastStream createMulticastStream(OutputStreams...)(OutputStreams output_streams)
+MulticastStream!OutputStreams createMulticastStream(OutputStreams...)(OutputStreams output_streams)
 {
-	import vibe.internal.interfaceproxy : asInterface;
-
-	OutputStream[OutputStreams.length] os;
-	foreach (i, O; OutputStreams)
-		os[i] = output_streams[i].asInterface!OutputStream;
-	return createMulticastStream(os[]);
-}
-/// ditto
-MulticastStream createMulticastStream(scope OutputStream[] outputs)
-{
-	return new MulticastStream(outputs, true);
+	return MulticastStream!OutputStreams(output_streams);
 }
 
 unittest {
-	auto s = createMulticastStream(nullSink, nullSink);
+	createMulticastStream(nullSink, nullSink);
 }
 
 
-class MulticastStream : OutputStream {
+struct MulticastStream(OutputStreams...) {
+	import std.algorithm : swap;
+
 	private {
-		OutputStream[] m_outputs;
+		OutputStreams m_outputs;
 	}
 
-	deprecated("Use createMulticastStream instead.")
-	this(OutputStream[] outputs ...)
+	private this(ref OutputStreams outputs)
 	{
-		this(outputs, true);
-	}
-
-	/// private
-	this(scope OutputStream[] outputs, bool dummy)
-	{
-		// NOTE: investigate .dup dmd workaround
-		m_outputs = outputs.dup;
+		foreach (i, T; OutputStreams)
+			swap(outputs[i], m_outputs[i]);
 	}
 
 	void finalize()
-	{
+	@safe @blocking {
 		flush();
 	}
 
 	void flush()
-	{
-		foreach (output; m_outputs)
-			output.flush();
+	@safe @blocking {
+		foreach (i, T; OutputStreams)
+			m_outputs[i].flush();
 	}
 
 	size_t write(in ubyte[] bytes, IOMode mode)
-	{
+	@safe @blocking {
 		if (!m_outputs.length) return bytes.length;
 
 		auto ret = m_outputs[0].write(bytes, mode);
 
-		foreach (output; m_outputs[1 .. $])
-			output.write(bytes[0 .. ret]);
+		foreach (i, T; OutputStreams[1 .. $])
+			m_outputs[i+1].write(bytes[0 .. ret]);
 
 		return ret;
 	}
-
-	alias write = OutputStream.write;
+	void write(in ubyte[] bytes) @blocking { auto n = write(bytes, IOMode.all); assert(n == bytes.length); }
+	void write(in char[] bytes) @blocking { write(cast(const(ubyte)[])bytes); }
 }
+
+mixin validateOutputStream!(MulticastStream!NullOutputStream);
