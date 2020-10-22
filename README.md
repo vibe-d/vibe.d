@@ -11,7 +11,7 @@ Visit the website at <https://vibed.org/> for more information and
 [documentation](https://vibed.org/docs).
 
 [![DUB Package](https://img.shields.io/dub/v/vibe-d.svg)](https://code.dlang.org/packages/vibe-d)
-[![Posix Build Status](https://travis-ci.org/vibe-d/vibe.d.svg?branch=master)](https://travis-ci.org/vibe-d/vibe.d)
+[![Posix Build Status](https://travis-ci.com/vibe-d/vibe.d.svg?branch=master)](https://travis-ci.com/vibe-d/vibe.d)
 [![Windows Build Status](https://ci.appveyor.com/api/projects/status/cp2kxg70h54pga9d/branch/master?svg=true)](https://ci.appveyor.com/project/s-ludwig/vibe-d/branch/master)
 
 Hello Vibe.d
