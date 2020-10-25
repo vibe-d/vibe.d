@@ -309,6 +309,7 @@ struct StreamOutputRange(OutputStream, size_t buffer_size = 256)
 
 	~this()
 	{
+		scope (failure) () @trusted { destroy(m_stream); }(); // workaround for #2484
 		flush();
 	}
 
