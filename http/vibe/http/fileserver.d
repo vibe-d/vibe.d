@@ -315,46 +315,15 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		res.headers["Content-Type"] = mimetype;
 
 	res.headers.addField("Accept-Ranges", "bytes");
-	ulong rangeStart = 0;
-	ulong rangeEnd = 0;
-	auto prange = "Range" in req.headers;
-
-	if (prange) {
-		auto range = (*prange).chompPrefix("bytes=");
-		if (range.canFind(','))
-			throw new HTTPStatusException(HTTPStatus.notImplemented);
-		auto s = range.split("-");
-		if (s.length != 2)
-			throw new HTTPStatusException(HTTPStatus.badRequest);
-		// https://tools.ietf.org/html/rfc7233
-		// Range can be in form "-\d", "\d-" or "\d-\d"
-		try {
-			if (s[0].length) {
-				rangeStart = s[0].to!ulong;
-				rangeEnd = s[1].length ? s[1].to!ulong : dirent.size-1;
-			} else if (s[1].length) {
-				rangeEnd = dirent.size-1;
-				rangeStart = dirent.size - min(s[1].to!ulong, dirent.size);
-			} else {
-				throw new HTTPStatusException(HTTPStatus.badRequest);
-			}
-		} catch (ConvException) {
-			throw new HTTPStatusException(HTTPStatus.badRequest);
-		}
-
-		if (rangeEnd >= dirent.size) rangeEnd = dirent.size-1;
-
-		if (rangeStart > rangeEnd) {
-			res.headers["Content-Range"] = "bytes */%s".format(dirent.size);
-			throw new HTTPStatusException(HTTPStatus.rangeNotSatisfiable);
-		}
+	RangeSpec range;
+	if (auto prange = "Range" in req.headers) {
+		range = parseRangeHeader(*prange, dirent.size, res);
 
 		// potential integer overflow with rangeEnd - rangeStart == size_t.max is intended. This only happens with empty files, the + 1 will then put it back to 0
-		res.headers["Content-Length"] = to!string(rangeEnd - rangeStart + 1);
-		res.headers["Content-Range"] = "bytes %s-%s/%s".format(rangeStart, rangeEnd, dirent.size);
+		res.headers["Content-Length"] = to!string(range.min - range.max);
+		res.headers["Content-Range"] = "bytes %s-%s/%s".format(range.min, range.max - 1, dirent.size);
 		res.statusCode = HTTPStatus.partialContent;
-	} else
-		res.headers["Content-Length"] = dirent.size.to!string;
+	} else res.headers["Content-Length"] = dirent.size.to!string;
 
 	// check for already encoded file if configured
 	string encodedFilepath;
@@ -409,10 +378,10 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 	}
 	scope(exit) fil.close();
 
-	if (prange) {
-		fil.seek(rangeStart);
-		fil.pipe(res.bodyWriter, rangeEnd - rangeStart + 1);
-		logTrace("partially sent file %d-%d, %s!", rangeStart, rangeEnd, res.headers["Content-Type"]);
+	if (range.max > range.min) {
+		fil.seek(range.min);
+		fil.pipe(res.bodyWriter, range.max - range.min);
+		logTrace("partially sent file %d-%d, %s!", range.min, range.max - 1, res.headers["Content-Type"]);
 	} else {
 		if (pce && !encodedFilepath.length)
 			fil.pipe(res.bodyWriter);
@@ -708,4 +677,56 @@ unittest
 	assert( cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(Yes.weak, "r2d2xxxx"), Yes.allowWeak));
 	assert(!cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "r2d2xxxx"), No.allowWeak));
 	assert( cacheMatch(`"xyzzy",W/"r2d2xxxx", "c3piozzzz"`, ETag(No.weak, "r2d2xxxx"), Yes.allowWeak));
+}
+
+private RangeSpec parseRangeHeader(string range_spec, ulong file_size, scope HTTPServerResponse res)
+{
+	RangeSpec ret;
+
+	auto range = range_spec.chompPrefix("bytes=");
+	if (range.canFind(','))
+		throw new HTTPStatusException(HTTPStatus.notImplemented);
+	auto s = range.split("-");
+	if (s.length != 2)
+		throw new HTTPStatusException(HTTPStatus.badRequest);
+
+	// https://tools.ietf.org/html/rfc7233
+	// Range can be in form "-\d", "\d-" or "\d-\d"
+	try {
+		if (s[0].length) {
+			ret.min = s[0].to!ulong;
+			ret.max = s[1].length ? s[1].to!ulong + 1 : file_size;
+		} else if (s[1].length) {
+			ret.min = file_size - min(s[1].to!ulong, file_size);
+			ret.max = file_size;
+		} else {
+			throw new HTTPStatusException(HTTPStatus.badRequest);
+		}
+	} catch (ConvException) {
+		throw new HTTPStatusException(HTTPStatus.badRequest);
+	}
+
+	if (ret.max > file_size) ret.max = file_size;
+
+	if (ret.min >= ret.max) {
+		res.headers["Content-Range"] = "bytes */%s".format(file_size);
+		throw new HTTPStatusException(HTTPStatus.rangeNotSatisfiable);
+	}
+
+	return ret;
+}
+
+unittest {
+	auto res = createTestHTTPServerResponse();
+	assertThrown(parseRangeHeader("bytes=2-1", 10, res));
+	assertThrown(parseRangeHeader("bytes=10-10", 10, res));
+	assertThrown(parseRangeHeader("bytes=0-0", 0, res));
+	assert(parseRangeHeader("bytes=10-20", 100, res) == RangeSpec(10, 21));
+	assert(parseRangeHeader("bytes=0-0", 1, res) == RangeSpec(0, 1));
+	assert(parseRangeHeader("bytes=0-20", 2, res) == RangeSpec(0, 2));
+	assert(parseRangeHeader("bytes=1-20", 2, res) == RangeSpec(1, 2));
+}
+
+private struct RangeSpec {
+	ulong min, max;
 }
