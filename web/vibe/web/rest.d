@@ -148,6 +148,50 @@
 		`vibe.web.common.MethodStyle` for more information about the available
 		styles.
 
+	Serialization:
+		By default the return values of the interface methods are serialized
+		as a JSON text and sent back to the REST client. To override this, you
+		can use the @resultSerializer attribute
+
+		---
+		struct TestStruct {int i;}
+
+		interface IService {
+		@safe:
+			@resultSerializer!(
+				// output_stream implements OutputRange
+				function (output_stream, test_struct) {
+					output_stream ~= serializeToJsonString(test_struct);
+				},
+				// input_stream implements InputStream
+				function (input_stream) {
+					return deserializeJson!TestStruct(input_stream.readAllUTF8());
+				},
+				"application/json")()
+			@resultSerializer!(
+				// output_stream implements OutputRange
+				function (output_stream, test_struct) {
+					output_stream ~= test_struct.i.to!string();
+				},
+				// input_stream implements InputStream
+				function (input_stream) {
+					TestStruct test_struct;
+					test_struct.i = input_stream.readAllUTF8().to!int();
+					return test_struct;
+				},
+				"plain/text")()
+			TestStruct getTest();
+		}
+
+		class Service : IService {
+		@safe:
+			TestStruct getTest() {
+				TestStruct test_struct = {42};
+				return test_struct;
+			}
+		}
+		---
+
 	Parameter_passing:
 		By default, parameter are passed via different methods depending on the
 		type of request. For POST and PATCH requests, they are passed via the
@@ -231,7 +275,7 @@ public import vibe.web.common;
 import vibe.core.log;
 import vibe.core.stream : InputStream;
 import vibe.http.router : URLRouter;
-import vibe.http.client : HTTPClientSettings;
+import vibe.http.client : HTTPClientResponse, HTTPClientSettings;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate, HTTPServerRequest, HTTPServerResponse;
 import vibe.http.status : HTTPStatus, isSuccessCode;
@@ -242,8 +286,12 @@ import vibe.inet.message : InetHeaderMap;
 import vibe.web.internal.rest.common : RestInterface, Route, SubInterfaceType;
 import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAuthenticated;
 
-import std.algorithm : startsWith, endsWith;
+import std.algorithm : startsWith, endsWith, sort;
+import std.algorithm.searching : count;
+import std.array : appender, split;
+import std.meta : AliasSeq;
 import std.range : isOutputRange;
+import std.string : strip, indexOf, toLower;
 import std.typecons : No, Nullable, Yes;
 import std.typetuple : anySatisfy, Filter;
 import std.traits;
@@ -730,9 +778,12 @@ class RestInterfaceClient(I) : I
 
 			auto httpsettings = m_intf.settings.httpClientSettings;
 
-			return .request(URL(m_intf.baseURL), m_requestFilter,
+			auto http_resp = .request(URL(m_intf.baseURL), m_requestFilter,
 				m_requestBodyFilter, verb, path,
 				hdrs, query, body_, reqReturnHdrs, optReturnHdrs, httpsettings);
+			scope(exit) http_resp.dropBody();
+
+			return http_resp.readJson();
 		}
 	}
 }
@@ -793,6 +844,10 @@ class RestInterfaceSettings {
 	*/
 	MethodStyle methodStyle = MethodStyle.lowerUnderscored;
 
+    /** The content type the client would like to receive the data back
+	*/
+	string content_type = "application/json";
+
 	/** Ignores a trailing underscore in method and function names.
 
 		With this setting set to $(D true), it's possible to use names in the
@@ -827,6 +882,7 @@ class RestInterfaceSettings {
 		ret.methodStyle = this.methodStyle;
 		ret.stripTrailingUnderscore = this.stripTrailingUnderscore;
 		ret.allowedOrigins = this.allowedOrigins.dup;
+		ret.content_type = this.content_type.dup;
 		ret.errorHandler = this.errorHandler;
 		if (this.httpClientSettings) {
 			ret.httpClientSettings = this.httpClientSettings.dup;
@@ -1521,26 +1577,45 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			import vibe.internal.meta.funcattr;
 
 			static if (!__traits(compiles, () @safe { __traits(getMember, inst, Method)(params); }))
-				pragma(msg, "Non-@safe methods are deprecated in REST interfaces - Mark "~T.stringof~"."~Method~" as @safe.");
+				pragma(msg, "Non-@safe methods are deprecated in REST interfaces - Mark " ~
+					T.stringof ~ "." ~ Method ~ " as @safe.");
 
 			static if (is(RT == void)) {
-				() @trusted { __traits(getMember, inst, Method)(params); } (); // TODO: remove after deprecation period
+				// TODO: remove after deprecation period
+				() @trusted { __traits(getMember, inst, Method)(params); } ();
 				returnHeaders();
 				res.writeBody(cast(ubyte[])null);
 			} else {
-				auto ret = () @trusted { return __traits(getMember, inst, Method)(params); } (); // TODO: remove after deprecation period
+				// TODO: remove after deprecation period
+				auto ret = () @trusted { return __traits(getMember, inst, Method)(params); } ();
 
 				static if (!__traits(compiles, () @safe { evaluateOutputModifiers!Func(ret, req, res); } ()))
-					pragma(msg, "Non-@safe @after evaluators are deprecated - annotate @after evaluator function for "~T.stringof~"."~Method~" as @safe.");
+					pragma(msg, "Non-@safe @after evaluators are deprecated - annotate @after evaluator function for " ~
+						T.stringof ~ "." ~ Method ~ " as @safe.");
 
 				ret = () @trusted { return evaluateOutputModifiers!CFunc(ret, req, res); } ();
 				returnHeaders();
-				static if (!__traits(compiles, () @safe { res.writeJsonBody(ret); }))
-					pragma(msg, "Non-@safe serialization of REST return types deprecated - ensure that "~RT.stringof~" is safely serializable.");
-				() @trusted {
-					debug res.writePrettyJsonBody(ret);
-					else res.writeJsonBody(ret);
-				}();
+
+				string accept_str;
+				if (const accept_header = "Accept" in req.headers)
+					accept_str = *accept_header;
+				enum result_serializers = ResultSerializersT!(Func);
+				immutable serializer_ind = get_matching_content_type!(result_serializers)(accept_str);
+				foreach (i, serializer; result_serializers)
+					if (serializer_ind == i) {
+						auto serialized_output = appender!string;
+						static if (!__traits(compiles, () @safe {
+							serializer.serialize(serialized_output, ret);
+						}))
+							pragma(msg, "Non-@safe serialization of REST return types deprecated - ensure that " ~
+								RT.stringof~" is safely serializable.");
+						() @trusted {
+							serializer.serialize(serialized_output, ret);
+						}();
+						res.writeBody(serialized_output.data, serializer.contentType);
+					}
+				res.statusCode = 406; // HTTP response: Not Acceptable, will trigger RestException on the client side
+				res.writeBody(cast(ubyte[])null);
 			}
 		} catch (Exception e) {
 			returnHeaders();
@@ -1696,6 +1771,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	alias PTT = ParameterTypeTuple!Func;
 	enum sroute = Info.staticRoutes[ridx];
 	auto route = intf.routes[ridx];
+	auto settings = intf.settings;
 
 	InetHeaderMap headers;
 	InetHeaderMap reqhdrs;
@@ -1788,12 +1864,25 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		}
 	}
 
-	auto jret = request(URL(intf.baseURL), request_filter, request_body_filter,
+	headers["Accept"] = settings.content_type;
+	reqhdrs["Content-Type"] = null;
+	auto ret = request(URL(intf.baseURL), request_filter, request_body_filter,
 		sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs,
 		intf.settings.httpClientSettings);
+	scope(exit) ret.dropBody();
 
-	static if (!is(RT == void))
-		return deserializeJson!RT(jret);
+	static if (!is(RT == void)) {
+		string content_type = "";
+		if (const hdr = "Content-Type" in reqhdrs)
+			content_type = *hdr;
+		enum result_serializers = ResultSerializersT!(Func);
+		immutable serializer_ind = get_matching_content_type!(result_serializers)(content_type);
+		foreach (i, serializer; result_serializers)
+			if (serializer_ind == i)
+    			return serializer.deserialize(ret.bodyReader);
+
+		throw new Exception("Unrecognized content type: " ~ content_type);
+	}
 }
 
 
@@ -1825,7 +1914,7 @@ import vibe.http.client : HTTPClientRequest;
  * Returns:
  *     The Json object returned by the request
  */
-private Json request(URL base_url,
+private HTTPClientResponse request(URL base_url,
 	scope void delegate(HTTPClientRequest) @safe request_filter,
 	scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter,
 	HTTPMethod verb, string path, const scope ref InetHeaderMap hdrs, string query,
@@ -1840,7 +1929,7 @@ private Json request(URL base_url,
 
 	if (query.length) url.queryString = query;
 
-	Json ret;
+	string ret;
 
 	auto reqdg = (scope HTTPClientRequest req) {
 		req.method = verb;
@@ -1859,47 +1948,46 @@ private Json request(URL base_url,
 			req.writeBody(cast(const(ubyte)[])body_, hdrs.get("Content-Type", "application/json"));
 	};
 
-	auto resdg = (scope HTTPClientResponse res) {
-		if (!res.bodyReader.empty)
-			ret = res.readJson();
+	HTTPClientResponse client_res;
+	if (http_settings) client_res = requestHTTP(url, reqdg, http_settings);
+	else client_res = requestHTTP(url, reqdg);
 
-		logDebug(
-			 "REST call: %s %s -> %d, %s",
-			 httpMethodString(verb),
-			 url.toString(),
-			 res.statusCode,
-			 ret.toString()
-			 );
+	import vibe.stream.operations;
 
-		// Get required headers - Don't throw yet
-		string[] missingKeys;
-		foreach (k, ref v; reqReturnHdrs.byKeyValue)
-			if (auto ptr = k in res.headers)
-				v = (*ptr).idup;
-			else
-				missingKeys ~= k;
+	logDebug(
+			"REST call: %s %s -> %d, %s",
+			httpMethodString(verb),
+			url.toString(),
+			client_res.statusCode,
+			ret
+			);
 
-		// Get optional headers
-		foreach (k, ref v; optReturnHdrs.byKeyValue)
-			if (auto ptr = k in res.headers)
-				v = (*ptr).idup;
-			else
-				v = null;
+	// Get required headers - Don't throw yet
+	string[] missingKeys;
+	foreach (k, ref v; reqReturnHdrs.byKeyValue)
+		if (auto ptr = k in client_res.headers)
+			v = (*ptr).idup;
+		else
+			missingKeys ~= k;
 
-		if (missingKeys.length)
-			throw new Exception(
-				"REST interface mismatch: Missing required header field(s): "
-				~ missingKeys.to!string);
+	// Get optional headers
+	foreach (k, ref v; optReturnHdrs.byKeyValue)
+		if (auto ptr = k in client_res.headers)
+			v = (*ptr).idup;
+		else
+			v = null;
+	if (missingKeys.length)
+		throw new Exception(
+			"REST interface mismatch: Missing required header field(s): "
+			~ missingKeys.to!string);
 
+	if (!isSuccessCode(cast(HTTPStatus)client_res.statusCode))
+	{
+		client_res.dropBody();
+		throw new RestException(client_res.statusCode, ret);
+	}
 
-		if (!isSuccessCode(cast(HTTPStatus)res.statusCode))
-			throw new RestException(res.statusCode, ret);
-	};
-
-	if (http_settings) requestHTTP(url, reqdg, resdg, http_settings);
-	else requestHTTP(url, reqdg, resdg);
-
-	return ret;
+	return client_res;
 }
 
 private {
@@ -1985,6 +2073,162 @@ private string generateModuleImports(I)()
 
 	auto modules = getRequiredImports!I();
 	return join(map!(a => "static import " ~ a ~ ";")(modules), "\n");
+}
+
+/***************************************************************************
+
+	The client sends the list of allowed content types in the 'Allow' http header
+	and the response will contain a 'Content-Type' header. This function will
+	try to find the best matching @SerializationResult UDA based on the allowed
+	content types.
+
+	Note:
+
+	Comment 1: if the request doesn't specify any allowed content types, then * / *
+	is assumed
+
+	Comment 2: if there are no UDA's matching the client's allowed content types, -1
+	is returned
+
+	Comment 3: if there are more than 1 matching UDA, for ONE specific client's allowed
+	content type(and their priority is the same - see below),
+	then the one specified earlier in the code gets chosen
+
+	Comment 4: accept-params(quality factor) and accept-extensions are ignored
+	https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
+
+	Comment 5: matching the most specific content type without any wildcard has priority
+
+	Comment 6: the request's content type can be in the format of
+
+	$(UL
+		$(LI major type / minor type)
+		$(LI major type / *)
+		$(LI * / *)
+	)
+
+	Params:
+		T = compile time known ResultSerializer classes
+		req_content_types_str = list of allowed content types for example:
+		text/*;q=0.3, text/html;q=0.7, text/html;level=1
+
+	Returns:
+		index of the result serializers in the T... AliasSeq if matching found,
+		-1 otherwise
+
+***************************************************************************/
+
+package int get_matching_content_type (T...)(string req_content_types_str) pure @safe
+{
+	if (!req_content_types_str.strip().length)
+		req_content_types_str = "*/*";
+	struct ContentType
+	{
+		this (string major_type, string minor_type)
+		{
+			this.major_type = major_type;
+			this.minor_type = minor_type;
+			this.full_type = major_type ~ "/" ~ minor_type;
+			this.star_num = this.full_type.count('*'); // serves as priority
+		}
+		string major_type;
+		string minor_type;
+		string full_type;
+		ulong star_num;
+	}
+
+	// processing ResultSerializers
+	alias packed_UDAs = AliasSeq!(T);
+	ContentType[] UDA_content_types;
+	foreach (UDA; packed_UDAs)
+	{
+		auto content_type_split = UDA.contentType.toLower().split("/");
+		assert(content_type_split.length == 2);
+		UDA_content_types ~= ContentType(content_type_split[0].strip(), content_type_split[1].strip());
+	}
+
+	// processing request content typess
+	ContentType[] req_content_types;
+	foreach (content_type; req_content_types_str.toLower().split(","))
+	{
+		immutable semicolon_pos = content_type.indexOf(';');
+		if (semicolon_pos != -1)
+			content_type = content_type[0 .. semicolon_pos]; // quality factor ignored
+		auto content_type_split = content_type.split("/");
+		if (content_type_split.length == 2)
+			req_content_types ~= ContentType(content_type_split[0].strip(), content_type_split[1].strip());
+	}
+	// sorting content types by matching preference
+	req_content_types.sort!(( x, y) => (x.star_num < y.star_num));
+
+	int res = -1;
+	ulong min_star_num = ulong.max;
+	foreach (UDA_ind, UDA_content_type; UDA_content_types)
+		foreach (const ref content_type; req_content_types)
+			if (
+					(
+						(
+							UDA_content_type.major_type == content_type.major_type &&
+							UDA_content_type.minor_type == content_type.minor_type
+						) ||
+						(
+							UDA_content_type.major_type == content_type.major_type &&
+							content_type.minor_type == "*"
+						) ||
+						(
+							content_type.major_type == "*" && content_type.minor_type == "*"
+						)
+					) &&
+					(
+						content_type.star_num < min_star_num
+					)
+				)
+				{
+					res = cast(int) UDA_ind;
+					min_star_num = content_type.star_num;
+				}
+	return res;
+}
+
+version(unittest)
+{
+	import std.range.interfaces : OutputRange;
+	import vibe.internal.interfaceproxy : InterfaceProxy;
+
+	void s (OutputRange!char, int){};
+	int d (InterfaceProxy!(InputStream)){return 1;}
+
+	int test1();
+
+	@resultSerializer!(s,d,"text/plain")
+	@resultSerializer!(s,d," aPPliCatIon  /  jsOn  ")
+	int test2();
+}
+
+unittest
+{
+	alias res = ResultSerializersT!(test1);
+	assert(res.length == 1);
+	assert(res[0].contentType == "application/json");
+
+	assert(get_matching_content_type!(res)("application/json") == 0);
+	assert(get_matching_content_type!(res)("application/*") == 0);
+	assert(get_matching_content_type!(res)("  appliCAtIon /  *") == 0);
+	assert(get_matching_content_type!(res)("*/*") == 0);
+	assert(get_matching_content_type!(res)("") == 0);
+	assert(get_matching_content_type!(res)("application/blabla") == -1);
+
+	alias res2 = ResultSerializersT!(test2);
+	assert(res2.length == 2);
+	assert(res2[0].contentType == "text/plain");
+	assert(res2[1].contentType == " aPPliCatIon  /  jsOn  ");
+
+	assert(get_matching_content_type!(res2)("text/plain, application/json") == 0);
+	assert(get_matching_content_type!(res2)("text/*, application/json") == 1);
+	assert(get_matching_content_type!(res2)("*/*, application/json") == 1);
+	assert(get_matching_content_type!(res2)("*/*") == 0);
+	assert(get_matching_content_type!(res2)("") == 0);
+	assert(get_matching_content_type!(res2)("blabla/blabla, blublu/blublu") == -1);
 }
 
 version(unittest)
