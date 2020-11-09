@@ -10,10 +10,12 @@ module vibe.web.common;
 import vibe.http.common;
 import vibe.http.server : HTTPServerRequest;
 import vibe.data.json;
-import vibe.internal.meta.uda : onlyAsUda;
+import vibe.internal.meta.uda : onlyAsUda, UDATuple;
 
+import std.meta : AliasSeq;
 static import std.utf;
 static import std.string;
+import std.traits : getUDAs, ReturnType;
 import std.typecons : Nullable;
 
 
@@ -446,10 +448,18 @@ class RestException : HTTPStatusException {
 		Json m_jsonResult;
 	}
 
-	@safe:
+    ///
+	this (int status, string result, string file = __FILE__, int line = __LINE__,
+		Throwable next = null) @safe
+	{
+		Json jsonResult = Json.emptyObject;
+		jsonResult["message"] = result;
+		this(status, jsonResult, file, line);
+	}
 
 	///
-	this(int status, Json jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	this (int status, Json jsonResult, string file = __FILE__, int line = __LINE__,
+		Throwable next = null) @safe
 	{
 		if (jsonResult.type == Json.Type.Object && jsonResult["statusMessage"].type == Json.Type.String) {
 			super(status, jsonResult["statusMessage"].get!string, file, line, next);
@@ -461,8 +471,11 @@ class RestException : HTTPStatusException {
 		m_jsonResult = jsonResult;
 	}
 
-	/// The HTTP status code
-	@property const(Json) jsonResult() const { return m_jsonResult; }
+	/// The result text reported to the client
+	@property inout(Json) jsonResult () inout nothrow pure @safe @nogc
+	{
+		return m_jsonResult;
+	}
 }
 
 /// private
@@ -478,6 +491,39 @@ package struct MethodAttribute
 	HTTPMethod data;
 	alias data this;
 }
+
+///
+public struct ResultSerializer (alias ST, alias DT, string ContentType)
+{
+	enum contentType = ContentType;
+	alias serialize = ST;
+	alias deserialize = DT;
+}
+
+alias resultSerializer(Args...) = ResultSerializer!(Args);
+
+///
+package alias DefaultSerializerT (FuncRetT) =
+	ResultSerializer!(
+		function (ref output_range, ref value) {
+			 serializeToJson(output_range, value);
+		},
+		function (input_stream) {
+			import vibe.stream.operations;
+			return deserializeJson!FuncRetT(input_stream.readAllUTF8);
+		},
+		"application/json"
+	);
+
+/// Convenience template to get all the ResultSerializers for a function
+package template ResultSerializersT (alias FuncT)
+{
+	alias DefinedSerializers = getUDAs!(FuncT, ResultSerializer);
+	static if (getUDAs!(FuncT, ResultSerializer).length)
+		alias ResultSerializersT = DefinedSerializers;
+	else
+		alias ResultSerializersT = AliasSeq!(DefaultSerializerT!(ReturnType!FuncT)());
+};
 
 /**
  * This struct contains the name of a route specified by the `path` function.
