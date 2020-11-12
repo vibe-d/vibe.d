@@ -2016,6 +2016,25 @@ struct JsonStringSerializer(R, bool pretty = false)
 			m_range.put('\n');
 			foreach (i; 0 .. m_level) m_range.put('\t');
 		}
+
+		private void sink (scope const(char)[] data)
+		{
+			static if (isOutputRange!(R, char))
+			{
+				static if (__traits(compiles, m_range ~= data))
+						m_range ~= data;
+					else
+						foreach (const c; data)
+							m_range.put(c);
+			}
+		}
+
+		package void serializeSinkType (T) (scope auto ref T record)
+		{
+			m_range.put('"');
+			record.toString(&this.sink);
+			m_range.put('"');
+		}
 	}
 
 	//
