@@ -39,6 +39,11 @@
 			$(LI Types satisfying the `isStringSerializable` trait will be
 				serialized as a string, as returned by their `toString`
 				method.)
+			$(LI Types satisfying the `isSinkSerializable` trait will be
+				serialized as a string using the toString(`SerializeSinkDg`)
+				function. toString(`SerializeSinkDg`) has precedence above
+				toString() if both are present. The serializer has to support the
+				`isSerializerSupportSinkType` trait)
 			$(LI Struct and class types by default will be serialized as
 				associative arrays, where the key is the name of the
 				corresponding field (can be overridden using the `@name`
@@ -475,7 +480,10 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			ser.serializeValue!(CustomType, ATTRIBUTES)(value.toRepresentation());
 		} else static if (isISOExtStringSerializable!TU) {
 			ser.serializeValue!(string, ATTRIBUTES)(value.toISOExtString());
-		} else static if (isStringSerializable!TU) {
+		} else static if (isSinkSerializable!TU && isSerializerSupportSinkType!(Serializer, TU)) {
+			ser.serializeSinkType!TU(value);
+		}
+		else static if (isStringSerializable!TU) {
 			ser.serializeValue!(string, ATTRIBUTES)(value.toString());
 		} else static if (is(TU == struct) || is(TU == class)) {
 			static if (!hasSerializableFields!(TU, Policy))
@@ -569,6 +577,66 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			ser.serializeValue!(string, ATTRIBUTES)(to!string(value));
 		} else static assert(false, "Unsupported serialization type: " ~ T.stringof);
 	}
+}
+
+///
+package template isSerializerSupportSinkType (SerT, ObjT)
+{
+	enum isSerializerSupportSinkType = is(typeof(SerT.serializeSinkType!(ObjT)(ObjT.init)));
+}
+
+///
+package template isSinkSerializable (ObjectT)
+{
+	enum isSinkSerializable = is(typeof(ObjectT.toString(SerializeSinkDg.init))) &&
+									 is(typeof(ObjectT.fromString("")) : ObjectT);
+}
+
+///
+package alias SerializeSinkDg = void delegate(scope const(char)[]) @safe;
+
+version(unittest)
+{
+	import std.array : split;
+	import std.format : formattedWrite;
+	import vibe.data.json;
+
+	struct X (alias hasSink)
+	{
+		private int i;
+		private string s;
+
+		static if (hasSink)
+		{
+			public void toString (SerializeSinkDg dg) @safe
+			{
+				formattedWrite(dg, "%d;%s", this.i, this.s);
+			}
+		}
+
+		public string toString () @safe const pure nothrow
+		{
+			return "42;hello";
+		}
+
+		public static X fromString (string s) @safe pure
+		{
+			auto parts = s.split(";");
+			auto x = X(parts[0].to!int, parts[1]);
+			return x;
+		}
+	}
+}
+
+unittest
+{
+	// old toString() style methods still work if no sink overload presented
+	auto serialized1 = X!false(7,"x1").serializeToJsonString();
+	assert(serialized1 == `"42;hello"`);
+
+	// sink overload takes precedence
+	auto serialized2 = X!true(7,"x2").serializeToJsonString();
+	assert(serialized2 == `"7;x2"`);
 }
 
 private struct Traits(T, alias POL, ATTRIBUTES...)
