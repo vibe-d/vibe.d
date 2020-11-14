@@ -305,8 +305,10 @@ struct Json {
 		m_type = Type.array;
 		m_array = v;
 		version (VibeJsonFieldNames) {
-			foreach (idx, ref av; m_array)
-				av.m_name = format("%s[%s]", m_name, idx);
+			try {
+				foreach (idx, ref av; m_array)
+					av.m_name = format("%s[%s]", m_name, idx);
+			} catch (Exception e) assert(false, e.msg);
 		}
 		return v;
 	}
@@ -316,7 +318,12 @@ struct Json {
 		runDestructors();
 		m_type = Type.object;
 		m_object = v;
-		version (VibeJsonFieldNames) { foreach (key, ref av; m_object) av.m_name = format("%s.%s", m_name, key); }
+		version (VibeJsonFieldNames) {
+			try {
+				foreach (key, ref av; m_object)
+					av.m_name = format("%s.%s", m_name, key);
+			} catch (Exception e) assert(false, e.msg);
+		}
 		return v;
 	}
 
