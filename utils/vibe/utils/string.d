@@ -68,36 +68,6 @@ bool allOf(const(char)[] str, const(char)[] chars)
 	return true;
 }
 
-deprecated("Will be removed in v0.9.0 - Use `std.string.indexOf`")
-ptrdiff_t indexOfCT(Char)(in Char[] s, dchar c, CaseSensitive cs = CaseSensitive.yes)
-@safe pure {
-	if (__ctfe) {
-		if (cs == CaseSensitive.yes) {
-			foreach (i, dchar ch; s)
-				if (ch == c)
-					return i;
-		} else {
-			c = std.uni.toLower(c);
-			foreach (i, dchar ch; s)
-				if (std.uni.toLower(ch) == c)
-					return i;
-		}
-		return -1;
-	} else return std.string.indexOf(s, c, cs);
-}
-
-deprecated("Will be removed in v0.9.0 - Use `std.string.indexOf`")
-ptrdiff_t indexOfCT(Char)(in Char[] s, in Char[] needle)
-{
-	if (__ctfe) {
-		if (s.length < needle.length) return -1;
-		foreach (i; 0 .. s.length - needle.length)
-			if (s[i .. i+needle.length] == needle)
-				return i;
-		return -1;
-	} else return std.string.indexOf(s, needle);
-}
-
 /**
 	Checks if any character in 'str' is contained in 'chars'.
 */

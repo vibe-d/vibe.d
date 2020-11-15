@@ -386,6 +386,12 @@ string formEncode(T)(T map, char sep = '&')
 	return formEncodeImpl(map, sep, true);
 }
 
+/// Ditto
+string formEncode(T : DictionaryList!Args, Args...)(T map, char sep = '&')
+{
+	return formEncodeImpl(map.byKeyValue(), sep, true);
+}
+
 /**
 	Writes to the $(D OutputRange) an URL encoded string as specified in RFC 3986 section 2
 
@@ -410,6 +416,12 @@ string urlEncode(T)(T map)
 	if (isFormMap!T)
 {
 	return formEncodeImpl(map, '&', false);
+}
+
+/// Ditto
+string urlEncode(T : DictionaryList!Args, Args...)(T map)
+{
+	return formEncodeImpl(map.byKeyValue, '&', false);
 }
 
 /**
