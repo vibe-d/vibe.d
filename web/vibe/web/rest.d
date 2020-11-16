@@ -2062,10 +2062,10 @@ do {
 			}
 		}
 
-		// Check for misplaced ref / out
+		// Check for misplaced out and non-const ref
 		alias PSC = ParameterStorageClass;
 		foreach (i, SC; ParameterStorageClassTuple!Func) {
-			static if (SC & PSC.out_ || SC & PSC.ref_) {
+			static if (SC & PSC.out_ || (SC & PSC.ref_ && !is(ConstOf!(PT[i]) == PT[i])) ) {
 				mixin(GenCmp!("Loop", i, PN[i]).Decl);
 				alias Attr
 					= Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
@@ -2236,6 +2236,13 @@ unittest {
 	static assert(stripTestIdent(getInterfaceValidationError!QueryRef)
 		== "query parameter 'auth' cannot be ref");
 
+	interface QueryRefConst {
+		@queryParam("auth", "auth")
+		string getData(const ref string auth);
+	}
+	enum err1 = getInterfaceValidationError!QueryRefConst;
+	static assert(err1 is null, err1);
+
 	interface QueryOut {
 		@queryParam("auth", "auth")
 		void getData(out string auth);
@@ -2248,7 +2255,14 @@ unittest {
 		string getData(ref string auth);
 	}
 	static assert(stripTestIdent(getInterfaceValidationError!BodyRef)
-		== "body_ parameter 'auth' cannot be ref");
+		== "body_ parameter 'auth' cannot be ref",x);
+
+	interface BodyRefConst {
+		@bodyParam("auth", "auth")
+		string getData(const ref string auth);
+	}
+	enum err2 = getInterfaceValidationError!BodyRefConst;
+	static assert(err2 is null, err2);
 
 	interface BodyOut {
 		@bodyParam("auth", "auth")
