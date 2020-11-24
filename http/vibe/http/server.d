@@ -486,10 +486,8 @@ HTTPServerResponse createTestHTTPServerResponse(OutputStream data_sink = null,
 		settings.sessionStore = session_store;
 	}
 
-	InterfaceProxy!Stream outstr;
-	if (data_sink && data_mode == TestHTTPResponseMode.plain)
-		outstr = createProxyStream(Stream.init, data_sink);
-	else outstr = createProxyStream(Stream.init, nullSink);
+	InterfaceProxy!Stream outstr = createProxyStream(Stream.init,
+		data_sink && data_mode == TestHTTPResponseMode.plain ? data_sink : nullSink);
 
 	auto ret = new HTTPServerResponse(outstr, InterfaceProxy!ConnectionStream.init,
 		settings, () @trusted { return vibeThreadAllocator(); } ());
