@@ -481,7 +481,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 		} else static if (isISOExtStringSerializable!TU) {
 			ser.serializeValue!(string, ATTRIBUTES)(value.toISOExtString());
 		} else static if (isSinkSerializable!TU && isSerializerSupportSinkType!(Serializer, TU)) {
-			ser.serializeSinkType!TU(value);
+			ser.serializeSinkType(value);
 		}
 		else static if (isStringSerializable!TU) {
 			ser.serializeValue!(string, ATTRIBUTES)(value.toString());
