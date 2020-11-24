@@ -1,0 +1,56 @@
+# Run Vibe.d's test suite on all three platforms
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  main:
+    name: Run
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        dc: [ dmd-latest, dmd-2.094.2, dmd-2.089.1, dmd-2.084.1, ldc-1.24.0, ldc-1.21.0, ldc-1.17.0 ]
+        include:
+          # Default
+          - { parts: 'builds,unittests,examples,tests,mongo', extra_dflags: '' }
+          # Custom part for coverage
+          - { dc: dmd-2.094.2, parts: 'unittests,tests', extra_dflags: "-cov -version=VibedSetCoverageMerge" }
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    services:
+      # https://docs.github.com/en/free-pro-team@latest/actions/guides/creating-redis-service-containers
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mongodb:
+        image: mongo
+        ports:
+          - 27017:27017
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Prepare compiler
+      uses: dlang-community/setup-dlang@v1
+      with:
+          compiler: ${{ matrix.dc }}
+
+    - name: '[POSIX] Run tests'
+      env:
+        VIBED_DRIVER: vibe-core
+        PARTS: builds,unittests,examples,tests,mongo
+      run: |
+        ./travis-ci.sh
+
+    - name: '[DMD] Upload coverage to Codecov'
+      if: matrix.dc == 'dmd-latest'
+      uses: codecov/codecov-action@v1
