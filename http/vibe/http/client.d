@@ -621,8 +621,6 @@ final class HTTPClient {
 
 			logTrace("HTTP client waiting for response");
 			if (!m_stream.empty) break;
-
-			enforce(i != 1, "Second attempt to send HTTP request failed.");
 		}
 		return has_body;
 	}
