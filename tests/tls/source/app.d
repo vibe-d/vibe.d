@@ -159,7 +159,7 @@ void test()
 
 void main()
 {
-	// import std.functional : toDelegate;
-	// runTask(toDelegate(&test));
-	// runEventLoop();
+	import std.functional : toDelegate;
+	runTask(toDelegate(&test));
+	runEventLoop();
 }
