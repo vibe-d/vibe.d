@@ -609,13 +609,12 @@ package template isStringSinkSerializable(T)
 		&& is(typeof(T.fromString(string.init)) : T);
 }
 
-version(unittest)
-{
+unittest {
 	import std.array : split;
 	import std.format : formattedWrite;
 	import vibe.data.json;
 
-	struct X(alias hasSink) {
+	static struct X(alias hasSink) {
 		private int i;
 		private string s;
 
@@ -638,10 +637,7 @@ version(unittest)
 			return x;
 		}
 	}
-}
 
-unittest
-{
 	static assert(!isStringSinkSerializable!(X!false));
 	static assert(isStringSinkSerializable!(X!true));
 
