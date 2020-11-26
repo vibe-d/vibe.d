@@ -2007,6 +2007,27 @@ struct JsonStringSerializer(R, bool pretty = false)
 			} else static assert(false, "Unsupported type: " ~ UT.stringof);
 		}
 
+		void writeStringSinkValue(Traits, T)(scope auto ref T value)
+		{
+			void sink(scope const(char)[] str) {
+				m_range.jsonEscape(str);
+			}
+
+			final class R {
+				void put(char ch) { put(() @trusted { return (&ch)[0 .. 1]; } ()); }
+				void put(scope const(char)[] str) { m_range.jsonEscape(str); }
+			}
+
+			m_range.put('"');
+			static if (__traits(compiles, value.toString((scope s) => sink(s)))) {
+				value.toString((scope s) => sink(s));
+			} else {
+				scope r = new R;
+				value.toString(r);
+			}
+			m_range.put('"');
+		}
+
 		private void startComposite()
 		{
 			static if (pretty) m_level++;
@@ -2036,25 +2057,6 @@ struct JsonStringSerializer(R, bool pretty = false)
 		{
 			m_range.put('\n');
 			foreach (i; 0 .. m_level) m_range.put('\t');
-		}
-
-		private void sink (scope const(char)[] data)
-		{
-			static if (isOutputRange!(R, char))
-			{
-				static if (__traits(compiles, m_range ~= data))
-						m_range ~= data;
-					else
-						foreach (const c; data)
-							m_range.put(c);
-			}
-		}
-
-		package void serializeSinkType (T) (scope auto ref T record)
-		{
-			m_range.put('"');
-			record.toString(&this.sink);
-			m_range.put('"');
 		}
 	}
 
@@ -2186,6 +2188,18 @@ struct JsonStringSerializer(R, bool pretty = false)
 			return true;
 		}
 	}
+}
+
+unittest {
+	static assert(doesSerializerSupportStringSink!(JsonStringSerializer!(Appender!string)));
+
+	auto app = appender!string;
+	auto ser = JsonStringSerializer!(Appender!string)(app);
+	static struct T1 { void toString(scope void delegate(scope const(char)[])) {} }
+	static struct T2 { void toString(R)(scope ref R dst) { dst.put('f'); dst.put("foo"); } }
+
+	ser.writeStringSinkValue!void(T1.init);
+	ser.writeStringSinkValue!void(T2.init);
 }
 
 /// Cloning JSON arrays
