@@ -595,7 +595,7 @@ package template doesSerializerSupportStringSink(SerT)
 }
 
 ///
-package template isStringSinkSerializable(T)
+template isStringSinkSerializable(T)
 {
 	import std.range : nullSink;
 
