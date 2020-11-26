@@ -492,25 +492,79 @@ package struct MethodAttribute
 	alias data this;
 }
 
+
+/** UDA for using a custom serializer for the method return value.
+
+	Instead of using the default serializer (JSON), this allows to define
+	custom serializers. Multiple serializers can be specified and will be
+	matched against the `Accept` header of the HTTP request.
+
+	Params:
+		serialize = An alias to a generic function taking an output range as
+			its first argument and the value to be serialized as its second
+			argument. The result of the serialization is written byte-wise into
+			the output range.
+		deserialize = An alias to a generic function taking a forward range
+			and returning the deserialized value.
+		content_type = The MIME type of the serialized representation.
+*/
+alias resultSerializer(alias serialize, alias deserialize, string content_type)
+	= ResultSerializer!(serialize, deserialize, content_type);
+
 ///
-public struct ResultSerializer (alias ST, alias DT, string ContentType)
+unittest {
+	import std.bitmanip : bigEndianToNative, nativeToBigEndian;
+
+	interface MyRestInterface {
+		static struct Point {
+			int x, y;
+		}
+
+		static void serialize(R)(ref R output_range, const ref Point value)
+		{
+			output_range.put(nativeToBigEndian(value.x));
+			output_range.put(nativeToBigEndian(value.y));
+		}
+
+		static Point deserialize(R)(R input_range)
+		{
+			Point ret;
+			ubyte[4] xbuf, ybuf;
+			input_range.takeExactly(4).copy(xbuf[]);
+			input_range.takeExactly(4).copy(ybuf[]);
+			ret.x = bigEndianToNative!int(xbuf);
+			ret.y = bigEndianToNative!int(ybuf);
+			return ret;
+		}
+
+		// serialize as binary data in network byte order
+		@resultSerializer!(serialize, deserialize, "application/binary")
+		Point getPoint();
+	}
+}
+
+/// private
+struct ResultSerializer (alias ST, alias DT, string ContentType)
 {
 	enum contentType = ContentType;
 	alias serialize = ST;
 	alias deserialize = DT;
 }
 
-alias resultSerializer(Args...) = ResultSerializer!(Args);
 
-///
 package alias DefaultSerializerT (FuncRetT) =
 	ResultSerializer!(
 		function (ref output_range, ref value) {
-			 serializeToJson(output_range, value);
+			static struct R {
+				typeof(output_range) underlying;
+				void put(char ch) { underlying.put(ch); }
+				void put(const(char)[] ch) { underlying.put(cast(const(ubyte)[])ch); }
+			}
+			auto dst = R(output_range);
+			serializeToJson(dst, value);
 		},
-		function (input_stream) {
-			import vibe.stream.operations;
-			return deserializeJson!FuncRetT(input_stream.readAllUTF8);
+		function (input_range) {
+			return deserializeJson!FuncRetT(std.string.assumeUTF(input_range));
 		},
 		"application/json"
 	);
