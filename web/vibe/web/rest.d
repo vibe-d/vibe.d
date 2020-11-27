@@ -1889,7 +1889,9 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 				//import vibe.stream.wrapper : streamInputRange;
 				//auto rng = streamInputRange(ret.bodyReader);
 				auto rng = ret.bodyReader.readAll();
-    			return serializer.deserialize(rng);
+				RT result;
+				serializer.deserialize(rng, result);
+				return result;
 			}
 
 		throw new Exception("Unrecognized content type: " ~ content_type);

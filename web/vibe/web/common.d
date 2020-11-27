@@ -505,7 +505,8 @@ package struct MethodAttribute
 			argument. The result of the serialization is written byte-wise into
 			the output range.
 		deserialize = An alias to a generic function taking a forward range
-			and returning the deserialized value.
+			as its first argument and a reference to the value that is to be
+			deserialized.
 		content_type = The MIME type of the serialized representation.
 */
 alias resultSerializer(alias serialize, alias deserialize, string content_type)
@@ -526,7 +527,7 @@ unittest {
 			output_range.put(nativeToBigEndian(value.y));
 		}
 
-		static Point deserialize(R)(R input_range)
+		static void deserialize(R)(R input_range, ref Point result)
 		{
 			Point ret;
 			ubyte[4] xbuf, ybuf;
@@ -563,8 +564,8 @@ package alias DefaultSerializerT (FuncRetT) =
 			auto dst = R(output_range);
 			serializeToJson(dst, value);
 		},
-		function (input_range) {
-			return deserializeJson!FuncRetT(std.string.assumeUTF(input_range));
+		function (input_range, ref FuncRetT result) {
+			result = deserializeJson!FuncRetT(std.string.assumeUTF(input_range));
 		},
 		"application/json"
 	);
