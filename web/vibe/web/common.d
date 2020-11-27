@@ -521,15 +521,17 @@ unittest {
 			int x, y;
 		}
 
-		static void serialize(R)(ref R output_range, const ref Point value)
+		static void serialize(R, T)(ref R output_range, const ref T value)
 		{
+			static assert(is(T == Point)); // only Point supported in this example
 			output_range.put(nativeToBigEndian(value.x));
 			output_range.put(nativeToBigEndian(value.y));
 		}
 
-		static void deserialize(R)(R input_range, ref Point result)
+		static void deserialize(R, T)(R input_range, ref T result)
 		{
-			Point ret;
+			static assert(is(T == Point)); // only Point supported in this example
+			T ret;
 			ubyte[4] xbuf, ybuf;
 			input_range.takeExactly(4).copy(xbuf[]);
 			input_range.takeExactly(4).copy(ybuf[]);
