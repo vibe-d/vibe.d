@@ -242,19 +242,23 @@ class ConnectionProxyStream : ConnectionStream {
 	after a call to front. This property allows the range to be used in
 	request-response scenarios.
 */
-struct StreamInputRange {
+deprecated("Use streamInputRange() instead.")
+StreamInputRange!OutputStream StreamInputRange()(InputStream stream) { return StreamInputRange!InputStream(stream); }
+/// ditto
+struct StreamInputRange(InputStream, size_t buffer_size = 256)
+	if (isInputStream!InputStream)
+{
 @safe:
-
 	private {
 		struct Buffer {
-			ubyte[256] data = void;
+			ubyte[buffer_size] data = void;
 			size_t fill = 0;
 		}
 		InputStream m_stream;
 		Buffer* m_buffer;
 	}
 
-	this (InputStream stream)
+	private this(InputStream stream)
 	{
 		m_stream = stream;
 		m_buffer = new Buffer;
@@ -282,11 +286,18 @@ struct StreamInputRange {
 		m_buffer.fill = sz;
 	}
 }
+/// ditto
+auto streamInputRange(size_t buffer_size = 256, InputStream)(InputStream stream)
+	if (isInputStream!InputStream)
+{
+	return StreamInputRange!(InputStream, buffer_size)(stream);
+}
 
 
 /**
 	Implements a buffered output range interface on top of an OutputStream.
 */
+deprecated("Use streamOutputRange() instead.")
 StreamOutputRange!OutputStream StreamOutputRange()(OutputStream stream) { return StreamOutputRange!OutputStream(stream); }
 /// ditto
 struct StreamOutputRange(OutputStream, size_t buffer_size = 256)
@@ -303,6 +314,7 @@ struct StreamOutputRange(OutputStream, size_t buffer_size = 256)
 
 	@disable this(this);
 
+	/// private
 	this(OutputStream stream)
 	{
 		m_stream = stream;

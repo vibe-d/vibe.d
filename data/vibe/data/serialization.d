@@ -36,14 +36,13 @@
 				serialized as a string, as returned by their `toISOExtString`
 				method. This causes types such as `SysTime` to be serialized
 				as strings.)
+			$(LI Types satisfying the `isStringSinkSerializable` trait will be
+				serialized as a string using the `toString(sink)` method. `sink`
+				can either be a delegate that takes a `char` array argument, or
+				an output range of `char`.)
 			$(LI Types satisfying the `isStringSerializable` trait will be
 				serialized as a string, as returned by their `toString`
 				method.)
-			$(LI Types satisfying the `isSinkSerializable` trait will be
-				serialized as a string using the toString(`SerializeSinkDg`)
-				function. toString(`SerializeSinkDg`) has precedence above
-				toString() if both are present. The serializer has to support the
-				`isSerializerSupportSinkType` trait)
 			$(LI Struct and class types by default will be serialized as
 				associative arrays, where the key is the name of the
 				corresponding field (can be overridden using the `@name`
@@ -480,10 +479,15 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			ser.serializeValue!(CustomType, ATTRIBUTES)(value.toRepresentation());
 		} else static if (isISOExtStringSerializable!TU) {
 			ser.serializeValue!(string, ATTRIBUTES)(value.toISOExtString());
-		} else static if (isSinkSerializable!TU && isSerializerSupportSinkType!(Serializer, TU)) {
-			ser.serializeSinkType(value);
-		}
-		else static if (isStringSerializable!TU) {
+		} else static if (isStringSinkSerializable!TU) {
+			static if (doesSerializerSupportStringSink!Serializer) {
+				ser.writeStringSinkValue!Traits(value);
+			} else {
+				auto app = appender!string;
+				app.formattedWrite("%s", value);
+				ser.serializeValue!(string, ATTRIBUTES)(app.data);
+			}
+		} else static if (isStringSerializable!TU) {
 			ser.serializeValue!(string, ATTRIBUTES)(value.toString());
 		} else static if (is(TU == struct) || is(TU == class)) {
 			static if (!hasSerializableFields!(TU, Policy))
@@ -580,56 +584,63 @@ private template serializeValueImpl(Serializer, alias Policy) {
 }
 
 ///
-package template isSerializerSupportSinkType (SerT, ObjT)
+package template doesSerializerSupportStringSink(SerT)
 {
-	enum isSerializerSupportSinkType = is(typeof(SerT.serializeSinkType!(ObjT)(ObjT.init)));
+	static struct T1 { void toString(scope void delegate(scope const(char)[])) {} }
+	static struct T2 { void toString(R)(ref R dst) { dst.put('f'); dst.put("foo"); } }
+
+	enum doesSerializerSupportStringSink =
+		is(typeof(SerT.init.writeStringSinkValue!(Traits!(T1, DefaultPolicy))(T1.init)))
+		&& is(typeof(SerT.init.writeStringSinkValue!(Traits!(T2, DefaultPolicy))(T2.init)));
 }
 
 ///
-package template isSinkSerializable (ObjectT)
+template isStringSinkSerializable(T)
 {
-	enum isSinkSerializable = is(typeof(ObjectT.toString(SerializeSinkDg.init))) &&
-									 is(typeof(ObjectT.fromString("")) : ObjectT);
+	import std.range : nullSink;
+
+	private void sink(S : const(char)[])(scope S s) @safe {}
+
+	enum isStringSinkSerializable =
+		(
+			is(typeof(T.init.toString((scope str) => sink(str))))
+			|| is(typeof(T.init.toString(nullSink)))
+		)
+		&& is(typeof(T.fromString(string.init)) : T);
 }
 
-///
-package alias SerializeSinkDg = void delegate(scope const(char)[]) @safe;
-
-version(unittest)
-{
+unittest {
 	import std.array : split;
 	import std.format : formattedWrite;
 	import vibe.data.json;
 
-	struct X (alias hasSink)
-	{
+	static struct X(alias hasSink) {
 		private int i;
 		private string s;
 
-		static if (hasSink)
-		{
-			public void toString (SerializeSinkDg dg) @safe
+		static if (hasSink) {
+			void toString (scope void delegate(scope const(char)[]) @safe dg) @safe
 			{
 				formattedWrite(dg, "%d;%s", this.i, this.s);
 			}
 		}
 
-		public string toString () @safe const pure nothrow
+		string toString () @safe const pure nothrow
 		{
 			return "42;hello";
 		}
 
-		public static X fromString (string s) @safe pure
+		static X fromString (string s) @safe pure
 		{
 			auto parts = s.split(";");
 			auto x = X(parts[0].to!int, parts[1]);
 			return x;
 		}
 	}
-}
 
-unittest
-{
+	static assert(!isStringSinkSerializable!(X!false));
+	static assert(isStringSinkSerializable!(X!true));
+
 	// old toString() style methods still work if no sink overload presented
 	auto serialized1 = X!false(7,"x1").serializeToJsonString();
 	assert(serialized1 == `"42;hello"`);

@@ -1260,7 +1260,7 @@ struct Json {
 	Throws a JSONException if any parsing error occured.
 */
 Json parseJson(R)(ref R range, int* line = null, string filename = null)
-	if( is(R == string) )
+	if (isForwardRange!R)
 {
 	Json ret;
 	enforceJson(!range.empty, "JSON string is empty.", filename, 0);
@@ -1276,17 +1276,20 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 	bool minus = false;
 	switch( range.front ){
 		case 'f':
-			enforceJson(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. min(5, $)]~"'.", filename, line);
+			enforceJson(range.save.dropOne.startsWith("alse"),
+				"Expected 'false', got '"~range.take(5).to!string~"'.", filename, line);
 			range.popFrontN(5);
 			ret = false;
 			break;
 		case 'n':
-			enforceJson(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. min(4, $)]~"'.", filename, line);
+			enforceJson(range.save.dropOne.startsWith("ull"),
+				"Expected 'null', got '"~range.take(4).to!string~"'.", filename, line);
 			range.popFrontN(4);
 			ret = null;
 			break;
 		case 't':
-			enforceJson(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. min(4, $)]~"'.", filename, line);
+			enforceJson(range.save.dropOne.startsWith("rue"),
+				"Expected 'true', got '"~range.take(4).to!string~"'.", filename, line);
 			range.popFrontN(4);
 			ret = true;
 			break;
@@ -1350,7 +1353,7 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 			ret = obj;
 			break;
 		default:
-			enforceJson(false, format("Expected valid JSON token, got '%s'.", range[0 .. min(12, $)]), filename, line);
+			enforceJson(false, format("Expected valid JSON token, got '%s'.", range.take(12)), filename, line);
 			assert(false);
 	}
 
@@ -1358,6 +1361,24 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 	version(JsonLineNumbers) ret.line = curline;
 	return ret;
 }
+
+
+unittest { // ensure parseJson works with a generic forward range
+	static struct R {
+		const(char)[] text;
+
+		@property char front() { return text[0]; }
+		@property R save() { return this; }
+		@property bool empty() const { return text.length == 0; }
+		void popFront() { text = text[1 .. $]; }
+	}
+
+	auto r = R(`{"i":42, "s": "foo"}`);
+	auto j = parseJson(r);
+	assert(j["i"] == 42);
+	assert(j["s"] == "foo");
+}
+
 
 /**
 	Parses the given JSON string and returns the corresponding Json object.
@@ -1556,7 +1577,7 @@ T deserializeJson(T)(Json src)
 }
 /// ditto
 T deserializeJson(T, R)(R input)
-	if (!is(R == Json) && isInputRange!R)
+	if (!is(R == Json) && isForwardRange!R)
 {
 	return deserialize!(JsonStringSerializer!R, T)(input);
 }
@@ -1986,6 +2007,27 @@ struct JsonStringSerializer(R, bool pretty = false)
 			} else static assert(false, "Unsupported type: " ~ UT.stringof);
 		}
 
+		void writeStringSinkValue(Traits, T)(scope auto ref T value)
+		{
+			void sink(scope const(char)[] str) {
+				m_range.jsonEscape(str);
+			}
+
+			final class R {
+				void put(char ch) { put(() @trusted { return (&ch)[0 .. 1]; } ()); }
+				void put(scope const(char)[] str) { m_range.jsonEscape(str); }
+			}
+
+			m_range.put('"');
+			static if (__traits(compiles, value.toString((scope s) => sink(s)))) {
+				value.toString((scope s) => sink(s));
+			} else {
+				scope r = new R;
+				value.toString(r);
+			}
+			m_range.put('"');
+		}
+
 		private void startComposite()
 		{
 			static if (pretty) m_level++;
@@ -2015,25 +2057,6 @@ struct JsonStringSerializer(R, bool pretty = false)
 		{
 			m_range.put('\n');
 			foreach (i; 0 .. m_level) m_range.put('\t');
-		}
-
-		private void sink (scope const(char)[] data)
-		{
-			static if (isOutputRange!(R, char))
-			{
-				static if (__traits(compiles, m_range ~= data))
-						m_range ~= data;
-					else
-						foreach (const c; data)
-							m_range.put(c);
-			}
-		}
-
-		package void serializeSinkType (T) (scope auto ref T record)
-		{
-			m_range.put('"');
-			record.toString(&this.sink);
-			m_range.put('"');
 		}
 	}
 
@@ -2165,6 +2188,18 @@ struct JsonStringSerializer(R, bool pretty = false)
 			return true;
 		}
 	}
+}
+
+unittest {
+	static assert(doesSerializerSupportStringSink!(JsonStringSerializer!(Appender!string)));
+
+	auto app = appender!string;
+	auto ser = JsonStringSerializer!(Appender!string)(app);
+	static struct T1 { void toString(scope void delegate(scope const(char)[])) {} }
+	static struct T2 { void toString(R)(scope ref R dst) { dst.put('f'); dst.put("foo"); } }
+
+	ser.writeStringSinkValue!void(T1.init);
+	ser.writeStringSinkValue!void(T2.init);
 }
 
 /// Cloning JSON arrays

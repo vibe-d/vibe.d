@@ -1599,16 +1599,18 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				string accept_str;
 				if (const accept_header = "Accept" in req.headers)
 					accept_str = *accept_header;
-				enum result_serializers = ResultSerializersT!(Func);
+				alias result_serializers = ResultSerializersT!Func;
 				immutable serializer_ind = get_matching_content_type!(result_serializers)(accept_str);
 				foreach (i, serializer; result_serializers)
 					if (serializer_ind == i) {
-						auto serialized_output = appender!string;
-						static if (!__traits(compiles, () @safe {
-							serializer.serialize(serialized_output, ret);
-						}))
+						auto serialized_output = appender!(ubyte[]);
+						static if (
+							__traits(compiles, () @trusted { serializer.serialize(serialized_output, ret); })
+							&& !__traits(compiles, () @safe { serializer.serialize(serialized_output, ret); }))
+						{
 							pragma(msg, "Non-@safe serialization of REST return types deprecated - ensure that " ~
 								RT.stringof~" is safely serializable.");
+						}
 						() @trusted {
 							serializer.serialize(serialized_output, ret);
 						}();
@@ -1762,6 +1764,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter)
 {
 	import vibe.web.internal.rest.common : ParameterKind;
+	import vibe.stream.operations : readAll;
 	import vibe.textfilter.urlencode : filterURLEncode, urlEncode;
 	import std.array : appender;
 
@@ -1875,11 +1878,19 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		string content_type = "";
 		if (const hdr = "Content-Type" in reqhdrs)
 			content_type = *hdr;
-		enum result_serializers = ResultSerializersT!(Func);
+		alias result_serializers = ResultSerializersT!Func;
 		immutable serializer_ind = get_matching_content_type!(result_serializers)(content_type);
 		foreach (i, serializer; result_serializers)
-			if (serializer_ind == i)
-    			return serializer.deserialize(ret.bodyReader);
+			if (serializer_ind == i) {
+				// TODO: The JSON deserialiation code requires a forward range,
+				//       but streamInputRange is currently just a bare input
+				//       range, so for now we need to read everything into a
+				//       buffer instead.
+				//import vibe.stream.wrapper : streamInputRange;
+				//auto rng = streamInputRange(ret.bodyReader);
+				auto rng = ret.bodyReader.readAll();
+				return serializer.deserialize!RT(rng);
+			}
 
 		throw new Exception("Unrecognized content type: " ~ content_type);
 	}
