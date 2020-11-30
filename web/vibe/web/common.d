@@ -528,7 +528,7 @@ unittest {
 			output_range.put(nativeToBigEndian(value.y));
 		}
 
-		static void deserialize(R, T)(R input_range, ref T result)
+		static T deserialize(T, R)(R input_range)
 		{
 			static assert(is(T == Point)); // only Point supported in this example
 			T ret;
@@ -547,40 +547,41 @@ unittest {
 }
 
 /// private
-struct ResultSerializer (alias ST, alias DT, string ContentType)
-{
+struct ResultSerializer(alias ST, alias DT, string ContentType) {
 	enum contentType = ContentType;
 	alias serialize = ST;
 	alias deserialize = DT;
 }
 
 
-package alias DefaultSerializerT (FuncRetT) =
-	ResultSerializer!(
-		function (ref output_range, ref value) {
-			static struct R {
-				typeof(output_range) underlying;
-				void put(char ch) { underlying.put(ch); }
-				void put(const(char)[] ch) { underlying.put(cast(const(ubyte)[])ch); }
-			}
-			auto dst = R(output_range);
-			serializeToJson(dst, value);
-		},
-		function (input_range, ref FuncRetT result) {
-			result = deserializeJson!FuncRetT(std.string.assumeUTF(input_range));
-		},
-		"application/json"
-	);
+package void defaultSerialize(T, R)(ref R output_range, in ref T value)
+{
+	static struct R {
+		typeof(output_range) underlying;
+		void put(char ch) { underlying.put(ch); }
+		void put(const(char)[] ch) { underlying.put(cast(const(ubyte)[])ch); }
+	}
+	auto dst = R(output_range);
+	serializeToJson(dst, value);
+}
+
+package T defaultDeserialize(T, R)(R input_range)
+{
+	return deserializeJson!T(std.string.assumeUTF(input_range));
+}
+
+package alias DefaultSerializerT = ResultSerializer!(
+	defaultSerialize, defaultDeserialize, "application/json");
+
 
 /// Convenience template to get all the ResultSerializers for a function
-package template ResultSerializersT (alias FuncT)
-{
-	alias DefinedSerializers = getUDAs!(FuncT, ResultSerializer);
-	static if (getUDAs!(FuncT, ResultSerializer).length)
+package template ResultSerializersT(alias func) {
+	alias DefinedSerializers = getUDAs!(func, ResultSerializer);
+	static if (getUDAs!(func, ResultSerializer).length)
 		alias ResultSerializersT = DefinedSerializers;
 	else
-		alias ResultSerializersT = AliasSeq!(DefaultSerializerT!(ReturnType!FuncT)());
-};
+		alias ResultSerializersT = AliasSeq!(DefaultSerializerT);
+}
 
 /**
  * This struct contains the name of a route specified by the `path` function.
