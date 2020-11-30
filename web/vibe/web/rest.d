@@ -192,6 +192,21 @@
 		}
 		---
 
+	Serialization_policies:
+		You can customize the serialization of any type used by an interface
+		by using serialization policies. The following example is using
+		the `Base64ArrayPolicy`, which means if `X` contains any ubyte arrays,
+		they will be serialized to their base64 encoding instead of
+		their normal string representation (e.g. `"[1, 2, 255]"`).
+
+		---
+		@serializationPolicy!(Base64ArrayPolicy)
+		interface ITestBase64
+		{
+			@safe X getTest();
+		}
+		---
+
 	Parameter_passing:
 		By default, parameter are passed via different methods depending on the
 		type of request. For POST and PATCH requests, they are passed via the
@@ -1415,6 +1430,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	static const sroute = RestInterface!T.staticRoutes[ridx];
 	auto route = intf.routes[ridx];
 	auto settings = intf.settings;
+    alias SerPolicyType = SerPolicyT!(RestInterface!T.I).PolicyTemplate;
 
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	@safe {
@@ -1496,26 +1512,26 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 						v = auth_info;
 					} else static if (sparam.kind == ParameterKind.query) {
 						if (auto pv = fieldname in req.query)
-							v = fromRestString!PT(*pv);
+							v = fromRestString!(PT, SerPolicyType)(*pv);
 					} else static if (sparam.kind == ParameterKind.wholeBody) {
-						try v = deserializeJson!PT(req.json);
+						try v = deserializeWithPolicy!(JsonSerializer, SerPolicyType, PT)(req.json);
 						catch (JSONException e) enforceBadRequest(false, e.msg);
 					} else static if (sparam.kind == ParameterKind.body_) {
 						try {
 							if (auto pv = fieldname in req.json)
-								v = deserializeJson!PT(*pv);
+								v = deserializeWithPolicy!(JsonSerializer, SerPolicyType, PT)(*pv);
 						} catch (JSONException e)
 							enforceBadRequest(false, e.msg);
 					} else static if (sparam.kind == ParameterKind.header) {
 						if (auto pv = fieldname in req.headers)
-							v = fromRestString!PT(*pv);
+							v = fromRestString!(PT, SerPolicyType)(*pv);
 					} else static if (sparam.kind == ParameterKind.attributed) {
 						static if (!__traits(compiles, () @safe { computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ()))
 							pragma(msg, "Non-@safe @before evaluators are deprecated - annotate evaluator function for parameter "~pname~" of "~T.stringof~"."~Method~" as @safe.");
 						v = () @trusted { return computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ();
 					} else static if (sparam.kind == ParameterKind.internal) {
 						if (auto pv = fieldname in req.params)
-							v = fromRestString!PT(urlDecode(*pv));
+							v = fromRestString!(PT, DefaultPolicy)(urlDecode(*pv));
 					} else static assert(false, "Unhandled parameter kind.");
 
 					static if (isInstanceOf!(Nullable, PT)) params[i] = v;
@@ -1605,14 +1621,18 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 					if (serializer_ind == i) {
 						auto serialized_output = appender!(ubyte[]);
 						static if (
-							__traits(compiles, () @trusted { serializer.serialize(serialized_output, ret); })
-							&& !__traits(compiles, () @safe { serializer.serialize(serialized_output, ret); }))
+							__traits(compiles, () @trusted {
+								serializer.serialize!(SerPolicyT!(RestInterface!T.I).PolicyTemplate)(serialized_output, ret);
+							})
+							&& !__traits(compiles, () @safe {
+								serializer.serialize!(SerPolicyT!(RestInterface!T.I).PolicyTemplate)(serialized_output, ret);
+							}))
 						{
 							pragma(msg, "Non-@safe serialization of REST return types deprecated - ensure that " ~
 								RT.stringof~" is safely serializable.");
 						}
 						() @trusted {
-							serializer.serialize(serialized_output, ret);
+							serializer.serialize!(SerPolicyT!(RestInterface!T.I).PolicyTemplate)(serialized_output, ret);
 						}();
 						res.writeBody(serialized_output.data, serializer.contentType);
 					}
@@ -1772,6 +1792,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	alias Func = Info.RouteFunctions[ridx];
 	alias RT = ReturnType!Func;
 	alias PTT = ParameterTypeTuple!Func;
+	alias SerPolicyType = SerPolicyT!I.PolicyTemplate;
 	enum sroute = Info.staticRoutes[ridx];
 	auto route = intf.routes[ridx];
 	auto settings = intf.settings;
@@ -1793,8 +1814,10 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		query.put("=");
 		static if (is(PT == Json))
 			query.filterURLEncode(ARGS[i].toString());
-		else // Note: CTFE triggers compiler bug here (think we are returning Json, not string).
-			query.filterURLEncode(toRestString(serializeToJson(ARGS[i])));
+		else
+		// Note: CTFE triggers compiler bug here (think we are returning Json, not string).
+				query.filterURLEncode(toRestString(
+				serializeWithPolicy!(JsonSerializer, SerPolicyType)(ARGS[i])));
 	}
 
 	foreach (i, PT; PTT) {
@@ -1803,9 +1826,9 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		static if (sparam.kind == ParameterKind.query) {
 			addQueryParam!i(fieldname);
 		} else static if (sparam.kind == ParameterKind.wholeBody) {
-			jsonBody = serializeToJson(ARGS[i]);
+			jsonBody = serializeWithPolicy!(JsonSerializer, SerPolicyType)(ARGS[i]);
 		} else static if (sparam.kind == ParameterKind.body_) {
-			jsonBody[fieldname] = serializeToJson(ARGS[i]);
+			jsonBody[fieldname] = serializeWithPolicy!(JsonSerializer, SerPolicyType)(ARGS[i]);
 		} else static if (sparam.kind == ParameterKind.header) {
 			// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
 			static if (sparam.isIn) {
@@ -1889,7 +1912,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 				//import vibe.stream.wrapper : streamInputRange;
 				//auto rng = streamInputRange(ret.bodyReader);
 				auto rng = ret.bodyReader.readAll();
-				return serializer.deserialize!RT(rng);
+				return serializer.deserialize!(SerPolicyT!I.PolicyTemplate, RT)(rng);
 			}
 
 		throw new Exception("Unrecognized content type: " ~ content_type);
@@ -2016,7 +2039,7 @@ private {
 		}
 	}
 
-	T fromRestString(T)(string value)
+	T fromRestString(T, alias SerPolicyType = DefaultPolicy)(string value)
 	{
 		import std.conv : ConvException;
 		import std.uuid : UUID, UUIDParsingException;
@@ -2031,7 +2054,7 @@ private {
 			else static if (__traits(compiles, T.fromISOExtString("hello"))) return T.fromISOExtString(value);
 			else static if (__traits(compiles, T.fromString("hello"))) return T.fromString(value);
 			else static if (is(T == UUID)) return UUID(value);
-			else return deserializeJson!T(parseJson(value));
+			else return deserializeWithPolicy!(JsonStringSerializer!string, SerPolicyType, T)(value);
 		} catch (ConvException e) {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		} catch (JSONException e) {
