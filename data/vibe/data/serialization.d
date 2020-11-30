@@ -132,6 +132,7 @@ import vibe.internal.meta.uda;
 import std.array : Appender, appender;
 import std.conv : to;
 import std.exception : enforce;
+import std.range.primitives : ElementType, isInputRange;
 import std.traits;
 import std.typetuple;
 
@@ -1499,6 +1500,22 @@ private template getExpandedFieldsData(T, FIELDS...)
 	enum subfieldsCount(alias F) = TypeTuple!(__traits(getMember, T, F)).length;
 	alias processSubfield(alias F) = aliasSeqOf!(zip(repeat(F), iota(subfieldsCount!F)));
 	alias getExpandedFieldsData = staticMap!(processSubfield, FIELDS);
+}
+
+/// Uses Base64 representation for `ubyte[]` instead of `to!string`
+public class Base64ArrayPolicy (R) if (isArray!R && is(ElementType!R : ubyte))
+{
+	public static string toRepresentation (in R data) @safe pure
+	{
+		import std.base64 : Base64;
+		return Base64.encode(data);
+	}
+
+	public static ubyte[] fromRepresentation (in string data) @safe pure
+	{
+		import std.base64 : Base64;
+		return Base64.decode(data);
+	}
 }
 
 /******************************************************************************/

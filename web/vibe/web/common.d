@@ -554,7 +554,7 @@ struct ResultSerializer(alias ST, alias DT, string ContentType) {
 }
 
 
-package void defaultSerialize(T, R)(ref R output_range, in ref T value)
+package void defaultSerialize (alias P, T, RT) (ref RT output_range, in ref T value)
 {
 	static struct R {
 		typeof(output_range) underlying;
@@ -562,12 +562,13 @@ package void defaultSerialize(T, R)(ref R output_range, in ref T value)
 		void put(const(char)[] ch) { underlying.put(cast(const(ubyte)[])ch); }
 	}
 	auto dst = R(output_range);
-	serializeToJson(dst, value);
+	value.serializeWithPolicy!(JsonStringSerializer!R, P) (dst);
 }
 
-package T defaultDeserialize(T, R)(R input_range)
+package T defaultDeserialize (alias P, T, R) (R input_range)
 {
-	return deserializeJson!T(std.string.assumeUTF(input_range));
+	return deserializeWithPolicy!(JsonStringSerializer!(typeof(std.string.assumeUTF(input_range))), P, T)
+		(std.string.assumeUTF(input_range));
 }
 
 package alias DefaultSerializerT = ResultSerializer!(
@@ -581,6 +582,88 @@ package template ResultSerializersT(alias func) {
 		alias ResultSerializersT = DefinedSerializers;
 	else
 		alias ResultSerializersT = AliasSeq!(DefaultSerializerT);
+}
+
+///
+package template SerPolicyT (Iface)
+{
+	static if (getUDAs!(Iface, SerPolicy).length)
+	{
+		alias SerPolicyT = getUDAs!(Iface, SerPolicy)[0];
+	}
+	else
+	{
+		alias SerPolicyT = SerPolicy!DefaultPolicy;
+	}
+}
+
+///
+package struct SerPolicy (alias PolicyTemplatePar)
+{
+	alias PolicyTemplate = PolicyTemplatePar;
+}
+
+///
+public alias serializationPolicy (Args...) = SerPolicy!(Args);
+
+unittest
+{
+	import vibe.data.serialization : Base64ArrayPolicy;
+	import std.array : appender;
+	import std.conv : to;
+
+	struct X
+	{
+		string name = "test";
+		ubyte[] arr = [138, 245, 231, 234, 142, 132, 142];
+	}
+	X x;
+
+	// Interface using Base64 array serialization
+	@serializationPolicy!(Base64ArrayPolicy)
+	interface ITestBase64
+	{
+		@safe X getTest();
+	}
+
+	alias serPolicyFound = SerPolicyT!ITestBase64;
+	alias resultSerializerFound = ResultSerializersT!(ITestBase64.getTest)[0];
+
+	// serialization test with base64 encoding
+	auto output = appender!string();
+
+	resultSerializerFound.serialize!(serPolicyFound.PolicyTemplate)(output, x);
+	auto serialized = output.data;
+	assert(serialized == `{"name":"test","arr":"ivXn6o6Ejg=="}`,
+			"serialization is not correct, produced: " ~ serialized);
+
+	// deserialization test with base64 encoding
+	auto deserialized = serialized.deserializeWithPolicy!(JsonStringSerializer!string, serPolicyFound.PolicyTemplate, X)();
+	assert(deserialized.name == "test", "deserialization of `name` is not correct, produced: " ~ deserialized.name);
+	assert(deserialized.arr == [138, 245, 231, 234, 142, 132, 142],
+			"deserialization of `arr` is not correct, produced: " ~ to!string(deserialized.arr));
+
+	// Interface NOT using Base64 array serialization
+	interface ITestPlain
+	{
+		@safe X getTest();
+	}
+
+	alias plainSerPolicyFound = SerPolicyT!ITestPlain;
+	alias plainResultSerializerFound = ResultSerializersT!(ITestPlain.getTest)[0];
+
+	// serialization test without base64 encoding
+	output = appender!string();
+	plainResultSerializerFound.serialize!(plainSerPolicyFound.PolicyTemplate)(output, x);
+	serialized = output.data;
+	assert(serialized == `{"name":"test","arr":[138,245,231,234,142,132,142]}`,
+			"serialization is not correct, produced: " ~ serialized);
+
+	// deserialization test without base64 encoding
+	deserialized = serialized.deserializeWithPolicy!(JsonStringSerializer!string, plainSerPolicyFound.PolicyTemplate, X)();
+	assert(deserialized.name == "test", "deserialization of `name` is not correct, produced: " ~ deserialized.name);
+	assert(deserialized.arr == [138, 245, 231, 234, 142, 132, 142],
+			"deserialization of `arr` is not correct, produced: " ~ to!string(deserialized.arr));
 }
 
 /**
