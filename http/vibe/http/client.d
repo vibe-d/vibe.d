@@ -539,6 +539,11 @@ final class HTTPClient {
 		else
 			scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
 
+		scope (failure) {
+			m_responding = false;
+			disconnect();
+		}
+
 		bool close_conn;
 		SysTime connected_time;
 		bool has_body = doRequestWithRetry(requester, false, close_conn, connected_time);
@@ -554,10 +559,6 @@ final class HTTPClient {
 		Exception user_exception;
 		while (true)
 		{
-			scope (failure) {
-				m_responding = false;
-				disconnect();
-			}
 			try responder(res);
 			catch (Exception e) {
 				logDebug("Error while handling response: %s", e.toString().sanitize());
@@ -589,6 +590,10 @@ final class HTTPClient {
 	{
 		bool close_conn;
 		SysTime connected_time;
+		scope (failure) {
+			m_responding = false;
+			disconnect();
+		}
 		bool has_body = doRequestWithRetry(requester, false, close_conn, connected_time);
 		m_responding = true;
 		auto res = new HTTPClientResponse(this, has_body, close_conn, () @trusted { return vibeThreadAllocator(); } (), connected_time);
