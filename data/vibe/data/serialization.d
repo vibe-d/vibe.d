@@ -483,6 +483,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			static if (doesSerializerSupportStringSink!Serializer) {
 				ser.writeStringSinkValue!Traits(value);
 			} else {
+				import std.format : formattedWrite;
 				auto app = appender!string;
 				app.formattedWrite("%s", value);
 				ser.serializeValue!(string, ATTRIBUTES)(app.data);
@@ -644,10 +645,23 @@ unittest {
 	// old toString() style methods still work if no sink overload presented
 	auto serialized1 = X!false(7,"x1").serializeToJsonString();
 	assert(serialized1 == `"42;hello"`);
+	auto deserialized1 = deserializeJson!(X!false)(serialized1);
+	assert(deserialized1.i == 42);
+	assert(deserialized1.s == "hello");
 
 	// sink overload takes precedence
 	auto serialized2 = X!true(7,"x2").serializeToJsonString();
 	assert(serialized2 == `"7;x2"`);
+	auto deserialized2 = deserializeJson!(X!true)(serialized2);
+	assert(deserialized2.i == 7);
+	assert(deserialized2.s == "x2");
+
+	// type is sink serializable, but serializer doesn't support sink
+	auto serialized3 = X!true(7,"x2").serializeToJson();
+	assert(to!string(serialized3) == `"7;x2"`);
+	auto deserialized3 = deserializeJson!(X!true)(serialized3);
+	assert(deserialized3.i == 7);
+	assert(deserialized3.s == "x2");
 }
 
 private struct Traits(T, alias POL, ATTRIBUTES...)
