@@ -483,6 +483,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			static if (doesSerializerSupportStringSink!Serializer) {
 				ser.writeStringSinkValue!Traits(value);
 			} else {
+				import std.format : formattedWrite;
 				auto app = appender!string;
 				app.formattedWrite("%s", value);
 				ser.serializeValue!(string, ATTRIBUTES)(app.data);
