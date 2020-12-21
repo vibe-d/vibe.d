@@ -85,10 +85,6 @@ struct AllocAppender(ArrayType : E[], E) {
 			m_allocatedBuffer = true;
 		}
 		if (m_remaining.length < amount) {
-			debug {
-				import std.digest.crc;
-				auto checksum = crc32Of(m_data[0 .. nelems]);
-			}
 			if (m_allocatedBuffer) {
 				void[] vdata = m_data;
 				m_alloc.reallocate(vdata, (nelems+amount)*E.sizeof);
@@ -99,7 +95,6 @@ struct AllocAppender(ArrayType : E[], E) {
 				m_data = newdata;
 				m_allocatedBuffer = true;
 			}
-			debug assert(crc32Of(m_data[0 .. nelems]) == checksum);
 		}
 		m_remaining = m_data[nelems .. m_data.length];
 	}
