@@ -90,7 +90,7 @@ final class Base64OutputStreamImpl(char C62, char C63, char CPAD = '=', OutputSt
 
 		const(ubyte)[] bytes = bytes_;
 
-		auto rng = StreamOutputRange(m_out);
+		auto rng = streamOutputRange(m_out);
 
 		size_t nwritten = 0;
 
