@@ -25,6 +25,9 @@ import core.time;
 @rootPathFromName
 interface Example1API
 {
+	// Methods need to be `@safe`:
+	@safe:
+
 	/* Default convention is based on camelCase
 	 */
 
@@ -89,6 +92,8 @@ unittest
 @rootPathFromName
 interface Example2API
 {
+	@safe:
+
 	// Any D data type may be here. Serializer is not configurable and will send all declared fields.
 	// This should be an API-specified type and may or may not be the same as data type used by other application code.
 	struct Aggregate
@@ -145,6 +150,8 @@ unittest
 @rootPathFromName
 interface Example3API
 {
+	@safe:
+
 	/* Available under ./nested_module/
 	 */
 	@property Example3APINested nestedModule();
@@ -158,6 +165,8 @@ interface Example3API
 
 interface Example3APINested
 {
+	@safe:
+
 	/* In this example it will be available under "GET /nested_module/number"
 	 * But this interface does't really know it, it does not care about exact path
 	 *
@@ -216,6 +225,8 @@ unittest
 @rootPathFromName
 interface Example4API
 {
+	@safe:
+
 	/* vibe.web.rest module provides two pre-defined UDA - @path and @method
 	 * You can use any one of those or both. In case @path is used, not method style
 	 * adjustment is made.
@@ -288,11 +299,13 @@ interface Example5API
 {
 	import vibe.web.rest : before, after;
 
+	@safe:
+
 	@before!authenticate("user") @after!addBrackets()
 	string getSecret(int num, User user);
 }
 
-User authenticate(HTTPServerRequest req, HTTPServerResponse res)
+User authenticate(HTTPServerRequest req, HTTPServerResponse res) @safe
 {
 	return User("admin", true);
 }
@@ -303,7 +316,7 @@ struct User
 	bool authorized;
 }
 
-string addBrackets(string result, HTTPServerRequest, HTTPServerResponse)
+string addBrackets(string result, HTTPServerRequest, HTTPServerResponse) @safe
 {
 	return "{" ~ result ~ "}";
 }
@@ -355,6 +368,8 @@ unittest
 @rootPathFromName
 interface Example6API
 {
+	@safe:
+
 	// The first parameter of @headerParam is the identifier (must match one of the parameter name).
 	// The second is the name of the field in the header, such as "Accept", "Content-Type", "User-Agent"...
 	@headerParam("auth", "Authorization")
@@ -437,6 +452,8 @@ unittest
 
 @rootPathFromName
 interface Example7API {
+	@safe:
+
 	// GET /example7_api/
 	// returns a custom JSON response
 	Json get();
