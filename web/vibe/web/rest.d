@@ -217,36 +217,37 @@
 		while for POST and PATCH, they are passed via the request body
 		as a JSON object.
 
-		The default behavior can be overridden using one of the following annotations:
+		The default behavior can be overridden using one of the following
+		annotations, put as UDA on the relevant parameter:
 
 		$(UL
-			$(LI `@headerParam("name", "field")`: Applied on a method, it will
-				source the parameter named `name` from the request headers named
-				"field". If the parameter is `ref`, it will also be set as a
-				response header. Parameters declared as `out` will $(I only) be
-				set as a response header.)
-			$(LI `@queryParam("name", "field")`: Applied on a method, it will
-				source the parameter `name` from a field named "field" of the
-				query string.)
-			$(LI `@bodyParam("name", "field")`: Applied on a method, it will
-				source the parameter `name` from a field named "field" of the
-				request body in JSON format.)
+			$(LI `@viaHeader("field")`: Will	source the parameter on which it is
+				applied from the request headers named "field". If the parameter
+				is `ref`, it will also be set as a response header. Parameters
+				declared as `out` will $(I only) be set as a response header.)
+			$(LI `@viaQuery("field")`: Will source the parameter on which it is
+				applied from a field named "field" of the query string.)
+			$(LI `@viaBody("field")`: Will source the parameter on which it is
+				applied from a field named "field" of the request body
+				in JSON format, or, if no field is passed, will represent the
+				whole body. Note that in the later case, there can be no other
+				`viaBody` parameters.)
 		)
 
 		----
 		@path("/api/")
 		interface APIRoot {
 			// GET /api/header with 'Authorization' set
-			@headerParam("param", "Authorization")
-			string getHeader(string param);
+			string getHeader(@viaBody("Authorization") string param);
 
 			// GET /api/foo?param=...
-			@queryParam("param", "param")
-			string getFoo(int param);
+			string getFoo(@viaQuery("param") int param);
 
 			// GET /api/body with body set to { "myFoo": {...} }
-			@bodyParam("myFoo", "parameter")
-			string getBody(FooType myFoo);
+			string getBody(@viaBody("parameter") FooType myFoo);
+
+			// GET /api/full_body with body set to {...}
+			string getFullBody(@viaBody() FooType myFoo);
 		}
 		----
 
@@ -388,10 +389,10 @@ import std.traits;
 		To return data, it is possible to either use the return value, which
 		will be sent as the response body, or individual `ref`/`out` parameters
 		can be used. The way they are represented in the response can be
-		customized by adding `@bodyParam`/`@headerParam` annotations in the
-		method declaration within the interface.
+		customized by adding `@viaBody`/`@viaHeader` annotations on the
+		parameter declaration of the method within the interface.
 
-		In case of errors, any `@headerParam` parameters are guaranteed to
+		In case of errors, any `@viaHeader` parameters are guaranteed to
 		be set in the response, so that applications such as HTTP basic
 		authentication can be implemented.
 
@@ -2310,7 +2311,7 @@ unittest
 package string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
 do {
-	import vibe.web.internal.rest.common : ParameterKind;
+	import vibe.web.internal.rest.common : ParameterKind, WebParamUDATuple;
 	import std.typetuple : TypeTuple;
 	import std.algorithm : strip;
 
@@ -2369,8 +2370,10 @@ do {
 		foreach (i, SC; ParameterStorageClassTuple!Func) {
 			static if (SC & PSC.out_ || (SC & PSC.ref_ && !is(ConstOf!(PT[i]) == PT[i])) ) {
 				mixin(GenCmp!("Loop", i, PN[i]).Decl);
-				alias Attr
-					= Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
+				alias Attr = TypeTuple!(
+					WebParamUDATuple!(Func, i),
+					Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT),
+				);
 				static if (Attr.length != 1) {
 					if (hack) return "%s: Parameter '%s' cannot be %s"
 						.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
@@ -2517,6 +2520,7 @@ unittest {
 	interface HeaderRef {
 		@headerParam("auth", "auth")
 		string getData(ref string auth);
+		string getData2(@viaHeader("auth") ref string auth);
 	}
 	static assert(getInterfaceValidationError!HeaderRef is null,
 		      stripTestIdent(getInterfaceValidationError!HeaderRef));
@@ -2524,6 +2528,7 @@ unittest {
 	interface HeaderOut {
 		@headerParam("auth", "auth")
 		void getData(out string auth);
+		void getData(@viaHeader("auth") out string auth);
 	}
 	static assert(getInterfaceValidationError!HeaderOut is null,
 		      stripTestIdent(getInterfaceValidationError!HeaderOut));

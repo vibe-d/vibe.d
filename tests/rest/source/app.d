@@ -370,27 +370,21 @@ interface Example6API
 {
 	@safe:
 
-	// The first parameter of @headerParam is the identifier (must match one of the parameter name).
-	// The second is the name of the field in the header, such as "Accept", "Content-Type", "User-Agent"...
-	@headerParam("auth", "Authorization")
-	@headerParam("tester", "X-Custom-Tester")
-	@headerParam("www", "WWW-Authenticate")
-	string getPortal(string auth,
-					 ref string tester,
-					 out Nullable!string www);
+	// The parameter is the name of the field in the header,
+	// such as "Accept", "Content-Type", "User-Agent"...
+	string getPortal(@viaHeader("Authorization") string auth,
+					 @viaHeader("X-Custom-Tester") ref string tester,
+					 @viaHeader("WWW-Authenticate") out Nullable!string www);
 
-	// As with @headerParam, the first parameter of @queryParam is the identifier.
-	// The second being the field name, e.g for a query such as: 'GET /root/node?foo=bar', "foo" will be the second parameter.
-	@queryParam("fortyTwo", "qparam")
-	string postAnswer(string fortyTwo);
-	// Finally, there is @bodyParam. It works as you expect it to work,
+	// The parameter is the field name, e.g for a query such as:
+	// 'GET /root/node?foo=bar', it will be "foo".
+	string postAnswer(@viaQuery("qparam") string fortyTwo);
+	// Finally, there is `@viaBody`. It works as you expect it to work,
 	// currently serializing passed data as Json and pass them through the body.
-	@bodyParam("myFoo", "parameter")
-	string postConcat(FooType myFoo);
+	string postConcat(@viaBody("parameter") FooType myFoo);
 
-	// expects the entire body
-	@bodyParam("obj")
-	string postConcatBody(FooType obj);
+	// Without a parameter, it will represent the entire body
+	string postConcatBody(@viaBody() FooType obj);
 
 	struct FooType {
 		int a;
