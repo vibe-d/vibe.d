@@ -382,6 +382,7 @@ final class ChunkedInputStream : InputStream
 	private {
 		InterfaceProxy!InputStream m_in;
 		ulong m_bytesInCurrentChunk = 0;
+		bool m_chunkHeaderRead;
 	}
 
 	deprecated("Use createChunkedInputStream() instead.")
@@ -395,14 +396,19 @@ final class ChunkedInputStream : InputStream
 	{
 		assert(!!stream);
 		m_in = stream;
-		readChunk();
 	}
 
-	@property bool empty() const { return m_bytesInCurrentChunk == 0; }
+	@property bool empty() { return bytesInCurrentChunk == 0; }
 
-	@property ulong leastSize() const { return m_bytesInCurrentChunk; }
+	@property ulong leastSize() { return bytesInCurrentChunk; }
 
 	@property bool dataAvailableForRead() { return m_bytesInCurrentChunk > 0 && m_in.dataAvailableForRead; }
+
+	private @property bytesInCurrentChunk()
+	{
+		if (!m_chunkHeaderRead) readChunk();
+		return m_bytesInCurrentChunk;
+	}
 
 	const(ubyte)[] peek()
 	{
@@ -416,7 +422,7 @@ final class ChunkedInputStream : InputStream
 		size_t nbytes = 0;
 
 		while (dst.length > 0) {
-			enforceBadRequest(m_bytesInCurrentChunk > 0, "Reading past end of chunked HTTP stream.");
+			enforceBadRequest(bytesInCurrentChunk > 0, "Reading past end of chunked HTTP stream.");
 
 			auto sz = cast(size_t)min(m_bytesInCurrentChunk, dst.length);
 			m_in.read(dst[0 .. sz]);
@@ -424,13 +430,12 @@ final class ChunkedInputStream : InputStream
 			m_bytesInCurrentChunk -= sz;
 			nbytes += sz;
 
-			// FIXME: this blocks, but shouldn't for IOMode.once/immediat
 			if( m_bytesInCurrentChunk == 0 ){
 				// skip current chunk footer and read next chunk
 				ubyte[2] crlf;
 				m_in.read(crlf);
 				enforceBadRequest(crlf[0] == '\r' && crlf[1] == '\n');
-				readChunk();
+				m_chunkHeaderRead = false;
 			}
 
 			if (mode != IOMode.all) break;
@@ -443,12 +448,13 @@ final class ChunkedInputStream : InputStream
 
 	private void readChunk()
 	{
-		assert(m_bytesInCurrentChunk == 0);
+		assert(m_bytesInCurrentChunk == 0 && !m_chunkHeaderRead);
 		// read chunk header
 		logTrace("read next chunk header");
 		auto ln = () @trusted { return cast(string)m_in.readLine(); } ();
 		logTrace("got chunk header: %s", ln);
 		m_bytesInCurrentChunk = parse!ulong(ln, 16u);
+		m_chunkHeaderRead = true;
 
 		if( m_bytesInCurrentChunk == 0 ){
 			// empty chunk denotes the end
