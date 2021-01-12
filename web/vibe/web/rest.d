@@ -1603,13 +1603,13 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				res.writeBody(cast(ubyte[])null);
 			} else {
 				// TODO: remove after deprecation period
-				auto ret = () @trusted { return __traits(getMember, inst, Method)(params); } ();
-
-				static if (!__traits(compiles, () @safe { evaluateOutputModifiers!Func(ret, req, res); } ()))
+				static if (!__traits(compiles, () @safe { evaluateOutputModifiers!Func(RT.init, req, res); } ()))
 					pragma(msg, "Non-@safe @after evaluators are deprecated - annotate @after evaluator function for " ~
 						T.stringof ~ "." ~ Method ~ " as @safe.");
 
-				ret = () @trusted { return evaluateOutputModifiers!CFunc(ret, req, res); } ();
+				auto ret = () @trusted {
+					return evaluateOutputModifiers!CFunc(
+						__traits(getMember, inst, Method)(params), req, res); } ();
 				returnHeaders();
 
 				string accept_str;
