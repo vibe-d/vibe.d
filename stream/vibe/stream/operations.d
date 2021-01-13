@@ -46,7 +46,7 @@ void readLine(InputStream, OutputStream)(InputStream stream, OutputStream dst, s
 	if (isInputStream!InputStream && isOutputStream!OutputStream)
 {
 	import vibe.stream.wrapper;
-	auto dstrng = StreamOutputRange(dst);
+	auto dstrng = streamOutputRange(dst);
 	readLine(stream, dstrng, max_bytes, linesep);
 }
 /// ditto
