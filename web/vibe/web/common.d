@@ -702,17 +702,31 @@ public struct WebParamAttribute {
  * The serialization format is currently not customizable.
  * If no fieldname is given, the entire body is serialized into the object.
  *
+ * There are currently two kinds of symbol to do this: `viaBody` and `bodyParam`.
+ * `viaBody` should be applied to the parameter itself, while `bodyParam`
+ * is applied to the function.
+ * `bodyParam` was introduced long before the D language for UDAs on parameters
+ * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
  *   field = The name of the field in the JSON object.
  *
  * ----
- * @bodyParam("pack", "package")
- * void ship(int pack);
+ * void ship(@viaBody("package") int pack);
  * // The server will receive the following body for a call to ship(42):
  * // { "package": 42 }
  * ----
  */
+WebParamAttribute viaBody(string field = null)
+@safe {
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.body_, null, field);
+}
+
+/// Ditto
 WebParamAttribute bodyParam(string identifier, string field) @safe
 in {
 	assert(field.length > 0, "fieldname can't be empty.");
@@ -741,16 +755,30 @@ WebParamAttribute bodyParam(string identifier)
  * If it's an aggregate, it will be serialized as JSON.
  * However, passing aggregate via header isn't a good practice and should be avoided for new production code.
  *
+ * There are currently two kinds of symbol to do this: `viaHeader` and `headerParam`.
+ * `viaHeader` should be applied to the parameter itself, while `headerParam`
+ * is applied to the function.
+ * `headerParam` was introduced long before the D language for UDAs on parameters
+ * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
  *   field = The name of the header field to use (e.g: 'Accept', 'Content-Type'...).
  *
  * ----
  * // The server will receive the content of the "Authorization" header.
- * @headerParam("auth", "Authorization")
- * void login(string auth);
+ * void login(@viaHeader("Authorization") string auth);
  * ----
  */
+WebParamAttribute viaHeader(string field)
+@safe {
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.header, null, field);
+}
+
+/// Ditto
 WebParamAttribute headerParam(string identifier, string field)
 @safe {
 	import vibe.web.internal.rest.common : ParameterKind;
@@ -765,6 +793,12 @@ WebParamAttribute headerParam(string identifier, string field)
  * It will be serialized as part of a JSON object, and will go through URL serialization.
  * The serialization format is not customizable.
  *
+ * There are currently two kinds of symbol to do this: `viaQuery` and `queryParam`.
+ * `viaQuery` should be applied to the parameter itself, while `queryParam`
+ * is applied to the function.
+ * `queryParam` was introduced long before the D language for UDAs on parameters
+ * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
  *   field = The field name to use.
@@ -772,10 +806,18 @@ WebParamAttribute headerParam(string identifier, string field)
  * ----
  * // For a call to postData("D is awesome"), the server will receive the query:
  * // POST /data?test=%22D is awesome%22
- * @queryParam("data", "test")
- * void postData(string data);
+ * void postData(@viaQuery("test") string data);
  * ----
  */
+WebParamAttribute viaQuery(string field)
+@safe {
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.query, null, field);
+}
+
+/// Ditto
 WebParamAttribute queryParam(string identifier, string field)
 @safe {
 	import vibe.web.internal.rest.common : ParameterKind;

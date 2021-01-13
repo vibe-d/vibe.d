@@ -281,9 +281,10 @@ import std.traits : hasUDA;
 			route.rawName = meta.url;
 			route.pathOverride = meta.hadPathUDA;
 
+			alias WPAT = UDATuple!(WebParamAttribute, func);
 			foreach (i, PT; ParameterTypes) {
 				enum pname = parameterNames[i];
-				alias WPAT = UDATuple!(WebParamAttribute, func);
+				enum ParamWPAT = WebParamUDATuple!(func, i);
 
 				// Comparison template for anySatisfy
 				//template Cmp(WebParamAttribute attr) { enum Cmp = (attr.identifier == ParamNames[i]); }
@@ -311,7 +312,22 @@ import std.traits : hasUDA;
 					pi.kind = ParameterKind.attributed;
 				} else static if (AliasSeq!(cfunc).length > 0 && IsAttributedParameter!(cfunc, pname)) {
 					pi.kind = ParameterKind.attributed;
+				} else static if (ParamWPAT.length) {
+					static assert(ParamWPAT.length == 1,
+						"Cannot have more than one kind of web parameter attribute " ~
+						"(`headerParam`, `bodyParam, etc..) on parameter `" ~
+						parameterNames[i] ~ "` to function `" ~
+						fullyQualifiedName!RouteFunction ~ "`");
+					pi.kind = ParamWPAT[0].origin;
+					pi.fieldName = ParamWPAT[0].field;
+					if (pi.kind == ParameterKind.body_ && pi.fieldName == "")
+						pi.kind = ParameterKind.wholeBody;
 				} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
+					// TODO: This was useful before DMD v2.082.0,
+					// as UDAs on parameters were not supported.
+					// It should be deprecated once at least one Vibe.d release
+					// containing support for WebParamAttributes on parameters
+					// has been put out.
 					alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
 					pi.kind = PWPAT[0].origin;
 					pi.fieldName = PWPAT[0].field;
@@ -498,6 +514,31 @@ template SubInterfaceType(alias F) {
 	else alias SubInterfaceType = void;
 }
 
+/**
+ * Get an UDATuple of WebParamAttribute at the index
+ *
+ * This is evil complicated magic.
+ * https://forum.dlang.org/post/qdmpfg$14f5$1@digitalmars.com
+ */
+template WebParamUDATuple (alias Func, size_t idx)
+{
+    import std.meta : AliasSeq;
+    import std.traits : getUDAs;
+
+    static template isWPA (alias Elem) {
+        static if (is(typeof(Elem)))
+            enum isWPA = is(typeof(Elem) == WebParamAttribute);
+        else
+            enum isWPA = false;
+    }
+
+    static if (is(typeof(Func) Params == __parameters))
+        alias WebParamUDATuple = Filter!(isWPA, __traits(getAttributes, Params[idx .. idx + 1]));
+    else
+        alias WebParamUDATuple = AliasSeq!();
+        //static assert(0, "Need to pass a function alias to `WebParamUDATuple`");
+}
+
 private bool extractPathParts(ref PathPart[] parts, string pattern)
 @safe {
 	import std.string : indexOf;
@@ -658,14 +699,18 @@ unittest { // #1285
 	interface I {
 		@headerParam("b", "foo") @headerParam("c", "bar")
 		void a(int a, out int b, ref int c);
+		void b(int a, @viaHeader("foo") out int b, @viaHeader("bar") ref int c);
 	}
 	alias RI = RestInterface!I;
-	static assert(RI.staticRoutes[0].parameters[0].name == "a");
-	static assert(RI.staticRoutes[0].parameters[0].isIn && !RI.staticRoutes[0].parameters[0].isOut);
-	static assert(RI.staticRoutes[0].parameters[1].name == "b");
-	static assert(!RI.staticRoutes[0].parameters[1].isIn && RI.staticRoutes[0].parameters[1].isOut);
-	static assert(RI.staticRoutes[0].parameters[2].name == "c");
-	static assert(RI.staticRoutes[0].parameters[2].isIn && RI.staticRoutes[0].parameters[2].isOut);
+	static foreach (idx; 0 .. 2)
+	{
+		static assert(RI.staticRoutes[idx].parameters[0].name == "a");
+		static assert(RI.staticRoutes[idx].parameters[0].isIn && !RI.staticRoutes[0].parameters[0].isOut);
+		static assert(RI.staticRoutes[idx].parameters[1].name == "b");
+		static assert(!RI.staticRoutes[idx].parameters[1].isIn && RI.staticRoutes[0].parameters[1].isOut);
+		static assert(RI.staticRoutes[idx].parameters[2].name == "c");
+		static assert(RI.staticRoutes[idx].parameters[2].isIn && RI.staticRoutes[0].parameters[2].isOut);
+	}
 }
 
 unittest {
