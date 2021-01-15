@@ -202,8 +202,8 @@ void handleHTTPConnection(TCPConnection connection, HTTPServerContext context)
 
 	// check wether the client's address is banned
 	foreach (ref virtual_host; context.m_virtualHosts)
-		if ((virtual_host.settings.isBannedDg !is null) &&
-			virtual_host.settings.isBannedDg(connection.remoteAddress()))
+		if ((virtual_host.settings.rejectConnectionPredicate !is null) &&
+			virtual_host.settings.rejectConnectionPredicate(connection.remoteAddress()))
 			return;
 
 	// Set NODELAY to true, to avoid delays caused by sending the response
@@ -639,16 +639,15 @@ final class HTTPServerSettings {
 	*/
 	string hostName;
 
-	/** Provides a way to ban and unban network addresses and reduce the
-		impact of DOS attack.
+	/** Provides a way to reject incoming connections as early as possible.
 
-		If the isBannedDg returns true for a specific NetworkAddress,
+		Allows to ban and unban network addresses and reduce the impact of DOS
+		attacks.
+
+		If the callback returns `true` for a specific `NetworkAddress`,
 		then all incoming requests from that address will be rejected.
 	*/
-	IsBannedDg isBannedDg;
-
-	/// Type of delegate accepted for `isBannedDg`
-	alias IsBannedDg = bool delegate (in NetworkAddress) @safe nothrow;
+	RejectConnectionPredicate rejectConnectionPredicate;
 
 	/** Configures optional features of the HTTP server
 
@@ -810,6 +809,10 @@ final class HTTPServerSettings {
 		assert(s.port == 443);
 	}
 }
+
+
+/// Callback type used to determine whether to reject incoming connections
+alias RejectConnectionPredicate = bool delegate (in NetworkAddress) @safe nothrow;
 
 
 /**

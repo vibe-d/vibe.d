@@ -398,7 +398,7 @@ unittest {
 		import vibe.stream.memory;
 		auto dst = createMemoryOutputStream;
 		{
-			auto rng = StreamOutputRange(dst);
+			auto rng = streamOutputRange(dst);
 			foreach (a; args) rng.put(a);
 		}
 		return dst.data.length;
