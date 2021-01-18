@@ -1077,7 +1077,10 @@ final class HTTPClientResponse : HTTPResponse {
 
 	~this()
 	{
-		debug if (m_client) { import std.stdio; writefln("WARNING: HTTPClientResponse not fully processed before being finalized"); }
+		debug if (m_client) {
+			import core.stdc.stdio;
+			printf("WARNING: HTTPClientResponse not fully processed before being finalized\n");
+		}
 	}
 
 	/**
