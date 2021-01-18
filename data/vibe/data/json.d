@@ -128,18 +128,24 @@ struct Json {
 		// memory leaks and, worse, std.algorithm.swap triggering an assertion
 		// because of internal pointers. This crude workaround seems to fix
 		// the issues.
-		enum m_size = max((BigInt.sizeof+(void*).sizeof), 2);
-		// NOTE : DMD 2.067.1 doesn't seem to init void[] correctly on its own.
-		// Explicity initializing it works around this issue. Using a void[]
-		// array here to guarantee that it's scanned by the GC.
-		void[m_size] m_data = (void[m_size]).init;
+		// NOTE: *Don't* use `void[m_size]`! It causes memory corruption and crashes.
+		// I suspect something in D copies `void[m_size]` byte by byte, causing the GC
+		// to temporarily lose track of the pointer.
+		// round up to the next (void*).sizeof multiple
+		enum m_size = [
+			BigInt.sizeof, long.sizeof, double.sizeof, bool.sizeof,
+			string.sizeof, (bool[string]).sizeof, (void[]).sizeof,
+		].fold!max.requiredNumberOfElementsOf((void*).sizeof);
+		// Using a void*[] array here to guarantee that it's both scanned by the
+		// GC and moved in pointer-sized steps.
+		void*[m_size] m_data;
 
 		static assert(m_data.offsetof == 0, "m_data must be the first struct member.");
 		static assert(BigInt.alignof <= 8, "Json struct alignment of 8 isn't sufficient to store BigInt.");
 
 		ref inout(T) getDataAs(T)() inout nothrow @trusted {
 			static assert(T.sizeof <= m_data.sizeof);
-			return (cast(inout(T)[1])m_data[0 .. T.sizeof])[0];
+			return *cast(inout(T)*)m_data.ptr;
 		}
 
 		@property ref inout(BigInt) m_bigInt() inout nothrow { return getDataAs!BigInt(); }
@@ -529,13 +535,25 @@ struct Json {
 	private alias KeyValue = Tuple!(string, "key", Json, "value");
 
 	/// Iterates over all key/value pairs of an object.
-	@property auto byKeyValue() @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue.map!(kv => KeyValue(kv.key, kv.value)).trustedRange; }
+	@property auto byKeyValue() @trusted {
+		checkType!(Json[string])("byKeyValue");
+		return m_object.byKeyValue.map!(kv => KeyValue(kv.key, kv.value)).trustedRange;
+	}
 	/// ditto
-	@property auto byKeyValue() const @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue.map!(kv => const(KeyValue)(kv.key, kv.value)).trustedRange; }
+	@property auto byKeyValue() const @trusted {
+		checkType!(Json[string])("byKeyValue");
+		return m_object.byKeyValue.map!(kv => cast(const) KeyValue(cast() kv.key, cast() kv.value)).trustedRange;
+	}
 	/// Iterates over all index/value pairs of an array.
-	@property auto byIndexValue() { checkType!(Json[])("byIndexValue"); return zip(iota(0, m_array.length), m_array); }
+	@property auto byIndexValue() {
+		checkType!(Json[])("byIndexValue");
+		return zip(iota(0, m_array.length), m_array);
+	}
 	/// ditto
-	@property auto byIndexValue() const { checkType!(Json[])("byIndexValue"); return zip(iota(0, m_array.length), m_array); }
+	@property auto byIndexValue() const {
+		checkType!(Json[])("byIndexValue");
+		return zip(iota(0, m_array.length), m_array);
+	}
 	/// Iterates over all values of an object or array.
 	@property auto byValue()
 	@trusted {
@@ -1212,7 +1230,7 @@ struct Json {
 		// BigInt is a struct, and it has a special BigInt.init value, which differs from null.
 		// m_data has no special initializer and when it tries to first access to BigInt
 		// via m_bigInt(), we should explicitly initialize m_data with BigInt.init
-		m_data[0 .. BigInt.sizeof] = cast(void[])init_;
+		*cast(void[BigInt.sizeof]*) m_data.ptr = cast(void[BigInt.sizeof])init_;
 	}
 
 	private void runDestructors()
@@ -1379,6 +1397,8 @@ unittest { // ensure parseJson works with a generic forward range
 	assert(j["s"] == "foo");
 }
 
+/// required number of array elements of size `size` to store `i` bytes.
+private alias requiredNumberOfElementsOf = (i, size) => (i + size - 1) / size;
 
 /**
 	Parses the given JSON string and returns the corresponding Json object.
