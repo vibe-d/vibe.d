@@ -54,13 +54,13 @@ bool isURLEncoded(const(char)[] str, const(char)[] reserved_chars = null)
 	import std.string : representation;
 
 	for (size_t i = 0; i < str.length; i++) {
+		if (isAsciiAlphaNum(str[i]))
+			continue;
+
 		switch (str[i]) {
 			case '-':
 			case '.':
-			case '0': .. case '9':
-			case 'A': .. case 'Z':
 			case '_':
-			case 'a': .. case 'z':
 			case '~':
 				break;
 			case '%':
@@ -132,7 +132,9 @@ void filterURLEncode(R)(ref R dst, const(char)[] str,
                         bool form_encoding = false)
 {
 	while (str.length > 0) {
-		switch (str[0]) {
+		if (isAsciiAlphaNum(str[0])) {
+			dst.put(str[0]);
+		} else switch (str[0]) {
 			default:
 				if (allowed_chars.canFind(str[0])) dst.put(str[0]);
 				else {
@@ -148,9 +150,6 @@ void filterURLEncode(R)(ref R dst, const(char)[] str,
 					break;
 				}
 				goto default;
-			case 'A': .. case 'Z':
-			case 'a': .. case 'z':
-			case '0': .. case '9':
 			case '-': case '_': case '.': case '~':
 				dst.put(str[0]);
 				break;
@@ -306,4 +305,24 @@ private struct StringSliceAppender(S) {
 	a = StringSliceAppender!string(s);
 	a.put("foo"); assert(a.data == "foo"); assert(a.data.ptr is s.ptr);
 	a.put('b'); assert(a.data == "foob");
+}
+
+private static bool isAsciiAlphaNum(char ch)
+@safe nothrow pure @nogc {
+	return (uint(ch) & 0xDF) - 0x41 < 26 || uint(ch) - '0' <= 9;
+}
+
+unittest {
+	assert(!isAsciiAlphaNum('@'));
+	assert(isAsciiAlphaNum('A'));
+	assert(isAsciiAlphaNum('Z'));
+	assert(!isAsciiAlphaNum('['));
+	assert(!isAsciiAlphaNum('`'));
+	assert(isAsciiAlphaNum('a'));
+	assert(isAsciiAlphaNum('z'));
+	assert(!isAsciiAlphaNum('{'));
+	assert(!isAsciiAlphaNum('/'));
+	assert(isAsciiAlphaNum('0'));
+	assert(isAsciiAlphaNum('9'));
+	assert(!isAsciiAlphaNum(':'));
 }
