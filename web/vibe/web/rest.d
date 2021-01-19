@@ -1918,16 +1918,26 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	}
 
 	headers["Accept"] = settings.content_type;
-	reqhdrs["Content-Type"] = null;
+
+	// Do not require a `Content-Type` header if no response is expected
+	// https://github.com/vibe-d/vibe.d/issues/2521
+	static if (!is(RT == void))
+		// Don't override it if set from the parameter
+		if ("Content-Type" !in opthdrs)
+			opthdrs["Content-Type"] = null;
+
 	auto ret = request(URL(intf.baseURL), request_filter, request_body_filter,
 		sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs,
 		intf.settings.httpClientSettings);
 	scope(exit) ret.dropBody();
 
 	static if (!is(RT == void)) {
-		string content_type = "";
-		if (const hdr = "Content-Type" in reqhdrs)
+		string content_type;
+		if (const hdr = "Content-Type" in opthdrs)
 			content_type = *hdr;
+		if (!content_type.length)
+			content_type = "application/octet-stream";
+
 		alias result_serializers = ResultSerializersT!Func;
 		immutable serializer_ind = get_matching_content_type!(result_serializers)(content_type);
 		foreach (i, serializer; result_serializers)
