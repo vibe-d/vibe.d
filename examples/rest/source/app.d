@@ -13,7 +13,8 @@ import vibe.http.server;
 import vibe.web.rest;
 
 import core.time;
-import std.typecons : Nullable;
+import std.conv : to;
+import std.typecons : Nullable, nullable;
 
 
 /* --------- EXAMPLE 1 ---------- */
@@ -573,7 +574,7 @@ shared static this()
 				assert(0, answer);
 			} catch (RestException e) {
 				assert(tester == "The cake is a lie", tester);
-				assert(www == `Basic realm="Aperture"`, www);
+				assert(www == `Basic realm="Aperture"`.nullable, www.to!string);
 			}
 		}
 
