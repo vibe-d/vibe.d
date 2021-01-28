@@ -13,7 +13,7 @@ import vibe.db.redis.redis;
 
 import std.conv : to;
 import std.datetime : SysTime;
-import std.typecons : Nullable;
+import std.typecons : apply, Nullable;
 import core.time : Duration, msecs, seconds;
 
 
@@ -516,7 +516,7 @@ struct RedisList(T = string) {
 	Nullable!T removeFrontBlock(Duration max_wait = 0.seconds) {
 		assert(max_wait == 0.seconds || max_wait >= 1.seconds);
 		auto r = m_db.blpop!string(m_key, max_wait.total!"seconds");
-		return r.isNull ? Nullable!T.init : Nullable!T(r[1].fromRedis!T);
+		return r.apply!(r => r[1].fromRedis!T);
 	}
 
 	struct Dollar {
