@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.9.3 - 2021-01-
+v0.9.3 - 2021-01-29
 -------------------
 
 Brings some important bug fixes in the HTTP client and `StreamOutputRange`. Also
@@ -15,6 +15,7 @@ some deprecated symbols.
 - The REST interface generator now allows `const ref` parameters (by Daniel Graczer) - [pull #2495][issue2495]
 - Instead of `@bodyParam`/`@headerParam`/`@queryParam`, parameters in REST interfaces can now be annotated directly with `@viaBody`/`@viaHeader`/`@viaQuery` (by Mathias Lang aka Geod24) - [pull #2516][issue2516]
 - Added support for range or callback based `toString` overloads in the serialization framework (by Daniel Graczer) - [pull #2493][issue2493], [pull #2503][issue2503], [pull #2510][issue2510]
+- The REST interface client does not require a "Content-Type" header for responses with no return value anymore (by Mathias Lang aka Geod24) - [pull #2521](issue2521)
 - Uses securely generated random numbers for digest authentication
 - `createMulticastStream` is now a `struct` and accepts non-`class` streams as sources - [pull #2487][issue2487]
 - Added `MulticastStreamMode`, enabling a new parallel mode - [pull #2519][issue2519]
@@ -23,6 +24,7 @@ some deprecated symbols.
 - `vibe.inet.path` is now deprecated (import `vibe.core.path` instead)
 - Removed deprecated `indexOfCT` and `DictionaryList` `alias this` (by Mathias Lang aka Geod24) - [pull #2475][issue2475]
 - Added `HTTPServerSettings.rejectConnectionPredicate` (by Daniel Graczer aka ferencdg) - [pull #2496][issue2496], [pull #2519][issue2519]
+- Optimized `URL.parse`/`isURLEncoded` - [pull #2524](issue2524)
 
 ### Bug fixes ###
 
@@ -55,6 +57,8 @@ some deprecated symbols.
 [issue2516]: https://github.com/vibe-d/vibe.d/issues/2516
 [issue2518]: https://github.com/vibe-d/vibe.d/issues/2518
 [issue2519]: https://github.com/vibe-d/vibe.d/issues/2519
+[issue2521]: https://github.com/vibe-d/vibe.d/issues/2521
+[issue2524]: https://github.com/vibe-d/vibe.d/issues/2524
 
 
 v0.9.2 - 2020-09-02
