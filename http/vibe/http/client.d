@@ -608,7 +608,7 @@ final class HTTPClient {
 
 	private bool doRequestWithRetry(scope void delegate(HTTPClientRequest req) requester, bool confirmed_proxy_auth /* basic only */, out bool close_conn, out SysTime connected_time)
 	{
-		if (m_conn && m_conn.connected && connected_time > m_keepAliveLimit){
+		if (m_conn && m_conn.connected && Clock.currTime(UTC()) > m_keepAliveLimit){
 			logDebug("Disconnected to avoid timeout");
 			disconnect();
 		}
