@@ -138,10 +138,8 @@ final class SystemRNG : RandomNumberStream {
 	else version(Posix)
 	{
 		import core.stdc.errno : errno, EINTR;
-		import core.stdc.stdio : FILE, _IONBF, fopen, fclose, fread, setvbuf;
-
-		//cryptographic file stream
-		private FILE* m_file;
+		//cryptographic file descriptor
+		private int m_fd = -1;
 	}
 	else
 	{
@@ -165,6 +163,7 @@ final class SystemRNG : RandomNumberStream {
 		}
 		else version(Posix)
 		{
+			import core.sys.posix.fcntl : open, O_RDONLY;
 			version (linux) static if (LinuxMaybeHasGetrandom)
 			{
 				import core.atomic : atomicLoad, atomicStore;
@@ -180,12 +179,8 @@ final class SystemRNG : RandomNumberStream {
 					return;
 			}
 			//open file
-			m_file = fopen("/dev/urandom", "rb");
-			enforce!CryptoException(m_file !is null, "Failed to open /dev/urandom");
-			scope (failure) fclose(m_file);
-			//do not use buffering stream to avoid possible attacks
-			enforce!CryptoException(setvbuf(m_file, null, 0, _IONBF) == 0,
-				"Failed to disable buffering for random number file handle");
+			m_fd = open("/dev/urandom", O_RDONLY);
+			enforce!CryptoException(m_fd != -1, "Failed to open /dev/urandom");
 		}
 	}
 
@@ -201,11 +196,12 @@ final class SystemRNG : RandomNumberStream {
 		}
 		else version (Posix)
 		{
+			import core.sys.posix.unistd : close;
 			version (linux) static if (LinuxMaybeHasGetrandom)
 			{
-				if (m_file is null) return;
+				if (m_fd == -1) return;
 			}
-			fclose(m_file);
+			close(m_fd);
 		}
 	}
 
@@ -266,7 +262,8 @@ final class SystemRNG : RandomNumberStream {
 					return buffer.length;
 				}
 			}
-			enforce!CryptoException(fread(buffer.ptr, buffer.length, 1, m_file) == 1,
+			import core.sys.posix.unistd : _read = read;
+			enforce!CryptoException(_read(m_fd, buffer.ptr, buffer.length) == buffer.length,
 				text("Failed to read next random number: ", errno));
 		}
 		return buffer.length;
