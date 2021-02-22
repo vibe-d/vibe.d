@@ -554,7 +554,7 @@ struct ResultSerializer(alias ST, alias DT, string ContentType) {
 }
 
 
-package void defaultSerialize (alias P, T, RT) (ref RT output_range, in ref T value)
+package void defaultSerialize (alias P, T, RT) (ref RT output_range, const scope ref T value)
 {
 	static struct R {
 		typeof(output_range) underlying;
