@@ -1136,12 +1136,12 @@ private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_w
 		case GENERAL_NAME.GEN_DNS:
 			cnid = NID_commonName;
 			alt_type = V_ASN1_IA5STRING;
-			str_match = allow_wildcards ? s => matchWildcard(value, s) : s => s.icmp(value) == 0;
+			str_match = allow_wildcards ? (in s) => matchWildcard(value, s) : (in s) => s.icmp(value) == 0;
 			break;
 		case GENERAL_NAME.GEN_IPADD:
 			cnid = 0;
 			alt_type = V_ASN1_OCTET_STRING;
-			str_match = s => s == value;
+			str_match = (in s) => s == value;
 			break;
 	}
 
