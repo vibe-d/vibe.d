@@ -412,10 +412,10 @@ struct DefaultDietFilters {
 
 	static this()
 	{
-		filters["css"] = (input, scope output) { output(filterCss(input)); };
-		filters["javascript"] = (input, scope output) { output(filterJavascript(input)); };
-		filters["markdown"] = (input, scope output) { output(filterMarkdown(() @trusted { return cast(string)input; } ())); };
-		filters["htmlescape"] = (input, scope output) { output(filterHtmlescape(input)); };
+		filters["css"] = (in input, scope output) { output(filterCss(input)); };
+		filters["javascript"] = (in input, scope output) { output(filterJavascript(input)); };
+		filters["markdown"] = (in input, scope output) { output(filterMarkdown(() @trusted { return cast(string)input; } ())); };
+		filters["htmlescape"] = (in input, scope output) { output(filterHtmlescape(input)); };
 	}
 
 	static SafeFilterCallback[string] filters;
