@@ -12,7 +12,7 @@ import vibe.http.router;
 import vibe.http.server;
 import vibe.web.rest;
 
-import std.typecons : Nullable;
+import std.typecons : Nullable, nullable;
 import core.time;
 
 /* --------- EXAMPLE 1 ---------- */
@@ -504,6 +504,7 @@ void runTests(string url)
 	}
 	// Example 6
 	{
+		import std.conv : to;
 		import vibe.http.client : requestHTTP;
 		import vibe.stream.operations : readAllUTF8;
 
@@ -529,7 +530,7 @@ void runTests(string url)
 			assert(0, answer);
 		} catch (RestException e) {
 			assert(tester == "The cake is a lie", tester);
-			assert(www == `Basic realm="Aperture"`, www);
+			assert(www == `Basic realm="Aperture"`.nullable, www.to!string);
 		}
 	}
 
