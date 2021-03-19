@@ -616,8 +616,8 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 	final switch (block.type) {
 		case BlockType.plain:
 			foreach (ln; block.text) {
-				dst.put(ln);
-				dst.put("\n");
+				put(dst, ln);
+				put(dst, "\n");
 			}
 			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
@@ -629,9 +629,9 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			break;
 		case BlockType.paragraph:
 			assert (block.blocks.length == 0);
-			dst.put("<p>");
+			put(dst, "<p>");
 			writeMarkdownEscaped(dst, block, links, settings);
-			dst.put("</p>\n");
+			put(dst, "</p>\n");
 			break;
 		case BlockType.header:
 			assert (block.blocks.length == 0);
@@ -646,89 +646,89 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 
 			static string[Alignment.max+1] alstr = ["", " align=\"left\"", " align=\"right\"", " align=\"center\""];
 
-			dst.put("<table>\n");
-			dst.put("<tr>");
+			put(dst, "<table>\n");
+			put(dst, "<tr>");
 			size_t i = 0;
 			foreach (col; block.text[0].getTableColumns()) {
-				dst.put("<th");
-				dst.put(alstr[block.columns[i]]);
-				dst.put('>');
+				put(dst, "<th");
+				put(dst, alstr[block.columns[i]]);
+				put(dst, '>');
 				dst.writeMarkdownEscaped(col, links, settings);
-				dst.put("</th>");
+				put(dst, "</th>");
 				if (i + 1 < block.columns.length)
 					i++;
 			}
-			dst.put("</tr>\n");
+			put(dst, "</tr>\n");
 			foreach (ln; block.text[1 .. $]) {
-				dst.put("<tr>");
+				put(dst, "<tr>");
 				i = 0;
 				foreach (col; ln.getTableColumns()) {
-					dst.put("<td");
-					dst.put(alstr[block.columns[i]]);
-					dst.put('>');
+					put(dst, "<td");
+					put(dst, alstr[block.columns[i]]);
+					put(dst, '>');
 					dst.writeMarkdownEscaped(col, links, settings);
-					dst.put("</td>");
+					put(dst, "</td>");
 					if (i + 1 < block.columns.length)
 						i++;
 				}
-				dst.put("</tr>\n");
+				put(dst, "</tr>\n");
 			}
-			dst.put("</table>\n");
+			put(dst, "</table>\n");
 			break;
 		case BlockType.oList:
-			dst.put("<ol>\n");
+			put(dst, "<ol>\n");
 			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
-			dst.put("</ol>\n");
+			put(dst, "</ol>\n");
 			break;
 		case BlockType.uList:
-			dst.put("<ul>\n");
+			put(dst, "<ul>\n");
 			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
-			dst.put("</ul>\n");
+			put(dst, "</ul>\n");
 			break;
 		case BlockType.listItem:
-			dst.put("<li>");
+			put(dst, "<li>");
 			writeMarkdownEscaped(dst, block, links, settings);
 			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
-			dst.put("</li>\n");
+			put(dst, "</li>\n");
 			break;
 		case BlockType.code:
 			assert (block.blocks.length == 0);
-			dst.put("<pre class=\"prettyprint\"><code>");
+			put(dst, "<pre class=\"prettyprint\"><code>");
 			foreach (ln; block.text) {
 				filterHTMLEscape(dst, ln);
-				dst.put("\n");
+				put(dst, "\n");
 			}
-			dst.put("</code></pre>\n");
+			put(dst, "</code></pre>\n");
 			break;
 		case BlockType.quote:
-			dst.put("<blockquote>");
+			put(dst, "<blockquote>");
 			writeMarkdownEscaped(dst, block, links, settings);
 			foreach (b; block.blocks)
 				writeBlock(dst, b, links, settings);
-			dst.put("</blockquote>\n");
+			put(dst, "</blockquote>\n");
 			break;
 		case BlockType.figure:
-			dst.put("<figure>");
+			put(dst, "<figure>");
 			bool omit_para = block.blocks.count!(b => b.type != BlockType.figureCaption) == 1;
 			foreach (b; block.blocks) {
 				if (b.type == BlockType.paragraph && omit_para) {
 					writeMarkdownEscaped(dst, b, links, settings);
 				} else writeBlock(dst, b, links, settings);
 			}
-			dst.put("</figure>\n");
+			put(dst, "</figure>\n");
 			break;
 		case BlockType.figureCaption:
-			dst.put("<figcaption>");
+			put(dst, "<figcaption>");
 			if (block.blocks.length == 1 && block.blocks[0].type == BlockType.paragraph) {
 				writeMarkdownEscaped(dst, block.blocks[0], links, settings);
 			} else {
 				foreach (b; block.blocks)
 					writeBlock(dst, b, links, settings);
 			}
-			dst.put("</figcaption>\n");
+			put(dst, "</figcaption>\n");
 			break;
 	}
 }
@@ -738,7 +738,7 @@ private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRe
 	auto lines = () @trusted { return cast(string[])block.text; } ();
 	auto text = settings.flags & MarkdownFlags.keepLineBreaks ? lines.join("<br>") : lines.join("\n");
 	writeMarkdownEscaped(dst, text, links, settings);
-	if (lines.length) dst.put("\n");
+	if (lines.length) put(dst, "\n");
 }
 
 /// private
@@ -762,24 +762,24 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 	while (ln.length > 0) {
 		switch (ln[0]) {
 			default:
-				dst.put(ln[0]);
+				put(dst, ln[0]);
 				ln = ln[1 .. $];
 				break;
 			case '\\':
 				if (ln.length >= 2) {
 					switch (ln[1]) {
 						default:
-							dst.put(ln[0 .. 2]);
+							put(dst, ln[0 .. 2]);
 							ln = ln[2 .. $];
 							break;
 						case '\'', '`', '*', '_', '{', '}', '[', ']',
 							'(', ')', '#', '+', '-', '.', '!':
-							dst.put(ln[1]);
+							put(dst, ln[1]);
 							ln = ln[2 .. $];
 							break;
 					}
 				} else {
-					dst.put(ln[0]);
+					put(dst, ln[0]);
 					ln = ln[1 .. $];
 				}
 				break;
@@ -787,22 +787,22 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 			case '*':
 				string text;
 				if (auto em = parseEmphasis(ln, text)) {
-					dst.put(em == 1 ? "<em>" : em == 2 ? "<strong>" : "<strong><em>");
-					dst.put(text);
-					dst.put(em == 1 ? "</em>" : em == 2 ? "</strong>": "</em></strong>");
+					put(dst, em == 1 ? "<em>" : em == 2 ? "<strong>" : "<strong><em>");
+					put(dst, text);
+					put(dst, em == 1 ? "</em>" : em == 2 ? "</strong>": "</em></strong>");
 				} else {
-					dst.put(ln[0]);
+					put(dst, ln[0]);
 					ln = ln[1 .. $];
 				}
 				break;
 			case '`':
 				string code;
 				if (parseInlineCode(ln, code)) {
-					dst.put("<code class=\"prettyprint\">");
+					put(dst, "<code class=\"prettyprint\">");
 					filterHTMLEscape(dst, code, HTMLEscapeFlags.escapeMinimal);
-					dst.put("</code>");
+					put(dst, "</code>");
 				} else {
-					dst.put(ln[0]);
+					put(dst, ln[0]);
 					ln = ln[1 .. $];
 				}
 				break;
@@ -817,9 +817,9 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 						attributes ~= Attribute("title", link.title);
 					dst.writeTag(attributes, "a");
 					writeMarkdownEscaped(dst, link.text, linkrefs, settings);
-					dst.put("</a>");
+					put(dst, "</a>");
 				} else {
-					dst.put(ln[0]);
+					put(dst, ln[0]);
 					ln = ln[1 .. $];
 				}
 				break;
@@ -835,48 +835,48 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 						attributes ~= Attribute("title", link.title);
 					dst.writeTag(attributes, "img");
 				} else if( ln.length >= 2 ){
-					dst.put(ln[0 .. 2]);
+					put(dst, ln[0 .. 2]);
 					ln = ln[2 .. $];
 				} else {
-					dst.put(ln[0]);
+					put(dst, ln[0]);
 					ln = ln[1 .. $];
 				}
 				break;
 			case '>':
-				if (settings.flags & MarkdownFlags.noInlineHtml) dst.put("&gt;");
-				else dst.put(ln[0]);
+				if (settings.flags & MarkdownFlags.noInlineHtml) put(dst, "&gt;");
+				else put(dst, ln[0]);
 				ln = ln[1 .. $];
 				break;
 			case '<':
 				string url;
 				if (parseAutoLink(ln, url)) {
 					bool is_email = url.startsWith("mailto:");
-					dst.put("<a href=\"");
+					put(dst, "<a href=\"");
 					if (is_email) filterHTMLAllEscape(dst, url);
 					else filterHTMLAttribEscape(dst, filterLink(url, false));
-					dst.put("\">");
+					put(dst, "\">");
 					if (is_email) filterHTMLAllEscape(dst, url[7 .. $]);
 					else filterHTMLEscape(dst, url, HTMLEscapeFlags.escapeMinimal);
-					dst.put("</a>");
+					put(dst, "</a>");
 				} else {
 					if (ln.startsWith("<br>")) {
 						// always support line breaks, since we embed them here ourselves!
-						dst.put("<br/>");
+						put(dst, "<br/>");
 						ln = ln[4 .. $];
 					} else if(ln.startsWith("<br/>")) {
-						dst.put("<br/>");
+						put(dst, "<br/>");
 						ln = ln[5 .. $];
 					} else {
 						if (settings.flags & MarkdownFlags.noInlineHtml)
-							dst.put("&lt;");
-						else dst.put(ln[0]);
+							put(dst, "&lt;");
+						else put(dst, ln[0]);
 						ln = ln[1 .. $];
 					}
 				}
 				break;
 		}
 	}
-	if (br) dst.put("<br/>");
+	if (br) put(dst, "<br/>");
 }
 
 private void writeTag(R, ARGS...)(ref R dst, string name, ARGS name_additions)
@@ -892,9 +892,9 @@ private void writeTag(R, ARGS...)(ref R dst, scope const(Attribute)[] attributes
 	foreach (a; attributes) {
 		dst.formattedWrite(" %s=\"", a.attribute);
 		dst.filterHTMLAttribEscape(a.value);
-		dst.put('\"');
+		put(dst, '\"');
 	}
-	dst.put('>');
+	put(dst, '>');
 }
 
 private bool isLineBlank(string ln)

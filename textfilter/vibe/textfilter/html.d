@@ -106,9 +106,9 @@ void filterHTMLAllEscape(R, S)(ref R dst, S str)
 	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
 	for (; !str.empty; str.popFront()) {
-		dst.put("&#");
-		dst.put(to!string(cast(uint)str.front));
-		dst.put(';');
+		put(dst, "&#");
+		put(dst, to!string(cast(uint)str.front));
+		put(dst, ';');
 	}
 }
 
@@ -134,25 +134,25 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 	switch (ch) {
 		default:
 			if (flags & HTMLEscapeFlags.escapeUnknown) {
-				dst.put("&#");
-				dst.put(to!string(cast(uint)ch));
-				dst.put(';');
-			} else dst.put(ch);
+				put(dst, "&#");
+				put(dst, to!string(cast(uint)ch));
+				put(dst, ';');
+			} else put(dst, ch);
 			break;
 		case '"':
-			if (flags & HTMLEscapeFlags.escapeQuotes) dst.put("&quot;");
-			else dst.put('"');
+			if (flags & HTMLEscapeFlags.escapeQuotes) put(dst, "&quot;");
+			else put(dst, '"');
 			break;
 		case '\'':
-			if (flags & HTMLEscapeFlags.escapeQuotes) dst.put("&#39;");
-			else dst.put('\'');
+			if (flags & HTMLEscapeFlags.escapeQuotes) put(dst, "&#39;");
+			else put(dst, '\'');
 			break;
 		case '\r', '\n':
 			if (flags & HTMLEscapeFlags.escapeNewline) {
-				dst.put("&#");
-				dst.put(to!string(cast(uint)ch));
-				dst.put(';');
-			} else dst.put(ch);
+				put(dst, "&#");
+				put(dst, to!string(cast(uint)ch));
+				put(dst, ';');
+			} else put(dst, ch);
 			break;
 		case 'a': .. case 'z': goto case;
 		case 'A': .. case 'Z': goto case;
@@ -160,11 +160,11 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 		case ' ', '\t', '-', '_', '.', ':', ',', ';',
 			 '#', '+', '*', '?', '=', '(', ')', '/', '!',
 			 '%' , '{', '}', '[', ']', '`', '´', '$', '^', '~':
-			dst.put(cast(char)ch);
+			put(dst, cast(char)ch);
 			break;
-		case '<': dst.put("&lt;"); break;
-		case '>': dst.put("&gt;"); break;
-		case '&': dst.put("&amp;"); break;
+		case '<': put(dst, "&lt;"); break;
+		case '>': put(dst, "&gt;"); break;
+		case '&': put(dst, "&amp;"); break;
 	}
 }
 
