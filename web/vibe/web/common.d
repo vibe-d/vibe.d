@@ -572,7 +572,7 @@ package T defaultDeserialize (alias P, T, R) (R input_range)
 }
 
 package alias DefaultSerializerT = ResultSerializer!(
-	defaultSerialize, defaultDeserialize, "application/json");
+	defaultSerialize, defaultDeserialize, "application/json; charset=UTF-8");
 
 
 /// Convenience template to get all the ResultSerializers for a function

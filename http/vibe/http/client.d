@@ -852,7 +852,7 @@ final class HTTPClientRequest : HTTPRequest {
 	{
 		import vibe.stream.wrapper : streamOutputRange;
 
-		headers["Content-Type"] = "application/json";
+		headers["Content-Type"] = "application/json; charset=UTF-8";
 
 		// set an explicit content-length field if chunked encoding is not allowed
 		if (!allow_chunked) {

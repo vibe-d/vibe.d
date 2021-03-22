@@ -34,7 +34,7 @@ import vibe.utils.string;
 import core.atomic;
 import core.vararg;
 import diet.traits : SafeFilterCallback, dietTraits;
-import std.algorithm : canFind;
+import std.algorithm : canFind, splitter;
 import std.array;
 import std.conv;
 import std.datetime;
@@ -1008,7 +1008,8 @@ final class HTTPServerRequest : HTTPRequest {
 		*/
 		@property ref Json json() @safe {
 			if (_json.isNull) {
-				if (icmp2(contentType, "application/json") == 0 || icmp2(contentType, "application/vnd.api+json") == 0 ) {
+				auto ctype = contentType.splitter(';').front;
+				if (icmp2(ctype, "application/json") == 0 || icmp2(ctype, "application/vnd.api+json") == 0) {
 					auto bodyStr = bodyReader.readAllUTF8();
 					if (!bodyStr.empty) _json = parseJson(bodyStr);
 					else _json = Json.undefined;
