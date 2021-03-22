@@ -341,7 +341,7 @@ package string determineLanguage(alias METHOD)(scope HTTPServerRequest req)
 
 unittest { // make sure that the custom determineLanguage is called
 	static struct CTX {
-		static string determineLanguage(Object a) { return "test"; }
+		static string determineLanguage(HTTPServerRequest a) { return "test"; }
 	}
 	@translationContext!CTX
 	static class Test {
@@ -350,7 +350,7 @@ unittest { // make sure that the custom determineLanguage is called
 		}
 	}
 	auto test = new Test;
-	assert(determineLanguage!(test.test)(null) == "test");
+	assert(determineLanguage!(test.test)(HTTPServerRequest.init) == "test");
 }
 
 unittest { // issue #1955
