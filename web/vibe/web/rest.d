@@ -328,8 +328,7 @@ import vibe.inet.message : InetHeaderMap;
 import vibe.web.internal.rest.common : RestInterface, Route, SubInterfaceType;
 import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAuthenticated;
 
-import std.algorithm : startsWith, endsWith, sort;
-import std.algorithm.searching : count;
+import std.algorithm : count, startsWith, endsWith, sort, splitter;
 import std.array : appender, split;
 import std.meta : AliasSeq;
 import std.range : isOutputRange;
@@ -1663,7 +1662,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 						}();
 						res.writeBody(serialized_output.data, serializer.contentType);
 					}
-				res.statusCode = 406; // HTTP response: Not Acceptable, will trigger RestException on the client side
+				res.statusCode = HTTPStatus.notAcceptable; // will trigger RestException on the client side
 				res.writeBody(cast(ubyte[])null);
 			}
 		} catch (Exception e) {
@@ -2016,7 +2015,7 @@ private HTTPClientResponse request(URL base_url,
 		if (request_filter) request_filter(req);
 
 		if (body_ != "")
-			req.writeBody(cast(const(ubyte)[])body_, hdrs.get("Content-Type", "application/json"));
+			req.writeBody(cast(const(ubyte)[])body_, hdrs.get("Content-Type", "application/json; charset=UTF-8"));
 	};
 
 	HTTPClientResponse client_res;
@@ -2213,7 +2212,8 @@ package int get_matching_content_type (T...)(string req_content_types_str) pure 
 	ContentType[] UDA_content_types;
 	foreach (UDA; packed_UDAs)
 	{
-		auto content_type_split = UDA.contentType.toLower().split("/");
+		auto ctype = UDA.contentType.splitter(';').front;
+		auto content_type_split = ctype.toLower().split("/");
 		assert(content_type_split.length == 2);
 		UDA_content_types ~= ContentType(content_type_split[0].strip(), content_type_split[1].strip());
 	}
@@ -2280,7 +2280,7 @@ unittest
 {
 	alias res = ResultSerializersT!(test1);
 	assert(res.length == 1);
-	assert(res[0].contentType == "application/json");
+	assert(res[0].contentType == "application/json; charset=UTF-8");
 
 	assert(get_matching_content_type!(res)("application/json") == 0);
 	assert(get_matching_content_type!(res)("application/*") == 0);
