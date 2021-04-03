@@ -36,6 +36,10 @@
 				serialized as a string, as returned by their `toISOExtString`
 				method. This causes types such as `SysTime` to be serialized
 				as strings.)
+			$(LI Types satisfying the `isStringSinkSerializable` trait will be
+				serialized as a string using the `toString(sink)` method. `sink`
+				can either be a delegate that takes a `char` array argument, or
+				an output range of `char`.)
 			$(LI Types satisfying the `isStringSerializable` trait will be
 				serialized as a string, as returned by their `toString`
 				method.)
@@ -128,6 +132,7 @@ import vibe.internal.meta.uda;
 import std.array : Appender, appender;
 import std.conv : to;
 import std.exception : enforce;
+import std.range.primitives : ElementType, isInputRange;
 import std.traits;
 import std.typetuple;
 
@@ -475,6 +480,15 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			ser.serializeValue!(CustomType, ATTRIBUTES)(value.toRepresentation());
 		} else static if (isISOExtStringSerializable!TU) {
 			ser.serializeValue!(string, ATTRIBUTES)(value.toISOExtString());
+		} else static if (isStringSinkSerializable!TU) {
+			static if (doesSerializerSupportStringSink!Serializer) {
+				ser.writeStringSinkValue!Traits(value);
+			} else {
+				import std.format : formattedWrite;
+				auto app = appender!string;
+				app.formattedWrite("%s", value);
+				ser.serializeValue!(string, ATTRIBUTES)(app.data);
+			}
 		} else static if (isStringSerializable!TU) {
 			ser.serializeValue!(string, ATTRIBUTES)(value.toString());
 		} else static if (is(TU == struct) || is(TU == class)) {
@@ -569,6 +583,86 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			ser.serializeValue!(string, ATTRIBUTES)(to!string(value));
 		} else static assert(false, "Unsupported serialization type: " ~ T.stringof);
 	}
+}
+
+///
+package template doesSerializerSupportStringSink(SerT)
+{
+	static struct T1 { void toString(scope void delegate(scope const(char)[])) {} }
+	static struct T2 { void toString(R)(ref R dst) { dst.put('f'); dst.put("foo"); } }
+
+	enum doesSerializerSupportStringSink =
+		is(typeof(SerT.init.writeStringSinkValue!(Traits!(T1, DefaultPolicy))(T1.init)))
+		&& is(typeof(SerT.init.writeStringSinkValue!(Traits!(T2, DefaultPolicy))(T2.init)));
+}
+
+///
+template isStringSinkSerializable(T)
+{
+	import std.range : nullSink;
+
+	private void sink(S : const(char)[])(scope S s) @safe {}
+
+	enum isStringSinkSerializable =
+		(
+			is(typeof(T.init.toString((scope str) => sink(str))))
+			|| is(typeof(T.init.toString(nullSink)))
+		)
+		&& is(typeof(T.fromString(string.init)) : T);
+}
+
+unittest {
+	import std.array : split;
+	import std.format : formattedWrite;
+	import vibe.data.json;
+
+	static struct X(alias hasSink) {
+		private int i;
+		private string s;
+
+		static if (hasSink) {
+			void toString (scope void delegate(scope const(char)[]) @safe dg) @safe
+			{
+				formattedWrite(dg, "%d;%s", this.i, this.s);
+			}
+		}
+
+		string toString () @safe const pure nothrow
+		{
+			return "42;hello";
+		}
+
+		static X fromString (string s) @safe pure
+		{
+			auto parts = s.split(";");
+			auto x = X(parts[0].to!int, parts[1]);
+			return x;
+		}
+	}
+
+	static assert(!isStringSinkSerializable!(X!false));
+	static assert(isStringSinkSerializable!(X!true));
+
+	// old toString() style methods still work if no sink overload presented
+	auto serialized1 = X!false(7,"x1").serializeToJsonString();
+	assert(serialized1 == `"42;hello"`);
+	auto deserialized1 = deserializeJson!(X!false)(serialized1);
+	assert(deserialized1.i == 42);
+	assert(deserialized1.s == "hello");
+
+	// sink overload takes precedence
+	auto serialized2 = X!true(7,"x2").serializeToJsonString();
+	assert(serialized2 == `"7;x2"`);
+	auto deserialized2 = deserializeJson!(X!true)(serialized2);
+	assert(deserialized2.i == 7);
+	assert(deserialized2.s == "x2");
+
+	// type is sink serializable, but serializer doesn't support sink
+	auto serialized3 = X!true(7,"x2").serializeToJson();
+	assert(to!string(serialized3) == `"7;x2"`);
+	auto deserialized3 = deserializeJson!(X!true)(serialized3);
+	assert(deserialized3.i == 7);
+	assert(deserialized3.s == "x2");
 }
 
 private struct Traits(T, alias POL, ATTRIBUTES...)
@@ -1406,6 +1500,22 @@ private template getExpandedFieldsData(T, FIELDS...)
 	enum subfieldsCount(alias F) = TypeTuple!(__traits(getMember, T, F)).length;
 	alias processSubfield(alias F) = aliasSeqOf!(zip(repeat(F), iota(subfieldsCount!F)));
 	alias getExpandedFieldsData = staticMap!(processSubfield, FIELDS);
+}
+
+/// Uses Base64 representation for `ubyte[]` instead of `to!string`
+public class Base64ArrayPolicy (R) if (isArray!R && is(ElementType!R : ubyte))
+{
+	public static string toRepresentation (in R data) @safe pure
+	{
+		import std.base64 : Base64;
+		return Base64.encode(data);
+	}
+
+	public static ubyte[] fromRepresentation (in string data) @safe pure
+	{
+		import std.base64 : Base64;
+		return Base64.decode(data);
+	}
 }
 
 /******************************************************************************/

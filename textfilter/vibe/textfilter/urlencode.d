@@ -14,6 +14,7 @@ import std.array;
 import std.conv;
 import std.exception;
 import std.format;
+import std.range;
 
 
 /**
@@ -54,13 +55,13 @@ bool isURLEncoded(const(char)[] str, const(char)[] reserved_chars = null)
 	import std.string : representation;
 
 	for (size_t i = 0; i < str.length; i++) {
+		if (isAsciiAlphaNum(str[i]))
+			continue;
+
 		switch (str[i]) {
 			case '-':
 			case '.':
-			case '0': .. case '9':
-			case 'A': .. case 'Z':
 			case '_':
-			case 'a': .. case 'z':
 			case '~':
 				break;
 			case '%':
@@ -132,9 +133,11 @@ void filterURLEncode(R)(ref R dst, const(char)[] str,
                         bool form_encoding = false)
 {
 	while (str.length > 0) {
-		switch (str[0]) {
+		if (isAsciiAlphaNum(str[0])) {
+			put(dst, str[0]);
+		} else switch (str[0]) {
 			default:
-				if (allowed_chars.canFind(str[0])) dst.put(str[0]);
+				if (allowed_chars.canFind(str[0])) put(dst, str[0]);
 				else {
 					static if (is(typeof({ R a, b; b = a; })))
 						formattedWrite(dst, "%%%02X", str[0]);
@@ -144,15 +147,12 @@ void filterURLEncode(R)(ref R dst, const(char)[] str,
 				break;
 			case ' ':
 				if (form_encoding) {
-					dst.put('+');
+					put(dst, '+');
 					break;
 				}
 				goto default;
-			case 'A': .. case 'Z':
-			case 'a': .. case 'z':
-			case '0': .. case '9':
 			case '-': case '_': case '.': case '~':
-				dst.put(str[0]);
+				put(dst, str[0]);
 				break;
 		}
 		str = str[1 .. $];
@@ -171,18 +171,18 @@ void filterURLDecode(R)(ref R dst, const(char)[] str, bool form_encoding = false
 				auto hex = str[1..3];
 				auto c = cast(char)parse!int(hex, 16);
 				enforce(hex.length == 0, "invalid percent encoding");
-				dst.put(c);
+				put(dst, c);
 				str = str[3 .. $];
 				break;
 			case '+':
 				if (form_encoding) {
-					dst.put(' ');
+					put(dst, ' ');
 					str = str[1 .. $];
 					break;
 				}
 				goto default;
 			default:
-				dst.put(str[0]);
+				put(dst, str[0]);
 				str = str[1 .. $];
 				break;
 		}
@@ -210,6 +210,35 @@ void filterURLDecode(R)(ref R dst, const(char)[] str, bool form_encoding = false
 	string aenc = urlEncode(a);
 	assert(aenc == "This~is%20a-test%21%0D%0AHello%2C%20W%C3%B6rld..%20");
 	assert(urlDecode(urlEncode(a)) == a);
+}
+
+// for issue https://github.com/vibe-d/vibe.d/issues/2541
+@safe unittest
+{
+    static struct LimitedRange
+    {
+        char[] buf;
+        void put(const(char)[] data) {
+            .put(buf, data);
+        }
+    }
+
+    char[100] buf1;
+    char[100] buf2;
+    auto r = LimitedRange(buf1[]);
+    r.filterURLEncode("This-is~a_test");
+    auto result = buf1[0 .. buf1.length - r.buf.length];
+    assert(result == "This-is~a_test");
+
+    r = LimitedRange(buf1[]);
+    r.filterURLEncode("This is a test");
+    result = buf1[0 .. buf1.length - r.buf.length];
+    assert(result == "This%20is%20a%20test");
+
+    r = LimitedRange(buf2[]);
+    r.filterURLDecode(result);
+    result = buf2[0 .. buf2.length - r.buf.length];
+    assert(result == "This is a test");
 }
 
 
@@ -306,4 +335,24 @@ private struct StringSliceAppender(S) {
 	a = StringSliceAppender!string(s);
 	a.put("foo"); assert(a.data == "foo"); assert(a.data.ptr is s.ptr);
 	a.put('b'); assert(a.data == "foob");
+}
+
+private static bool isAsciiAlphaNum(char ch)
+@safe nothrow pure @nogc {
+	return (uint(ch) & 0xDF) - 0x41 < 26 || uint(ch) - '0' <= 9;
+}
+
+unittest {
+	assert(!isAsciiAlphaNum('@'));
+	assert(isAsciiAlphaNum('A'));
+	assert(isAsciiAlphaNum('Z'));
+	assert(!isAsciiAlphaNum('['));
+	assert(!isAsciiAlphaNum('`'));
+	assert(isAsciiAlphaNum('a'));
+	assert(isAsciiAlphaNum('z'));
+	assert(!isAsciiAlphaNum('{'));
+	assert(!isAsciiAlphaNum('/'));
+	assert(isAsciiAlphaNum('0'));
+	assert(isAsciiAlphaNum('9'));
+	assert(!isAsciiAlphaNum(':'));
 }

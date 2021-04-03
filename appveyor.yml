@@ -17,7 +17,7 @@ environment:
     DVersion: 2.088.1
     arch: x64
   - DC: dmd
-    DVersion: 2.083.1
+    DVersion: 2.084.1
     arch: x86_mscoff
   - DC: ldc
     DVersion: 1.20.1

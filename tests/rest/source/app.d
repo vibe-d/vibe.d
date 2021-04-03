@@ -12,7 +12,7 @@ import vibe.http.router;
 import vibe.http.server;
 import vibe.web.rest;
 
-import std.typecons : Nullable;
+import std.typecons : Nullable, nullable;
 import core.time;
 
 /* --------- EXAMPLE 1 ---------- */
@@ -25,6 +25,9 @@ import core.time;
 @rootPathFromName
 interface Example1API
 {
+	// Methods need to be `@safe`:
+	@safe:
+
 	/* Default convention is based on camelCase
 	 */
 
@@ -89,6 +92,8 @@ unittest
 @rootPathFromName
 interface Example2API
 {
+	@safe:
+
 	// Any D data type may be here. Serializer is not configurable and will send all declared fields.
 	// This should be an API-specified type and may or may not be the same as data type used by other application code.
 	struct Aggregate
@@ -145,6 +150,8 @@ unittest
 @rootPathFromName
 interface Example3API
 {
+	@safe:
+
 	/* Available under ./nested_module/
 	 */
 	@property Example3APINested nestedModule();
@@ -158,6 +165,8 @@ interface Example3API
 
 interface Example3APINested
 {
+	@safe:
+
 	/* In this example it will be available under "GET /nested_module/number"
 	 * But this interface does't really know it, it does not care about exact path
 	 *
@@ -216,6 +225,8 @@ unittest
 @rootPathFromName
 interface Example4API
 {
+	@safe:
+
 	/* vibe.web.rest module provides two pre-defined UDA - @path and @method
 	 * You can use any one of those or both. In case @path is used, not method style
 	 * adjustment is made.
@@ -288,11 +299,13 @@ interface Example5API
 {
 	import vibe.web.rest : before, after;
 
+	@safe:
+
 	@before!authenticate("user") @after!addBrackets()
 	string getSecret(int num, User user);
 }
 
-User authenticate(HTTPServerRequest req, HTTPServerResponse res)
+User authenticate(HTTPServerRequest req, HTTPServerResponse res) @safe
 {
 	return User("admin", true);
 }
@@ -303,7 +316,7 @@ struct User
 	bool authorized;
 }
 
-string addBrackets(string result, HTTPServerRequest, HTTPServerResponse)
+string addBrackets(string result, HTTPServerRequest, HTTPServerResponse) @safe
 {
 	return "{" ~ result ~ "}";
 }
@@ -355,27 +368,23 @@ unittest
 @rootPathFromName
 interface Example6API
 {
-	// The first parameter of @headerParam is the identifier (must match one of the parameter name).
-	// The second is the name of the field in the header, such as "Accept", "Content-Type", "User-Agent"...
-	@headerParam("auth", "Authorization")
-	@headerParam("tester", "X-Custom-Tester")
-	@headerParam("www", "WWW-Authenticate")
-	string getPortal(string auth,
-					 ref string tester,
-					 out Nullable!string www);
+	@safe:
 
-	// As with @headerParam, the first parameter of @queryParam is the identifier.
-	// The second being the field name, e.g for a query such as: 'GET /root/node?foo=bar', "foo" will be the second parameter.
-	@queryParam("fortyTwo", "qparam")
-	string postAnswer(string fortyTwo);
-	// Finally, there is @bodyParam. It works as you expect it to work,
+	// The parameter is the name of the field in the header,
+	// such as "Accept", "Content-Type", "User-Agent"...
+	string getPortal(@viaHeader("Authorization") string auth,
+					 @viaHeader("X-Custom-Tester") ref string tester,
+					 @viaHeader("WWW-Authenticate") out Nullable!string www);
+
+	// The parameter is the field name, e.g for a query such as:
+	// 'GET /root/node?foo=bar', it will be "foo".
+	string postAnswer(@viaQuery("qparam") string fortyTwo);
+	// Finally, there is `@viaBody`. It works as you expect it to work,
 	// currently serializing passed data as Json and pass them through the body.
-	@bodyParam("myFoo", "parameter")
-	string postConcat(FooType myFoo);
+	string postConcat(@viaBody("parameter") FooType myFoo);
 
-	// expects the entire body
-	@bodyParam("obj")
-	string postConcatBody(FooType obj);
+	// Without a parameter, it will represent the entire body
+	string postConcatBody(@viaBody() FooType obj);
 
 	struct FooType {
 		int a;
@@ -437,6 +446,8 @@ unittest
 
 @rootPathFromName
 interface Example7API {
+	@safe:
+
 	// GET /example7_api/
 	// returns a custom JSON response
 	Json get();
@@ -493,6 +504,7 @@ void runTests(string url)
 	}
 	// Example 6
 	{
+		import std.conv : to;
 		import vibe.http.client : requestHTTP;
 		import vibe.stream.operations : readAllUTF8;
 
@@ -518,7 +530,7 @@ void runTests(string url)
 			assert(0, answer);
 		} catch (RestException e) {
 			assert(tester == "The cake is a lie", tester);
-			assert(www == `Basic realm="Aperture"`, www);
+			assert(www == `Basic realm="Aperture"`.nullable, www.to!string);
 		}
 	}
 

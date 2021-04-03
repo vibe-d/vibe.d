@@ -9,7 +9,7 @@ void main()
 		},
 		(scope res) {
 			logInfo("Response: %d", res.statusCode);
-			foreach (k, v; res.headers)
+			foreach (k, v; res.headers.byKeyValue)
 				logInfo("Header: %s: %s", k, v);
 		}
 	);

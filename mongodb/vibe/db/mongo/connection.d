@@ -118,7 +118,7 @@ class MongoAuthException : MongoException
 final class MongoConnection {
 @safe:
 
-	import vibe.stream.wrapper : StreamOutputRange, streamOutputRange;
+	import vibe.stream.wrapper /* : StreamOutputRange, streamOutputRange */;
 	import vibe.internal.interfaceproxy;
 	import vibe.core.stream : InputStream, Stream;
 

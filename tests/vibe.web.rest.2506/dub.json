@@ -1,0 +1,6 @@
+{
+	"name": "2506",
+	"dependencies": {
+		"vibe-d": { "path": "../../" }
+	}
+}

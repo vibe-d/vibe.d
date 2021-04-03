@@ -10,10 +10,12 @@ module vibe.web.common;
 import vibe.http.common;
 import vibe.http.server : HTTPServerRequest;
 import vibe.data.json;
-import vibe.internal.meta.uda : onlyAsUda;
+import vibe.internal.meta.uda : onlyAsUda, UDATuple;
 
+import std.meta : AliasSeq;
 static import std.utf;
 static import std.string;
+import std.traits : getUDAs, ReturnType;
 import std.typecons : Nullable;
 
 
@@ -446,10 +448,18 @@ class RestException : HTTPStatusException {
 		Json m_jsonResult;
 	}
 
-	@safe:
+    ///
+	this (int status, string result, string file = __FILE__, int line = __LINE__,
+		Throwable next = null) @safe
+	{
+		Json jsonResult = Json.emptyObject;
+		jsonResult["message"] = result;
+		this(status, jsonResult, file, line);
+	}
 
 	///
-	this(int status, Json jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	this (int status, Json jsonResult, string file = __FILE__, int line = __LINE__,
+		Throwable next = null) @safe
 	{
 		if (jsonResult.type == Json.Type.Object && jsonResult["statusMessage"].type == Json.Type.String) {
 			super(status, jsonResult["statusMessage"].get!string, file, line, next);
@@ -461,8 +471,11 @@ class RestException : HTTPStatusException {
 		m_jsonResult = jsonResult;
 	}
 
-	/// The HTTP status code
-	@property const(Json) jsonResult() const { return m_jsonResult; }
+	/// The result text reported to the client
+	@property inout(Json) jsonResult () inout nothrow pure @safe @nogc
+	{
+		return m_jsonResult;
+	}
 }
 
 /// private
@@ -477,6 +490,180 @@ package struct MethodAttribute
 {
 	HTTPMethod data;
 	alias data this;
+}
+
+
+/** UDA for using a custom serializer for the method return value.
+
+	Instead of using the default serializer (JSON), this allows to define
+	custom serializers. Multiple serializers can be specified and will be
+	matched against the `Accept` header of the HTTP request.
+
+	Params:
+		serialize = An alias to a generic function taking an output range as
+			its first argument and the value to be serialized as its second
+			argument. The result of the serialization is written byte-wise into
+			the output range.
+		deserialize = An alias to a generic function taking a forward range
+			as its first argument and a reference to the value that is to be
+			deserialized.
+		content_type = The MIME type of the serialized representation.
+*/
+alias resultSerializer(alias serialize, alias deserialize, string content_type)
+	= ResultSerializer!(serialize, deserialize, content_type);
+
+///
+unittest {
+	import std.bitmanip : bigEndianToNative, nativeToBigEndian;
+
+	interface MyRestInterface {
+		static struct Point {
+			int x, y;
+		}
+
+		static void serialize(R, T)(ref R output_range, const ref T value)
+		{
+			static assert(is(T == Point)); // only Point supported in this example
+			output_range.put(nativeToBigEndian(value.x));
+			output_range.put(nativeToBigEndian(value.y));
+		}
+
+		static T deserialize(T, R)(R input_range)
+		{
+			static assert(is(T == Point)); // only Point supported in this example
+			T ret;
+			ubyte[4] xbuf, ybuf;
+			input_range.takeExactly(4).copy(xbuf[]);
+			input_range.takeExactly(4).copy(ybuf[]);
+			ret.x = bigEndianToNative!int(xbuf);
+			ret.y = bigEndianToNative!int(ybuf);
+			return ret;
+		}
+
+		// serialize as binary data in network byte order
+		@resultSerializer!(serialize, deserialize, "application/binary")
+		Point getPoint();
+	}
+}
+
+/// private
+struct ResultSerializer(alias ST, alias DT, string ContentType) {
+	enum contentType = ContentType;
+	alias serialize = ST;
+	alias deserialize = DT;
+}
+
+
+package void defaultSerialize (alias P, T, RT) (ref RT output_range, const scope ref T value)
+{
+	static struct R {
+		typeof(output_range) underlying;
+		void put(char ch) { underlying.put(ch); }
+		void put(const(char)[] ch) { underlying.put(cast(const(ubyte)[])ch); }
+	}
+	auto dst = R(output_range);
+	value.serializeWithPolicy!(JsonStringSerializer!R, P) (dst);
+}
+
+package T defaultDeserialize (alias P, T, R) (R input_range)
+{
+	return deserializeWithPolicy!(JsonStringSerializer!(typeof(std.string.assumeUTF(input_range))), P, T)
+		(std.string.assumeUTF(input_range));
+}
+
+package alias DefaultSerializerT = ResultSerializer!(
+	defaultSerialize, defaultDeserialize, "application/json; charset=UTF-8");
+
+
+/// Convenience template to get all the ResultSerializers for a function
+package template ResultSerializersT(alias func) {
+	alias DefinedSerializers = getUDAs!(func, ResultSerializer);
+	static if (getUDAs!(func, ResultSerializer).length)
+		alias ResultSerializersT = DefinedSerializers;
+	else
+		alias ResultSerializersT = AliasSeq!(DefaultSerializerT);
+}
+
+///
+package template SerPolicyT (Iface)
+{
+	static if (getUDAs!(Iface, SerPolicy).length)
+	{
+		alias SerPolicyT = getUDAs!(Iface, SerPolicy)[0];
+	}
+	else
+	{
+		alias SerPolicyT = SerPolicy!DefaultPolicy;
+	}
+}
+
+///
+package struct SerPolicy (alias PolicyTemplatePar)
+{
+	alias PolicyTemplate = PolicyTemplatePar;
+}
+
+///
+public alias serializationPolicy (Args...) = SerPolicy!(Args);
+
+unittest
+{
+	import vibe.data.serialization : Base64ArrayPolicy;
+	import std.array : appender;
+	import std.conv : to;
+
+	struct X
+	{
+		string name = "test";
+		ubyte[] arr = [138, 245, 231, 234, 142, 132, 142];
+	}
+	X x;
+
+	// Interface using Base64 array serialization
+	@serializationPolicy!(Base64ArrayPolicy)
+	interface ITestBase64
+	{
+		@safe X getTest();
+	}
+
+	alias serPolicyFound = SerPolicyT!ITestBase64;
+	alias resultSerializerFound = ResultSerializersT!(ITestBase64.getTest)[0];
+
+	// serialization test with base64 encoding
+	auto output = appender!string();
+
+	resultSerializerFound.serialize!(serPolicyFound.PolicyTemplate)(output, x);
+	auto serialized = output.data;
+	assert(serialized == `{"name":"test","arr":"ivXn6o6Ejg=="}`,
+			"serialization is not correct, produced: " ~ serialized);
+
+	// deserialization test with base64 encoding
+	auto deserialized = serialized.deserializeWithPolicy!(JsonStringSerializer!string, serPolicyFound.PolicyTemplate, X)();
+	assert(deserialized.name == "test", "deserialization of `name` is not correct, produced: " ~ deserialized.name);
+	assert(deserialized.arr == [138, 245, 231, 234, 142, 132, 142],
+			"deserialization of `arr` is not correct, produced: " ~ to!string(deserialized.arr));
+
+	// Interface NOT using Base64 array serialization
+	interface ITestPlain
+	{
+		@safe X getTest();
+	}
+
+	alias plainSerPolicyFound = SerPolicyT!ITestPlain;
+	alias plainResultSerializerFound = ResultSerializersT!(ITestPlain.getTest)[0];
+
+	// serialization test without base64 encoding
+	output = appender!string();
+	plainResultSerializerFound.serialize!(plainSerPolicyFound.PolicyTemplate)(output, x);
+	serialized = output.data;
+	assert(serialized == `{"name":"test","arr":[138,245,231,234,142,132,142]}`,
+			"serialization is not correct, produced: " ~ serialized);
+
+	// deserialization test without base64 encoding
+	deserialized = serialized.deserializeWithPolicy!(JsonStringSerializer!string, plainSerPolicyFound.PolicyTemplate, X)();
+	assert(deserialized.name == "test", "deserialization of `name` is not correct, produced: " ~ deserialized.name);
+	assert(deserialized.arr == [138, 245, 231, 234, 142, 132, 142],
+			"deserialization of `arr` is not correct, produced: " ~ to!string(deserialized.arr));
 }
 
 /**
@@ -515,17 +702,31 @@ public struct WebParamAttribute {
  * The serialization format is currently not customizable.
  * If no fieldname is given, the entire body is serialized into the object.
  *
+ * There are currently two kinds of symbol to do this: `viaBody` and `bodyParam`.
+ * `viaBody` should be applied to the parameter itself, while `bodyParam`
+ * is applied to the function.
+ * `bodyParam` was introduced long before the D language for UDAs on parameters
+ * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
  *   field = The name of the field in the JSON object.
  *
  * ----
- * @bodyParam("pack", "package")
- * void ship(int pack);
+ * void ship(@viaBody("package") int pack);
  * // The server will receive the following body for a call to ship(42):
  * // { "package": 42 }
  * ----
  */
+WebParamAttribute viaBody(string field = null)
+@safe {
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.body_, null, field);
+}
+
+/// Ditto
 WebParamAttribute bodyParam(string identifier, string field) @safe
 in {
 	assert(field.length > 0, "fieldname can't be empty.");
@@ -554,16 +755,30 @@ WebParamAttribute bodyParam(string identifier)
  * If it's an aggregate, it will be serialized as JSON.
  * However, passing aggregate via header isn't a good practice and should be avoided for new production code.
  *
+ * There are currently two kinds of symbol to do this: `viaHeader` and `headerParam`.
+ * `viaHeader` should be applied to the parameter itself, while `headerParam`
+ * is applied to the function.
+ * `headerParam` was introduced long before the D language for UDAs on parameters
+ * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
  *   field = The name of the header field to use (e.g: 'Accept', 'Content-Type'...).
  *
  * ----
  * // The server will receive the content of the "Authorization" header.
- * @headerParam("auth", "Authorization")
- * void login(string auth);
+ * void login(@viaHeader("Authorization") string auth);
  * ----
  */
+WebParamAttribute viaHeader(string field)
+@safe {
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.header, null, field);
+}
+
+/// Ditto
 WebParamAttribute headerParam(string identifier, string field)
 @safe {
 	import vibe.web.internal.rest.common : ParameterKind;
@@ -578,6 +793,12 @@ WebParamAttribute headerParam(string identifier, string field)
  * It will be serialized as part of a JSON object, and will go through URL serialization.
  * The serialization format is not customizable.
  *
+ * There are currently two kinds of symbol to do this: `viaQuery` and `queryParam`.
+ * `viaQuery` should be applied to the parameter itself, while `queryParam`
+ * is applied to the function.
+ * `queryParam` was introduced long before the D language for UDAs on parameters
+ * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
  *   field = The field name to use.
@@ -585,10 +806,18 @@ WebParamAttribute headerParam(string identifier, string field)
  * ----
  * // For a call to postData("D is awesome"), the server will receive the query:
  * // POST /data?test=%22D is awesome%22
- * @queryParam("data", "test")
- * void postData(string data);
+ * void postData(@viaQuery("test") string data);
  * ----
  */
+WebParamAttribute viaQuery(string field)
+@safe {
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.query, null, field);
+}
+
+/// Ditto
 WebParamAttribute queryParam(string identifier, string field)
 @safe {
 	import vibe.web.internal.rest.common : ParameterKind;
