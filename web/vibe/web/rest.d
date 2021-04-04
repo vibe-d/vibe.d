@@ -1999,8 +1999,6 @@ private HTTPClientResponse request(URL base_url,
 
 	if (query.length) url.queryString = query;
 
-	string ret;
-
 	auto reqdg = (scope HTTPClientRequest req) {
 		req.method = verb;
 		foreach (k, v; hdrs.byKeyValue)
@@ -2029,7 +2027,7 @@ private HTTPClientResponse request(URL base_url,
 			httpMethodString(verb),
 			url.toString(),
 			client_res.statusCode,
-			ret
+			client_res.statusPhrase
 			);
 
 	// Get required headers - Don't throw yet
@@ -2054,7 +2052,7 @@ private HTTPClientResponse request(URL base_url,
 	if (!isSuccessCode(cast(HTTPStatus)client_res.statusCode))
 	{
 		client_res.dropBody();
-		throw new RestException(client_res.statusCode, ret);
+		throw new RestException(client_res.statusCode, client_res.statusPhrase);
 	}
 
 	return client_res;

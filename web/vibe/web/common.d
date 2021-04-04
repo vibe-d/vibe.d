@@ -453,7 +453,7 @@ class RestException : HTTPStatusException {
 		Throwable next = null) @safe
 	{
 		Json jsonResult = Json.emptyObject;
-		jsonResult["message"] = result;
+		jsonResult["statusMessage"] = result;
 		this(status, jsonResult, file, line);
 	}
 
