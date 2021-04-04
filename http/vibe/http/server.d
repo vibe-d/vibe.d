@@ -1008,7 +1008,9 @@ final class HTTPServerRequest : HTTPRequest {
 		*/
 		@property ref Json json() @safe {
 			if (_json.isNull) {
-				auto ctype = contentType.splitter(';').front;
+				auto splitter = contentType.splitter(';');
+				auto ctype = splitter.empty ? "" : splitter.front;
+
 				if (icmp2(ctype, "application/json") == 0 || icmp2(ctype, "application/vnd.api+json") == 0) {
 					auto bodyStr = bodyReader.readAllUTF8();
 					if (!bodyStr.empty) _json = parseJson(bodyStr);
@@ -1018,6 +1020,11 @@ final class HTTPServerRequest : HTTPRequest {
 				}
 			}
 			return _json.get;
+		}
+
+		/// Get the json body when there is no content-type header
+		unittest {
+			assert(createTestHTTPServerRequest(URL("http://localhost/")).json.type == Json.Type.undefined);
 		}
 
 		private Nullable!Json _json;
