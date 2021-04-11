@@ -1991,6 +1991,7 @@ private HTTPClientResponse request(URL base_url,
 	string body_, ref InetHeaderMap reqReturnHdrs,
 	ref InetHeaderMap optReturnHdrs, in HTTPClientSettings http_settings)
 @safe {
+	import std.uni : sicmp;
 	import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
 	import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
 
@@ -1998,8 +1999,6 @@ private HTTPClientResponse request(URL base_url,
 	url.pathString = path;
 
 	if (query.length) url.queryString = query;
-
-	string ret;
 
 	auto reqdg = (scope HTTPClientRequest req) {
 		req.method = verb;
@@ -2029,7 +2028,7 @@ private HTTPClientResponse request(URL base_url,
 			httpMethodString(verb),
 			url.toString(),
 			client_res.statusCode,
-			ret
+			client_res.statusPhrase
 			);
 
 	// Get required headers - Don't throw yet
@@ -2053,8 +2052,12 @@ private HTTPClientResponse request(URL base_url,
 
 	if (!isSuccessCode(cast(HTTPStatus)client_res.statusCode))
 	{
+		Json msg = Json(["statusMessage": Json(client_res.statusPhrase)]);
+		if (client_res.contentType.length)
+			if (client_res.contentType.splitter(";").front.strip.sicmp("application/json") == 0)
+				msg = client_res.readJson();
 		client_res.dropBody();
-		throw new RestException(client_res.statusCode, ret);
+		throw new RestException(client_res.statusCode, msg);
 	}
 
 	return client_res;
