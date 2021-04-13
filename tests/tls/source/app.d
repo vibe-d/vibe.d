@@ -132,7 +132,7 @@ void test()
 
 	// fail for untrusted server cert
 	testConn(
-		true, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
+		false, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
 		true, "server.crt", "server.key", null, null, TLSPeerValidationMode.trustedCert
 	);
 
@@ -159,7 +159,7 @@ void test()
 
 void main()
 {
-	// import std.functional : toDelegate;
-	// runTask(toDelegate(&test));
-	// runEventLoop();
+	import std.functional : toDelegate;
+	runTask(toDelegate(&test));
+	runEventLoop();
 }
