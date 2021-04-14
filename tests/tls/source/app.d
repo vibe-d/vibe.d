@@ -27,14 +27,20 @@ void createPipePair(out Stream a, out Stream b)
 	b = createProxyStream(p2, p1);
 }
 
+enum Expected {
+	success,
+	fail,
+	dontCare
+}
+
 void testConn(
-	bool cli_fail, string cli_cert, string cli_key, string cli_trust, string cli_peer, TLSPeerValidationMode cli_mode,
-	bool srv_fail, string srv_cert, string srv_key, string srv_trust, string srv_peer, TLSPeerValidationMode srv_mode)
+	Expected cli_expect, string cli_cert, string cli_key, string cli_trust, string cli_peer, TLSPeerValidationMode cli_mode,
+	Expected srv_expect, string srv_cert, string srv_key, string srv_trust, string srv_peer, TLSPeerValidationMode srv_mode)
 {
 	Stream ctunnel, stunnel;
 	logInfo("Test client %s (%s, %s, %s, %s), server %s (%s, %s, %s, %s)",
-		cli_fail ? "fail" : "success", cli_cert, cli_key, cli_trust, cli_peer,
-		srv_fail ? "fail" : "success", srv_cert, srv_key, srv_trust, srv_peer);
+		cli_expect, cli_cert, cli_key, cli_trust, cli_peer,
+		srv_expect, srv_cert, srv_key, srv_trust, srv_peer);
 
 	createPipePair(ctunnel, stunnel);
 	auto t1 = runTask({
@@ -43,14 +49,17 @@ void testConn(
 		try {
 			sconn = createTLSStream(stunnel, sctx, TLSStreamState.accepting, srv_peer);
 			logDiagnostic("Successfully initiated server tunnel.");
-			assert(!srv_fail, "Server expected to fail TLS connection.");
+			assert(srv_expect != Expected.fail, "Server expected to fail TLS connection.");
 		} catch (Exception e) {
-			if (srv_fail) logDiagnostic("Server tunnel failed as expected: %s", e.msg);
-			else logError("Server tunnel failed: %s", e.toString().sanitize);
-			assert(srv_fail, "Server not expected to fail TLS connection.");
+			if (srv_expect == Expected.dontCare) logDiagnostic("Server tunnel failed (dont-care): %s", e.msg);
+			else if (srv_expect == Expected.fail) logDiagnostic("Server tunnel failed as expected: %s", e.msg);
+			else {
+				logError("Server tunnel failed: %s", e.toString().sanitize);
+				assert(false, "Server not expected to fail TLS connection.");
+			}
 			return;
 		}
-		if (cli_fail) return;
+		if (cli_expect == Expected.fail) return;
 		assert(sconn.readLine() == "foo");
 		sconn.write("bar\r\n");
 		sconn.finalize();
@@ -61,14 +70,17 @@ void testConn(
 		try {
 			cconn = createTLSStream(ctunnel, cctx, TLSStreamState.connecting, cli_peer);
 			logDiagnostic("Successfully initiated client tunnel.");
-			assert(!cli_fail, "Client expected to fail TLS connection.");
+			assert(cli_expect != Expected.fail, "Client expected to fail TLS connection.");
 		} catch (Exception e) {
-			if (cli_fail) logDiagnostic("Client tunnel failed as expected: %s", e.msg);
-			else logError("Client tunnel failed: %s", e.toString().sanitize);
-			assert(cli_fail, "Client not expected to fail TLS connection.");
+			if (cli_expect == Expected.dontCare) logDiagnostic("Client tunnel failed (dont-care): %s", e.msg);
+			else if (cli_expect == Expected.fail) logDiagnostic("Client tunnel failed as expected: %s", e.msg);
+			else {
+				logError("Client tunnel failed: %s", e.toString().sanitize);
+				assert(false, "Client not expected to fail TLS connection.");
+			}
 			return;
 		}
-		if (srv_fail) return;
+		if (srv_expect == Expected.fail) return;
 		cconn.write("foo\r\n");
 		assert(cconn.readLine() == "bar");
 		cconn.finalize();
@@ -86,38 +98,38 @@ void test()
 
 	// fail for untrusted server cert
 	testConn(
-		true, null, null, null, "localhost", TLSPeerValidationMode.trustedCert,
-		true, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
+		Expected.fail, null, null, null, "localhost", TLSPeerValidationMode.trustedCert,
+		Expected.fail, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
 	);
 
 	// succeed for untrusted server cert with disabled validation
 	testConn(
-		false, null, null, null, null, TLSPeerValidationMode.none,
-		false, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
+		Expected.success, null, null, null, null, TLSPeerValidationMode.none,
+		Expected.success, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
 	);
 
 	// succeed for untrusted server cert if ignored
 	testConn(
-		false, null, null, null, "localhost", TLSPeerValidationMode.requireCert|TLSPeerValidationMode.checkPeer,
-		false, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
+		Expected.success, null, null, null, "localhost", TLSPeerValidationMode.requireCert|TLSPeerValidationMode.checkPeer,
+		Expected.success, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
 	);
 
 	// fail for trusted server cert with no/wrong host name
 	testConn(
-		true, null, null, "ca.crt", "wronghost", TLSPeerValidationMode.trustedCert,
-		false, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
+		Expected.fail, null, null, "ca.crt", "wronghost", TLSPeerValidationMode.trustedCert,
+		Expected.success, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
 	);
 
 	// succeed for trusted server cert with no/wrong host name if ignored
 	testConn(
-		false, null, null, "ca.crt", "wronghost", TLSPeerValidationMode.trustedCert & ~TLSPeerValidationMode.checkPeer,
-		false, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
+		Expected.success, null, null, "ca.crt", "wronghost", TLSPeerValidationMode.trustedCert & ~TLSPeerValidationMode.checkPeer,
+		Expected.success, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
 	);
 
 	// succeed for trusted server cert
 	testConn(
-		false, null, null, "ca.crt", "localhost", TLSPeerValidationMode.trustedCert,
-		false, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
+		Expected.success, null, null, "ca.crt", "localhost", TLSPeerValidationMode.trustedCert,
+		Expected.success, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
 	);
 
 	// succeed with no certificates
@@ -132,26 +144,26 @@ void test()
 
 	// fail for untrusted server cert
 	testConn(
-		false, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
-		true, "server.crt", "server.key", null, null, TLSPeerValidationMode.trustedCert
+		Expected.dontCare, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
+		Expected.fail, "server.crt", "server.key", null, null, TLSPeerValidationMode.trustedCert
 	);
 
 	// succeed for untrusted server cert with disabled validation
 	testConn(
-		false, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
-		false, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
+		Expected.success, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
+		Expected.success, "server.crt", "server.key", null, null, TLSPeerValidationMode.none
 	);
 
 	// succeed for untrusted server cert if ignored
 	testConn(
-		false, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
-		false, "server.crt", "server.key", null, null, TLSPeerValidationMode.requireCert
+		Expected.success, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
+		Expected.success, "server.crt", "server.key", null, null, TLSPeerValidationMode.requireCert
 	);
 
 	// succeed for trusted server cert
 	testConn(
-		false, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
-		false, "server.crt", "server.key", "ca.crt", null, TLSPeerValidationMode.trustedCert & ~TLSPeerValidationMode.checkPeer
+		Expected.success, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
+		Expected.success, "server.crt", "server.key", "ca.crt", null, TLSPeerValidationMode.trustedCert & ~TLSPeerValidationMode.checkPeer
 	);
 
 	exitEventLoop();
