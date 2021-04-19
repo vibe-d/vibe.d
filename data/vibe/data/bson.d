@@ -1631,6 +1631,11 @@ struct BsonSerializer {
 		return false;
 	}
 
+	void ignoreValue() @safe
+	{
+		// Not needed
+	}
+
 	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(auto ref T value)
 	@safe {
 		alias UT = Unqual!T;

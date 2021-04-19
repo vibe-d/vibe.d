@@ -104,6 +104,7 @@
 			void endReadArrayEntry(ElementTypeTraits)(size_t index);
 			T readValue(TypeTraits, T)();
 			bool tryReadNull(TypeTraits)();
+			void ignoreValue();
 		}
 		---
 
@@ -888,7 +889,9 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				ser.readDictionary!Traits((name) {
 					static if (hasSerializableFields!(T, Policy)) {
 						switch (name) {
-							default: break;
+							default:
+								ser.ignoreValue();
+								break;
 							foreach (i, mname; SerializableFields!(T, Policy)) {
 								alias TM = TypeTuple!(typeof(__traits(getMember, T, mname)));
 								alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
@@ -1638,6 +1641,11 @@ version (unittest) {
 				return true;
 			} else return false;
 		}
+
+		void ignoreValue() @safe
+		{
+			// Not needed for this serializer
+		}
 	}
 }
 
@@ -2199,3 +2207,4 @@ unittest { // issue #2110 - single-element tuples
 	assert(serialize!TestSerializer(s) == expected);
 	assert(deserialize!(TestSerializer, S)(expected) == s);
 }
+
