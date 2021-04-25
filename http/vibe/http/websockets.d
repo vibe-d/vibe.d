@@ -1042,7 +1042,7 @@ private static immutable s_webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11
  * Currently only 6 values are defined, however the opcode is defined as
  * taking 4 bits.
  */
-private enum FrameOpcode : ubyte {
+public enum FrameOpcode : ubyte {
 	continuation = 0x0,
 	text = 0x1,
 	binary = 0x2,
