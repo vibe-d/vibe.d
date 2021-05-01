@@ -51,7 +51,7 @@ version(unittest)
 */
 template getSymbols(T)
 {
-	import std.typetuple : TypeTuple, NoDuplicates, staticMap;
+	import std.typetuple : TypeTuple, NoDuplicates;
 	import std.traits;
 
 	private template Implementation(T)
@@ -59,7 +59,12 @@ template getSymbols(T)
 		static if (is(T == U!V, alias U, V)) { // single-argument template support
 			alias Implementation = TypeTuple!(U, Implementation!V);
 		}
-		else static if (isAggregateType!T || is(T == enum)) {
+		else static if (isAggregateType!T) {
+			// dmd will no longer drop qualifier for aggregate passed to alias param:
+			// https://issues.dlang.org/show_bug.cgi?id=20863
+			alias Implementation = Unqual!T;
+		}
+		else static if (is(T == enum)) {
 			alias Implementation = T;
 		}
 		else static if (isStaticArray!T || isArray!T) {
@@ -77,8 +82,7 @@ template getSymbols(T)
 		else
 			alias Implementation = TypeTuple!();
 	}
-
-	alias getSymbols = NoDuplicates!(staticMap!(Unqual, Implementation!T));
+	alias getSymbols = NoDuplicates!(Implementation!T);
 }
 
 ///
