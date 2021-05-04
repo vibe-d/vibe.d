@@ -60,19 +60,19 @@ template getSymbols(T)
 			alias Implementation = TypeTuple!(U, Implementation!V);
 		}
 		else static if (isAggregateType!T || is(T == enum)) {
-			alias Implementation = T;
+			alias Implementation = Unqual!T;
 		}
 		else static if (isStaticArray!T || isArray!T) {
-			alias Implementation = Implementation!(typeof(T.init[0]));
+			alias Implementation = Implementation!(Unqual!(typeof(T.init[0])));
 		}
 		else static if (isAssociativeArray!T) {
 			alias Implementation = TypeTuple!(
-				Implementation!(ValueType!T),
-				Implementation!(KeyType!T)
+				Implementation!(Unqual!(ValueType!T)),
+				Implementation!(Unqual!(KeyType!T))
 			);
 		}
 		else static if (isPointer!T) {
-			alias Implementation = Implementation!(PointerTarget!T);
+			alias Implementation = Implementation!(Unqual!(PointerTarget!T));
 		}
 		else
 			alias Implementation = TypeTuple!();
