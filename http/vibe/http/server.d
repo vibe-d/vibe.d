@@ -1711,7 +1711,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if (m_rawConnection && m_rawConnection.connected) {
 			try if (m_conn) m_conn.flush();
 			catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
-			if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!long) {
+			if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!ulong) {
 				logDebug("HTTP response only written partially before finalization. Terminating connection.");
 				m_requiresConnectionClose = true;
 			}
