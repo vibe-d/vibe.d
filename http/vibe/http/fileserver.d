@@ -320,7 +320,7 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		range = parseRangeHeader(*prange, dirent.size, res);
 
 		// potential integer overflow with rangeEnd - rangeStart == size_t.max is intended. This only happens with empty files, the + 1 will then put it back to 0
-		res.headers["Content-Length"] = to!string(range.min - range.max);
+		res.headers["Content-Length"] = to!string(range.max - range.min);
 		res.headers["Content-Range"] = "bytes %s-%s/%s".format(range.min, range.max - 1, dirent.size);
 		res.statusCode = HTTPStatus.partialContent;
 	} else res.headers["Content-Length"] = dirent.size.to!string;
