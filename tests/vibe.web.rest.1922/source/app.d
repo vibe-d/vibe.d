@@ -46,6 +46,7 @@ interface IItemAPI {
 		string item;
 	}
 
+@safe:
 	@anyAuth string getName(string item, AuthInfo info);
 	@anyAuth int getNum(int num);
 
@@ -53,6 +54,7 @@ interface IItemAPI {
 }
 
 class ItemAPI : IItemAPI {
+@safe:
 	string getName(string item, AuthInfo info){
 		return info.name ~ item;
 	}
@@ -64,6 +66,7 @@ class ItemAPI : IItemAPI {
 
 @requiresAuth
 interface IAuthAPI {
+@safe:
 	@noAuth int getNonAuthNumber(int num);
 	@anyAuth int getAuthNumber(AuthInfo info, int num);
 	@anyAuth Collection!IItemAPI items();
@@ -73,6 +76,7 @@ interface IAuthAPI {
 
 class AuthAPI : IAuthAPI {
 	private IItemAPI m_items;
+@safe:
 	this(){
 		m_items = new ItemAPI;
 	}

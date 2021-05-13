@@ -2,10 +2,12 @@ import std.datetime;
 import vibe.d;
 
 interface ITestAPI {
+@safe:
     string postDefault(int value, bool check = true);
 }
 
 class Test : ITestAPI {
+@safe:
     string postDefault(int value, bool check = true) {
         import std.format;
         return format("Value: %s, Check: %s", value, check);

@@ -6,6 +6,7 @@ interface ITestAPI
 {
 	@property ISub sub();
 
+@safe:
 	@method(HTTPMethod.POST) @path("other/path")
 	string info();
 	string getInfo();
@@ -22,6 +23,7 @@ interface ITestAPI
 }
 
 interface ISub {
+@safe:
 	int get(int id);
 }
 
@@ -31,6 +33,7 @@ class TestAPI : ITestAPI
 
 	this() { m_sub = new SubAPI; }
 
+@safe:
 	@property SubAPI sub() { return m_sub; }
 
 	string getInfo() { return "description"; }
@@ -49,6 +52,7 @@ class SubAPI : ISub {
 
 interface ITestAPICors
 {
+@safe:
 	string getFoo();
 	string setFoo();
 	string addFoo();
@@ -62,6 +66,7 @@ interface ITestAPICors
 
 class TestAPICors : ITestAPICors
 {
+@safe:
 	string getFoo() { return "foo"; };
 	string setFoo() { return "foo"; };
 	string addFoo() { return "foo"; };

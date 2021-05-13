@@ -23,7 +23,7 @@ class LocalForumAPI : ForumAPI {
 		m_data = new ForumData;
 		m_threads = new LocalThreadAPI(m_data);
 	}
-
+@safe:
 	Collection!ThreadAPI threads() { return Collection!ThreadAPI(m_threads); }
 }
 
@@ -33,6 +33,7 @@ class LocalThreadAPI : ThreadAPI {
 		LocalPostAPI m_posts;
 	}
 
+@safe:
 	this(ForumData data)
 	{
 		m_data = data;
@@ -48,7 +49,7 @@ class LocalThreadAPI : ThreadAPI {
 
 	string[] get()
 	{
-		return m_data.threads.keys;
+		return () @trusted { return m_data.threads.keys; } ();
 	}
 }
 
@@ -57,6 +58,7 @@ class LocalPostAPI : PostAPI {
 		ForumData m_data;
 	}
 
+@safe:
 	this(ForumData data)
 	{
 		m_data = data;

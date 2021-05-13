@@ -1624,7 +1624,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 
 			static if (is(RT == void)) {
 				// TODO: remove after deprecation period
-				() @trusted { __traits(getMember, inst, Method)(params); } ();
+				__traits(getMember, inst, Method)(params);
 				returnHeaders();
 				res.writeBody(cast(ubyte[])null);
 			} else {
@@ -1633,9 +1633,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 					pragma(msg, "Non-@safe @after evaluators are deprecated - annotate @after evaluator function for " ~
 						T.stringof ~ "." ~ Method ~ " as @safe.");
 
-				auto ret = () @trusted {
-					return evaluateOutputModifiers!CFunc(
-						__traits(getMember, inst, Method)(params), req, res); } ();
+				auto ret = evaluateOutputModifiers!CFunc(
+						__traits(getMember, inst, Method)(params), req, res);
 				returnHeaders();
 
 				string accept_str;

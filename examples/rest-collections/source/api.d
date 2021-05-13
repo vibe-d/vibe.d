@@ -5,6 +5,7 @@ import vibe.web.rest;
 
 interface ForumAPI {
 	// base path /threads/
+@safe:
 	Collection!ThreadAPI threads();
 }
 
@@ -14,6 +15,7 @@ interface ThreadAPI {
 		string _thread_name;
 	}
 
+@safe:
 	// base path /threads/:thread_number/posts/
 	Collection!PostAPI posts(string _thread_name);
 
@@ -33,6 +35,7 @@ interface PostAPI {
 		int _post_index;
 	}
 
+@safe:
 	// POST /threads/:thread_number/posts/
 	// Posts a new thread reply
 	void post(string _thread_name, string message);

@@ -71,6 +71,7 @@ struct Auth {
 
 @requiresAuth
 interface IService {
+@safe:
     @noAuth int getPublic();
     @anyAuth int getAny();
     @anyAuth int getAnyA(Auth auth);
@@ -82,6 +83,7 @@ interface IService {
 }
 
 class Service : IService {
+@safe:
     int getPublic() { return 42; }
     int getAny() { return 42; }
     int getAnyA(Auth auth) { assert(auth.username.among("admin", "peter", "stacy")); return 42; }

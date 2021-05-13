@@ -21,11 +21,13 @@ shared static this()
 }
 
 interface ILlama {
+@safe:
     @bodyParam("llama", "llama")
     string updateLlama(string llama = null);
 }
 
 class Llama : ILlama {
+@safe:
     string updateLlama(string llama) {
         assert(llama == "llama", "[vibe.web.rest.1125.Server] Expected llama, got: " ~ llama);
         return llama;

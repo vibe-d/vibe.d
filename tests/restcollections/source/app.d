@@ -3,6 +3,7 @@ module app;
 import vibe.vibe;
 
 interface API {
+@safe:
 	Collection!ItemAPI items();
 }
 
@@ -11,6 +12,7 @@ interface ItemAPI {
 		string _item;
 	}
 
+@safe:
 	Collection!SubItemAPI subItems(string _item);
 
 	ItemManagerAPI manager();
@@ -22,6 +24,7 @@ interface SubItemAPI {
 		int _index;
 	}
 
+@safe:
 	@property int length(string _item);
 
 	@method(HTTPMethod.GET)
@@ -29,12 +32,14 @@ interface SubItemAPI {
 }
 
 interface ItemManagerAPI {
+@safe:
 	@property string databaseURL();
 }
 
 
 class LocalAPI : API {
 	LocalItemAPI m_items;
+@safe:
 	this() { m_items = new LocalItemAPI; }
 	Collection!ItemAPI items() { return Collection!ItemAPI(m_items); }
 }
@@ -45,6 +50,7 @@ class LocalItemAPI : ItemAPI {
 		LocalSubItemAPI m_subItems;
 	}
 
+@safe:
 	this()
 	{
 		m_manager = new LocalItemManagerAPI;
@@ -59,6 +65,7 @@ class LocalItemAPI : ItemAPI {
 class LocalSubItemAPI : SubItemAPI {
 	private LocalItemManagerAPI m_manager;
 
+@safe:
 	this(LocalItemManagerAPI manager)
 	{
 		m_manager = manager;
@@ -72,6 +79,7 @@ class LocalSubItemAPI : SubItemAPI {
 class LocalItemManagerAPI : ItemManagerAPI {
 	string[][string] items;
 
+@safe:
 	this()
 	{
 		items = [

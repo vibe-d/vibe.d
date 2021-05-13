@@ -3,11 +3,13 @@ import vibe.d;
 
 interface IOrientDBRoot
 {
+@safe:
 	@property IOrientDBQuery query();
 }
 
 interface IOrientDBQuery
 {
+@safe:
 	@method(HTTPMethod.GET)
 	@path(":db_name/sql/:query/:result_set_size")
 	Json sql(string _db_name, string _query, int _result_set_size);
@@ -19,11 +21,13 @@ interface IOrientDBQuery
 
 class OrientDBRoot : IOrientDBRoot {
 	private OrientDBQuery m_query;
+@safe:
 	override @property IOrientDBQuery query() { return m_query; }
 	public this() { this.m_query = new OrientDBQuery(); }
 }
 
 class OrientDBQuery : IOrientDBQuery {
+@safe:
 	override Json sql(string _db_name, string _query, int _result_set_size) {
 		assert(_db_name == Param1, _db_name);
 		assert(_query == Param2, _query);
