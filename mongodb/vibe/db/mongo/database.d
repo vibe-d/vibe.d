@@ -120,6 +120,10 @@ struct MongoDatabase
 		See $(LINK http://www.mongodb.org/display/DOCS/Commands) for a list
 		of possible values for command_and_options.
 
+		Note that some commands return a cursor instead of a single document.
+		In this case, use `runListCommand` instead of `runCommand` to be able
+		to properly iterate over the results.
+
 		Params:
 			command_and_options = Bson object containing the command to be executed
 				as well as the command parameters as fields
@@ -129,5 +133,18 @@ struct MongoDatabase
 	Bson runCommand(T)(T command_and_options)
 	{
 		return m_client.getCollection(m_commandCollection).findOne(command_and_options);
+	}
+	/// ditto
+	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options)
+	{
+		auto cur = runCommand(command_and_options);
+		if (cur["ok"].get!double != 1.0)
+			throw new MongoException("MongoDB list command failed: " ~ cur["errmsg"].get!string);
+
+		auto cursorid = cur["cursor"]["id"].get!long;
+		static if (is(R == Bson))
+			auto existing = cur["cursor"]["firstBatch"].get!(Bson[]);
+		else auto existing = cur["cursor"]["firstBatch"].deserializeBson!(R[]);
+		return MongoCursor!R(m_client, m_commandCollection, cursorid, existing);
 	}
 }
