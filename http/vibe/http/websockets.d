@@ -799,13 +799,20 @@ final class WebSocket {
 	}
 
 	private void startReader()
-	{
-		m_readMutex.performLocked!({}); //Wait until initialization
-		scope (exit) {
-			m_conn.close();
-			m_readCondition.notifyAll();
+	nothrow {
+		try m_readMutex.performLocked!({}); //Wait until initialization
+		catch (Exception e) {
+			logException(e, "WebSocket reader task failed to wait for initialization");
+			try m_conn.close();
+			catch (Exception e) logException(e, "Failed to close WebSocket connection after initialization failure");
+			m_closeCode = WebSocketCloseReason.abnormalClosure;
+			try m_readCondition.notifyAll();
+			catch (Exception e) assert(false, e.msg);
+			return;
 		}
+
 		try {
+			loop:
 			while (!m_conn.empty) {
 				assert(!m_nextMessage);
 				/*scope*/auto msg = new IncomingWebSocketMessage(m_conn, m_rng);
@@ -841,7 +848,7 @@ final class WebSocket {
 
 						if(!m_sentCloseFrame) close();
 						logDebug("Terminating connection (%s)", m_sentCloseFrame);
-						return;
+						break loop;
 					case FrameOpcode.text:
 					case FrameOpcode.binary:
 					case FrameOpcode.continuation: // FIXME: add proper support for continuation frames!
@@ -860,7 +867,12 @@ final class WebSocket {
 
 		// If no close code was passed, e.g. this was an unclean termination
 		//  of our websocket connection, set the close code to 1006.
-		if (this.m_closeCode == 0) this.m_closeCode = WebSocketCloseReason.abnormalClosure;
+		if (m_closeCode == 0) m_closeCode = WebSocketCloseReason.abnormalClosure;
+
+		try m_conn.close();
+		catch (Exception e) logException(e, "Failed to close WebSocket connection");
+		try m_readCondition.notifyAll();
+		catch (Exception e) assert(false, e.msg);
 	}
 
 	private void sendPing()

@@ -1176,33 +1176,39 @@ final class RedisSubscriberImpl {
 		}
 
 		// Waits for data and advises the handler
-		m_listenerHelper = runTask({
+		m_listenerHelper = runTask(() nothrow {
 			loop: while(true) {
 				if (m_stop || !m_lockedConnection.conn) break;
 
-				const waitResult = m_lockedConnection.conn.waitForDataEx(100.msecs);
-				if (m_stop) break;
+				try {
+					const waitResult = m_lockedConnection.conn.waitForDataEx(100.msecs);
+					if (m_stop) break;
 
-				final switch (waitResult) {
-					case WaitForDataStatus.noMoreData:
-						break loop;
-					case WaitForDataStatus.timeout:
-						logTrace("No data arrival in 100 ms...");
-						continue loop;
-					case WaitForDataStatus.dataAvailable:
+					final switch (waitResult) {
+						case WaitForDataStatus.noMoreData:
+							break loop;
+						case WaitForDataStatus.timeout:
+							logTrace("No data arrival in 100 ms...");
+							continue loop;
+						case WaitForDataStatus.dataAvailable:
+					}
+
+					// Data has arrived, this task is in charge of notifying the main handler loop
+					logTrace("Notify data arrival");
+
+					() @trusted { receiveTimeout(0.seconds, (Variant v) {}); } (); // clear message queue
+					() @trusted { m_listener.send(Action.DATA); } ();
+					if (!() @trusted { return receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }); } ())
+						assert(false);
+				} catch (Exception e) {
+					logException(e, "Redis listen task failed - stopping to listen");
+					break;
 				}
-
-				// Data has arrived, this task is in charge of notifying the main handler loop
-				logTrace("Notify data arrival");
-
-				() @trusted { receiveTimeout(0.seconds, (Variant v) {}); } (); // clear message queue
-				() @trusted { m_listener.send(Action.DATA); } ();
-				if (!() @trusted { return receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }); } ())
-					assert(false);
 			}
 
 			logTrace("Listener Helper exit.");
-			() @trusted { m_listener.send(Action.STOP); } ();
+			try () @trusted { m_listener.send(Action.STOP); } ();
+			catch (Exception e) assert(false, e.msg);
 		} );
 
 		m_listening = true;
@@ -1264,7 +1270,7 @@ final class RedisSubscriberImpl {
 	/// The timeout is passed over to the listener, which closes after the period of inactivity.
 	/// Use 0.seconds timeout to specify a very long time (365 days)
 	/// Errors will be sent to Callback Delegate on channel "Error".
-	Task listen(void delegate(string, string) @safe callback, Duration timeout = 0.seconds)
+	Task listen(void delegate(string, string) @safe nothrow callback, Duration timeout = 0.seconds)
 	{
 		logTrace("Listen");
 		void impl() @safe {
@@ -1272,12 +1278,13 @@ final class RedisSubscriberImpl {
 			m_waiter = Task.getThis();
 			scope(exit) m_waiter = Task();
 			Throwable ex;
-			m_listener = runTask({
+			m_listener = runTask(() nothrow {
 				try blisten(callback, timeout);
 				catch(Exception e) {
 					ex = e;
 					if (m_waiter != Task() && !m_listening) {
-						() @trusted { m_waiter.send(Action.STARTED); } ();
+						try () @trusted { m_waiter.send(Action.STARTED); } ();
+						catch (Exception e) assert(false, e.msg);
 						return;
 					}
 					callback("Error", e.msg);
@@ -1300,10 +1307,19 @@ final class RedisSubscriberImpl {
 		return m_listener;
 	}
 	/// ditto
-	deprecated("Use an @safe message callback")
+	deprecated("Use an `@safe` message callback")
 	Task listen(void delegate(string, string) @system onMessage, Duration timeout = 0.seconds)
 	{
 		return listen((string ch, string msg) @trusted => onMessage(ch, msg));
+	}
+	/// ditto
+	deprecated("Use a `nothrow` message callback")
+	Task listen(void delegate(string, string) @safe callback, Duration timeout = 0.seconds)
+	{
+		return listen((ch, msg) @safe nothrow {
+			try callback(ch, msg);
+			catch (Exception e) logException(e, "Uncaught exception in Redis listen callback");
+		}, timeout);
 	}
 }
 
@@ -1544,8 +1560,8 @@ private final class RedisConnection {
 		m_port = port;
 	}
 
-	@property TCPConnection conn() { return m_conn; }
-	@property void conn(TCPConnection conn) { m_conn = conn; }
+	@property TCPConnection conn() nothrow { return m_conn; }
+	@property void conn(TCPConnection conn) nothrow { m_conn = conn; }
 
 	void setAuth(string password)
 	{

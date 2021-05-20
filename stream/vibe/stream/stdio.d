@@ -8,6 +8,7 @@
 module vibe.stream.stdio;
 
 import vibe.core.core;
+import vibe.core.log;
 import vibe.core.stream;
 import vibe.stream.taskpipe;
 
@@ -112,20 +113,23 @@ class StdFileStream : ConnectionStream {
 	private void readThreadFunc()
 	{
 		bool loop_flag = false;
-		runTask({
+		runTask(() nothrow {
 			ubyte[1] buf;
-			scope(exit) {
-				if (m_file.isOpen) m_file.close();
-				m_readPipe.finalize();
-				if (loop_flag) exitEventLoop();
-				else loop_flag = true;
-			}
-			while (!m_file.eof) {
+			try while (!m_file.eof) {
 				auto data = m_file.rawRead(buf);
 				if (!data.length) break;
 				m_readPipe.write(data, IOMode.all);
 				vibe.core.core.yield();
 			}
+			catch (Exception e) logException!(LogLevel.diagnostic)(e, "Failed to read from File");
+
+			try {
+				if (m_file.isOpen) m_file.close();
+			} catch (Exception e) logException(e, "Failed to close File");
+			try m_readPipe.finalize();
+			catch (Exception e) assert(false, e.msg);
+			if (loop_flag) exitEventLoop();
+			else loop_flag = true;
 		});
 		if (!loop_flag) {
 			loop_flag = true;
@@ -138,20 +142,22 @@ class StdFileStream : ConnectionStream {
 		import std.algorithm : min;
 
 		bool loop_flag = false;
-		runTask({
+		runTask(() nothrow {
 			ubyte[1024] buf;
-			scope(exit) {
-				if (m_file.isOpen) m_file.close();
-				if (loop_flag) exitEventLoop();
-				else loop_flag = true;
-			}
-			while (m_file.isOpen && !m_writePipe.empty) {
+			try while (m_file.isOpen && !m_writePipe.empty) {
 				auto len = min(buf.length, m_writePipe.leastSize);
 				if (!len) break;
 				m_writePipe.read(buf[0 .. len], IOMode.all);
 				m_file.rawWrite(buf[0 .. len]);
 				vibe.core.core.yield();
 			}
+			catch (Exception e) logException!(LogLevel.diagnostic)(e, "Failed to write to File");
+
+			try {
+				if (m_file.isOpen) m_file.close();
+			} catch (Exception e) logException(e, "Failed to close File");
+			if (loop_flag) exitEventLoop();
+			else loop_flag = true;
 		});
 		if (!loop_flag) {
 			loop_flag = true;
