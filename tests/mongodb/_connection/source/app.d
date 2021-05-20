@@ -3,6 +3,7 @@ import vibe.db.mongo.client;
 import vibe.core.core;
 import vibe.core.log;
 import core.time;
+import std.algorithm;
 import std.conv;
 import std.exception;
 
@@ -143,6 +144,15 @@ int main(string[] args)
 	assert(v["hello"].get!string == "world",
 			"Mongo server didn't operate as epxected. Got " ~ v["hello"].to!string ~ " instead of world!");
 	logInfo(`just-inserted {"hello": "world"} entry found`);
+
+	assert(db.runListCommand(["listCollections": Bson(1.0)])
+		.map!(c => c["name"].get!string)
+		.equal(["collection"]));
+
+	coll.drop();
+
+	assert(db.runListCommand(["listCollections": Bson(1.0)])
+		.empty);
 
 	logInfo("All tests passed");
 	return 0;
