@@ -1439,7 +1439,13 @@ final class HTTPServerResponse : HTTPResponse {
 	@property InterfaceProxy!OutputStream bodyWriter()
 	@safe {
 		assert(!!m_conn);
-		if (m_bodyWriter) return m_bodyWriter;
+		if (m_bodyWriter) {
+			// for test responses, the body writer is pre-set, without headers
+			// being written, so we may need to do that here
+			if (!m_headerWritten) writeHeader();
+
+			return m_bodyWriter;
+		}
 
 		assert(!m_headerWritten, "A void body was already written!");
 		assert(this.statusCode >= 200, "1xx responses can't have body");
@@ -1729,7 +1735,7 @@ final class HTTPServerResponse : HTTPResponse {
 	@safe {
 		import vibe.stream.wrapper;
 
-		assert(!m_bodyWriter && !m_headerWritten, "Try to write header after body has already begun.");
+		assert(!m_headerWritten, "Try to write header after body has already begun.");
 		assert(this.httpVersion != HTTPVersion.HTTP_1_0 || this.statusCode >= 200, "Informational status codes aren't supported by HTTP/1.0.");
 
 		// Don't set m_headerWritten for 1xx status codes
