@@ -510,6 +510,66 @@ final class URLRouter : HTTPServerRequestHandler {
 	assert(ensureMatch("/:foo/", "/foo/bar/") !is null);
 }
 
+unittest { // issue #2561
+	import vibe.http.server : createTestHTTPServerRequest, createTestHTTPServerResponse;
+	import vibe.inet.url : URL;
+	import vibe.stream.memory : createMemoryOutputStream;
+
+	Route[] routes = [
+		Route(HTTPMethod.PUT, "/public/devices/commandList"),
+		Route(HTTPMethod.PUT, "/public/devices/logicStateList"),
+		Route(HTTPMethod.OPTIONS, "/public/devices/commandList"),
+		Route(HTTPMethod.OPTIONS, "/public/devices/logicStateList"),
+		Route(HTTPMethod.PUT, "/public/mnemoschema"),
+		Route(HTTPMethod.PUT, "/public/static"),
+		Route(HTTPMethod.PUT, "/public/dynamic"),
+		Route(HTTPMethod.PUT, "/public/info"),
+		Route(HTTPMethod.PUT, "/public/info-network"),
+		Route(HTTPMethod.PUT, "/public/events"),
+		Route(HTTPMethod.PUT, "/public/eventList"),
+		Route(HTTPMethod.PUT, "/public/availBatteryModels"),
+		Route(HTTPMethod.OPTIONS, "/public/availBatteryModels"),
+		Route(HTTPMethod.OPTIONS, "/public/dynamic"),
+		Route(HTTPMethod.OPTIONS, "/public/eventList"),
+		Route(HTTPMethod.OPTIONS, "/public/events"),
+		Route(HTTPMethod.OPTIONS, "/public/info"),
+		Route(HTTPMethod.OPTIONS, "/public/info-network"),
+		Route(HTTPMethod.OPTIONS, "/public/mnemoschema"),
+		Route(HTTPMethod.OPTIONS, "/public/static"),
+		Route(HTTPMethod.PUT, "/settings/admin/getinfo"),
+		Route(HTTPMethod.PUT, "/settings/admin/setconf"),
+		Route(HTTPMethod.PUT, "/settings/admin/checksetaccess"),
+		Route(HTTPMethod.OPTIONS, "/settings/admin/checksetaccess"),
+		Route(HTTPMethod.OPTIONS, "/settings/admin/getinfo"),
+		Route(HTTPMethod.OPTIONS, "/settings/admin/setconf"),
+	];
+
+	auto router = new URLRouter;
+
+	foreach (r; routes)
+		router.match(r.method, r.pattern, (req, res) {
+			res.writeBody("OK");
+		});
+
+	{ // make sure unmatched routes are not handled by the router
+		auto req = createTestHTTPServerRequest(URL("http://localhost/foobar"), HTTPMethod.PUT);
+		auto res = createTestHTTPServerResponse();
+		router.handleRequest(req, res);
+		assert(!res.headerWritten);
+	}
+
+	// ensure all routes are matched
+	foreach (r; routes) {
+		auto url = URL("http://localhost"~r.pattern);
+		auto output = createMemoryOutputStream();
+		auto req = createTestHTTPServerRequest(url, r.method);
+		auto res = createTestHTTPServerResponse(output, null, TestHTTPResponseMode.bodyOnly);
+		router.handleRequest(req, res);
+		//assert(res.headerWritten);
+		assert(output.data == "OK");
+	}
+}
+
 
 /**
 	Convenience abstraction for a single `URLRouter` route.
@@ -955,7 +1015,7 @@ private struct MatchGraphBuilder {
 		if (!m_nodes.length) return;
 
 		import vibe.utils.hashmap;
-		HashMap!(size_t, NodeIndex) combined_nodes;
+		HashMap!(LinkedSetHash, NodeIndex) combined_nodes;
 		Array!bool visited;
 		visited.length = m_nodes.length * 2;
 		Stack!NodeIndex node_stack;
@@ -971,7 +1031,7 @@ private struct MatchGraphBuilder {
 
 			foreach (ch; ubyte.min .. ubyte.max+1) {
 				auto chnodes = m_nodes[n].edges[ch];
-				size_t chhash = m_edgeEntries.getHash(chnodes);
+				LinkedSetHash chhash = m_edgeEntries.getHash(chnodes);
 
 				// handle trivial cases
 				if (m_edgeEntries.hasMaxLength(chnodes, 1))
@@ -1044,7 +1104,7 @@ private struct MatchGraphBuilder {
 			}
 			logInfo("  %s: %s", i, n.terminals[].map!(t => t.var != VarIndex.max ? format("T%s(%s)", t.index, t.var) : format("T%s", t.index)).join(" "));
 			ubyte first_char;
-			size_t list_hash;
+			LinkedSetHash list_hash;
 			NodeSet list;
 
 			void printEdges(ubyte last_char) {
@@ -1109,6 +1169,10 @@ private struct MatchGraphBuilder {
 	}
 }
 
+
+/** Used to store and manipulate multiple linked lists within a single array
+	based storage.
+*/
 struct LinkedSetBacking(T) {
 	import std.container.array : Array;
 	import std.range : isInputRange;
@@ -1167,13 +1231,16 @@ struct LinkedSetBacking(T) {
 			insert(h, itm);
 	}
 
-	size_t getHash(Handle sh)
+	LinkedSetHash getHash(Handle sh)
 	const {
+		import std.digest.md : md5Of;
+
 		// NOTE: the returned hash is order independent, to avoid bogus
 		//       mismatches when comparing lists of different order
-		size_t ret = 0x72d2da6c;
+		LinkedSetHash ret = cast(LinkedSetHash)md5Of([]);
 		while (sh != Handle.init) {
-			ret ^= (hashOf(m_storage[sh.index].value) ^ 0xb1bdfb8d) * 0x5dbf04a4;
+			auto h = cast(LinkedSetHash)md5Of(cast(const(ubyte)[])(&m_storage[sh.index].value)[0 .. 1]);
+			foreach (i; 0 .. ret.length) ret[i] ^= h[i];
 			sh.index = m_storage[sh.index].next;
 		}
 		return ret;
@@ -1230,11 +1297,15 @@ unittest {
 	assert(h != b.getHash(b.emptySet));
 	s = b.create(5, 3, 7);
 	assert(b.getHash(s) == h);
+	assert(b.getItems(s).equal([7, 3, 5]));
 
 	b.insert(&s, 11);
 	assert(b.hasLength(s, 4));
 	assert(b.getHash(s) != h);
+	assert(b.getItems(s).equal([11, 7, 3, 5]));
 }
+
+alias LinkedSetHash = ulong[16/ulong.sizeof];
 
 private struct Stack(E)
 {
