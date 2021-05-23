@@ -1,0 +1,467 @@
+/** Implements a buffered random access wrapper stream.
+
+	Copyright: © 2020-2021 Sönke Ludwig
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Sönke Ludwig
+*/
+module vibe.stream.bufferedstream;
+
+import inbase.core.refcount;
+
+import std.algorithm;
+import std.traits : Unqual;
+import vibe.core.stream;
+
+
+/** Creates a new buffered stream wrapper.
+
+	Params:
+		stream = The stream that is going to be wrapped
+		buffer_size = Size of a single buffer segment
+		buffer_count = Number of buffer segments
+*/
+auto bufferedStream(S)(S stream, size_t buffer_size = 16_384, size_t buffer_count = 4)
+	if (isRandomAccessStream!S)
+	in { assert(buffer_size > 0 && buffer_count > 0); }
+do {
+	return BufferedStream!S(stream.move, buffer_size, buffer_count);
+}
+
+
+/** Random access stream that provides buffering on top of a wrapped stream.
+
+	The source stream is logically split up into chunks of equal size, where
+	a defined maximum number of those chunks can be cached in memory. Cached
+	chunks are managed using a LRU strategy.
+*/
+struct BufferedStream(S) {
+	import std.experimental.allocator;
+	import std.experimental.allocator.mallocator;
+
+	private final static class State {
+		S stream;
+		ulong ptr;
+		ulong size;
+		size_t bufferSize;
+		Buffer[] buffers;
+		ulong accessCount;
+
+		this(size_t buffer_size, size_t buffer_count)
+		{
+			this.bufferSize = buffer_size;
+			this.buffers = Mallocator.instance.makeArray!Buffer(buffer_count);
+			foreach (ref b; this.buffers)
+				b.memory = Mallocator.instance.makeArray!ubyte(buffer_size);
+		}
+
+		~this()
+		{
+			if (this.stream.writable)
+				flush();
+
+			foreach (b; this.buffers)
+				Mallocator.instance.dispose(b.memory);
+			Mallocator.instance.dispose(this.buffers);
+		}
+
+		void flush()
+		{
+			foreach (i; 0 .. this.buffers.length)
+				flushBuffer(i);
+			this.stream.flush();
+		}
+
+		private size_t bufferChunk(ulong chunk_index)
+		{
+			auto idx = this.buffers.countUntil!((ref b) => b.chunk == chunk_index);
+			if (idx >= 0) return idx;
+
+			auto offset = chunk_index * this.bufferSize;
+			if (offset >= this.size) this.size = this.stream.size;
+			if (offset >= this.size) throw new Exception("Reading past end of stream.");
+
+			auto newidx = this.buffers.minIndex!((ref a, ref b) => a.lastAccess < b.lastAccess);
+			flushBuffer(newidx);
+
+			this.buffers[newidx].fill = 0;
+			this.buffers[newidx].chunk = chunk_index;
+			fillBuffer(newidx, min(this.size - chunk_index*this.bufferSize, this.bufferSize));
+			return newidx;
+		}
+
+		private void fillBuffer(size_t buffer, size_t size)
+		{
+			auto b = &this.buffers[buffer];
+			if (size <= b.fill) return;
+			assert(size <= this.bufferSize);
+
+			this.stream.seek(b.chunk*this.bufferSize + b.fill);
+			this.stream.read(b.memory[b.fill .. size]);
+			b.fill = size;
+			touchBuffer(buffer);
+		}
+
+		private void flushBuffer(size_t buffer)
+		{
+			auto b = &this.buffers[buffer];
+			if (!b.fill || !b.dirty) return;
+			this.stream.seek(b.chunk * this.bufferSize);
+			this.stream.write(b.memory[0 .. b.fill]);
+			if (b.chunk * this.bufferSize + b.fill > this.size)
+				this.size = b.chunk * this.bufferSize + b.fill;
+			b.dirty = false;
+			touchBuffer(buffer);
+		}
+
+		private void touchBuffer(size_t buffer)
+		{
+			this.buffers[buffer].lastAccess = ++this.accessCount;
+		}
+
+		private void iterateChunks(B)(ulong offset, scope B[] bytes,
+			scope bool delegate(ulong offset, scope B[] bytes, sizediff_t buffer, size_t buffer_begin, size_t buffer_end) @safe del)
+		@safe {
+			auto begin = offset;
+			auto end = offset + bytes.length;
+
+			if (bytes.length == 0) return;
+
+			auto chunk_begin = begin / this.bufferSize;
+			auto chunk_end = (end + this.bufferSize - 1) / this.bufferSize;
+
+			foreach (i; chunk_begin .. chunk_end) {
+				auto chunk_off = i * this.bufferSize;
+				auto cstart = max(chunk_off, begin);
+				auto cend = min(chunk_off + this.bufferSize, end);
+				assert(cend > cstart);
+
+				auto buf = this.buffers.countUntil!((ref b) => b.chunk == i);
+				auto buf_begin = cast(size_t)(cstart - chunk_off);
+				auto buf_end = cast(size_t)(cend - chunk_off);
+
+				auto bytes_chunk = bytes[cast(size_t)(cstart - begin) .. cast(size_t)(cend - begin)];
+
+				if (!del(cstart, bytes_chunk, buf, buf_begin, buf_end))
+					break;
+			}
+		}
+	}
+
+	private {
+		// makes the stream copyable and makes it small enough to be put into
+		// a stream proxy
+		CountedRef!State m_state;
+	}
+
+	private this(S stream, size_t buffer_size, size_t buffer_count)
+	{
+		m_state = CountedRef!State.create(buffer_size, buffer_count);
+		m_state.stream = stream.move;
+		m_state.size = m_state.stream.size;
+	}
+
+	@property bool empty() @blocking { return m_state.ptr >= m_state.size; }
+	@property ulong leastSize() @blocking { return m_state.size - m_state.ptr; }
+	@property bool dataAvailableForRead() { return peek().length > 0; }
+	@property ulong size() const nothrow { return m_state.size; }
+	@property bool readable() const nothrow { return m_state.stream.readable; }
+	@property bool writable() const nothrow { return m_state.stream.writable; }
+
+	@property ref inout(S) underlying() inout { return m_state.stream; }
+
+	static if (is(typeof(S.init.truncate(ulong.init))))
+		void truncate(ulong size)
+		{
+			sync();
+			m_state.stream.truncate(size);
+			m_state.size = size;
+		}
+
+	const(ubyte)[] peek()
+	{
+		auto limit = (m_state.ptr / m_state.bufferSize + 1) * m_state.bufferSize;
+		auto dummy = () @trusted { return (cast(const(ubyte)*)null)[0 .. cast(size_t)(limit - m_state.ptr)]; } ();
+
+		const(ubyte)[] ret;
+		m_state.iterateChunks!(const(ubyte))(m_state.ptr, dummy, (offset, scope _, buf, buf_begin, buf_end) {
+			if (buf >= 0) {
+				auto b = &m_state.buffers[buf];
+				ret = b.memory[buf_begin .. min(buf_end, b.fill)];
+				m_state.touchBuffer(buf);
+			}
+			return false;
+		});
+		return ret;
+	}
+
+	size_t read(scope ubyte[] dst, IOMode mode)
+	@blocking {
+		size_t nread = 0;
+
+		// update size if a read past EOF is expected
+		if (m_state.ptr + dst.length > m_state.size) m_state.size = m_state.stream.size;
+
+		m_state.iterateChunks!ubyte(m_state.ptr, dst, (offset, scope dst_chunk, buf, buf_begin, buf_end) {
+			if (buf < 0) {
+				if (mode == IOMode.immediate) return false;
+				if (mode == IOMode.once && nread) return false;
+				buf = m_state.bufferChunk(offset / m_state.bufferSize);
+			} else m_state.touchBuffer(buf);
+
+			if (m_state.buffers[buf].fill < buf_end) {
+				if (mode == IOMode.immediate) return false;
+				if (mode == IOMode.once && nread) return false;
+				m_state.fillBuffer(buf, buf_end);
+			}
+
+			// the whole of dst_chunk is now in the buffer
+			assert(buf_begin % m_state.bufferSize == offset % m_state.bufferSize);
+			assert(dst_chunk.length <= buf_end - buf_begin);
+			dst_chunk[] = m_state.buffers[buf].memory[buf_begin .. buf_begin + dst_chunk.length];
+			nread += dst_chunk.length;
+
+			return true;
+		});
+
+		if (mode == IOMode.all && dst.length != nread)
+			throw new Exception("Reading past end of stream.");
+
+		m_state.ptr += nread;
+
+		return nread;
+	}
+
+	void read(scope ubyte[] dst) @blocking { auto n = read(dst, IOMode.all); assert(n == dst.length); }
+
+	size_t write(in ubyte[] bytes, IOMode mode)
+	@blocking {
+		size_t nwritten = 0;
+
+		m_state.iterateChunks!(const(ubyte))(m_state.ptr, bytes, (offset, scope src_chunk, buf, buf_begin, buf_end) {
+			if (buf < 0) { // write through if not buffered
+				if (mode == IOMode.immediate) return false;
+				if (mode == IOMode.once && nwritten) return false;
+
+				m_state.stream.seek(offset);
+				m_state.stream.write(src_chunk);
+			} else {
+				auto b = &m_state.buffers[buf];
+				b.memory[buf_begin .. buf_begin + src_chunk.length] = src_chunk;
+				b.fill = max(b.fill, buf_begin + src_chunk.length);
+				b.dirty = true;
+			}
+
+			nwritten += src_chunk.length;
+			if (offset + src_chunk.length > m_state.size)
+				m_state.size = offset + src_chunk.length;
+
+			return true;
+		});
+
+		assert(mode != IOMode.all || nwritten == bytes.length);
+
+		m_state.ptr += nwritten;
+
+		return nwritten;
+	}
+
+	void write(in ubyte[] bytes) @blocking { auto n = write(bytes, IOMode.all); assert(n == bytes.length); }
+	void write(in char[] bytes) @blocking { write(cast(const(ubyte)[])bytes); }
+
+	void flush() @blocking { m_state.flush(); }
+
+	/** Flushes and releases all buffers and updates the buffer size.
+
+		This forces the buffered view of the source stream to be in sync with
+		the actual source stream.
+	*/
+	void sync()
+	@blocking {
+		flush();
+		foreach (ref b; m_state.buffers) {
+			b.chunk = ulong.max;
+			b.fill = 0;
+		}
+		m_state.size = m_state.stream.size;
+	}
+
+	void finalize() @blocking { flush(); }
+
+	void seek(ulong offset) { m_state.ptr = offset; }
+	ulong tell() nothrow { return m_state.ptr; }
+
+}
+
+mixin validateRandomAccessStream!(BufferedStream!RandomAccessStream);
+
+unittest {
+	import std.exception : assertThrown;
+	import vibe.stream.memory : createMemoryStream;
+	import vibe.stream.operations : readAll;
+
+	auto buf = new ubyte[](256);
+	foreach (i, ref b; buf) b = cast(ubyte)i;
+	auto str = createMemoryStream(buf, true, 128);
+	auto bstr = bufferedStream(str, 16, 4);
+
+	// test empty method
+	assert(!bstr.empty);
+	bstr.readAll();
+	assert(bstr.empty);
+
+	bstr.seek(0);
+
+	ubyte[1] bb;
+
+	// test that each byte is readable
+	foreach (i; 0 .. 128) {
+		bstr.read(bb);
+		assert(bb[0] == i);
+	}
+
+	// same in reverse
+	foreach_reverse (i; 0 .. 128) {
+		bstr.seek(i);
+		bstr.read(bb);
+		assert(bb[0] == i);
+	}
+
+	// the first chunk should be cached now
+	assert(bstr.dataAvailableForRead);
+	assert(bstr.peek().length == 15);
+	assert(bstr.peek()[0] == 1);
+
+	// the last one should not
+	bstr.seek(126);
+	assert(!bstr.dataAvailableForRead);
+	assert(bstr.peek().length == 0);
+	assert(bstr.leastSize == 2);
+
+	// a read brings it back
+	bstr.read(bb);
+	assert(bb[0] == 126);
+	assert(bstr.dataAvailableForRead);
+	assert(bstr.peek() == [127]);
+
+	// the first to third ones should still be there
+	ubyte[3*16-8] mb;
+	bstr.seek(0);
+	assert(bstr.dataAvailableForRead);
+	assert(bstr.read(mb, IOMode.immediate) == mb.length);
+	foreach (i, b; mb) assert(i == b);
+
+	// should read only the remaining 8 buffered bytes
+	assert(bstr.read(mb, IOMode.immediate) == 8);
+	assert(bstr.tell == 3*16);
+	bstr.seek(mb.length);
+
+	// should also read only the remaining 8 buffered bytes
+	assert(bstr.read(mb, IOMode.once) == 8);
+	assert(bstr.tell == 3*16);
+	bstr.seek(mb.length);
+
+	// should read the whole buffer, caching the fourth and fifth chunk
+	assert(bstr.read(mb, IOMode.all) == mb.length);
+	assert(bstr.tell == 2*mb.length);
+	foreach (i, b; mb) assert(i + mb.length == b);
+
+	// the first chunk should now be out of cache
+	bstr.seek(0);
+	assert(!bstr.dataAvailableForRead);
+
+	// reading with immediate should consequently fail
+	assert(bstr.read(mb, IOMode.immediate) == 0);
+
+	// the second/third ones should still be in
+	bstr.seek(16);
+	assert(bstr.dataAvailableForRead);
+	bstr.seek(2*16);
+	assert(bstr.dataAvailableForRead);
+
+	// reading uncached data followed by cached data should succeed for "once"
+	bstr.seek(0);
+	assert(bstr.read(mb, IOMode.once) == mb.length);
+	foreach (i, b; mb) assert(i == b);
+
+	// the first three and the fifth chunk should now be cached
+	bstr.seek(0);
+	assert(bstr.dataAvailableForRead);
+	bstr.seek(16);
+	assert(bstr.dataAvailableForRead);
+	bstr.seek(32);
+	assert(bstr.dataAvailableForRead);
+	bstr.seek(48);
+	assert(!bstr.dataAvailableForRead);
+	bstr.seek(64);
+	assert(bstr.dataAvailableForRead);
+
+	// reading once should read until the end of the cached chunk sequence
+	bstr.seek(0);
+	assert(bstr.read(mb, IOMode.once) == mb.length);
+	foreach (i, b; mb) assert(i == b);
+
+	// produce an EOF error
+	bstr.seek(128);
+	assertThrown(bstr.read(bb));
+	assert(bstr.tell == 128);
+
+	// add more data from the outside
+	str.seek(str.size);
+	str.write([cast(ubyte)128]);
+
+	// should now succeed
+	bstr.read(bb);
+	assert(bb[0] == 128);
+
+	// next byte should produce an EOF error again
+	assertThrown(bstr.read(bb));
+
+	// add more data from the inside
+	bstr.write([ubyte(129)]);
+
+	// should now succeed
+	bstr.seek(129);
+	bstr.read(bb);
+	assert(bb[0] == 129);
+	assert(bstr.size == 130);
+	assert(str.size == 129);
+	bstr.flush();
+	assert(str.size == 130);
+
+	// next byte should produce an EOF error again
+	bstr.seek(130);
+	assertThrown(bstr.read(bb));
+	assert(bstr.tell == 130);
+	assertThrown(bstr.read(bb, IOMode.once));
+	assert(bstr.tell == 130);
+
+	// add more data from the inside (chunk now cached)
+	bstr.write([ubyte(130)]);
+	assert(bstr.size == 131);
+	assert(str.size == 130);
+
+	// should now succeed
+	bstr.seek(130);
+	bstr.read(bb);
+	assert(bb[0] == 130);
+
+	// flush should write though to the file
+	bstr.flush();
+	assert(str.size == 131);
+
+	// read back the written data from the underlying file
+	bstr.sync();
+	bstr.seek(129);
+	bstr.read(bb);
+	assert(bb[0] == 129);
+	bstr.read(bb);
+	assert(bb[0] == 130);
+}
+
+private struct Buffer {
+	ulong chunk = ulong.max; // chunk index (offset = chunk * m_state.bufferSize)
+	ubyte[] memory;
+	ulong lastAccess;
+	size_t fill;
+	bool dirty;
+}
