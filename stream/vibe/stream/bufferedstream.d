@@ -10,7 +10,6 @@ import vibe.core.stream;
 
 import std.algorithm;
 import std.traits : Unqual;
-import std.typecons : RefCountedAutoInitialize, RefCounted, refCounted;
 
 
 /** Creates a new buffered stream wrapper.
@@ -40,6 +39,7 @@ struct BufferedStream(S) {
 
 	private static struct State {
 		S stream;
+		int refCount = 1;
 		ulong ptr;
 		ulong size;
 		size_t bufferSize;
@@ -65,8 +65,10 @@ struct BufferedStream(S) {
 			if (this.stream.writable)
 				flush();
 
-			Mallocator.instance.dispose(this.buffermemory);
-			Mallocator.instance.dispose(this.buffers);
+			() @trusted {
+				Mallocator.instance.dispose(this.buffermemory);
+				Mallocator.instance.dispose(this.buffers);
+			} ();
 		}
 
 		@disable this(this);
@@ -157,13 +159,25 @@ struct BufferedStream(S) {
 	private {
 		// makes the stream copyable and makes it small enough to be put into
 		// a stream proxy
-		RefCounted!(State, RefCountedAutoInitialize.no) m_state;
+		State* m_state;
 	}
 
 	private this(S stream, size_t buffer_size, size_t buffer_count)
+	@safe {
+		m_state = new State(buffer_size, buffer_count, stream.move);
+	}
+
+	this(this)
 	{
-		auto st = State(buffer_size, buffer_count, stream.move);
-		m_state = refCounted(st.move);
+		if (m_state) m_state.refCount++;
+	}
+
+	~this()
+	@safe {
+		if (m_state) {
+			if (!--m_state.refCount)
+				destroy(*m_state);
+		}
 	}
 
 	@property bool empty() @blocking { return state.ptr >= state.size; }
@@ -296,12 +310,12 @@ struct BufferedStream(S) {
 	void seek(ulong offset) { state.ptr = offset; }
 	ulong tell() nothrow { return state.ptr; }
 
-	private ref inout(State) state() @trusted nothrow return inout { return m_state.refCountedPayload; }
+	private ref inout(State) state() @trusted nothrow return inout { return *m_state; }
 }
 
 mixin validateRandomAccessStream!(BufferedStream!RandomAccessStream);
 
-unittest {
+@safe unittest {
 	import std.exception : assertThrown;
 	import vibe.stream.memory : createMemoryStream;
 	import vibe.stream.operations : readAll;
