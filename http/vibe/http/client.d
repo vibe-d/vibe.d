@@ -409,9 +409,11 @@ final class HTTPClient {
 	static void setTLSSetupCallback(void function(TLSContext) @safe func) @trusted { ms_tlsSetup = func; }
 
 	/**
-		Connects to a specific server.
+		Sets up this HTTPClient to connect to a specific server.
 
 		This method may only be called if any previous connection has been closed.
+
+		The actual connection is deferred until a request is initiated (using `HTTPClient.request`).
 	*/
 	void connect(string server, ushort port = 80, bool use_tls = false, const(HTTPClientSettings) settings = defaultSettings)
 	{
