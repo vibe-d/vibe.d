@@ -148,6 +148,8 @@ struct Json {
 	// but that's okay because we want to be word aligned anyways.
 	private struct FillerType
 	{
+		static import std.meta;
+
 		enum exactSize = Largest!(BigInt, long, double, bool, string, Json[string], Json[]).sizeof;
 		enum numFields = (exactSize + size_t.sizeof - 1) / size_t.sizeof;
 
