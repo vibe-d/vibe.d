@@ -1562,7 +1562,6 @@ struct BsonSerializer {
 		auto old = m_inputData;
 		foreach (string name, value; old.byKeyValue) {
 			m_inputData = value;
-			//TODO: foo
 			entry_callback(name);
 		}
 		m_inputData = old;
@@ -1630,11 +1629,6 @@ struct BsonSerializer {
 	{
 		if (m_inputData.type == Bson.Type.null_) return true;
 		return false;
-	}
-
-	void ignoreValue() @safe
-	{
-		// Not needed
 	}
 
 	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(auto ref T value)
