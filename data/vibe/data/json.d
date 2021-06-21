@@ -1880,7 +1880,7 @@ struct JsonSerializer {
 	//
 	// deserialization
 	//
-	void readDictionary(Traits)(scope void delegate(string) @safe field_handler)
+	void readDictionary(Traits)(scope bool delegate(string) @safe field_handler)
 	{
 		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
@@ -2099,7 +2099,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			int m_line = 0;
 		}
 
-		void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
+		void readDictionary(Traits)(scope bool delegate(string) @safe entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
 			enforceJson(!m_range.empty && m_range.front == '{', "Expecting object.");
@@ -2123,7 +2123,9 @@ struct JsonStringSerializer(R, bool pretty = false)
 				enforceJson(!m_range.empty && m_range.front == ':', "Expecting ':', not '"~m_range.front.to!string~"'.");
 				m_range.popFront();
 
-				entry_callback(name);
+				if (!entry_callback(name)) {
+					ignoreValue();
+				}
 			}
 		}
 
@@ -2932,6 +2934,6 @@ unittest { // issue #1647 - JSON deserializeJson throws exception on unknown inp
 	struct S {
 		string foo;
 	}
-	S expected = S("baar");
+	S expected = S("bar");
 	assert(deserializeJson!S(`{"foo":"bar","baz":"bam"}`) == expected);
 }
