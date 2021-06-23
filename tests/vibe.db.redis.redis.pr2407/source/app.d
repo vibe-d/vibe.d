@@ -1,7 +1,6 @@
 import vibe.db.redis.redis;
 import vibe.core.core;
 import vibe.core.log;
-import vibe.core.core;
 import vibe.core.concurrency;
 
 void main()

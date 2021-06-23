@@ -7,6 +7,7 @@
 */
 module vibe.http.proxy;
 
+import vibe.core.core : runTask;
 import vibe.core.log;
 import vibe.http.client;
 import vibe.http.server;
@@ -109,7 +110,6 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 			auto scon = res.connectProxy();
 			assert (scon);
 
-			import vibe.core.core : runTask;
 			runTask(() nothrow {
 				try scon.pipe(ccon);
 				catch (Exception e) {
@@ -166,7 +166,6 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 				auto scon = res.switchProtocol("");
 				auto ccon = cres.switchProtocol("");
 
-				import vibe.core.core : runTask;
 				runTask(() nothrow {
 					try ccon.pipe(scon);
 					catch (Exception e) {
