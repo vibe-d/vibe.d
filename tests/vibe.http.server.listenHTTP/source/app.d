@@ -1,5 +1,4 @@
 import vibe.core.core;
-import vibe.core.core;
 import vibe.core.log;
 import vibe.http.client;
 import vibe.http.server;
