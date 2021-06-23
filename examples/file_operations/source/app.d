@@ -1,18 +1,7 @@
 import vibe.core.core;
 import vibe.core.file;
 import std.stdio;
-
-static if (__VERSION__ >= 2076)
-	import std.datetime.stopwatch;
-else
-	import std.datetime;
-
-auto peekMSecs(T)(T sw) {
-	static if (__VERSION__ >= 2076)
-		return sw.peek.total!"msecs";
-	else
-		return sw.peek.msecs;
-}
+import std.datetime.stopwatch;
 
 void main() {
 	FileStream fs = openFile("./hello.txt", FileMode.createTrunc);
@@ -21,18 +10,18 @@ void main() {
 	bool finished;
 	auto task = runTask({
 		writeln("Task 1: Starting write operations to hello.txt");
-		while (sw.peekMSecs < 150) {
+		while (sw.peek.total!"msecs" < 150) {
 			fs.write("Some string is being written here ..");
 		}
 		writeln("Task 1: Final offset: ", fs.tell(), "B, file size: ",
-			fs.size(), "B", ", total time: ", sw.peekMSecs, " ms");
+			fs.size(), "B", ", total time: ", sw.peek.total!"msecs", " ms");
 		fs.close();
 		finished = true;
 	});
 
 	runTask({
 		while (!finished) {
-			writeln("Task 2: Task 1 has written ", fs.size(), "B so far in ", sw.peekMSecs, " ms");
+			writeln("Task 2: Task 1 has written ", fs.size(), "B so far in ", sw.peek.total!"msecs", " ms");
 			sleep(10.msecs);
 		}
 		removeFile("./hello.txt");

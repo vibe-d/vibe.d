@@ -13,10 +13,7 @@ import vibe.db.mongo.flags : QueryFlags;
 import vibe.inet.webform;
 
 import std.conv : to;
-static if (__VERSION__ >= 2076)
-	import std.digest : toHexString;
-else
-	import std.digest.digest : toHexString;
+import std.digest : toHexString;
 import std.digest.md : md5Of;
 import std.algorithm : splitter, startsWith;
 import std.string : icmp, indexOf, toLower;

@@ -76,26 +76,7 @@ import std.conv;
 import std.datetime;
 import std.exception;
 import std.format;
-static if(__VERSION__ >= 2082)
-{
-	import std.json : JSONValue, JSONType;
-}
-else
-{
-	import std.json : JSONValue, JSON_TYPE;
-	private enum JSONType : byte
-	{
-		null_ = JSON_TYPE.NULL,
-		string = JSON_TYPE.STRING,
-		integer = JSON_TYPE.INTEGER,
-		uinteger = JSON_TYPE.UINTEGER,
-		float_ = JSON_TYPE.FLOAT,
-		array = JSON_TYPE.ARRAY,
-		object = JSON_TYPE.OBJECT,
-		true_ = JSON_TYPE.TRUE,
-		false_ = JSON_TYPE.FALSE,
-	}
-}
+import std.json : JSONValue, JSONType;
 import std.range;
 import std.string;
 import std.traits;
@@ -2713,13 +2694,13 @@ package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(T.i
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message = "JSON exception")
 {
-	import vibe.internal.exception : enforce;
+	import std.exception : enforce;
 	enforce!JSONException(cond, message, file, line);
 }
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int err_line)
 {
-	import vibe.internal.exception : enforce;
+	import std.exception : enforce;
 	enforce!JSONException(cond, format("%s(%s): Error: %s", err_file, err_line+1, message), file, line);
 }
 
