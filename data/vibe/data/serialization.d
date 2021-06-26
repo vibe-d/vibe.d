@@ -97,9 +97,7 @@
 
 			// deserialization
 
-			// `entry_callback` returns true if the field with the name of the first argument could
-			// be found in the type currently being deserialized, false otherwise.
-			void readDictionary(TypeTraits)(scope bool delegate(string) entry_callback);
+			void readDictionary(TypeTraits)(scope void delegate(string) entry_callback);
 			void beginReadDictionaryEntry(ElementTypeTraits)(string);
 			void endReadDictionaryEntry(ElementTypeTraits)(string);
 			void readArray(TypeTraits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback);
@@ -107,6 +105,10 @@
 			void endReadArrayEntry(ElementTypeTraits)(size_t index);
 			T readValue(TypeTraits, T)();
 			bool tryReadNull(TypeTraits)();
+
+			// skipValue() is optional. It will be called by the entry_callback in readDictionary
+			// whenever the key passed to the entry_callback cannot be found.
+			void skipValue();
 		}
 		---
 
@@ -729,7 +731,11 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				bool[fieldsCount] set;
 				ser.readDictionary!Traits((name) {
 					switch (name) {
-						default: return false;
+						default:
+							static if(is(typeof(ser.skipvalue))) {
+								ser.skipValue();
+							}
+							break;
 						foreach (i, TV; T.Types) {
 							enum fieldName = underscoreStrip(T.fieldNames[i]);
 							alias STraits = SubTraits!(Traits, TV);
@@ -738,7 +744,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 								ret[i] = ser.deserializeValue!(TV, ATTRIBUTES);
 								ser.endReadDictionaryEntry!STraits(fieldName);
 								set[i] = true;
-							} return true;
+							} break;
 						}
 					}
 				});
@@ -809,7 +815,6 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				ser.beginReadDictionaryEntry!STraits(name);
 				ret[key] = ser.deserializeValue!(TV, ATTRIBUTES);
 				ser.endReadDictionaryEntry!STraits(name);
-				return true;
 			});
 			return ret;
 		} else static if (isInstanceOf!(Nullable, T)) {
@@ -893,7 +898,10 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 					static if (hasSerializableFields!(T, Policy)) {
 						switch (name) {
 							default:
-								return false;
+								static if(is(typeof(ser.skipValue))) {
+									ser.skipValue();
+								}
+								break;
 							foreach (i, mname; SerializableFields!(T, Policy)) {
 								alias TM = TypeTuple!(typeof(__traits(getMember, T, mname)));
 								alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
@@ -901,7 +909,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 								enum fname = getPolicyAttribute!(T, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 								case fname:
 									static if (hasPolicyAttribute!(OptionalAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0]))
-										if (ser.tryReadNull!STraits()) return true;
+										if (ser.tryReadNull!STraits()) return;
 									set[i] = true;
 									ser.beginReadDictionaryEntry!STraits(fname);
 									static if (!isBuiltinTuple!(T, mname)) {
@@ -910,12 +918,11 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 										__traits(getMember, ret, mname) = ser.deserializeValue!(Tuple!TM, TA);
 									}
 									ser.endReadDictionaryEntry!STraits(fname);
-									return true;
+									break;
 							}
 						}
 					} else {
 						pragma(msg, "Deserializing composite type "~T.stringof~" which has no serializable fields.");
-						return false;
 					}
 				});
 			}
@@ -1571,7 +1578,7 @@ version (unittest) {
 		}
 
 		// deserialization
-		void readDictionary(Traits)(scope bool delegate(string) @safe entry_callback)
+		void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 		{
 			skip("D("~unqualType!(Traits.Type).mangleof~"){");
 			while (result.startsWith("DE(")) {
@@ -2102,7 +2109,7 @@ unittest {
 		this(string s) { ser.result = s; }
 		T readValue(Traits, T)() @system { return ser.readValue!(Traits, T); }
 		void writeValue(Traits, T)(T value) @system { ser.writeValue!(Traits, T)(value); }
-		void readDictionary(Traits)(scope bool delegate(string) @system entry_callback) { return ser.readDictionary!Traits((s) @trusted { entry_callback(s); return true; }); }
+		void readDictionary(Traits)(scope void delegate(string) @system entry_callback) { return ser.readDictionary!Traits((s) @trusted { entry_callback(s); }); }
 		void readArray(Traits)(scope void delegate(size_t) @system size_callback, scope void delegate() @system entry_callback) { ser.readArray!Traits((s) @trusted { size_callback(s); }, () @trusted { entry_callback(); }); }
 	}
 

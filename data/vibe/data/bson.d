@@ -1556,7 +1556,7 @@ struct BsonSerializer {
 	//
 	// deserialization
 	//
-	void readDictionary(Traits)(scope bool delegate(string) @safe entry_callback)
+	void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 	{
 		enforce(m_inputData.type == Bson.Type.object, "Expected object instead of "~m_inputData.type.to!string());
 		auto old = m_inputData;

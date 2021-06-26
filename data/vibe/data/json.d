@@ -1880,7 +1880,7 @@ struct JsonSerializer {
 	//
 	// deserialization
 	//
-	void readDictionary(Traits)(scope bool delegate(string) @safe field_handler)
+	void readDictionary(Traits)(scope void delegate(string) @safe field_handler)
 	{
 		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
@@ -2099,7 +2099,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			int m_line = 0;
 		}
 
-		void readDictionary(Traits)(scope bool delegate(string) @safe entry_callback)
+		void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
 			enforceJson(!m_range.empty && m_range.front == '{', "Expecting object.");
@@ -2123,9 +2123,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				enforceJson(!m_range.empty && m_range.front == ':', "Expecting ':', not '"~m_range.front.to!string~"'.");
 				m_range.popFront();
 
-				if (!entry_callback(name)) {
-					ignoreValue();
-				}
+				entry_callback(name);
 			}
 		}
 
@@ -2221,7 +2219,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			return true;
 		}
 
-		void ignoreValue() @safe
+		void skipValue() @safe
 		{
 			m_range.skipWhitespace(&m_line);
 			switch(m_range.front) {
@@ -2238,7 +2236,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 						enforceJson(m_range.front == ',', "Expecting ',' or ']'.");
 						m_range.popFront();
 					} else first = false;
-					ignoreValue();
+					skipValue();
 				}
 				break;
 			case '{':
@@ -2262,7 +2260,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 					enforceJson(!m_range.empty && m_range.front == ':', "Expecting ':', not '"~m_range.front.to!string~"'.");
 					m_range.popFront();
 
-					ignoreValue();
+					skipValue();
 				}
 				break;
 			case '"':
