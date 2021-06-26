@@ -732,7 +732,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				ser.readDictionary!Traits((name) {
 					switch (name) {
 						default:
-							static if(is(typeof(ser.skipvalue))) {
+							static if (is(typeof(ser.skipValue()))) {
 								ser.skipValue();
 							}
 							break;
@@ -898,7 +898,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 					static if (hasSerializableFields!(T, Policy)) {
 						switch (name) {
 							default:
-								static if(is(typeof(ser.skipValue))) {
+								static if (is(typeof(ser.skipValue()))) {
 									ser.skipValue();
 								}
 								break;
@@ -2212,4 +2212,3 @@ unittest { // issue #2110 - single-element tuples
 	assert(serialize!TestSerializer(s) == expected);
 	assert(deserialize!(TestSerializer, S)(expected) == s);
 }
-
