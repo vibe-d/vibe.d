@@ -2218,6 +2218,82 @@ struct JsonStringSerializer(R, bool pretty = false)
 			assert(m_range.empty || m_range.front != 'l');
 			return true;
 		}
+
+		void skipValue() @safe
+		{
+			m_range.skipWhitespace(&m_line);
+			switch(m_range.front) {
+			case '[':
+				m_range.popFront();
+				bool first = true;
+				while(true) {
+					m_range.skipWhitespace(&m_line);
+					enforceJson(!m_range.empty, "Missing ']'.");
+					if (m_range.front == ']') {
+						m_range.popFront();
+						break;
+					} else if (!first) {
+						enforceJson(m_range.front == ',', "Expecting ',' or ']'.");
+						m_range.popFront();
+					} else first = false;
+					skipValue();
+				}
+				break;
+			case '{':
+				m_range.popFront();
+				bool first = true;
+				while(true) {
+					m_range.skipWhitespace(&m_line);
+					enforceJson(!m_range.empty, "Missing '}'.");
+					if (m_range.front == '}') {
+						m_range.popFront();
+						break;
+					} else if (!first) {
+						enforceJson(m_range.front == ',', "Expecting ',' or '}', not '"~m_range.front.to!string~"'.");
+						m_range.popFront();
+						m_range.skipWhitespace(&m_line);
+					} else first = false;
+
+					m_range.skipJsonString(&m_line);
+
+					m_range.skipWhitespace(&m_line);
+					enforceJson(!m_range.empty && m_range.front == ':', "Expecting ':', not '"~m_range.front.to!string~"'.");
+					m_range.popFront();
+
+					skipValue();
+				}
+				break;
+			case '"':
+				m_range.skipJsonString(&m_line);
+				break;
+			case '-':
+			case '0': .. case '9':
+				bool dummy; // ignore
+				m_range.skipNumber(dummy, dummy);
+				break;
+			case 't':
+				foreach (ch; "true") {
+					enforceJson(m_range.front == ch, "Expecting 'true'.");
+					m_range.popFront();
+				}
+				break;
+			case 'f':
+				foreach (ch; "false") {
+					enforceJson(m_range.front == ch, "Expecting 'false'.");
+					m_range.popFront();
+				}
+				break;
+			case 'n':
+				foreach (ch; "null") {
+					enforceJson(m_range.front == ch, "Expecting 'null'.");
+					m_range.popFront();
+				}
+				break;
+			default:
+				throw new JSONException("Expected start of object, array, string, number, boolean or null value, got"~m_range.front.to!string);
+			}
+			m_range.skipWhitespace(&m_line);
+		}
 	}
 }
 
@@ -2849,4 +2925,13 @@ private auto trustedRange(R)(R range)
 	assert(deserializeJson!dstring(Json([Json("f"), Json("o"), Json("o")])) == "foo");
 	assert(serializeToJsonString(cast(const(dchar)[])"foo"d) == "\"foo\"");
 	assert(deserializeJson!dstring("\"foo\"") == "foo");
+}
+
+
+unittest { // issue #1647 - JSON deserializeJson throws exception on unknown input fields
+	struct S {
+		string foo;
+	}
+	S expected = S("bar");
+	assert(deserializeJson!S(`{"foo":"bar","baz":"bam"}`) == expected);
 }
