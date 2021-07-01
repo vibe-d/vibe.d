@@ -306,7 +306,7 @@ struct MongoCollection {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/db.collection.aggregate)
 	*/
-	Bson aggregate(ARGS...)(ARGS pipeline)
+	Bson aggregate(ARGS...)(ARGS pipeline) @safe
 	{
 		import std.traits : isArray;
 
@@ -322,14 +322,14 @@ struct MongoCollection {
 	}
 
 	/// ditto
-	MongoCursor!R aggregate(R = Bson, S = Bson)(S[] pipeline, AggregateOptions options)
+	MongoCursor!R aggregate(R = Bson, S = Bson)(S[] pipeline, AggregateOptions options) @safe
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
 		Bson cmd = Bson.emptyObject; // empty object because order is important
 		cmd["aggregate"] = Bson(m_name);
 		cmd["pipeline"] = serializeToBson(pipeline);
-		foreach (string k, v; serializeToBson(options))
+		foreach (string k, v; serializeToBson(options).byKeyValue)
 		{
 			// spec recommends to omit cursor field when explain is true
 			if (!options.explain.isNull && options.explain.get && k == "cursor")
@@ -347,7 +347,7 @@ struct MongoCollection {
 	}
 
 	/// Example taken from the MongoDB documentation
-	unittest {
+	@safe unittest {
 		import vibe.db.mongo.mongo;
 
 		void test() {
