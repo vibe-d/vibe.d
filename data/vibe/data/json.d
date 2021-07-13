@@ -65,6 +65,21 @@ module vibe.data.json;
 	string j4 = S("foo", 32, true).serializeToJsonString();
 }
 
+/// Range based Nullable based access
+@safe unittest {
+	// using the constructor
+	Json input = Json.emptyObject;
+	input["intArray"] = Json([Json("foo"), Json(42), Json(24)]);
+
+	long theSum = input.asArray("intArray")
+		.map!(it => it.as!long())
+		.filter!(it => !it.isNull)
+		.map!(it => it.get())
+		.sum;
+
+	assert(theSum == 66);
+}
+
 
 public import vibe.data.serialization;
 
@@ -80,7 +95,7 @@ import std.json : JSONValue, JSONType;
 import std.range;
 import std.string;
 import std.traits;
-import std.typecons : Tuple;
+import std.typecons : nullable, Tuple, Nullable;
 import std.uuid;
 
 /******************************************************************************/
@@ -364,6 +379,91 @@ struct Json {
 		assert(value[2] == "foo");
 	}
 
+	/**
+		Exception less array access.
+		If there is an array by the name of `key` in the Json object it is
+		returned, otherwise an empty array is returned.
+	*/
+	Json[] asArray(string key)
+	@trusted {
+		auto pv = key in m_object;
+		return pv && pv.type == Json.Type.array
+			? pv.byValue().array
+			: [];
+	}
+
+	/// ditto
+	Json[] asArray()
+	@safe {
+		return m_type == Json.Type.array
+			? this.byValue().array
+			: [];
+	}
+
+	///
+	@safe unittest {
+		Json value = Json.emptyObject;
+		assert(value.asArray("not_in_there").empty);
+
+		value["a"] = Json([Json(1), Json(2)]);
+
+		auto a = value.asArray("a");
+		assert(!a.empty);
+
+		auto b = value.asArray("b");
+		assert(b.empty);
+	}
+
+	///
+	@safe unittest {
+		Json value = Json([Json(1), Json(2)]);
+
+		auto a = value.asArray();
+		assert(a.length == 2);
+	}
+
+	/**
+		Exception less access to but arrays.
+		If there is a non-null `Nullalbe!(T)` by the name of `key` in the Json
+		object it is returned, otherwise null `Nullable!(T)` is returned.
+	*/
+	Nullable!T as(T)()
+	@safe {
+		const ttid = typeId!T;
+		return m_type == ttid
+			? nullable(this.get!(T))
+			: Nullable!(T).init;
+	}
+
+	/// ditto
+	Nullable!T as(T)(string key)
+	@trusted {
+		const ttid = typeId!T;
+		auto pv = key in m_object;
+		return pv && pv.type == ttid
+			? nullable(pv.get!(T))
+			: Nullable!(T).init;
+	}
+
+	///
+	@safe unittest {
+		Json value = Json("Hello Vibe");
+
+		auto a = value.as!string();
+		assert(a.get("") == "Hello Vibe");
+	}
+
+	///
+	@safe unittest {
+		Json value = Json.emptyObject;
+		value["a"] = 1;
+
+		auto a = value.as!long("a");
+		assert(!a.isNull());
+
+		auto b = value.as!long("b");
+		assert(b.isNull());
+	}
 
 	/**
 		Allows direct indexing of object typed JSON values using a string as
