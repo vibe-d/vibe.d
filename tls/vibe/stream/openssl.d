@@ -132,16 +132,6 @@ static if (OPENSSL_VERSION.startsWith("1.1")) {
 		extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
 	}
 
-	private enum SSL_CTRL_SET_MIN_PROTO_VERSION = 123;
-
-	private int SSL_CTX_set_min_proto_version(ssl_ctx_st* ctx, int ver) {
-		return cast(int) SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, ver, null);
-	}
-
-	private int SSL_set_min_proto_version(ssl_st* s, int ver) {
-		return cast(int) SSL_ctrl(s, SSL_CTRL_SET_MIN_PROTO_VERSION, ver, null);
-	}
-
 	extern(C) nothrow {
 		void BIO_set_init(BIO* bio, int init_) @trusted;
 		int BIO_get_init(BIO* bio) @trusted;
