@@ -615,6 +615,7 @@ unittest
 	struct X
 	{
 		string name = "test";
+        char[] charArr = ['h','e','l','l','o'];
 		ubyte[] arr = [138, 245, 231, 234, 142, 132, 142];
 	}
 	X x;
@@ -634,12 +635,13 @@ unittest
 
 	resultSerializerFound.serialize!(serPolicyFound.PolicyTemplate)(output, x);
 	auto serialized = output.data;
-	assert(serialized == `{"name":"test","arr":"ivXn6o6Ejg=="}`,
+	assert(serialized == `{"name":"test","charArr":"hello","arr":"ivXn6o6Ejg=="}`,
 			"serialization is not correct, produced: " ~ serialized);
 
 	// deserialization test with base64 encoding
 	auto deserialized = serialized.deserializeWithPolicy!(JsonStringSerializer!string, serPolicyFound.PolicyTemplate, X)();
 	assert(deserialized.name == "test", "deserialization of `name` is not correct, produced: " ~ deserialized.name);
+	assert(deserialized.charArr == ['h','e','l','l','o'], "deserialization of `charArr` is not correct, produced: " ~ deserialized.charArr);
 	assert(deserialized.arr == [138, 245, 231, 234, 142, 132, 142],
 			"deserialization of `arr` is not correct, produced: " ~ to!string(deserialized.arr));
 
@@ -656,12 +658,13 @@ unittest
 	output = appender!string();
 	plainResultSerializerFound.serialize!(plainSerPolicyFound.PolicyTemplate)(output, x);
 	serialized = output.data;
-	assert(serialized == `{"name":"test","arr":[138,245,231,234,142,132,142]}`,
+	assert(serialized == `{"name":"test","charArr":"hello","arr":[138,245,231,234,142,132,142]}`,
 			"serialization is not correct, produced: " ~ serialized);
 
 	// deserialization test without base64 encoding
 	deserialized = serialized.deserializeWithPolicy!(JsonStringSerializer!string, plainSerPolicyFound.PolicyTemplate, X)();
 	assert(deserialized.name == "test", "deserialization of `name` is not correct, produced: " ~ deserialized.name);
+	assert(deserialized.charArr == ['h','e','l','l','o'], "deserialization of `charArr` is not correct, produced: " ~ deserialized.charArr);
 	assert(deserialized.arr == [138, 245, 231, 234, 142, 132, 142],
 			"deserialization of `arr` is not correct, produced: " ~ to!string(deserialized.arr));
 }

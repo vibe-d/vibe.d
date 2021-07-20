@@ -1516,7 +1516,7 @@ private template getExpandedFieldsData(T, FIELDS...)
 }
 
 /// Uses Base64 representation for `ubyte[]` instead of `to!string`
-public class Base64ArrayPolicy (R) if (isArray!R && is(ElementType!R : ubyte))
+public class Base64ArrayPolicy (R) if (isArray!R && is(immutable(ElementType!R) == immutable(ubyte)))
 {
 	public static string toRepresentation (in R data) @safe pure
 	{
