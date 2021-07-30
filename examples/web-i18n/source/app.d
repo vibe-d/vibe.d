@@ -24,7 +24,7 @@ struct TranslationContext {
 }
 
 // perform some generic translation to see if things are working...
-static assert(tr!(TranslationContext, "de_DE")("Welcome to the i18n example app!") == "Willkommen zum i18n-Beispiel!");
+static assert(tr!(TranslationContext, "de_DE")("Welcome to the i18n example app!", "home") == "Willkommen zum i18n-Beispiel!");
 
 // Use the @translationContext attribute to make the translations defined
 // above available to our web service
