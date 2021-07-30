@@ -2,18 +2,23 @@ msgid ""
 msgstr ""
 "Plural-Forms: nplurals=2; plural=n != 1;\\n"
 
+msgctxt "home"
 msgid "Welcome to the i18n example app!"
 msgstr "Willkommen zum i18n-Beispiel!"
 
+msgctxt "home"
 msgid "This is the internationalization example app."
 msgstr "Dies ist das Beispielprogramm für Internationalisierung."
 
+msgctxt "home"
 msgid "It can use string interpolation! See the title \"#{title}\" here as an example."
 msgstr "Es kann String-Interpolationen benutzen! Nehmen Sie den Titel \"#{title}\" hier als Beispiel."
 
+msgctxt "home"
 msgid "Here are some examples of context being used."
 msgstr "Hier sind einige Beispiele von Kontext verwendet."
 
+msgctxt "home"
 msgid "Cardinal directions:"
 msgstr "Himmelsrichtungen:"
 
@@ -33,6 +38,7 @@ msgctxt "direction"
 msgid "W"
 msgstr "Westen"
 
+msgctxt "home"
 msgid "Letter mnemonics:"
 msgstr "Schreiben Mnemotechnik:"
 
@@ -52,6 +58,7 @@ msgctxt "letter"
 msgid "W"
 msgstr "Wilhelm"
 
+msgctxt "home"
 msgid "Plural forms:"
 msgstr "Pluralformen:"
 
