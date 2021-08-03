@@ -460,6 +460,90 @@ class Example7 : Example7API {
 	}
 }
 
+/* --------- EXAMPLE 8 ---------- */
+
+@rootPathFromName
+interface Example8API
+{
+	// Methods need to be `@safe`:
+	@safe:
+
+	struct FooType {
+		int a;
+		string s;
+		double d;
+	}
+
+	FooType constFoo (const FooType param);
+	FooType constRefFoo (const ref FooType param);
+	FooType inFoo (in FooType param);
+	FooType immutableFoo (immutable FooType param);
+	int[] constArr (const int[] param);
+	int[] constRefArr (const ref int[] param);
+	int[] inArr (in int[] param);
+	int[] immutableArr (immutable int[] param);
+}
+
+class Example8 : Example8API
+{
+	override: // usage of this handy D feature is highly recommended
+
+	FooType constFoo (const FooType param)
+	{
+		return param;
+	}
+
+	FooType constRefFoo (const ref FooType param)
+	{
+		return param;
+	}
+
+	FooType immutableFoo (immutable FooType param)
+	{
+		return param;
+	}
+
+	int[] constArr (const int[] param)
+	{
+		return param.dup;
+	}
+
+	int[] constRefArr (const ref int[] param)
+	{
+		return param.dup;
+	}
+
+	int[] immutableArr (immutable int[] param)
+	{
+		return param.dup;
+	}
+
+	int[] inArr (in int[] param)
+	{
+		return param.dup;
+	}
+
+	FooType inFoo (in FooType param)
+	{
+		return param;
+	}
+}
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example8());
+	auto routes = router.getAllRoutes();
+
+	assert (routes[0].method == HTTPMethod.POST && routes[0].pattern == "/example8_api/const_foo");
+	assert (routes[1].method == HTTPMethod.POST && routes[1].pattern == "/example8_api/const_ref_foo");
+	assert (routes[2].method == HTTPMethod.POST && routes[2].pattern == "/example8_api/in_foo");
+	assert (routes[3].method == HTTPMethod.POST && routes[3].pattern == "/example8_api/immutable_foo");
+	assert (routes[4].method == HTTPMethod.POST && routes[4].pattern == "/example8_api/const_arr");
+	assert (routes[5].method == HTTPMethod.POST && routes[5].pattern == "/example8_api/const_ref_arr");
+	assert (routes[6].method == HTTPMethod.POST && routes[6].pattern == "/example8_api/in_arr");
+	assert (routes[7].method == HTTPMethod.POST && routes[7].pattern == "/example8_api/immutable_arr");
+}
 
 void runTests(string url)
 {
@@ -601,6 +685,24 @@ void runTests(string url)
 			assert(answer == expected);
 		}
 	}
+
+	// Example 8
+	{
+		import std.algorithm;
+
+		auto api = new RestInterfaceClient!Example8API(url);
+		Example8API.FooType foo = Example8API.FooType(44, "firmak", 0.37);
+		assert(foo == api.constFoo(foo));
+		assert(foo == api.constRefFoo(foo));
+		assert(foo == api.inFoo(foo));
+		assert(foo == api.immutableFoo(foo));
+
+		int[] arr = [42, 37, 44];
+		assert(arr.equal(api.constArr(arr)));
+		assert(arr.equal(api.constRefArr(arr)));
+		assert(arr.equal(api.immutableArr(cast(immutable(int[])) arr)));
+		assert(arr.equal(api.inArr(arr)));
+	}
 }
 
 shared static this()
@@ -616,6 +718,7 @@ shared static this()
 	registerRestInterface(routes, new Example5());
 	registerRestInterface(routes, new Example6());
 	registerRestInterface(routes, new Example7());
+	registerRestInterface(routes, new Example8());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 0;

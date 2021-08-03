@@ -255,6 +255,7 @@ import std.traits : hasUDA;
 		import vibe.web.auth : AuthInfo;
 		import std.algorithm.searching : any, count;
 		import std.meta : AliasSeq;
+		import std.traits : isMutable;
 
 		assert(__ctfe);
 
@@ -300,7 +301,7 @@ import std.traits : hasUDA;
 					pi.isOut = true;
 				} else static if (SC & ParameterStorageClass.ref_) {
 					pi.isIn = true;
-					pi.isOut = true;
+					pi.isOut = isMutable!PT;
 				} else {
 					pi.isIn = true;
 				}

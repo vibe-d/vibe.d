@@ -1439,6 +1439,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 {
 	import std.meta : AliasSeq;
 	import std.string : format;
+	import std.traits : Unqual;
 	import vibe.http.common : HTTPStatusException, enforceBadRequest;
 	import vibe.utils.string : sanitizeUTF8;
 	import vibe.web.internal.rest.common : ParameterKind;
@@ -1447,7 +1448,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	import vibe.textfilter.urlencode : urlDecode;
 
 	enum Method = __traits(identifier, Func);
-	alias PTypes = ParameterTypeTuple!Func;
+	// We need mutable types for deserialization
+	alias PTypes = staticMap!(Unqual, ParameterTypeTuple!Func);
 	alias PDefaults = ParameterDefaultValueTuple!Func;
 	alias CFuncRaw = derivedMethod!(T, Func);
 	static if (AliasSeq!(CFuncRaw).length > 0) alias CFunc = CFuncRaw;
