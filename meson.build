@@ -10,8 +10,6 @@ project_version_suffix = '~rc1'
 project_version        = meson.project_version()
 project_version_full   = project_version + project_version_suffix
 
-source_root = meson.source_root()
-
 pkgc = import('pkgconfig')
 
 #
