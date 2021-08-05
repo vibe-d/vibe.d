@@ -35,15 +35,13 @@ endif
 
 if meson.is_subproject() == false
     if meson.get_compiler('d').get_id() == 'llvm'
-        add_global_arguments(['-d-version=VibeLibeventDriver',
-                              '-d-version=Have_openssl',
+        add_global_arguments(['-d-version=Have_openssl',
                               '-d-version=Have_diet_ng',
                               '-d-version=Have_stdx_allocator',
                               flag_new_openssl_ldc], language : 'd')
     endif
     if meson.get_compiler('d').get_id() == 'dmd'
-        add_global_arguments(['-version=VibeLibeventDriver',
-                              '-version=Have_openssl',
+        add_global_arguments(['-version=Have_openssl',
                               '-version=Have_diet_ng',
                               '-version=Have_stdx_allocator',
                               flag_new_openssl_dmd], language : 'd')
