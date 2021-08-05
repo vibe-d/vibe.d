@@ -608,11 +608,17 @@ final class OpenSSLContext : TLSContext {
 		m_kind = kind;
 
 		const(SSL_METHOD)* method;
+
 		c_ulong veroptions = SSL_OP_NO_SSLv2;
-		c_ulong options = SSL_OP_NO_COMPRESSION;
-		static if (OPENSSL_VERSION.startsWith("1.1")) {}
-		else
-			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE; // There are always enabled in OpenSSL 1.1.0.
+		c_ulong options;
+		static if (!OPENSSL_VERSION.startsWith("1.1"))
+		{
+			// TODO: Make this more foolproof, as we now assume either 1.0 or 1.1
+			// These options are always enabled in OpenSSL 1.1.0
+			// They are mitigation techniques against some attacks,
+			// e.g. `SSL_OP_NO_COMPRESSION` is a countermeasure for `CRIME` attacks
+			options |= SSL_OP_NO_COMPRESSION|SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
+		}
 		int minver = TLS1_VERSION;
 		int maxver = TLS1_2_VERSION;
 
