@@ -109,9 +109,6 @@ subdir('utils/')
 # Data
 subdir('data/')
 
-# Core
-subdir('core/')
-
 # Crypto
 subdir('crypto/')
 
