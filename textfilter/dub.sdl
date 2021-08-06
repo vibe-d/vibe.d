@@ -1,7 +1,7 @@
 name "textfilter"
 description "Text filtering routines"
 targetType "library"
-dependency "vibe-d:core" version="*"
+dependency "vibe-core" version="~>1.0"
 dependency "vibe-d:utils" version="*"
 sourcePaths "."
 importPaths "."

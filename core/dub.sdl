@@ -7,29 +7,21 @@ dependency "vibe-core" version=">=1.7.0-rc.2 <2.0.0-0"
 
 targetType "none"
 
+preGenerateCommands "echo ---" "echo The vibe:core sub package has been \
+	deprecated and will be removed soon. Please change your dependencies \
+	to vibe-core instead." "echo ---"
+
 configuration "vibe-core" {
 }
 
 configuration "win32_mscoff" {
-	preGenerateCommands "echo ---" "echo The win32 legacy driver has been \
-		removed and the vibe-core implementation is used instead. Please \
-		update your dependencies to use vibe-core directly." "echo ---"
 }
 
 configuration "libevent" {
-	preGenerateCommands "echo ---" "echo The libevent legacy driver has been \
-		removed and the vibe-core implementation is used instead. Please \
-		update your dependencies to use vibe-core directly." "echo ---"
 }
 
 configuration "libasync" {
-	preGenerateCommands "echo ---" "echo The libasync legacy driver has been \
-		removed and the vibe-core implementation is used instead. Please \
-		update your dependencies to use vibe-core directly." "echo ---"
 }
 
 configuration "win32" {
-	preGenerateCommands "echo ---" "echo The win32 legacy driver has been \
-		removed and the vibe-core implementation is used instead. Please \
-		update your dependencies to use vibe-core directly." "echo ---"
 }
