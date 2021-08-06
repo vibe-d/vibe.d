@@ -10,7 +10,6 @@ authors "Sönke Ludwig" "Mathias 'Geod24' Lang" "Etienne Cimon" "Martin Nowak" \
 systemDependencies "Optionally OpenSSL 1.1.x"
 dependency ":redis" version="*"
 dependency ":data" version="*"
-dependency ":core" version="*"
 dependency ":mongodb" version="*"
 dependency ":web" version="*"
 dependency ":utils" version="*"
