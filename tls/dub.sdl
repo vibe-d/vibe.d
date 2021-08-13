@@ -102,12 +102,6 @@ configuration "openssl-1.0" {
 	versions "VibeUseOpenSSL10"
 }
 
-configuration "openssl-0.9" {
-	platforms "posix"
-	dependency "openssl" version="~>1.0"
-	versions "VibeUseOldOpenSSL"
-}
-
 configuration "botan" {
 	dependency "botan" version="~>1.12.0"
 }

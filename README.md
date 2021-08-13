@@ -204,8 +204,5 @@ JSON syntax:
 }
 ```
 
-For older systems there is also an "openssl-0.9" configuration that can be
-used in analogy to the above to build against the OpenSSL 0.9.8 branch.
-
 Finally, there is a "botan" configuration for using the D port of the Botan
 library.
