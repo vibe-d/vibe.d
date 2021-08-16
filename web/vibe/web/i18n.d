@@ -271,6 +271,9 @@ public string determineLanguageByHeader(T)(string accept_language, T allowed_lan
 				// request en_* == serve en
 				if (lcode == alang && !lextra.length)
 					return lang;
+				// request en == serve en_*
+				if (lcode == alang && !aextra.length)
+					return lang;
 				// request en* == serve en_* && be first occurence
 				if (lcode == alang && lextra.length && !fallback.length)
 					fallback = lang;
@@ -303,19 +306,20 @@ public string determineLanguageByHeader(Tuple...)(HTTPServerRequest req, Tuple a
 }
 
 @safe unittest {
-	assert(determineLanguageByHeader("de,de-DE;q=0.8,en;q=0.6,en-US;q=0.4", ["en-US", "de_DE", "de_CH"]) == "de_DE");
-	assert(determineLanguageByHeader("de,de-CH;q=0.8,en;q=0.6,en-US;q=0.4", ["en_US", "de_DE", "de-CH"]) == "de-CH");
+	assert(determineLanguageByHeader("de-DE,de;q=0.8,en;q=0.6,en-US;q=0.4", ["en-US", "de_DE", "de_CH"]) == "de_DE");
+	assert(determineLanguageByHeader("de-CH,de;q=0.8,en;q=0.6,en-US;q=0.4", ["en_US", "de_DE", "de-CH"]) == "de-CH");
 	assert(determineLanguageByHeader("en_CA,en_US", ["ja_JP", "en"]) == "en");
 	assert(determineLanguageByHeader("en", ["ja_JP", "en"]) == "en");
 	assert(determineLanguageByHeader("en", ["ja_JP", "en_US"]) == "en_US");
 	assert(determineLanguageByHeader("en_US", ["ja-JP", "en"]) == "en");
-	assert(determineLanguageByHeader("de,de-DE;q=0.8,en;q=0.6,en-US;q=0.4", ["ja_JP"]) is null);
+	assert(determineLanguageByHeader("de-DE,de;q=0.8,en;q=0.6,en-US;q=0.4", ["ja_JP"]) is null);
 	assert(determineLanguageByHeader("de, de-DE ;q=0.8 , en ;q=0.6 , en-US;q=0.4", ["de-DE"]) == "de-DE");
 	assert(determineLanguageByHeader("en_GB", ["en_US"]) == "en_US");
 	assert(determineLanguageByHeader("de_DE", ["en_US"]) is null);
 	assert(determineLanguageByHeader("en_US,enCA", ["en_GB"]) == "en_GB");
 	assert(determineLanguageByHeader("en_US,enCA", ["en_GB", "en"]) == "en");
 	assert(determineLanguageByHeader("en_US,enCA", ["en", "en_GB"]) == "en");
+	assert(determineLanguageByHeader("de,en_US;q=0.8,en;q=0.6", ["en_US", "de_DE"]) == "de_DE");
 	// TODO from above (should be invalid input having a more generic language first in the list!)
 	//assert(determineLanguageByHeader("en_US,enCA", ["en", "en_US"]) == "en_US");
 }
