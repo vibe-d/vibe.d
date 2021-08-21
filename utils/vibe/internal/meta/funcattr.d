@@ -310,7 +310,7 @@ private {
 
 	template isInputAttribute(T...)
 	{
-		enum isInputAttribute = (T.length == 1) && isInstanceOf!(InputAttribute, typeof(T[0]));
+		enum isInputAttribute = (T.length == 1) && !is(T[0]) && isInstanceOf!(InputAttribute, typeof(T[0]));
 	}
 
 	unittest
