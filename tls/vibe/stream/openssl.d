@@ -126,9 +126,14 @@ static if (OPENSSL_VERSION.startsWith("1.1")) {
 	}
 
 	private enum SSL_CTRL_SET_MIN_PROTO_VERSION = 123;
+	private enum SSL_CTRL_SET_MAX_PROTO_VERSION = 124;
 
 	private int SSL_CTX_set_min_proto_version(ssl_ctx_st* ctx, int ver) {
 		return cast(int) SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, ver, null);
+	}
+
+	private int SSL_CTX_set_max_proto_version(ssl_ctx_st* ctx, int ver) {
+		return cast(int) SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MAX_PROTO_VERSION, ver, null);
 	}
 
 	private int SSL_set_min_proto_version(ssl_st* s, int ver) {
@@ -603,38 +608,39 @@ final class OpenSSLContext : TLSContext {
 		m_kind = kind;
 
 		const(SSL_METHOD)* method;
-		c_long veroptions = SSL_OP_NO_SSLv2;
-		c_long options = SSL_OP_NO_COMPRESSION;
+		c_ulong veroptions = SSL_OP_NO_SSLv2;
+		c_ulong options = SSL_OP_NO_COMPRESSION;
 		static if (OPENSSL_VERSION.startsWith("1.1")) {}
 		else
 			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE; // There are always enabled in OpenSSL 1.1.0.
 		int minver = TLS1_VERSION;
+		int maxver = TLS1_2_VERSION;
 
 		() @trusted {
 		final switch (kind) {
 			case TLSContextKind.client:
 				final switch (ver) {
 					case TLSVersion.any: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
-					case TLSVersion.ssl3: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv2|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = SSL3_VERSION; break;
+					case TLSVersion.ssl3: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = SSL3_VERSION; maxver = SSL3_VERSION; break;
 					case TLSVersion.tls1: method = TLSv1_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
 					//case TLSVersion.tls1_1: method = TLSv1_1_client_method(); break;
 					//case TLSVersion.tls1_2: method = TLSv1_2_client_method(); break;
-					case TLSVersion.tls1_1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; break;
+					case TLSVersion.tls1_1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
 					case TLSVersion.tls1_2: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
-					case TLSVersion.dtls1: method = DTLSv1_client_method(); minver = DTLS1_VERSION; break;
+					case TLSVersion.dtls1: method = DTLSv1_client_method(); minver = DTLS1_VERSION; maxver = DTLS1_VERSION; break;
 				}
 				break;
 			case TLSContextKind.server:
 			case TLSContextKind.serverSNI:
 				final switch (ver) {
 					case TLSVersion.any: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
-					case TLSVersion.ssl3: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv2|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = SSL3_VERSION; break;
+					case TLSVersion.ssl3: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = SSL3_VERSION; maxver = SSL3_VERSION; break;
 					case TLSVersion.tls1: method = TLSv1_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
-					case TLSVersion.tls1_1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; break;
+					case TLSVersion.tls1_1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
 					case TLSVersion.tls1_2: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
 					//case TLSVersion.tls1_1: method = TLSv1_1_server_method(); break;
 					//case TLSVersion.tls1_2: method = TLSv1_2_server_method(); break;
-					case TLSVersion.dtls1: method = DTLSv1_server_method(); minver = DTLS1_VERSION; break;
+					case TLSVersion.dtls1: method = DTLSv1_server_method(); minver = DTLS1_VERSION; maxver = DTLS1_VERSION; break;
 				}
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 				break;
@@ -646,18 +652,21 @@ final class OpenSSLContext : TLSContext {
 			enforceSSL(0, "Failed to create SSL context");
 			assert(false);
 		}
+
 		static if (OPENSSL_VERSION.startsWith("1.1")) {
 			() @trusted { return SSL_CTX_set_min_proto_version(m_ctx, minver); }()
 				.enforceSSL("Failed setting minimum protocol version");
+			() @trusted { return SSL_CTX_set_max_proto_version(m_ctx, maxver); }()
+				.enforceSSL("Failed setting maximum protocol version");
 			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options); }();
 			if (retOptions != options)
 				logDiagnostic("SSL modified options: passed 0x%08x vs applied 0x%08x", options, retOptions);
 		} else {
-			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options | veroptions); }();
+			options |= veroptions;
+			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options); }();
 			if (retOptions != options)
-				logDiagnostic("SSL modified options: passed 0x%08x vs applied 0x%08x", options | veroptions, retOptions);
+				logDiagnostic("SSL modified options: passed 0x%08x vs applied 0x%08x", options, retOptions);
 		}
-
 		if (kind == TLSContextKind.server) {
 			setDHParams();
 			static if (haveECDH) setECDHCurve();
