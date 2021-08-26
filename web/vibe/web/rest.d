@@ -1804,7 +1804,6 @@ private string generateRestClientMethods(I)()
 	}
 
 	// generate stubs for non-route functions
-	pragma(msg, __traits(allMembers, I));
 	static foreach (m; __traits(allMembers, I))
 		foreach (i, fun; MemberFunctionsTuple!(I, m))
 			static if (hasUDA!(fun, NoRouteAttribute))
