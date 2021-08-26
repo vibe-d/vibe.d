@@ -1082,7 +1082,7 @@ struct Collection(I)
 		foreach (m; __traits(allMembers, I)) {
 			foreach (ovrld; MemberFunctionsTuple!(I, m)) {
 				alias PT = ParameterTypeTuple!ovrld;
-				static if (!matchesAllIDs!ovrld) {
+				static if (!matchesAllIDs!ovrld && !hasUDA!(ovrld, NoRouteAttribute)) {
 					static assert(matchesParentIDs!ovrld,
 						"Collection methods must take all parent IDs as the first parameters."~PT.stringof~"   "~ParentIDs.stringof);
 					ret ~= "auto "~m~"(ARGS...)(ARGS args) { return m_interface."~m~"(m_parentIDs, args); }\n";
@@ -1802,6 +1802,17 @@ private string generateRestClientMethods(I)()
 				});
 			}.format(i, pnames);
 	}
+
+	// generate stubs for non-route functions
+	pragma(msg, __traits(allMembers, I));
+	static foreach (m; __traits(allMembers, I))
+		foreach (i, fun; MemberFunctionsTuple!(I, m))
+			static if (hasUDA!(fun, NoRouteAttribute))
+				ret ~= q{
+					mixin CloneFunction!(MemberFunctionsTuple!(I, "%s")[%s], q{
+						assert(false);
+					});
+				}.format(m, i);
 
 	return ret;
 }
@@ -2700,4 +2711,12 @@ private template GenOrphan(int id) {
 		auto client = new RestInterfaceClient!(IKeys!())("http://127.0.0.1:8080");
 		assert(client.create("Hello", 0) == "4242-4242");
 	}
+}
+
+@safe unittest { // @noRoute support in RestInterfaceClient
+	interface I {
+		void foo();
+		@noRoute int bar(void* someparam);
+	}
+	auto cli = new RestInterfaceClient!I("http://127.0.0.1/");
 }
