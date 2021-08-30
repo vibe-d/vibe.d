@@ -39,8 +39,8 @@ struct URL {
 	/// Constructs a new URL object from its components.
 	this(string schema, string host, ushort port, InetPath path) pure nothrow
 	in {
-		assert(isValidSchema(schema));
-		assert(host.length == 0 || isValidHostName(host));
+		assert(isValidSchema(schema), "Invalid URL schema name: " ~ schema);
+		assert(host.length == 0 || isValidHostName(host), "Invalid URL host name: " ~ host);
 	}
 	do {
 		m_schema = schema;
@@ -153,7 +153,7 @@ struct URL {
 			str = str[idx+1 .. $];
 			bool requires_host = false;
 
-			if (isDoubleSlashSchema(m_schema)) {
+			if (isCommonInternetSchema(m_schema)) {
 				// proto://server/path style
 				enforce(str.startsWith("//"), "URL must start with proto://...");
 				requires_host = true;
@@ -349,7 +349,7 @@ struct URL {
 		auto dst = appender!string();
 		dst.put(schema);
 		dst.put(":");
-		if (isDoubleSlashSchema(schema))
+		if (isCommonInternetSchema(schema))
 			dst.put("//");
 		if (m_username.length || m_password.length) {
 			dst.put(username);
@@ -504,17 +504,72 @@ unittest {
 
 private enum isAnyPath(P) = is(P == InetPath) || is(P == PosixPath) || is(P == WindowsPath);
 
-private bool isDoubleSlashSchema(string schema)
+private shared immutable(StringSet)* st_commonInternetSchemas;
+
+
+/** Adds the name of a schema to be treated as double-slash style.
+
+	See_also: `isCommonInternetSchema`, RFC 1738 Section 3.1
+*/
+void registerCommonInternetSchema(string schema)
+@trusted nothrow {
+	import core.atomic : atomicLoad, cas;
+
+	while (true) {
+		auto olds = atomicLoad(st_commonInternetSchemas);
+		auto news = olds ? olds.dup : new StringSet;
+		news.add(schema);
+		static if (__VERSION__ < 2094) {
+			// work around bogus shared violation error on earlier versions of Druntime
+			if (cas(cast(shared(StringSet*)*)&st_commonInternetSchemas, cast(shared(StringSet)*)olds, cast(shared(StringSet)*)news))
+				break;
+		} else {
+			if (cas(&st_commonInternetSchemas, olds, cast(immutable)news))
+				break;
+		}
+	}
+}
+
+
+/** Determines whether an URL schema is double-slash based.
+
+	Double slash based schemas are of the form `schema://[host]/<path>`
+	and are parsed differently compared to generic schemas, which are simply
+	parsed as `schema:<path>`.
+
+	Built-in recognized double-slash schemas: ftp, http, https,
+	http+unix, https+unix, spdy, sftp, ws, wss, file, redis, tcp,
+	rtsp, rtsps
+
+	See_also: `registerCommonInternetSchema`, RFC 1738 Section 3.1
+*/
+bool isCommonInternetSchema(string schema)
 @safe nothrow @nogc {
+	import core.atomic : atomicLoad;
+
 	switch (schema) {
 		case "ftp", "http", "https", "http+unix", "https+unix":
 		case "spdy", "sftp", "ws", "wss", "file", "redis", "tcp":
 		case "rtsp", "rtsps":
 			return true;
 		default:
-			return false;
+			return atomicLoad(st_commonInternetSchemas).contains(schema);
 	}
 }
+
+
+private struct StringSet {
+	bool[string] m_data;
+
+	void add(string str) @safe nothrow { m_data[str] = true; }
+	bool contains(string str) const @safe nothrow @nogc { return !!(str in m_data); }
+	StringSet* dup() const @safe nothrow {
+		auto ret = new StringSet;
+		foreach (k; m_data.byKey) ret.add(k);
+		return ret;
+	}
+}
+
 
 unittest { // IPv6
 	auto urlstr = "http://[2003:46:1a7b:6c01:64b:80ff:fe80:8003]:8091/abc";
