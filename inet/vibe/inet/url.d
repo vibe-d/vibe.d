@@ -553,8 +553,16 @@ bool isCommonInternetSchema(string schema)
 		case "rtsp", "rtsps":
 			return true;
 		default:
-			return atomicLoad(st_commonInternetSchemas).contains(schema);
+			auto set = atomicLoad(st_commonInternetSchemas);
+			return set ? set.contains(schema) : false;
 	}
+}
+
+unittest {
+	assert(isCommonInternetSchema("http"));
+	assert(!isCommonInternetSchema("foobar"));
+	registerCommonInternetSchema("foobar");
+	assert(isCommonInternetSchema("foobar"));
 }
 
 
