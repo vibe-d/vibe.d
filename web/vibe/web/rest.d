@@ -315,7 +315,7 @@ module vibe.web.rest;
 public import vibe.web.common;
 
 import vibe.core.log;
-import vibe.core.stream : InputStream;
+import vibe.core.stream : InputStream, isInputStream, pipe;
 import vibe.http.router : URLRouter;
 import vibe.http.client : HTTPClientResponse, HTTPClientSettings;
 import vibe.http.common : HTTPMethod;
@@ -1629,6 +1629,12 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				() @trusted { __traits(getMember, inst, Method)(params); } ();
 				returnHeaders();
 				res.writeBody(cast(ubyte[])null);
+			} else static if (isInputStream!RT) {
+				returnHeaders();
+				auto ret = () @trusted {
+					return evaluateOutputModifiers!CFunc(
+						__traits(getMember, inst, Method)(params), req, res); } ();
+				ret.pipe(res.bodyWriter);
 			} else {
 				// TODO: remove after deprecation period
 				static if (!__traits(compiles, () @safe { evaluateOutputModifiers!Func(RT.init, req, res); } ()))
@@ -1940,9 +1946,12 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	auto ret = request(URL(intf.baseURL), request_filter, request_body_filter,
 		sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs,
 		intf.settings.httpClientSettings);
-	scope(exit) ret.dropBody();
 
-	static if (!is(RT == void)) {
+	static if (isInputStream!RT) {
+		return RT(ret.bodyReader);
+	} else static if (!is(RT == void)) {
+		scope(exit) ret.dropBody();
+
 		string content_type;
 		if (const hdr = "Content-Type" in opthdrs)
 			content_type = *hdr;
@@ -1964,7 +1973,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 			}
 
 		throw new Exception("Unrecognized content type: " ~ content_type);
-	}
+	} else ret.dropBody();
 }
 
 
