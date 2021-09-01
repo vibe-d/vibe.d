@@ -7,6 +7,7 @@
 import vibe.appmain;
 import vibe.core.core;
 import vibe.core.log;
+import vibe.core.stream : InputStreamProxy;
 import vibe.data.json;
 import vibe.http.router;
 import vibe.http.server;
@@ -50,6 +51,8 @@ interface Example1API
 	 * Rather obvious and thus omitted in this example interface.
 	 */
 	@property string getter();
+
+	InputStreamProxy getStream();
 }
 
 class Example1 : Example1API
@@ -69,6 +72,12 @@ class Example1 : Example1API
 		string getter()
 		{
 			return "Getter";
+		}
+
+		InputStreamProxy getStream()
+		{
+			import vibe.stream.memory : createMemoryStream;
+			return InputStreamProxy(createMemoryStream(cast(ubyte[])"foobar".dup));
 		}
 }
 
@@ -547,12 +556,15 @@ unittest
 
 void runTests(string url)
 {
+	import vibe.stream.operations : readAllUTF8;
+
 	// Example 1
 	{
 		auto api = new RestInterfaceClient!Example1API(url);
 		assert(api.getSomeInfo() == "Some Info!");
 		assert(api.getter == "Getter");
 		assert(api.postSum(2, 3) == 5);
+		assert(api.getStream().readAllUTF8() == "foobar");
 	}
 	// Example 2
 	{
