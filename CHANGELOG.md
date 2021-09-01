@@ -1,6 +1,74 @@
 Changelog
 =========
 
+v0.9.4 - 2021-09-
+-------------------
+
+Updates compiler support and OpenSSL binaries, starts the deprecation phase of
+`vibe-d:core` and enables input stream return types in the REST interface
+generator. This release also contains some important bug fixes in the HTTP and
+REST systems, as well as making some smaller API additions.
+
+### Features and improvements ###
+
+- Supports D frontend versions 2.087.1 to 2.097.2
+- The `vibe-d:core` sub package has been deprecated - depend on `vibe-core` directly instead - [pull #2592][issue2592]
+- OpenSSL
+	- Upgraded Windows binaries to 1.1.1l - [pull #2601][issue2601]
+	- Removed support for OpenSSL 0.9.x (by Mathias Lang aka Geod24) - [pull #2594][issue2594]
+	- The OpenSSL TLS provider now also restricts the maximum protocol version when setting an explicit version (by Hiroki Noda aka kubo39) - [pull #2583][issue2583]
+- REST interface generator
+	- Extended the client to be able to stub out `@noRoute` methods, which allows to put `authenticate` methods in interfaces - [pull #2598][issue2598]
+	- Added support for input stream return types (`InputStreamProxy`) - [pull #2602][issue2602]
+- Improved the JSON string deserializer to be able to ignore unexpected fields (by Chris Josten aka HenkKalkwater) - [pull #2553][issue2553]
+- Added `vibe.stream.bufferedstream.BufferedStream` - [pull #2566][issue2566], [pull #2567][issue2567]
+- Added `isCommonInternetSchema`/`registerCommonInternetSchema` for controlling URL parsing - [pull #2600][issue2600]
+- Added `vibe.http.websockets.FrameOpcode` (by Tobias Pankrath aka Panke) - [pull #2554][issue2554]
+- Added `MongoDatabase.runListCommand` - [pull #2560][issue2560]
+- Made `MongoCollection.aggregate` `@safe` (by Jan Jurzitza aka WebFreak001) - [pull #2574][issue2574]
+
+### Bug fixes ###
+
+- Fixed rare crashes in `Json` by switching back to use `union` (by Mathis Beer aka FeepingCreature) - [issue #2205][issue2205], [pull #2206][issue2206]
+- Fixed HTTP client handling of keep-alive timeouts (by Yazan Dabain aka yazd) - [pull #2529][issue2529
+- Fixed some `-preview=in` related issues (by Mathias Lang aka Geod24) - [pull #2536][issue2536], [pull #2538][issue2538]
+- Fixed various places in `vibe.textfilter` to use `put(rng, items)` instead of `rng.put(items)` (by Steven Schveighoffer aka schveiguy) - [issue #2541][issue2541], [pull #2542][issue2542]
+- Fixed handling of explicit character set declaration in Content-Type headers for JSON bodies in the HTTP/REST system - [issue #2543][issue2543], [pull #2544][issue2544]
+- Fixed handling of error messages in the REST client - [pull #2549][issue2549]
+- Fixed Content-Length for range based responses of the HTTP file server - [pull #2557][issue2557]
+- Fixed wrong route matching in `URLRouter` caused by weak hash algorithm - [issue #2561][issue2561], [pull #2565][issue2565]
+- Fixed the REST generator to allow `const` parameters (by Ömer Faruk Irmak aka omerfirmak) - [pull #2552][issue2552]
+- Fixed HTTP Accept-Language header handling for basic language matches - [pull #2595][issue2595]
+
+[issue2205]: https://github.com/vibe-d/vibe.d/issues/2205
+[issue2206]: https://github.com/vibe-d/vibe.d/issues/2206
+[issue2536]: https://github.com/vibe-d/vibe.d/issues/2536
+[issue2538]: https://github.com/vibe-d/vibe.d/issues/2538
+[issue2541]: https://github.com/vibe-d/vibe.d/issues/2541
+[issue2542]: https://github.com/vibe-d/vibe.d/issues/2542
+[issue2543]: https://github.com/vibe-d/vibe.d/issues/2543
+[issue2544]: https://github.com/vibe-d/vibe.d/issues/2544
+[issue2549]: https://github.com/vibe-d/vibe.d/issues/2549
+[issue2552]: https://github.com/vibe-d/vibe.d/issues/2552
+[issue2553]: https://github.com/vibe-d/vibe.d/issues/2553
+[issue2554]: https://github.com/vibe-d/vibe.d/issues/2554
+[issue2557]: https://github.com/vibe-d/vibe.d/issues/2557
+[issue2560]: https://github.com/vibe-d/vibe.d/issues/2560
+[issue2561]: https://github.com/vibe-d/vibe.d/issues/2561
+[issue2565]: https://github.com/vibe-d/vibe.d/issues/2565
+[issue2566]: https://github.com/vibe-d/vibe.d/issues/2566
+[issue2567]: https://github.com/vibe-d/vibe.d/issues/2567
+[issue2574]: https://github.com/vibe-d/vibe.d/issues/2574
+[issue2583]: https://github.com/vibe-d/vibe.d/issues/2583
+[issue2592]: https://github.com/vibe-d/vibe.d/issues/2592
+[issue2594]: https://github.com/vibe-d/vibe.d/issues/2594
+[issue2595]: https://github.com/vibe-d/vibe.d/issues/2595
+[issue2598]: https://github.com/vibe-d/vibe.d/issues/2598
+[issue2600]: https://github.com/vibe-d/vibe.d/issues/2600
+[issue2601]: https://github.com/vibe-d/vibe.d/issues/2601
+[issue2602]: https://github.com/vibe-d/vibe.d/issues/2602
+
+
 v0.9.3 - 2021-01-29
 -------------------
 
