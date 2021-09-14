@@ -217,7 +217,17 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		return ret.data;
 	}
 	/// ditto
+	void getAll(string key, scope void delegate(const(ValueType)) @safe nothrow del)
+	const {
+		getAllImpl(key, del);
+	}
+	/// ditto
 	void getAll(string key, scope void delegate(const(ValueType)) @safe del)
+	const {
+		getAllImpl(key, del);
+	}
+
+	private void getAllImpl(C)(string key, scope C del)
 	const {
 		static if (USE_HASHSUM) uint keysum = computeCheckSumI(key);
 		else enum keysum = 0;
@@ -382,6 +392,18 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	b.addField("A", 2);
 	assert(b["A"] == 1);
 	assert(b.getAll("a") == [1, 2]);
+}
+
+@safe nothrow unittest {
+	DictionaryList!(int, true) a;
+	a.addField("a", 1);
+	a.addField("a", 2);
+	assert(a.getAll("a") == [1, 2]);
+	assert("a" in a);
+	a["a"] = 3;
+	assert(a.getAll("a") == [3, 2]);
+	a.removeAll("a");
+	assert(a.getAll("a").length == 0);
 }
 
 unittest {

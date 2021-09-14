@@ -196,7 +196,7 @@ unittest {
 		// write-only property (NO)
 		@property void p3(int value) { privateJ = value; }
 		// ref returning property (OK)
-		@property ref int p4() { return i; }
+		@property ref int p4() return { return i; }
 		// parameter-less template property (OK)
 		@property ref int p5()() { return i; }
 		// not treated as a property by DMD, so not a field
@@ -206,7 +206,7 @@ unittest {
 		static @property int p7() { return k; }
 		static @property void p7(int value) { k = value; }
 
-		ref int f1() { return i; } // ref returning function (no field)
+		ref int f1() return { return i; } // ref returning function (no field)
 
 		int f2(Args...)(Args args) { return i; }
 
@@ -313,7 +313,7 @@ unittest { // normal fields
 		enum c = 42;
 		void f();
 		static void g();
-		ref int h() { return a; }
+		ref int h() return { return a; }
 		static ref int i() { return b; }
 	}
 	static assert(isNonStaticMember!(S, "a"));
