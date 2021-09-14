@@ -282,14 +282,14 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 	// return if the file does not exist
 	if (!existsFile(pathstr)){
 		if (settings.options & HTTPFileServerOption.failIfNotFound)
-			throw new HTTPStatusException(HTTPStatus.NotFound);
+			throw new HTTPStatusException(HTTPStatus.notFound);
 		return;
 	}
 
 	FileInfo dirent;
 	try dirent = getFileInfo(pathstr);
 	catch(Exception){
-		throw new HTTPStatusException(HTTPStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
+		throw new HTTPStatusException(HTTPStatus.internalServerError, "Failed to get information for the file due to a file system error.");
 	}
 
 	if (dirent.isDirectory) {
@@ -297,7 +297,7 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 			return sendFileImpl(req, res, path ~ "index.html", settings);
 		logDebugV("Hit directory when serving files, ignoring: %s", pathstr);
 		if (settings.options & HTTPFileServerOption.failIfNotFound)
-			throw new HTTPStatusException(HTTPStatus.NotFound);
+			throw new HTTPStatusException(HTTPStatus.notFound);
 		return;
 	}
 
@@ -341,7 +341,7 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 
 		try dirent = getFileInfo(encodedFilepath);
 		catch(Exception){
-			throw new HTTPStatusException(HTTPStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
+			throw new HTTPStatusException(HTTPStatus.internalServerError, "Failed to get information for the file due to a file system error.");
 		}
 
 		// encoded file must be younger than original else warn

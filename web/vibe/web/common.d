@@ -850,19 +850,19 @@ enum MethodStyle
 	/// UPPER-CASE-NAMING
 	upperDashed,
 
-	/// deprecated
+	deprecated
 	Unaltered = unaltered,
-	/// deprecated
+	deprecated
 	CamelCase = camelCase,
-	/// deprecated
+	deprecated
 	PascalCase = pascalCase,
-	/// deprecated
+	deprecated
 	LowerCase = lowerCase,
-	/// deprecated
+	deprecated
 	UpperCase = upperCase,
-	/// deprecated
+	deprecated
 	LowerUnderscored = lowerUnderscored,
-	/// deprecated
+	deprecated
 	UpperUnderscored = upperUnderscored,
 }
 

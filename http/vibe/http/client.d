@@ -510,7 +510,7 @@ final class HTTPClient {
 
 		if (res.headers.get("Proxy-Authenticate", null) !is null){
 			res.dropBody();
-			throw new HTTPStatusException(HTTPStatus.ProxyAuthenticationRequired, "Proxy Authentication Failed.");
+			throw new HTTPStatusException(HTTPStatus.proxyAuthenticationRequired, "Proxy Authentication Failed.");
 		}
 
 	}
