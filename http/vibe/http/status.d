@@ -61,47 +61,47 @@ enum HTTPStatus {
 	failedDependency             = 424,
 	insufficientStorage          = 507,
 
-	requestedrangenotsatisfiable = rangeNotSatisfiable, /// deprecated
-	Continue = continue_, /// deprecated
-	SwitchingProtocols = switchingProtocols, /// deprecated
-	OK = ok, /// deprecated
-	Created = created, /// deprecated
-	Accepted = accepted, /// deprecated
-	NonAuthoritativeInformation = nonAuthoritativeInformation, /// deprecated
-	NoContent = noContent, /// deprecated
-	ResetContent = resetContent, /// deprecated
-	PartialContent = partialContent, /// deprecated
-	MultipleChoices = multipleChoices, /// deprecated
-	MovedPermanently = movedPermanently, /// deprecated
-	Found = found, /// deprecated
-	SeeOther = seeOther, /// deprecated
-	NotModified = notModified, /// deprecated
-	UseProxy = useProxy, /// deprecated
-	TemporaryRedirect = temporaryRedirect, /// deprecated
-	BadRequest = badRequest, /// deprecated
-	Unauthorized = unauthorized, /// deprecated
-	PaymentRequired = paymentRequired, /// deprecated
-	Forbidden = forbidden, /// deprecated
-	NotFound = notFound, /// deprecated
-	MethodNotAllowed = methodNotAllowed, /// deprecated
-	NotAcceptable = notAcceptable, /// deprecated
-	ProxyAuthenticationRequired = proxyAuthenticationRequired, /// deprecated
-	RequestTimeout = requestTimeout, /// deprecated
-	Conflict = conflict, /// deprecated
-	Gone = gone, /// deprecated
-	LengthRequired = lengthRequired, /// deprecated
-	PreconditionFailed = preconditionFailed, /// deprecated
-	RequestEntityTooLarge = requestEntityTooLarge, /// deprecated
-	RequestURITooLarge = requestURITooLarge, /// deprecated
-	UnsupportedMediaType = unsupportedMediaType, /// deprecated
-	Requestedrangenotsatisfiable = requestedrangenotsatisfiable, /// deprecated
-	ExpectationFailed = expectationFailed, /// deprecated
-	InternalServerError = internalServerError, /// deprecated
-	NotImplemented = notImplemented, /// deprecated
-	BadGateway = badGateway, /// deprecated
-	ServiceUnavailable = serviceUnavailable, /// deprecated
-	GatewayTimeout = gatewayTimeout, /// deprecated
-	HTTPVersionNotSupported = httpVersionNotSupported, /// deprecated
+	deprecated("Use `rangeNotSatisfiable` instead") requestedrangenotsatisfiable = rangeNotSatisfiable,
+	deprecated("Use `continue_` instead") Continue = continue_,
+	deprecated("Use `switchingProtocols` instead") SwitchingProtocols = switchingProtocols,
+	deprecated("Use `ok` instead") OK = ok,
+	deprecated("Use `created` instead") Created = created,
+	deprecated("Use `accepted` instead") Accepted = accepted,
+	deprecated("Use `nonAuthoritativeInformation` instead") NonAuthoritativeInformation = nonAuthoritativeInformation,
+	deprecated("Use `noContent` instead") NoContent = noContent,
+	deprecated("Use `resetContent` instead") ResetContent = resetContent,
+	deprecated("Use `partialContent` instead") PartialContent = partialContent,
+	deprecated("Use `multipleChoices` instead") MultipleChoices = multipleChoices,
+	deprecated("Use `movedPermanently` instead") MovedPermanently = movedPermanently,
+	deprecated("Use `found` instead") Found = found,
+	deprecated("Use `seeOther` instead") SeeOther = seeOther,
+	deprecated("Use `notModified` instead") NotModified = notModified,
+	deprecated("Use `useProxy` instead") UseProxy = useProxy,
+	deprecated("Use `temporaryRedirect` instead") TemporaryRedirect = temporaryRedirect,
+	deprecated("Use `badRequest` instead") BadRequest = badRequest,
+	deprecated("Use `unauthorized` instead") Unauthorized = unauthorized,
+	deprecated("Use `paymentRequired` instead") PaymentRequired = paymentRequired,
+	deprecated("Use `forbidden` instead") Forbidden = forbidden,
+	deprecated("Use `notFound` instead") NotFound = notFound,
+	deprecated("Use `methodNotAllowed` instead") MethodNotAllowed = methodNotAllowed,
+	deprecated("Use `notAcceptable` instead") NotAcceptable = notAcceptable,
+	deprecated("Use `proxyAuthenticationRequired` instead") ProxyAuthenticationRequired = proxyAuthenticationRequired,
+	deprecated("Use `requestTimeout` instead") RequestTimeout = requestTimeout,
+	deprecated("Use `conflict` instead") Conflict = conflict,
+	deprecated("Use `gone` instead") Gone = gone,
+	deprecated("Use `lengthRequired` instead") LengthRequired = lengthRequired,
+	deprecated("Use `preconditionFailed` instead") PreconditionFailed = preconditionFailed,
+	deprecated("Use `requestEntityTooLarge` instead") RequestEntityTooLarge = requestEntityTooLarge,
+	deprecated("Use `requestURITooLarge` instead") RequestURITooLarge = requestURITooLarge,
+	deprecated("Use `unsupportedMediaType` instead") UnsupportedMediaType = unsupportedMediaType,
+	deprecated("Use `requestedrangenotsatisfiable` instead") Requestedrangenotsatisfiable = rangeNotSatisfiable,
+	deprecated("Use `expectationFailed` instead") ExpectationFailed = expectationFailed,
+	deprecated("Use `internalServerError` instead") InternalServerError = internalServerError,
+	deprecated("Use `notImplemented` instead") NotImplemented = notImplemented,
+	deprecated("Use `badGateway` instead") BadGateway = badGateway,
+	deprecated("Use `serviceUnavailable` instead") ServiceUnavailable = serviceUnavailable,
+	deprecated("Use `gatewayTimeout` instead") GatewayTimeout = gatewayTimeout,
+	deprecated("Use `httpVersionNotSupported` instead") HTTPVersionNotSupported = httpVersionNotSupported,
 }
 
 
@@ -147,7 +147,7 @@ string httpStatusText(int code)
 		case HTTPStatus.requestEntityTooLarge        : return "Request Entity Too Large";
 		case HTTPStatus.requestURITooLarge           : return "Request-URI Too Large";
 		case HTTPStatus.unsupportedMediaType         : return "Unsupported Media Type";
-		case HTTPStatus.requestedrangenotsatisfiable : return "Requested range not satisfiable";
+		case HTTPStatus.rangeNotSatisfiable          : return "Requested range not satisfiable";
 		case HTTPStatus.expectationFailed            : return "Expectation Failed";
 		case HTTPStatus.unavailableForLegalReasons   : return "Unavailable For Legal Reasons";
 		case HTTPStatus.internalServerError          : return "Internal Server Error";

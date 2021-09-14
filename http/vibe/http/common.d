@@ -286,7 +286,7 @@ class HTTPResponse {
 		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
 
 		/// The status code of the response, 200 by default
-		int statusCode = HTTPStatus.OK;
+		int statusCode = HTTPStatus.ok;
 
 		/** The status phrase of the response
 

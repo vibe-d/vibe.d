@@ -555,16 +555,6 @@ enum TestHTTPResponseMode {
 }
 
 
-private enum HTTPServerOptionImpl {
-	none                      = 0,
-	errorStackTraces          = 1<<7,
-	reusePort                 = 1<<8,
-	distribute                = 1<<9, // deprecated
-	reuseAddress              = 1<<10,
-	defaults                  = reuseAddress
-}
-
-// TODO: Should be turned back into an enum once the deprecated symbols can be removed
 /**
 	Specifies optional features of the HTTP server.
 
@@ -574,8 +564,8 @@ private enum HTTPServerOptionImpl {
 	will also drain the `HTTPServerRequest.bodyReader` stream whenever a request
 	body with form or JSON data is encountered.
 */
-struct HTTPServerOption {
-	static enum none                      = HTTPServerOptionImpl.none;
+enum HTTPServerOption {
+	none                      = 0,
 	/** Enables stack traces (`HTTPServerErrorInfo.debugMessage`).
 
 		Note that generating the stack traces are generally a costly
@@ -584,28 +574,19 @@ struct HTTPServerOption {
 		the application, such as function addresses, which can
 		help an attacker to abuse possible security holes.
 	*/
-	static enum errorStackTraces          = HTTPServerOptionImpl.errorStackTraces;
+	errorStackTraces          = 1<<7,
 	/// Enable port reuse in `listenTCP()`
-	static enum reusePort                 = HTTPServerOptionImpl.reusePort;
+	reusePort                 = 1<<8,
 	/// Enable address reuse in `listenTCP()`
-	static enum reuseAddress              = HTTPServerOptionImpl.reuseAddress;
-
+	reuseAddress              = 1<<10,
 	/** The default set of options.
 
 		Includes all parsing options, as well as the `errorStackTraces`
 		option if the code is compiled in debug mode.
 	*/
-	static enum defaults = () {
-		HTTPServerOptionImpl ops = HTTPServerOptionImpl.defaults;
-		debug ops |= HTTPServerOptionImpl.errorStackTraces;
-		return ops;
-	} ().HTTPServerOption;
+	defaults                  = () { auto ret = reuseAddress; debug ret |= errorStackTraces; return ret; } (),
 
-	deprecated("None has been renamed to none.")
-	static enum None = none;
-
-	HTTPServerOptionImpl x;
-	alias x this;
+	deprecated("None has been renamed to none.") None = none
 }
 
 
@@ -655,7 +636,7 @@ final class HTTPServerSettings {
 		load in case of invalid or unwanted requests (DoS). By default,
 		HTTPServerOption.defaults is used.
 	*/
-	HTTPServerOptionImpl options = HTTPServerOption.defaults;
+	HTTPServerOption options = HTTPServerOption.defaults;
 
 	/** Time of a request after which the connection is closed with an error; not supported yet
 
@@ -1504,7 +1485,7 @@ final class HTTPServerResponse : HTTPResponse {
 			url = The URL to redirect to
 			status = The HTTP redirect status (3xx) to send - by default this is $(D HTTPStatus.found)
 	*/
-	void redirect(string url, int status = HTTPStatus.Found)
+	void redirect(string url, int status = HTTPStatus.found)
 	@safe {
 		// Disallow any characters that may influence the header parsing
 		enforce(!url.representation.canFind!(ch => ch < 0x20),
@@ -1515,7 +1496,7 @@ final class HTTPServerResponse : HTTPResponse {
 		writeBody("redirecting...");
 	}
 	/// ditto
-	void redirect(URL url, int status = HTTPStatus.Found)
+	void redirect(URL url, int status = HTTPStatus.found)
 	@safe {
 		redirect(url.toString(), status);
 	}
@@ -1551,7 +1532,7 @@ final class HTTPServerResponse : HTTPResponse {
 	*/
 	ConnectionStream switchProtocol(string protocol)
 	@safe {
-		statusCode = HTTPStatus.SwitchingProtocols;
+		statusCode = HTTPStatus.switchingProtocols;
 		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
 		m_requiresConnectionClose = true;
@@ -1561,7 +1542,7 @@ final class HTTPServerResponse : HTTPResponse {
 	/// ditto
 	void switchProtocol(string protocol, scope void delegate(scope ConnectionStream) @safe del)
 	@safe {
-		statusCode = HTTPStatus.SwitchingProtocols;
+		statusCode = HTTPStatus.switchingProtocols;
 		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
 		m_requiresConnectionClose = true;
@@ -2022,7 +2003,7 @@ private final class TimeoutHTTPInputStream : InputStream {
 	@safe {
 		auto curr = Clock.currStdTime();
 		auto diff = curr - m_timeref;
-		if (diff > m_timeleft) throw new HTTPStatusException(HTTPStatus.RequestTimeout);
+		if (diff > m_timeleft) throw new HTTPStatusException(HTTPStatus.requestTimeout);
 		m_timeleft -= diff;
 		m_timeref = curr;
 	}
@@ -2052,7 +2033,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 	import vibe.core.core : runWorkerTaskDist;
 	import std.algorithm : canFind, find;
 
-	static TCPListener doListen(HTTPServerContext listen_info, bool dist, bool reusePort, bool reuseAddress, bool is_tls)
+	static TCPListener doListen(HTTPServerContext listen_info, bool reusePort, bool reuseAddress, bool is_tls)
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
@@ -2095,7 +2076,6 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 		else {
 			auto li = new HTTPServerContext(addr, settings.port);
 			if (auto tcp_lst = doListen(li,
-					(settings.options & HTTPServerOptionImpl.distribute) != 0,
 					(settings.options & HTTPServerOption.reusePort) != 0,
 					(settings.options & HTTPServerOption.reuseAddress) != 0,
 					settings.tlsContext !is null)) // DMD BUG 2043
