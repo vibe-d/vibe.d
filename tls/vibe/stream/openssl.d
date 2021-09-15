@@ -165,6 +165,8 @@ static if (OPENSSL_VERSION.startsWith("1.1")) {
 		int BIO_meth_set_ctrl(BIO_METHOD* biom, BIOMethCtrlCallback cb);
 		int BIO_meth_set_create(BIO_METHOD* biom, BIOMethCreateCallback cb);
 		int BIO_meth_set_destroy(BIO_METHOD* biom, BIOMethDestroyCallback cb);
+
+		c_ulong SSL_CTX_set_options(SSL_CTX *ctx, c_ulong op);
 	}
 } else {
 	private void BIO_set_init(BIO* b, int init_) @safe nothrow {
@@ -658,15 +660,14 @@ final class OpenSSLContext : TLSContext {
 				.enforceSSL("Failed setting minimum protocol version");
 			() @trusted { return SSL_CTX_set_max_proto_version(m_ctx, maxver); }()
 				.enforceSSL("Failed setting maximum protocol version");
-			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options); }();
-			if (retOptions != options)
-				logDiagnostic("SSL modified options: passed 0x%08x vs applied 0x%08x", options, retOptions);
 		} else {
 			options |= veroptions;
-			auto retOptions = () @trusted { return SSL_CTX_set_options(m_ctx, options); }();
-			if (retOptions != options)
-				logDiagnostic("SSL modified options: passed 0x%08x vs applied 0x%08x", options, retOptions);
 		}
+
+		auto newopts = () @trusted { return SSL_CTX_set_options(m_ctx, options); }();
+		if ((newopts & options) != options)
+			logDiagnostic("Not all SSL options applied: passed 0x%08x vs applied 0x%08x", options, newopts);
+
 		if (kind == TLSContextKind.server) {
 			setDHParams();
 			static if (haveECDH) setECDHCurve();
