@@ -189,6 +189,19 @@ struct BufferedStream(S) {
 
 	@property ref inout(S) underlying() inout { return state.stream; }
 
+	static if (isClosableRandomAccessStream!S) {
+		void close()
+		{
+			sync();
+			state.stream.close();
+		}
+
+		@property bool isOpen()
+		const {
+			return state.stream.isOpen();
+		}
+	}
+
 	static if (is(typeof(S.init.truncate(ulong.init))))
 		void truncate(ulong size)
 		{
@@ -477,6 +490,11 @@ mixin validateRandomAccessStream!(BufferedStream!RandomAccessStream);
 	assert(bb[0] == 129);
 	bstr.read(bb);
 	assert(bb[0] == 130);
+}
+
+unittest {
+	static assert(isTruncatableStream!(BufferedStream!TruncatableStream));
+	static assert(isClosableRandomAccessStream!(BufferedStream!ClosableRandomAccessStream));
 }
 
 private struct Buffer {
