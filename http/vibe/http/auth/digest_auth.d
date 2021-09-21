@@ -29,7 +29,7 @@ class DigestAuthInfo
 	@safe:
 
 	string realm;
-	ubyte[32] secret;
+	ubyte[16] secret;
 	ulong timeout;
 
 	this()
