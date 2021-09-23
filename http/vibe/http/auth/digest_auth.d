@@ -56,7 +56,7 @@ class DigestAuthInfo
 		if (decoded.length != now.sizeof + secret.length) return NonceState.Invalid;
 		auto timebytes = decoded[0 .. now.sizeof];
 		auto time = () @trusted { return (cast(typeof(now)[])timebytes)[0]; } ();
-		if (timeout + time > now) return NonceState.Expired;
+		if (timeout + time < now) return NonceState.Expired;
 		MD5 md5;
 		md5.put(timebytes);
 		md5.put(secret);
@@ -64,6 +64,14 @@ class DigestAuthInfo
 		if (data[] != decoded[now.sizeof .. $]) return NonceState.Invalid;
 		return NonceState.Valid;
 	}
+}
+
+unittest
+{
+	auto authInfo = new DigestAuthInfo;
+	auto req = createTestHTTPServerRequest(URL("http://localhost/"));
+	auto nonce = authInfo.createNonce(req);
+	assert(authInfo.checkNonce(nonce, req) == NonceState.Valid);
 }
 
 private bool checkDigest(scope HTTPServerRequest req, DigestAuthInfo info, scope DigestHashCallback pwhash, out bool stale, out string username)
