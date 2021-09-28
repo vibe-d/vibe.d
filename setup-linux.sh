@@ -162,9 +162,8 @@ finstall()
 	# if everything went fine
 	echo -e "\n  \033[32;40;7;1mvibe.d installed successfully!\033[0m\n"
 	echo "You need to have the following dependencies installed:"
-	echo "  ·dmd 2.061 - http://dlang.org"
+	echo "  ·dmd - http://dlang.org"
 	echo "  ·libssl (development files) - http://www.openssl.org/"
-	echo "  ·libevent 2.0.x (development files) - http://libevent.org/"
 	echo -e "\ntake a look at examples on $BASE_DIR/examples/"
 }
 

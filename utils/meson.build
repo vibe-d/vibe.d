@@ -32,11 +32,10 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Low level utility functionality
 vibe_utils_lib = library('vibe-utils',
         [vibe_utils_src],
-        include_directories: [openssl_inc, libevent_inc],
+        include_directories: [openssl_inc],
         install: true,
         dependencies: [crypto_dep,
                        ssl_dep,
-                       libevent_dep,
                        zlib_dep,
                        allocator_dep],
         version: project_version,
@@ -52,10 +51,9 @@ pkgc.generate(name: 'vibe-utils',
 
 vibe_utils_dep = declare_dependency(
     link_with: [vibe_utils_lib],
-    include_directories: [vibe_utils_src_dir, openssl_inc, libevent_inc],
+    include_directories: [vibe_utils_src_dir, openssl_inc],
     dependencies: [crypto_dep,
                     ssl_dep,
-                    libevent_dep,
                     zlib_dep,
                     allocator_dep],
 )
