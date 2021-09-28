@@ -74,7 +74,7 @@ if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
             echo "[INFO] Running mongo test $ex"
             (cd tests/mongodb/$ex && DUB_INVOKE="dub --compiler=$DC $DUB_ARGS" ./run.sh)
         elif [ -r tests/mongodb/$ex/dub.json ] || [ -r tests/mongodb/$ex/dub.sdl ]; then
-            # test with only dub.json, let travis-ci.sh start and shutdown the server so we don't have to duplicate the code across all tests
+            # test with only dub.json, let run-ci.sh start and shutdown the server so we don't have to duplicate the code across all tests
             # We use --fork in all mongod calls because it waits until the database is fully up-and-running for all queries.
 
             MONGOPORT=22824
@@ -106,7 +106,7 @@ if [[ $PARTS =~ (^|,)meson(,|$) ]]; then
 
     allow_meson_test="yes"
     if [[ ${DC=dmd} = ldc2 ]]; then
-        # we can not run tests when compiling with LDC+Meson on Travis at the moment,
+        # we can not run tests when compiling with LDC+Meson on GitHub Actions at the moment,
         # due to an LDC bug: https://github.com/ldc-developers/ldc/issues/2280
         # as soon as the bug is fixed, we can run tests again for the fixed LDC versions.
         allow_meson_test="no"
@@ -121,7 +121,7 @@ if [[ $PARTS =~ (^|,)meson(,|$) ]]; then
         fi
     fi
 
-    # we limit the number of Ninja jobs to 4, so Travis doesn't kill us
+    # we limit the number of Ninja jobs to 4, so GitHub Actions doesn't kill us
     ninja -j4
 
     if [[ ${allow_meson_test} = "yes" ]]; then
