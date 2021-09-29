@@ -30,12 +30,12 @@ class DigestAuthInfo
 
 	string realm;
 	ubyte[16] secret;
-	ulong timeout;
+	Duration timeout;
 
 	this()
 	{
 		secureRNG.read(secret[]);
-		timeout = 300;
+		timeout = 300.seconds;
 	}
 
 	string createNonce(in HTTPServerRequest req)
@@ -56,7 +56,7 @@ class DigestAuthInfo
 		if (decoded.length != now.sizeof + secret.length) return NonceState.Invalid;
 		auto timebytes = decoded[0 .. now.sizeof];
 		auto time = () @trusted { return (cast(typeof(now)[])timebytes)[0]; } ();
-		if (timeout + time < now) return NonceState.Expired;
+		if (timeout.total!"hnsecs" + time < now) return NonceState.Expired;
 		MD5 md5;
 		md5.put(timebytes);
 		md5.put(secret);
