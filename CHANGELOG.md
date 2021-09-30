@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.9.4 - 2021-09-
+v0.9.4 - 2021-09-30
 -------------------
 
 Updates compiler support and OpenSSL binaries, starts the deprecation phase of
@@ -26,6 +26,12 @@ REST systems, as well as making some smaller API additions.
 - Added `vibe.http.websockets.FrameOpcode` (by Tobias Pankrath aka Panke) - [pull #2554][issue2554]
 - Added `MongoDatabase.runListCommand` - [pull #2560][issue2560]
 - Made `MongoCollection.aggregate` `@safe` (by Jan Jurzitza aka WebFreak001) - [pull #2574][issue2574]
+- Marked a number of enum values as `deprecated`, which were only documented as such - [pull #2604][issue2604]
+- Made the basic `DictionaryList` API `nothrow` - [pull #2605][issue2605]
+- Optimized HTTP time string generation in high-load situations (by Hiroki Noda aka kubo39) - [pull #2012][issue2012]
+- Fixed HTTP digest auth secret handling and timeout behavior (by Hiroki Noda aka kubo39) - [pull #2609][issue2609], [pull #2613][issue2613]
+- `BufferedStream` now forwards `ClosableRandomAccessStream` specific properties - [pull #2608][issue2608]
+
 
 ### Bug fixes ###
 
@@ -40,6 +46,7 @@ REST systems, as well as making some smaller API additions.
 - Fixed the REST generator to allow `const` parameters (by Ömer Faruk Irmak aka omerfirmak) - [pull #2552][issue2552]
 - Fixed HTTP Accept-Language header handling for basic language matches - [pull #2595][issue2595]
 
+[issue2012]: https://github.com/vibe-d/vibe.d/issues/2012
 [issue2205]: https://github.com/vibe-d/vibe.d/issues/2205
 [issue2206]: https://github.com/vibe-d/vibe.d/issues/2206
 [issue2536]: https://github.com/vibe-d/vibe.d/issues/2536
@@ -67,6 +74,11 @@ REST systems, as well as making some smaller API additions.
 [issue2600]: https://github.com/vibe-d/vibe.d/issues/2600
 [issue2601]: https://github.com/vibe-d/vibe.d/issues/2601
 [issue2602]: https://github.com/vibe-d/vibe.d/issues/2602
+[issue2604]: https://github.com/vibe-d/vibe.d/issues/2604
+[issue2605]: https://github.com/vibe-d/vibe.d/issues/2605
+[issue2608]: https://github.com/vibe-d/vibe.d/issues/2608
+[issue2609]: https://github.com/vibe-d/vibe.d/issues/2609
+[issue2613]: https://github.com/vibe-d/vibe.d/issues/2613
 
 
 v0.9.3 - 2021-01-29
