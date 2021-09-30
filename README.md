@@ -76,7 +76,7 @@ Similarly, you can run an example by invoking `dub` from any of the
 example project directories.
 
 Note that on non-Windows operating systems, you also need to have
-libevent and OpenSSL installed - and of course a D compiler. See below
+OpenSSL installed - and of course a D compiler. See below
 for instructions.
 
 
@@ -88,18 +88,15 @@ Additional setup on Windows
 
 ### Note for building on Win64
 
-There are currently no 64-bit Windows binaries of libevent included, so you'll either need to build those yourself, or you can switch to the "win32" event driver by inserting `"subConfigurations": {"vibe-d": "win32"}` into the dub.json file of your project.
-
+You can switch to the "win32" event driver by inserting `"subConfigurations": {"vibe-d": "win32"}` into the dub.json file of your project.
 
 Additional setup on Mac using brew
 ----------------------------------
 
 If you don't have brew installed, install it according to their [install
-instructions](<https://www.brew.sh>) and
-install libevent.
+instructions](<https://brew.sh>).
 
     ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-    brew install libevent
 
 You can then also install DUB using brew:
 
@@ -117,7 +114,7 @@ Additional setup on Linux (Debian/Ubuntu/Mint)
 
 Install vibe.d's dependencies (*)
 
-    sudo apt-get install libevent-dev libssl-dev
+    sudo apt-get install libssl-dev
 
 
 On 32-bit linux: Install DMD-i386
@@ -147,30 +144,14 @@ You need to have the following dependencies installed:
  - [DMD 2.077.1 or greater](http://dlang.org/download)
  - [libssl](http://www.openssl.org/source/)
 
-If using the (now deprecated) "libevent" configuration, libevent is also required:
- - [libevent 2.0.x](http://libevent.org/) (*)
-
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
-
-(*) Note that some Linux distributions such as Debian Squeeze or CentOS 6 may only ship libevent 1.4, in this case you will have to manually compile the latest 2.0.x version:
-
-```
-wget https://github.com/downloads/libevent/libevent/libevent-2.0.21-stable.tar.gz
-tar -xf libevent-2.0.21-stable.tar.gz
-cd libevent-2.0.21-stable
-./configure
-make
-make install
-ldconfig
-```
-
 
 Additional setup on FreeBSD
 ---------------------------
 
 Install the DMD compiler and vibe.d's dependencies using portupgrade or a similar mechanism:
 
-    sudo portupgrade -PN devel/libevent2 devel/pkgconf
+    sudo portupgrade -PN devel/pkgconf
 
 Optionally, run `./setup-freebsd.sh` to create a user/group pair for privilege lowering.
 
