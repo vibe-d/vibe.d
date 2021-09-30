@@ -21,7 +21,7 @@ Hello Vibe.d
 #!/usr/bin/env dub
 /+ dub.sdl:
    name "hello_vibed"
-   dependency "vibe-d" version="~>0.8.0"
+   dependency "vibe-d" version="~>0.9.0"
 +/
 import vibe.vibe;
 
@@ -86,10 +86,6 @@ Additional setup on Windows
  - Just install DMD using the installer on <https://dlang.org/download.html>
  - And get the latest [DUB release](https://code.dlang.org/download)
 
-### Note for building on Win64
-
-You can switch to the "win32" event driver by inserting `"subConfigurations": {"vibe-d": "win32"}` into the dub.json file of your project.
-
 Additional setup on Mac using brew
 ----------------------------------
 
@@ -112,7 +108,7 @@ Optionally, run `./setup-mac.sh` to create a user/group pair for privilege lower
 Additional setup on Linux (Debian/Ubuntu/Mint)
 ----------------------------------------------
 
-Install vibe.d's dependencies (*)
+Install vibe.d's dependencies:
 
     sudo apt-get install libssl-dev
 
@@ -132,8 +128,6 @@ On 64-bit linux: Install DMD-amd64
 
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
-
-(*) Note that Debian 6 (Squeeze) and older requires manual installation (see below).
 
 
 Additional setup on Linux (generic)
