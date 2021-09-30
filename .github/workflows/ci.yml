@@ -59,7 +59,7 @@ jobs:
         VIBED_DRIVER: vibe-core
         PARTS: builds,unittests,examples,tests,mongo
       run: |
-        ./travis-ci.sh
+        ./run-ci.sh
 
     - name: '[DMD] Upload coverage to Codecov'
       if: matrix.dc == 'dmd-latest'
