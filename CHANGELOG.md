@@ -85,8 +85,8 @@ v0.9.3 - 2021-01-29
 -------------------
 
 Brings some important bug fixes in the HTTP client and `StreamOutputRange`. Also
-adds custom serializer support for the REST interface generator and removes
-some deprecated symbols.
+adds custom serializer support and input range return support for the REST
+interface generator and removes some deprecated symbols.
 
 ### Features and improvements ###
 
