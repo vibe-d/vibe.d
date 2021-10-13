@@ -345,8 +345,15 @@ struct URL {
 	/// Converts this URL object to its string representation.
 	string toString()
 	const nothrow {
-		import std.format;
 		auto dst = appender!string();
+		try this.toString(dst);
+		catch (Exception e) assert(false, e.msg);
+		return dst.data;
+	}
+
+	/// Ditto
+	void toString(OutputRange) (ref OutputRange dst) const {
+		import std.format;
 		dst.put(schema);
 		dst.put(":");
 		if (isCommonInternetSchema(schema))
@@ -365,13 +372,10 @@ struct URL {
 		dst.put(host);
 		if ( ipv6 ) dst.put(']');
 
-		if (m_port > 0) {
-			try formattedWrite(dst, ":%d", m_port);
-			catch (Exception e) assert(false, e.msg);
-		}
+		if (m_port > 0)
+			formattedWrite(dst, ":%d", m_port);
 
 		dst.put(localURI);
-		return dst.data;
 	}
 
 	/** Converts a "file" URL back to a native file system path.
