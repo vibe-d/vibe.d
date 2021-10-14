@@ -17,7 +17,7 @@ import std.conv;
 import std.exception;
 import std.string;
 import std.traits : isInstanceOf;
-import std.ascii : isAlpha;
+import std.ascii : isAlpha, isASCII, toLower;
 
 
 /**
@@ -262,7 +262,14 @@ struct URL {
 	/// Get the default port for the given schema or 0
 	static ushort defaultPort(string schema)
 	nothrow {
-		switch (schema) {
+		import std.uni : toLower;
+		string lowerschema = schema;
+		try
+			lowerschema = schema.toLower();
+		catch (Exception)
+			return 0;
+
+		switch (lowerschema) {
 			default:
 			case "file": return 0;
 			case "http": return 80;
@@ -455,6 +462,7 @@ bool isValidSchema(string schema)
 		switch (ch) {
 			default: return false;
 			case 'a': .. case 'z': break;
+			case 'A': .. case 'Z': break;
 			case '0': .. case '9': break;
 			case '+', '.', '-': break;
 		}
@@ -467,6 +475,7 @@ unittest {
 	assert(isValidSchema("http+ssh"));
 	assert(isValidSchema("http"));
 	assert(!isValidSchema("http/ssh"));
+	assert(isValidSchema("HTtp"));
 }
 
 
@@ -518,11 +527,21 @@ private shared immutable(StringSet)* st_commonInternetSchemas;
 void registerCommonInternetSchema(string schema)
 @trusted nothrow {
 	import core.atomic : atomicLoad, cas;
+	import std.uni : toLower;
+
+	string lowerschema;
+	try {
+		lowerschema = schema.toLower();
+	} catch (Exception e) {
+		assert(false, e.msg);
+	}
+
+	assert(lowerschema.length < 128, "Only schemas with less than 128 characters are supported");
 
 	while (true) {
 		auto olds = atomicLoad(st_commonInternetSchemas);
 		auto news = olds ? olds.dup : new StringSet;
-		news.add(schema);
+		news.add(lowerschema);
 		static if (__VERSION__ < 2094) {
 			// work around bogus shared violation error on earlier versions of Druntime
 			if (cas(cast(shared(StringSet*)*)&st_commonInternetSchemas, cast(shared(StringSet)*)olds, cast(shared(StringSet)*)news))
@@ -550,23 +569,38 @@ void registerCommonInternetSchema(string schema)
 bool isCommonInternetSchema(string schema)
 @safe nothrow @nogc {
 	import core.atomic : atomicLoad;
+	char[128] buffer;
 
-	switch (schema) {
+	if (schema.length >= 128) return false;
+
+	foreach (ix, char c; schema)
+	{
+		if (!isASCII(c)) return false;
+		buffer[ix] = toLower(c);
+	}
+
+	scope lowerschema = buffer[0 .. schema.length];
+
+	switch (lowerschema) {
 		case "ftp", "http", "https", "http+unix", "https+unix":
 		case "spdy", "sftp", "ws", "wss", "file", "redis", "tcp":
 		case "rtsp", "rtsps":
 			return true;
 		default:
 			auto set = atomicLoad(st_commonInternetSchemas);
-			return set ? set.contains(schema) : false;
+			return () @trusted {
+				return set ? set.contains(cast(string) lowerschema) : false;
+			}();
 	}
 }
 
 unittest {
 	assert(isCommonInternetSchema("http"));
+	assert(isCommonInternetSchema("HTtP"));
 	assert(!isCommonInternetSchema("foobar"));
-	registerCommonInternetSchema("foobar");
+	registerCommonInternetSchema("fooBar");
 	assert(isCommonInternetSchema("foobar"));
+	assert(isCommonInternetSchema("fOObAR"));
 }
 
 
