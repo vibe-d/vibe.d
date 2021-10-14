@@ -19,6 +19,7 @@ import std.exception;
 import std.string;
 import std.traits : isInstanceOf;
 import std.ascii : isAlpha, isASCII, toLower;
+import std.uri: encode;
 
 
 /**
@@ -140,7 +141,7 @@ struct URL {
 
 		TODO: additional validation required (e.g. valid host and user names and port)
 	*/
-	this(string url_string)
+	this(string url_string, bool encoded = true)
 	{
 		auto str = url_string;
 		enforce(str.length > 0, "Empty URL.");
@@ -208,12 +209,27 @@ struct URL {
 			str = str[si .. $];
 		}
 
-		this.localURI = str;
+		this.localURI = (encoded) ? str : str.encode;
 	}
 	/// ditto
 	static URL parse(string url_string)
 	{
 		return URL(url_string);
+	}
+	
+	/**
+	* Parse a 'plain' string into an `URL`.
+	*
+	* Unlike `URL.parse`, this expects its argument to be a 
+	* plain url (not percent-encoded nor punyencoded), and thus can contain
+	* non-ASCII characters as well as reserved ones (e.g. a space).
+	*
+	* Params:
+	*   url_string = A plaintext URL, which will be percent-encoded in the result.
+	*/
+	static URL parsePlain(string url_string)
+	{
+		return URL(url_string, false);
 	}
 	/// ditto
 	static URL fromString(string url_string)
@@ -846,6 +862,13 @@ unittest {
 unittest {
 	auto url = URL("http://example.com/some%2bpath");
 	assert((cast(PosixPath)url.path).toString() == "/some+path", url.path.toString());
+}
+
+unittest {
+	auto url = URL("http://example.com/hello-🌍", false);
+	assert(url.pathString == "/hello-%F0%9F%8C%8D");
+	url = URL.parsePlain("http://example.com/안녕하세요-세계");
+	assert(url.pathString == "/%EC%95%88%EB%85%95%ED%95%98%EC%84%B8%EC%9A%94-%EC%84%B8%EA%B3%84");
 }
 
 unittest {
