@@ -72,18 +72,10 @@ install:
               }
               $env:toolchain = "msvc";
               $version = $env:DVersion;
-              if($version -eq "1.3.0" -Or $version -eq "1.4.0" -Or $version -eq "1.5.0" -Or $version -eq "1.6.0") {
-                Invoke-WebRequest "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-win64-msvc.zip" -OutFile "c:\ldc.zip";
-                echo "finished.";
-                pushd c:\\;
-                7z x ldc.zip > $null;
-                popd;
-              } else {
-                Invoke-WebRequest "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-windows-$($env:arch).7z" -OutFile "c:\ldc.7z";
-                pushd c:\\;
-                7z x ldc.7z > $null;
-                popd;
-              }
+              Invoke-WebRequest "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-windows-$($env:arch).7z" -OutFile "c:\ldc.7z";
+              pushd c:\\;
+              7z x ldc.7z > $null;
+              popd;
             }
         }
   - ps: SetUpDCompiler
@@ -110,11 +102,7 @@ before_build:
          }
          elseif($env:DC -eq "ldc"){
            $version = $env:DVersion;
-           if($version -eq "1.3.0" -Or $version -eq "1.4.0" -Or $version -eq "1.5.0" -Or $version -eq "1.6.0") {
-               $env:PATH += ";C:\ldc2-$($version)-win64-msvc\bin";
-           } else {
-               $env:PATH += ";C:\ldc2-$($version)-windows-$($env:arch)\bin";
-           }
+           $env:PATH += ";C:\ldc2-$($version)-windows-$($env:arch)\bin";
            $env:DC = "ldc2";
          }
   - ps: $env:compilersetup = "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall";
