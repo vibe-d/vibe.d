@@ -1,5 +1,6 @@
 platform: x64
 environment:
+ dub_version: 1.7.2
  matrix:
   - DC: dmd
     DVersion: 2.098.0
@@ -79,7 +80,7 @@ install:
             }
         }
   - ps: SetUpDCompiler
-  - powershell -Command [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest "https://github.com/dlang/dub/releases/download/v1.7.2/dub-1.7.2-windows-x86.zip" -OutFile dub.zip
+  - powershell -Command [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest "https://github.com/dlang/dub/releases/download/v$($env:dub_version)/dub-$($env:dub_version)-windows-x86.zip" -OutFile dub.zip
   - 7z x dub.zip -odub > nul
   - set PATH=%CD%\%binpath%;%CD%\dub;%PATH%
   - dub --version
