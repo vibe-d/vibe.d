@@ -116,15 +116,15 @@ Install vibe.d's dependencies:
 On 32-bit linux: Install DMD-i386
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://downloads.dlang.org/releases/2.x/2.087.1/dmd_2.087.1-0_i386.deb"
-    sudo dpkg -i dmd_2.087.1-0_i386.deb
+    wget "http://downloads.dlang.org/releases/2.x/2.098.0/dmd_2.098.0-0_i386.deb"
+    sudo dpkg -i dmd_2.098.0-0_i386.deb
 
 
 On 64-bit linux: Install DMD-amd64
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://downloads.dlang.org/releases/2.x/2.087.1/dmd_2.087.1-0_amd64.deb"
-    sudo dpkg -i dmd_2.087.1-0_amd64.deb
+    wget "http://downloads.dlang.org/releases/2.x/2.098.0/dmd_2.098.0-0_amd64.deb"
+    sudo dpkg -i dmd_2.098.0-0_amd64.deb
 
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
@@ -135,7 +135,7 @@ Additional setup on Linux (generic)
 
 You need to have the following dependencies installed:
 
- - [DMD 2.077.1 or greater](http://dlang.org/download)
+ - [DMD 2.088.1 or greater](http://dlang.org/download)
  - [libssl](http://www.openssl.org/source/)
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
