@@ -367,8 +367,11 @@ struct URL {
 			dst.put("//");
 		if (m_username.length || m_password.length) {
 			dst.put(username);
-			dst.put(':');
-			dst.put(password);
+			if (m_password.length)
+			{
+				dst.put(':');
+				dst.put(password);
+			}
 			dst.put('@');
 		}
 
@@ -709,6 +712,14 @@ unittest {
 	url.pathString = "/foo%20bar/boo%2foom/";
 	assert(url.pathString == "/foo%20bar/boo%2foom/");
 	assert(url.toString() == "http://example.com/foo%20bar/boo%2foom/");
+}
+
+unittest {
+	URL url = URL("http://user:password@example.com");
+	assert(url.toString() == "http://user:password@example.com");
+
+	url = URL("http://user@example.com");
+	assert(url.toString() == "http://user@example.com");
 }
 
 unittest {
