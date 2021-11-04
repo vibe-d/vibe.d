@@ -1,38 +1,39 @@
 platform: x64
 environment:
+ dub_version: 1.7.2
  matrix:
   - DC: dmd
-    DVersion: 2.096.1
+    DVersion: 2.098.0
     arch: x64
   - DC: dmd
-    DVersion: 2.096.1
+    DVersion: 2.098.0
+    arch: x86_mscoff
+  - DC: dmd
+    DVersion: 2.092.1
+    arch: x64
+  - DC: dmd
+    DVersion: 2.091.1
     arch: x86_mscoff
   - DC: dmd
     DVersion: 2.090.1
     arch: x64
   - DC: dmd
-    DVersion: 2.089.1
-    arch: x86_mscoff
-  - DC: dmd
     DVersion: 2.088.1
-    arch: x64
-  - DC: dmd
-    DVersion: 2.086.1
     arch: x86_mscoff
   - DC: ldc
-    DVersion: 1.26.0
+    DVersion: 1.28.0
     arch: x86
+  - DC: ldc
+    DVersion: 1.21.0
+    arch: x86
+  - DC: ldc
+    DVersion: 1.20.0
+    arch: x64
   - DC: ldc
     DVersion: 1.19.0
     arch: x86
   - DC: ldc
     DVersion: 1.18.0
-    arch: x64
-  - DC: ldc
-    DVersion: 1.17.0
-    arch: x86
-  - DC: ldc
-    DVersion: 1.16.0
     arch: x86
 
 branches:
@@ -72,22 +73,14 @@ install:
               }
               $env:toolchain = "msvc";
               $version = $env:DVersion;
-              if($version -eq "1.3.0" -Or $version -eq "1.4.0" -Or $version -eq "1.5.0" -Or $version -eq "1.6.0") {
-                Invoke-WebRequest "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-win64-msvc.zip" -OutFile "c:\ldc.zip";
-                echo "finished.";
-                pushd c:\\;
-                7z x ldc.zip > $null;
-                popd;
-              } else {
-                Invoke-WebRequest "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-windows-$($env:arch).7z" -OutFile "c:\ldc.7z";
-                pushd c:\\;
-                7z x ldc.7z > $null;
-                popd;
-              }
+              Invoke-WebRequest "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-windows-$($env:arch).7z" -OutFile "c:\ldc.7z";
+              pushd c:\\;
+              7z x ldc.7z > $null;
+              popd;
             }
         }
   - ps: SetUpDCompiler
-  - powershell -Command [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest "https://github.com/dlang/dub/releases/download/v1.7.2/dub-1.7.2-windows-x86.zip" -OutFile dub.zip
+  - powershell -Command [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest "https://github.com/dlang/dub/releases/download/v$($env:dub_version)/dub-$($env:dub_version)-windows-x86.zip" -OutFile dub.zip
   - 7z x dub.zip -odub > nul
   - set PATH=%CD%\%binpath%;%CD%\dub;%PATH%
   - dub --version
@@ -110,11 +103,7 @@ before_build:
          }
          elseif($env:DC -eq "ldc"){
            $version = $env:DVersion;
-           if($version -eq "1.3.0" -Or $version -eq "1.4.0" -Or $version -eq "1.5.0" -Or $version -eq "1.6.0") {
-               $env:PATH += ";C:\ldc2-$($version)-win64-msvc\bin";
-           } else {
-               $env:PATH += ";C:\ldc2-$($version)-windows-$($env:arch)\bin";
-           }
+           $env:PATH += ";C:\ldc2-$($version)-windows-$($env:arch)\bin";
            $env:DC = "ldc2";
          }
   - ps: $env:compilersetup = "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall";

@@ -12,15 +12,15 @@ jobs:
         os: [ ubuntu-latest ]
         dc:
           - dmd-latest
+          - dmd-2.097.1
           - dmd-2.096.1
-          - dmd-2.095.1
-          - dmd-2.092.1
-          - dmd-2.087.1
+          - dmd-2.093.1
+          - dmd-2.088.1
           - ldc-latest
+          - ldc-1.27.1
           - ldc-1.26.0
-          - ldc-1.25.0
-          - ldc-1.22.0
-          - ldc-1.17.0
+          - ldc-1.23.0
+          - ldc-1.18.0
         include:
           # Default
           - { parts: 'builds,unittests,examples,tests,mongo', extra_dflags: '' }
