@@ -19,6 +19,9 @@ import std.exception;
 import std.string;
 import std.traits : isInstanceOf;
 import std.ascii : isAlpha, isASCII, toLower;
+import std.uri: encode;
+
+import core.checkedint : addu;
 
 
 /**
@@ -140,7 +143,7 @@ struct URL {
 
 		TODO: additional validation required (e.g. valid host and user names and port)
 	*/
-	this(string url_string)
+	this(string url_string, bool encoded = true)
 	{
 		auto str = url_string;
 		enforce(str.length > 0, "Empty URL.");
@@ -201,6 +204,8 @@ struct URL {
 				if(pi > 0) {
 					m_host = m_host[0 .. pi];
 				}
+				if (!encoded)
+					m_host = m_host.splitter('.').map!(punyEncode).join('.');
 			}
 
 			enforce(!requires_host || m_schema == "file" || m_host.length > 0,
@@ -208,12 +213,27 @@ struct URL {
 			str = str[si .. $];
 		}
 
-		this.localURI = str;
+		this.localURI = (encoded) ? str : str.encode;
 	}
 	/// ditto
 	static URL parse(string url_string)
 	{
 		return URL(url_string);
+	}
+	
+	/**
+	* Parse a 'plain' string into an `URL`.
+	*
+	* Unlike `URL.parse`, this expects its argument to be a 
+	* plain url (not percent-encoded nor punyencoded), and thus can contain
+	* non-ASCII characters as well as reserved ones (e.g. a space).
+	*
+	* Params:
+	*   url_string = A plaintext URL, which will be percent-encoded in the result.
+	*/
+	static URL parsePlain(string url_string)
+	{
+		return URL(url_string, false);
 	}
 	/// ditto
 	static URL fromString(string url_string)
@@ -740,6 +760,144 @@ private struct SchemaDefaultPortMap {
 	}
 }
 
+// Puny encoding
+private {
+	/** Bootstring parameters for Punycode
+		These parameters are designed for Unicode
+
+		See also: RFC 3492 Section 5
+	*/
+	enum uint base = 36;
+	enum uint tmin = 1;
+	enum uint tmax = 26;
+	enum uint skew = 38;
+	enum uint damp = 700;
+	enum uint initial_bias = 72;
+	enum uint initial_n = 128;
+
+	/*	Bias adaptation
+
+		See also: RFC 3492 Section 6.1
+	*/
+	uint punyAdapt (uint pdelta, int numpoints, bool firsttime)
+	@safe @nogc nothrow pure {
+		uint delta = firsttime ? pdelta / damp : pdelta / 2;
+		delta += delta / numpoints;
+		uint k = 0;
+
+		while (delta > ((base - tmin) * tmax) / 2)
+		{
+			delta /= (base - tmin);
+			k += base;
+		}
+
+		return k + (((base - tmin + 1) * delta) / (delta + skew));
+	}
+
+	/*	Converts puny digit-codes to code point
+
+		See also: RFC 3492 Section 5
+	*/
+	dchar punyDigitToCP (uint digit)
+	@safe @nogc nothrow pure {
+		return cast(dchar) (digit + 22 + 75 * (digit < 26));
+	}
+
+	/*	Encodes `input` with puny encoding
+		
+		If input is all characters below `initial_n`
+		input is returned as is.
+
+		See also: RFC 3492 Section 6.3
+	*/
+	string punyEncode (in string input)
+	@safe {
+		uint n = initial_n;
+		uint delta = 0;
+		uint bias = initial_bias;
+		uint h;
+		uint b;
+		dchar m = dchar.max; // minchar
+		bool delta_overflow;
+		
+		uint input_len = 0;
+		auto output = appender!string();
+		
+		output.put("xn--");
+
+		foreach (dchar cp; input)
+		{
+			if (cp <= initial_n)
+			{
+				output.put(cast(char) cp);
+				h += 1;
+			}
+			// Count length of input as code points, `input.length` counts bytes
+			input_len += 1;
+		}
+
+		b = h;
+		if (b == input_len)
+			return input; // No need to puny encode
+
+		if (b > 0)
+			output.put('-');
+
+		while (h < input_len)
+		{
+			m = dchar.max;
+			foreach (dchar cp; input)
+			{
+				if (n <= cp && cp < m)
+					m = cp;
+			}
+
+			assert(m != dchar.max, "Punyencoding failed, cannot find code point");
+
+			delta = addu(delta, ((m - n) * (h + 1)), delta_overflow);
+			assert(!delta_overflow, "Punyencoding failed, delta overflow");
+
+			n = m;
+
+			foreach (dchar cp; input)
+			{
+				if (cp < n)
+					delta += 1;
+
+				if (cp == n)
+				{
+					uint q = delta;
+					uint k = base;
+
+					while (true)
+					{
+						uint t;
+						if (k <= bias /* + tmin */)
+							t = tmin;
+						else if (k >=  bias + tmax)
+							t = tmax;
+						else
+							t = k - bias;
+
+						if (q < t) break;
+
+						output.put(punyDigitToCP(t + ((q - t) % (base - t))));
+						q = (q - t) / (base - t);
+						k += base;
+					}
+					output.put(punyDigitToCP(q));
+					bias = punyAdapt(delta, h + 1, h == b);
+					delta = 0;
+					h += 1;
+				}
+			}
+			delta += 1;
+			n += 1;
+		}
+
+		return output.data;
+	}
+}
 
 unittest { // IPv6
 	auto urlstr = "http://[2003:46:1a7b:6c01:64b:80ff:fe80:8003]:8091/abc";
@@ -846,6 +1004,21 @@ unittest {
 unittest {
 	auto url = URL("http://example.com/some%2bpath");
 	assert((cast(PosixPath)url.path).toString() == "/some+path", url.path.toString());
+}
+
+unittest {
+	auto url = URL("http://example.com/hello-🌍", false);
+	assert(url.pathString == "/hello-%F0%9F%8C%8D");
+	url = URL.parsePlain("http://example.com/안녕하세요-세계");
+	assert(url.pathString == "/%EC%95%88%EB%85%95%ED%95%98%EC%84%B8%EC%9A%94-%EC%84%B8%EA%B3%84");
+	url = URL.parsePlain("http://hello-🌍.com/");
+	assert(url.host == "xn--hello--8k34e.com");
+	url = URL.parsePlain("http://hello-🌍.com:8080/");
+	assert(url.host == "xn--hello--8k34e.com");
+	url = URL.parsePlain("http://i-❤-이모티콘.io");
+	assert(url.host == "xn--i---5r6aq903fubqabumj4g.io");
+	url = URL.parsePlain("https://hello🌍.i-❤-이모티콘.com");
+	assert(url.host == "xn--hello-oe93d.xn--i---5r6aq903fubqabumj4g.com");
 }
 
 unittest {
