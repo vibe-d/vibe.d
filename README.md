@@ -92,8 +92,6 @@ Additional setup on Mac using brew
 If you don't have brew installed, install it according to their [install
 instructions](<https://brew.sh>).
 
-    ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-
 You can then also install DUB using brew:
 
     brew install dub
