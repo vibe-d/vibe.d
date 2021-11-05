@@ -262,22 +262,21 @@ struct URL {
 	/// Get the default port for the given schema or 0
 	static ushort defaultPort(string schema)
 	nothrow {
+		import core.atomic : atomicLoad;
 		import std.uni : toLower;
-		string lowerschema = schema;
+
+		string lowerschema;
+
 		try
 			lowerschema = schema.toLower();
-		catch (Exception)
-			return 0;
+		catch (Exception e)
+			assert(false, e.msg);
+		
+		if (auto set = atomicLoad(map_commonInternetSchemas))
+			if (set.contains(lowerschema))
+				return set.get(lowerschema);
 
-		switch (lowerschema) {
-			default:
-			case "file": return 0;
-			case "http": return 80;
-			case "https": return 443;
-			case "ftp": return 21;
-			case "spdy": return 443;
-			case "sftp": return 22;
-		}
+		return 0;
 	}
 	/// ditto
 	ushort defaultPort()
@@ -520,14 +519,43 @@ unittest {
 
 private enum isAnyPath(P) = is(P == InetPath) || is(P == PosixPath) || is(P == WindowsPath);
 
-private shared immutable(StringSet)* st_commonInternetSchemas;
+private shared immutable(SchemaDefaultPortMap)* map_commonInternetSchemas;
 
+shared static this() {
+	auto initial_schemas = new SchemaDefaultPortMap;
+	initial_schemas.add("file", 0);
+	initial_schemas.add("tcp", 0);
+	initial_schemas.add("ftp", 21);
+	initial_schemas.add("sftp", 22);
+	initial_schemas.add("http", 80);
+	initial_schemas.add("https", 443);
+	initial_schemas.add("http+unix", 80);
+	initial_schemas.add("https+unix", 443);
+	initial_schemas.add("spdy", 443);
+	initial_schemas.add("ws", 80);
+	initial_schemas.add("wss", 443);
+	initial_schemas.add("redis", 6379);
+	initial_schemas.add("rtsp", 554);
+	initial_schemas.add("rtsps", 322);
+
+	map_commonInternetSchemas = cast(immutable)initial_schemas;
+}
+
+deprecated("Use the overload that accepts a `ushort port` as second argument")
+void registerCommonInternetSchema(string schema)
+{
+    registerCommonInternetSchema(schema, 0);
+}
 
 /** Adds the name of a schema to be treated as double-slash style.
 
+	Params:
+		schema = Name of the schema
+		port = Default port for the schema
+
 	See_also: `isCommonInternetSchema`, RFC 1738 Section 3.1
 */
-void registerCommonInternetSchema(string schema)
+void registerCommonInternetSchema(string schema, ushort port)
 @trusted nothrow {
 	import core.atomic : atomicLoad, cas;
 	import std.uni : toLower;
@@ -542,15 +570,15 @@ void registerCommonInternetSchema(string schema)
 	assert(lowerschema.length < 128, "Only schemas with less than 128 characters are supported");
 
 	while (true) {
-		auto olds = atomicLoad(st_commonInternetSchemas);
-		auto news = olds ? olds.dup : new StringSet;
-		news.add(lowerschema);
+		auto olds = atomicLoad(map_commonInternetSchemas);
+		auto news = olds ? olds.dup : new SchemaDefaultPortMap;
+		news.add(lowerschema, port);
 		static if (__VERSION__ < 2094) {
 			// work around bogus shared violation error on earlier versions of Druntime
-			if (cas(cast(shared(StringSet*)*)&st_commonInternetSchemas, cast(shared(StringSet)*)olds, cast(shared(StringSet)*)news))
+			if (cas(cast(shared(SchemaDefaultPortMap*)*)&map_commonInternetSchemas, cast(shared(SchemaDefaultPortMap)*)olds, cast(shared(SchemaDefaultPortMap)*)news))
 				break;
 		} else {
-			if (cas(&st_commonInternetSchemas, olds, cast(immutable)news))
+			if (cas(&map_commonInternetSchemas, olds, cast(immutable)news))
 				break;
 		}
 	}
@@ -584,37 +612,36 @@ bool isCommonInternetSchema(string schema)
 
 	scope lowerschema = buffer[0 .. schema.length];
 
-	switch (lowerschema) {
-		case "ftp", "http", "https", "http+unix", "https+unix":
-		case "spdy", "sftp", "ws", "wss", "file", "redis", "tcp":
-		case "rtsp", "rtsps":
-			return true;
-		default:
-			auto set = atomicLoad(st_commonInternetSchemas);
-			return () @trusted {
-				return set ? set.contains(cast(string) lowerschema) : false;
-			}();
-	}
+	return () @trusted {
+		auto set = atomicLoad(map_commonInternetSchemas);
+		return set ? set.contains(cast(string) lowerschema) : false;
+	} ();
 }
 
 unittest {
 	assert(isCommonInternetSchema("http"));
 	assert(isCommonInternetSchema("HTtP"));
+	assert(URL.defaultPort("http") == 80);
 	assert(!isCommonInternetSchema("foobar"));
-	registerCommonInternetSchema("fooBar");
+	registerCommonInternetSchema("fooBar", 2522);
 	assert(isCommonInternetSchema("foobar"));
 	assert(isCommonInternetSchema("fOObAR"));
+	assert(URL.defaultPort("foobar") == 2522);
+	assert(URL.defaultPort("fOObar") == 2522);
+
+	assert(URL.defaultPort("unregistered") == 0);
 }
 
 
-private struct StringSet {
-	bool[string] m_data;
+private struct SchemaDefaultPortMap {
+	ushort[string] m_data;
 
-	void add(string str) @safe nothrow { m_data[str] = true; }
+	void add(string str, ushort port) @safe nothrow { m_data[str] = port; }
 	bool contains(string str) const @safe nothrow @nogc { return !!(str in m_data); }
-	StringSet* dup() const @safe nothrow {
-		auto ret = new StringSet;
-		foreach (k; m_data.byKey) ret.add(k);
+	ushort get(string str) const @safe nothrow { return m_data[str]; }
+	SchemaDefaultPortMap* dup() const @safe nothrow {
+		auto ret = new SchemaDefaultPortMap;
+		foreach (s; m_data.byKeyValue) ret.add(s.key, s.value);
 		return ret;
 	}
 }
