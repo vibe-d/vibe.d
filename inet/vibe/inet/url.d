@@ -13,6 +13,7 @@ import vibe.textfilter.urlencode;
 import vibe.utils.string;
 
 import std.array;
+import std.algorithm;
 import std.conv;
 import std.exception;
 import std.string;
@@ -418,6 +419,99 @@ struct URL {
 		return cast(NativePath)this.path;
 	}
 
+	/// Decode percent encoded triplets for unreserved or convert to uppercase
+	private string normalize_percent_encoding(scope const(char)[] input)
+	{
+		auto normalized = appender!string;
+		normalized.reserve(input.length);
+
+		for (size_t i = 0; i < input.length; i++)
+		{
+			const char c = input[i];
+			if (c == '%')
+			{
+				if (input.length < i + 3)
+					assert(false, "Invalid percent encoding");
+				
+				char conv = cast(char) input[i + 1 .. i + 3].to!ubyte(16);
+				switch (conv)
+				{
+					case 'A': .. case 'Z':
+					case 'a': .. case 'z':
+					case '0': .. case '9':
+					case '-': case '.': case '_': case '~':
+						normalized ~= conv; // Decode unreserved
+						break;
+					default:
+						normalized ~= input[i .. i + 3].toUpper(); // Uppercase HEX
+						break;
+				}
+
+				i += 2;
+			}
+			else
+				normalized ~= c;
+		}
+
+		return normalized.data;
+	}
+
+	/**
+	  * Normalize the content of this `URL` in place
+	  *
+	  * Normalization can be used to create a more consistent and human-friendly
+	  * string representation of the `URL`.
+	  * The list of transformations applied in the process of normalization is as follows:
+			- Converting schema and host to lowercase
+			- Removing port if it is the default port for schema
+			- Removing dot segments in path
+			- Converting percent-encoded triplets to uppercase
+			- Adding slash when path is empty
+			- Adding slash to path when path represents a directory
+			- Decoding percent encoded triplets for unreserved characters
+				A-Z a-z 0-9 - . _ ~ 
+
+		Params:
+			isDirectory = Path of the URL represents a directory, if one is 
+			not already present, a trailing slash will be appended when `true`
+	*/
+	void normalize(bool isDirectory = false)
+	{
+		import std.uni : toLower;
+		
+		// Lowercase host and schema
+		this.m_schema = this.m_schema.toLower();
+		this.m_host = this.m_host.toLower();
+
+		// Remove default port
+		if (this.m_port == URL.defaultPort(this.m_schema))
+			this.m_port = 0;
+
+		// Normalize percent encoding, decode unreserved or uppercase hex
+		this.m_queryString = normalize_percent_encoding(this.m_queryString);
+		this.m_anchor = normalize_percent_encoding(this.m_anchor);
+
+		// Normalize path (first remove dot segments then normalize path segments)
+		this.m_path = InetPath(this.m_path.normalized.bySegment2.map!(
+				n => InetPath.Segment2.fromTrustedEncodedString(normalize_percent_encoding(n.encodedName))
+			).array);
+
+		// Add trailing slash to empty path
+		if (this.m_path.empty || isDirectory)
+			this.m_path.endsWithSlash = true;		
+	}
+
+	/** Returns the normalized form of the URL.
+
+		See `normalize` for a full description.
+	*/
+	URL normalized()
+	const {
+		URL ret = this;
+		ret.normalize();
+		return ret;
+	}
+
 	bool startsWith(const URL rhs)
 	const nothrow {
 		if( m_schema != rhs.m_schema ) return false;
@@ -816,6 +910,33 @@ unittest { // native path <-> URL conversion
 
 	assertThrown(URL("http://example.org/").toNativePath);
 	assertThrown(URL(NativePath("foo/bar")));
+}
+
+unittest { // URL Normalization
+	auto url = URL.parse("http://example.com/foo%2a");
+	assert(url.normalized.toString() == "http://example.com/foo%2A");
+
+	url = URL.parse("HTTP://User@Example.COM/Foo");
+	assert(url.normalized.toString() == "http://User@example.com/Foo");
+	
+	url = URL.parse("http://example.com/%7Efoo");
+	assert(url.normalized.toString() == "http://example.com/~foo");
+	
+	url = URL.parse("http://example.com/foo/./bar/baz/../qux");
+	assert(url.normalized.toString() == "http://example.com/foo/bar/qux");
+	
+	url = URL.parse("http://example.com");
+	assert(url.normalized.toString() == "http://example.com/");
+	
+	url = URL.parse("http://example.com:80/");
+	assert(url.normalized.toString() == "http://example.com/");
+
+	url = URL.parse("hTTPs://examPLe.COM:443/my/path");
+	assert(url.normalized.toString() == "https://example.com/my/path");
+
+	url = URL.parse("http://example.com/foo");
+	url.normalize(true);
+	assert(url.toString() == "http://example.com/foo/");
 }
 
 version (Windows) unittest { // Windows drive letter paths
