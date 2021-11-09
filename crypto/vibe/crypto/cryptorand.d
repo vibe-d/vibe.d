@@ -556,7 +556,7 @@ unittest
 				assert(rand != prevRadn, "it's almost unbelievable - current and previous random bytes are equal");
 
 				//make sure that we have different random bytes in different hash digests
-				if(bufferSize > digestLength!Hash)
+				static if(bufferSize > digestLength!Hash)
 				{
 					//begin and end of random number array
 					ubyte[] begin = rand[0..digestLength!Hash];
