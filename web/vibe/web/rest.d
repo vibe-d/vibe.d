@@ -932,8 +932,18 @@ class RestInterfaceSettings {
 	}
 }
 
+/** Type of the optional handler used to render custom replies in case of errors.
+
+	The error handler for a REST interface can be set via
+	`RestInterfaceSettings.errorHandler`.
+ */
 alias RestErrorHandler = void delegate(HTTPServerRequest, HTTPServerResponse, RestErrorInformation error) @safe;
 
+/** Contains detailed informations about the error
+
+	Used by the error handler (`RestInterfaceSettings.errorHandler`) to return
+	the correct information(s) to clients.
+ */
 struct RestErrorInformation {
 	/// The status code that the handler should send in the reply
 	HTTPStatus statusCode;
