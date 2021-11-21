@@ -7,3 +7,13 @@ indent_style = tab
 indent_size = 4
 trim_trailing_whitespace = true
 charset = utf-8
+
+[*.{d,di}]
+dfmt_brace_style = knr
+dfmt_keep_line_breaks = true
+dfmt_single_template_constraint_indent = true
+dfmt_single_indent = true
+dfmt_template_constraint_style = conditional_newline_indent
+dfmt_compact_labeled_statements = false
+dfmt_space_after_cast = false
+dfmt_align_switch_statements = false
