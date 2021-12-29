@@ -122,8 +122,12 @@ class LimitedInputStream : InputStream {
 
 	size_t read(scope ubyte[] dst, IOMode mode)
 	{
-		if (dst.length > m_sizeLimit) onSizeLimitReached();
-		auto ret = m_input.read(dst, mode);
+		import std.algorithm: min;
+
+		if ((mode == IOMode.all || m_sizeLimit == 0) && dst.length > m_sizeLimit) onSizeLimitReached();
+
+		const validReadSize = min(dst.length, m_sizeLimit);
+		auto ret = m_input.read(dst[0 .. validReadSize], mode);
 		m_sizeLimit -= ret;
 		return ret;
 	}
