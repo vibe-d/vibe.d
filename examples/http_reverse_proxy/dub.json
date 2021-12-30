@@ -3,6 +3,5 @@
 	"description": "Sets up a simple reverse proxy to a foreign server.",
 	"dependencies": {
 		"vibe-d:http": {"path": "../../"}
-	},
-	"versions": ["VibeDefaultMain"]
+	}
 }

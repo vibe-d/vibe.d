@@ -3,6 +3,7 @@
 module app;
 
 import std.exception : enforce;
+import vibe.core.core;
 import vibe.core.log;
 import vibe.http.fileserver;
 import vibe.http.router;
@@ -124,7 +125,7 @@ class SampleService {
 }
 
 
-shared static this()
+int main(string[] args)
 {
 	// Create the router that will dispatch each request to the proper handler method
 	auto router = new URLRouter;
@@ -140,7 +141,9 @@ shared static this()
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
 	settings.sessionStore = new MemorySessionStore;
-	listenHTTP(settings, router);
+
+	auto listener = listenHTTP(settings, router);
 
 	logInfo("Please open http://127.0.0.1:8080/ in your browser.");
+	return runApplication(&args);
 }

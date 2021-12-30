@@ -1,4 +1,6 @@
-import vibe.core.core : sleep;
+module app;
+
+import vibe.core.core;
 import vibe.core.log;
 import vibe.http.fileserver : serveStaticFiles;
 import vibe.http.router : URLRouter;
@@ -9,7 +11,7 @@ import core.time;
 import std.conv : to;
 
 
-shared static this()
+int main(string[] args)
 {
 	auto router = new URLRouter;
 	router.get("/", staticRedirect("/index.html"));
@@ -19,7 +21,9 @@ shared static this()
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
-	listenHTTP(settings, router);
+
+	auto listener = listenHTTP(settings, router);
+	return runApplication(&args);
 }
 
 void handleWebSocketConnection(scope WebSocket socket)

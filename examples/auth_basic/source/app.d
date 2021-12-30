@@ -1,4 +1,6 @@
-import vibe.appmain;
+module app;
+
+import vibe.core.core;
 import vibe.http.auth.basic_auth;
 import vibe.http.router;
 import vibe.http.server;
@@ -9,7 +11,7 @@ bool checkPassword(string user, string password)
 	return user == "admin" && password == "secret";
 }
 
-shared static this()
+int main(string[] args)
 {
 	auto router = new URLRouter;
 
@@ -26,5 +28,6 @@ shared static this()
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
 
-	listenHTTP(settings, router);
+	auto listener = listenHTTP(settings, router);
+	return runApplication(&args);
 }

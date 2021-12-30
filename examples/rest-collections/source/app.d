@@ -83,7 +83,7 @@ class LocalPostAPI : PostAPI {
 	}
 }
 
-shared static this()
+int main(string[] args)
 {
 	auto router = new URLRouter;
 	router.registerRestInterface(new LocalForumAPI);
@@ -91,9 +91,9 @@ shared static this()
 	auto settings = new HTTPServerSettings;
 	settings.bindAddresses = ["127.0.0.1"];
 	settings.port = 8080;
-	listenHTTP(settings, router);
+	auto listener = listenHTTP(settings, router);
 
-	runTask({
+	auto taskHandler = runTask({
 		auto api = new RestInterfaceClient!ForumAPI("http://127.0.0.1:8080/");
 		logInfo("Current number of threads: %s", api.threads.get().length);
 		logInfo("Posting a topic...");
@@ -109,4 +109,6 @@ shared static this()
 		}
 		logInfo("Leaving REST server running. Hit Ctrl+C to exit.");
 	});
+
+	return runApplication(&args);
 }

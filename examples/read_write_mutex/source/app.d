@@ -1,3 +1,4 @@
+module app;
 
 import vibe.d;
 
@@ -58,7 +59,7 @@ __gshared {
 	ulong s_runningTasks;
 }
 
-shared static this()
+int main(string[] args)
 {
 	s_taskMutex = new TaskMutex();
 	s_taskCondition = new TaskCondition(s_taskMutex);
@@ -78,7 +79,7 @@ shared static this()
 
 	//Wait for a couple of seconds for the server to be initialized properly and then start
 	//multiple concurrent threads that simultaneously start queries on the rest interface defined above.
-	setTimer(500.msecs, () @trusted  {
+	setTimer(500.msecs, () @trusted {
 		scope (failure) assert(false);
 
 		scope(exit)
@@ -109,4 +110,6 @@ shared static this()
 			while(s_runningTasks > 0);
 		}
 	});
+
+	return runApplication(&args);
 }

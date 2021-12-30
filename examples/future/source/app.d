@@ -1,13 +1,14 @@
-import vibe.appmain;
+module app;
+
+import vibe.core.core;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.core.concurrency;
 import core.time;
 
-
-shared static this()
+int main(string[] args)
 {
-	runTask({
+	auto taskHandler = runTask({
 		auto val = async({
 			logInfo("Starting to compute value.");
 			sleep(500.msecs); // simulate some lengthy computation
@@ -21,4 +22,6 @@ shared static this()
 		logInfo("Result: %s", val.getResult());
 		exitEventLoop();
 	});
+
+	return runApplication(&args);
 }

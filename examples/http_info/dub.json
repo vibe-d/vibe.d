@@ -3,6 +3,5 @@
 	"description": "Displays request information using a Diet template.",
 	"dependencies": {
 		"vibe-d:http": {"path": "../../"}
-	},
-	"versions": ["VibeDefaultMain"]
+	}
 }

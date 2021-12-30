@@ -1,11 +1,14 @@
-import vibe.appmain;
+module app;
+
+import vibe.core.core;
 import vibe.core.net;
 import vibe.core.stream;
 
-shared static this()
+int main(string[] args)
 {
-	listenTCP(2000, (conn) {
+	auto listener = listenTCP(2000, (conn) {
 		try conn.pipe(conn);
 		catch (Exception e) conn.close();
 	});
+	return runApplication(&args);
 }

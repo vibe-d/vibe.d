@@ -5,10 +5,9 @@ import vibe.core.net;
 
 import core.time;
 
-
-shared static this()
+int main(string[] args)
 {
-	runTask({
+	auto t1Hansler = runTask({
 		auto udp_listener = listenUDP(1234);
 		while (true) {
 			auto pack = udp_listener.recv();
@@ -16,7 +15,7 @@ shared static this()
 		}
 	});
 
-	runTask({
+	auto t2Handler = runTask({
 		auto udp_sender = listenUDP(0);
 		udp_sender.connect("127.0.0.1", 1234);
 		while (true) {
@@ -25,4 +24,6 @@ shared static this()
 			udp_sender.send(cast(ubyte[])"Hello, World!");
 		}
 	});
+
+	return runApplication(&args);
 }

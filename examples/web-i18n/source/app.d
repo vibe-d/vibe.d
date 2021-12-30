@@ -1,6 +1,7 @@
 // This module shows the translation support of the vibe.web.web framework.
 module app;
 
+import vibe.core.core;
 import vibe.core.log;
 import vibe.http.fileserver;
 import vibe.http.router;
@@ -38,7 +39,7 @@ class SampleService {
 	}
 }
 
-shared static this()
+int main(string[] args)
 {
 	// Create the router that will map the incoming requests to request handlers
 	auto router = new URLRouter;
@@ -52,7 +53,9 @@ shared static this()
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
 	settings.sessionStore = new MemorySessionStore;
-	listenHTTP(settings, router);
+
+	auto listener = listenHTTP(settings, router);
 
 	logInfo("Please open http://127.0.0.1:8080/ in your browser.");
+	return runApplication(&args);
 }

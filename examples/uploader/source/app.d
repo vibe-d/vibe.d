@@ -1,4 +1,6 @@
-import vibe.appmain;
+module app;
+
+import vibe.core.core;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.core.path;
@@ -6,7 +8,6 @@ import vibe.http.router;
 import vibe.http.server;
 
 import std.exception;
-
 
 void uploadFile(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
@@ -22,7 +23,7 @@ void uploadFile(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	res.writeBody("File uploaded!", "text/plain");
 }
 
-shared static this()
+int main(string[] args)
 {
 	auto router = new URLRouter;
 	router.get("/", staticTemplate!"upload_form.dt");
@@ -31,5 +32,7 @@ shared static this()
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
-	listenHTTP(settings, router);
+
+	auto listener = listenHTTP(settings, router);
+	return runApplication(&args);
 }

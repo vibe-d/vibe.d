@@ -1,4 +1,5 @@
-import vibe.appmain;
+module app;
+
 import vibe.core.core;
 import vibe.core.log;
 import vibe.http.router;
@@ -21,7 +22,7 @@ void interrupt(HTTPServerRequest req, HTTPServerResponse res)
 	res.redirect("/");
 }
 
-shared static this()
+int main(string[] args)
 {
 	g_task = runTask({
 		logInfo("Starting task, waiting for max. 10 seconds.");
@@ -41,7 +42,9 @@ shared static this()
 
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
-	listenHTTP(settings, routes);
+
+	auto listener = listenHTTP(settings, routes);
 
 	logInfo("Please open http://localhost:8080/ in a browser to monitor or interrupt the task.");
+	return runApplication(&args);
 }

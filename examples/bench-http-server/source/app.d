@@ -1,4 +1,5 @@
-import vibe.appmain;
+module app;
+
 import vibe.core.core;
 import vibe.http.fileserver;
 import vibe.http.router;
@@ -63,7 +64,7 @@ pure char[] generateData()
 }
 
 
-shared static this()
+int main(string[] args)
 {
 	//setLogLevel(LogLevel.Trace);
 	data = generateData();
@@ -89,7 +90,10 @@ shared static this()
 		routes.get("/file/*", serveStaticFiles("./public", fsettings));
 		routes.rebuild();
 
-		listenHTTP(settings, routes);
-		listenTCP(8081, toDelegate(&staticAnswer), "127.0.0.1", TCPListenOptions.reusePort);
+		auto httpListener = listenHTTP(settings, routes);
+		auto tcpListener  = listenTCP(8081, toDelegate(&staticAnswer),
+			"127.0.0.1", TCPListenOptions.reusePort);
 	});
+
+	return runApplication(&args);
 }

@@ -6,7 +6,6 @@
 		"vibe-d": {"version": "~master", "path": "../../"}
 	},
 	"versions": [
-		"VibeDefaultMain",
 		"RWMutexPrint",
 	],
 }

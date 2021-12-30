@@ -3,6 +3,5 @@
     "description": "Example project demonstrating the use of collections in REST interfaces.",
     "dependencies": {
         "vibe-d": {"path": "../../"}
-    },
-    "versions": ["VibeDefaultMain"]
+    }
 }
