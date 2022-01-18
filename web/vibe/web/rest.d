@@ -995,12 +995,10 @@ struct RestErrorInformation {
 struct Collection(I)
 	if (is(I == interface))
 {
-	import std.typetuple;
-
 	static assert(is(I.CollectionIndices == struct), "Collection interfaces must define a CollectionIndices struct.");
 
 	alias Interface = I;
-	alias AllIDs = TypeTuple!(typeof(I.CollectionIndices.tupleof));
+	alias AllIDs = AliasSeq!(typeof(I.CollectionIndices.tupleof));
 	alias AllIDNames = FieldNameTuple!(I.CollectionIndices);
 	static assert(AllIDs.length >= 1, I.stringof~".CollectionIndices must define at least one member.");
 	static assert(AllIDNames.length == AllIDs.length);
@@ -2350,7 +2348,6 @@ package string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
 do {
 	import vibe.web.internal.rest.common : ParameterKind, WebParamUDATuple;
-	import std.typetuple : TypeTuple;
 	import std.algorithm : strip;
 
 	// The hack parameter is to kill "Statement is not reachable" warnings.
@@ -2367,7 +2364,7 @@ do {
 		alias PT = ParameterTypeTuple!Func;
 		static if (!__traits(compiles, ParameterIdentifierTuple!Func)) {
 			if (hack) return "%s: A parameter has no name.".format(FuncId);
-			alias PN = TypeTuple!("-DummyInvalid-");
+			alias PN = AliasSeq!("-DummyInvalid-");
 		} else
 			alias PN = ParameterIdentifierTuple!Func;
 		alias WPAT = UDATuple!(WebParamAttribute, Func);
@@ -2408,7 +2405,7 @@ do {
 		foreach (i, SC; ParameterStorageClassTuple!Func) {
 			static if (SC & PSC.out_ || (SC & PSC.ref_ && !is(ConstOf!(PT[i]) == PT[i])) ) {
 				mixin(GenCmp!("Loop", i, PN[i]).Decl);
-				alias Attr = TypeTuple!(
+				alias Attr = AliasSeq!(
 					WebParamUDATuple!(Func, i),
 					Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT),
 				);
