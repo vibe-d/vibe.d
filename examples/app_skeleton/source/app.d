@@ -1,5 +1,6 @@
 module app;
 
+import vibe.core.core;
 import vibe.http.fileserver;
 import vibe.http.router;
 import vibe.http.server;
@@ -12,7 +13,7 @@ void showError(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInf
 	res.render!("error.dt", req, error);
 }
 
-shared static this()
+int main(string[] args)
 {
 	auto router = new URLRouter;
 	router.get("/", &showHome);
@@ -24,5 +25,6 @@ shared static this()
 	settings.port = 8080;
 	settings.errorPageHandler = toDelegate(&showError);
 
-	listenHTTP(settings, router);
+	auto listener = listenHTTP(settings, router);
+	return runApplication(&args);
 }

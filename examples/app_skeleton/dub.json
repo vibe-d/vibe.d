@@ -1,13 +1,7 @@
 ﻿{
 	"name": "app-skeleton",
 	"description": "An example project skeleton",
-	"homepage": "http://my-project.org",
-	"copyright": "Copyright © 2000, Toni Tester",
-	"authors": [
-		"Toni Tester"
-	],
 	"dependencies": {
 		"vibe-d": {"path": "../../"}
-	},
-	"versions": ["VibeDefaultMain"]
+	}
 }

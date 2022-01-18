@@ -6,7 +6,7 @@
 */
 module app;
 
-import vibe.appmain;
+import vibe.core.core;
 import vibe.http.router;
 import vibe.http.server;
 import vibe.web.web;
@@ -133,7 +133,7 @@ class App {
 	}
 }
 
-shared static this()
+int main(string[] args)
 {
 	auto router = new URLRouter;
 	router.registerWebInterface(new App);
@@ -142,5 +142,6 @@ shared static this()
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
 
-	listenHTTP(settings, router);
+	auto listener = listenHTTP(settings, router);
+	return runApplication(&args);
 }

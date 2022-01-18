@@ -3,6 +3,5 @@
 	"description": "Demonstrates digest authentication.",
 	"dependencies": {
 		"vibe-d:http": {"path": "../../"}
-	},
-	"versions": ["VibeDefaultMain"]
+	}
 }

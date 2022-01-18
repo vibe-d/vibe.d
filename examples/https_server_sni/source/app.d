@@ -1,10 +1,11 @@
-import vibe.appmain;
+module app;
+
+import vibe.core.core;
 import vibe.core.log;
 import vibe.http.server;
 import vibe.stream.tls;
 
-
-shared static this()
+int main(string[] args)
 {
 	{
 		auto settings = new HTTPServerSettings;
@@ -40,6 +41,8 @@ You can then navigate to either https://hosta:8080/ or https://hostb:8080/
 and should be presented with a different certificate each time, matching the
 host name entered.
 `);
+
+	return runApplication(&args);
 }
 
 void handleRequestA(scope HTTPServerRequest req, scope HTTPServerResponse res)

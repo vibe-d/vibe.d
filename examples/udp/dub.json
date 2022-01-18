@@ -3,6 +3,5 @@
 	"description": "Sends UDP packets from one socket to another.",
 	"dependencies": {
 		"vibe-d:core": {"path": "../../"}
-	},
-	"versions": ["VibeDefaultMain"]
+	}
 }

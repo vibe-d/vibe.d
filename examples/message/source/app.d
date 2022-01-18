@@ -1,11 +1,11 @@
-import vibe.appmain;
+module app;
+
 import vibe.core.core;
 import vibe.core.log;
 import vibe.core.concurrency;
 import core.time;
 
-
-shared static this()
+int main(string[] args)
 {
 	auto t1 = runTask({
 		while (true) {
@@ -53,4 +53,6 @@ shared static this()
 		logInfo("send string Bye bye");
 		t1.send("Bye bye");
 	});
+
+	return runApplication(&args);
 }

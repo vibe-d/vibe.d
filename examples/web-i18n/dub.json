@@ -4,6 +4,5 @@
 	"dependencies": {
 		"vibe-d:web": {"path": "../../"}
 	},
-	"stringImportPaths": ["views", "translations"],
-	"versions": ["VibeDefaultMain"]
+	"stringImportPaths": ["views", "translations"]
 }

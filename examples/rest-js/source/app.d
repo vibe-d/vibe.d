@@ -1,3 +1,6 @@
+module app;
+
+import vibe.core.core;
 import vibe.web.rest;
 import vibe.http.common : HTTPMethod;
 
@@ -18,7 +21,7 @@ class Test : ITest {
 	void postToConsole(string text) { writeln(text); }
 }
 
-shared static this()
+int main(string[] args)
 {
 	import vibe.core.log : logInfo;
 	import vibe.inet.url : URL;
@@ -43,7 +46,9 @@ shared static this()
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
-	listenHTTP(settings, router);
+
+	auto listener = listenHTTP(settings, router);
 
 	logInfo("Please open http://127.0.0.1:8080/ in your browser.");
+	return runApplication(&args);
 }

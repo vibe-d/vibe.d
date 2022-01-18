@@ -3,8 +3,8 @@
  * introduces few new more advanced features. Sometimes registration code in module constructor
  * is also important, it is then mentioned in example comment explicitly.
  */
+module app;
 
-import vibe.appmain;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.data.json;
@@ -476,7 +476,7 @@ class Example7 : Example7API {
 }
 
 
-shared static this()
+int main(string[] args)
 {
 	// Registering our REST services in router
 	auto routes = new URLRouter;
@@ -494,7 +494,7 @@ shared static this()
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
 
-	listenHTTP(settings, routes);
+	auto listener = listenHTTP(settings, routes);
 
 	/* At this moment, server is prepared to process requests.
 	 * After a small delay to let socket become ready, the very same D interfaces
@@ -633,4 +633,6 @@ shared static this()
 
 		logInfo("Success.");
 	});
+
+	return runApplication(&args);
 }

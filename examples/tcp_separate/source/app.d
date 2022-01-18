@@ -1,16 +1,17 @@
-import vibe.appmain;
-import vibe.core.core : runTask, sleep;
+module app;
+
+import vibe.core.core;
 import vibe.core.log : logError, logInfo;
 import vibe.core.net : TCPConnection, listenTCP;
 import vibe.stream.operations : readLine;
 
 import core.time;
 
-shared static this()
+int main(string[] args)
 {
 	// shows how to handle reading and writing of the TCP connection
 	// in separate tasks
-	listenTCP(7000, (conn) {
+	auto listener = listenTCP(7000, (conn) {
 		auto wtask = runTask!TCPConnection((conn) {
 			try {
 				while (conn.connected) {
@@ -37,4 +38,6 @@ shared static this()
 
 		conn.close();
 	});
+
+	return runApplication(&args);
 }

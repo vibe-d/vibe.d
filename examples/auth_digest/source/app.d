@@ -1,4 +1,6 @@
-import vibe.appmain;
+module app;
+
+import vibe.core.core;
 import vibe.http.auth.digest_auth;
 import vibe.http.router;
 import vibe.http.server;
@@ -11,7 +13,7 @@ string digestPassword(string realm, string user) @safe
 	return "";
 }
 
-shared static this()
+int main(string[] args)
 {
 	auto authinfo = new DigestAuthInfo;
 	authinfo.realm = "Site Realm";
@@ -31,5 +33,6 @@ shared static this()
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
 
-	listenHTTP(settings, router);
+	auto listener = listenHTTP(settings, router);
+	return runApplication(&args);
 }

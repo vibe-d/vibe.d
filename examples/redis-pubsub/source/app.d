@@ -1,8 +1,12 @@
-import core.time;
-import std.functional;
+module app;
+
 import vibe.core.core;
 import vibe.core.log;
 import vibe.db.redis.redis;
+
+import std.functional;
+
+import core.time;
 
 void printReply(string channel, string message) @safe
 {
@@ -11,7 +15,7 @@ void printReply(string channel, string message) @safe
 
 RedisSubscriber subscriber;
 
-shared static this()
+int main(string[] args)
 {
 	auto publisher = new RedisClient();
 	subscriber = publisher.createSubscriber();
@@ -21,10 +25,11 @@ shared static this()
 	publisher.getDatabase(0).publish("test1", "Hello World!");
 	publisher.getDatabase(0).publish("test2", "Hello from Channel 2");
 
-
-	runTask({
+	auto taskHandler = runTask({
 		subscriber.subscribe("test-fiber");
 		publisher.getDatabase(0).publish("test-fiber", "Hello from the Fiber!");
 		subscriber.unsubscribe();
 	});
+
+	return runApplication(&args);
 }

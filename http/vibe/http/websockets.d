@@ -486,9 +486,10 @@ unittest
  * Represents a single _WebSocket connection.
  *
  * ---
- * shared static this ()
+ * int main (string[] args)
  * {
- *   runTask(() => connectToWS());
+ *   auto taskHandle = runTask(() => connectToWS());
+ *   return runApplication(&args);
  * }
  *
  * void connectToWS ()
@@ -1132,7 +1133,7 @@ private struct Frame {
 		}
 
 		if (sys_rng) {
-            sys_rng.read(dst[0 .. 4]);
+			sys_rng.read(dst[0 .. 4]);
 			for (size_t i = 0; i < payload.length; i++)
 				payload[i] ^= dst[i % 4];
 		}

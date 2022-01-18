@@ -3,6 +3,5 @@
 	"description": "Demonstrates cross-task message communication.",
 	"dependencies": {
 		"vibe-d:core": {"path": "../../"}
-	},
-	"versions": ["VibeDefaultMain"]
+	}
 }
