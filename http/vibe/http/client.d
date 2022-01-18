@@ -77,11 +77,7 @@ HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientR
 /// ditto
 HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester = null, const(HTTPClientSettings) settings = defaultSettings)
 {
-	import std.algorithm.searching : canFind;
-
-	bool use_tls = isTLSRequired(url, settings);
-
-	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
+	auto cli = connectHTTP(url, settings);
 	auto res = cli.request(
 		(scope req){ httpRequesterDg(req, url, settings, requester); },
 	);
@@ -100,9 +96,7 @@ void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) re
 /// ditto
 void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, const(HTTPClientSettings) settings = defaultSettings)
 {
-	bool use_tls = isTLSRequired(url, settings);
-
-	auto cli = connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
+	auto cli = connectHTTP(url, settings);
 	cli.request(
 		(scope req){ httpRequesterDg(req, url, settings, requester); },
 		responder
@@ -218,6 +212,13 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPC
 	}
 
 	return pool.lockConnection();
+}
+
+/// Ditto
+auto connectHTTP(URL url, const(HTTPClientSettings) settings = null)
+{
+	const use_tls = isTLSRequired(url, settings);
+	return connectHTTP(url.getFilteredHost, url.port, use_tls, settings);
 }
 
 static ~this()
