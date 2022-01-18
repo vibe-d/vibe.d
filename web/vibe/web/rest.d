@@ -317,8 +317,8 @@ public import vibe.web.common;
 import vibe.core.log;
 import vibe.core.stream : InputStream, isInputStream, pipe;
 import vibe.http.router : URLRouter;
-import vibe.http.client : HTTPClientResponse, HTTPClientSettings;
-import vibe.http.common : HTTPMethod;
+import vibe.http.client : HTTPClientRequest, HTTPClientResponse, HTTPClientSettings;
+import vibe.http.common : HTTPMethod, HTTPStatusException;
 import vibe.http.server : HTTPServerRequestDelegate, HTTPServerRequest, HTTPServerResponse;
 import vibe.http.status : HTTPStatus, isSuccessCode;
 import vibe.internal.meta.uda;
@@ -682,8 +682,6 @@ unittest {
 */
 class RestInterfaceClient(I) : I
 {
-	import vibe.inet.url : URL;
-	import vibe.http.client : HTTPClientRequest;
 	import std.typetuple : staticMap;
 
 	private alias Info = RestInterface!I;
@@ -955,8 +953,6 @@ struct RestErrorInformation {
 
 	private this(Exception e, HTTPStatus default_status)
 	@safe {
-		import vibe.http.common : HTTPStatusException;
-
 		this.exception = e;
 
 		if (auto he = cast(HTTPStatusException)e) {
@@ -999,12 +995,10 @@ struct RestErrorInformation {
 struct Collection(I)
 	if (is(I == interface))
 {
-	import std.typetuple;
-
 	static assert(is(I.CollectionIndices == struct), "Collection interfaces must define a CollectionIndices struct.");
 
 	alias Interface = I;
-	alias AllIDs = TypeTuple!(typeof(I.CollectionIndices.tupleof));
+	alias AllIDs = AliasSeq!(typeof(I.CollectionIndices.tupleof));
 	alias AllIDNames = FieldNameTuple!(I.CollectionIndices);
 	static assert(AllIDs.length >= 1, I.stringof~".CollectionIndices must define at least one member.");
 	static assert(AllIDNames.length == AllIDs.length);
@@ -1348,13 +1342,15 @@ alias before = vibe.internal.meta.funcattr.before;
 
 ///
 @safe unittest {
-	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
+    import vibe.http.router;
+	import vibe.http.server;
+    import vibe.web.rest;
 
 	interface MyService {
 		long getHeaderCount(size_t foo = 0) @safe;
 	}
 
-	static size_t handler(HTTPServerRequest req, HTTPServerResponse res)
+	static size_t handler(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		return req.headers.length;
 	}
@@ -1389,7 +1385,9 @@ alias after = vibe.internal.meta.funcattr.after;
 
 ///
 @safe unittest {
-	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
+    import vibe.http.router;
+	import vibe.http.server;
+    import vibe.web.rest;
 
 	interface MyService {
 		long getMagic() @safe;
@@ -1447,10 +1445,9 @@ alias after = vibe.internal.meta.funcattr.after;
  */
 private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(T inst, ref RestInterface!T intf)
 {
-	import std.meta : AliasSeq;
 	import std.string : format;
 	import std.traits : Unqual;
-	import vibe.http.common : HTTPStatusException, enforceBadRequest;
+	import vibe.http.common : enforceBadRequest;
 	import vibe.utils.string : sanitizeUTF8;
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.internal.meta.funcattr : IsAttributedParameter, computeAttributedParameterCtx;
@@ -1711,8 +1708,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange routes, RestInterfaceSettings settings = null)
 {
 	import std.algorithm : map, joiner, any;
-	import std.conv : text;
 	import std.array : array;
+	import std.conv : text;
 	import vibe.http.common : httpMethodString, httpMethodFromString;
 	// NOTE: don't know what is better, to keep this in memory, or generate on each request
 	auto allow = routes.map!(r => r.method.httpMethodString).joiner(",").text();
@@ -1840,7 +1837,6 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.stream.operations : readAll;
 	import vibe.textfilter.urlencode : filterURLEncode, urlEncode;
-	import std.array : appender;
 
 	alias Info = RestInterface!I;
 	alias Func = Info.RouteFunctions[ridx];
@@ -1986,8 +1982,6 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	} else ret.dropBody();
 }
 
-
-import vibe.http.client : HTTPClientRequest;
 /**
  * Perform a request to the interface using the given parameters.
  *
@@ -2023,21 +2017,22 @@ private HTTPClientResponse request(URL base_url,
 	ref InetHeaderMap optReturnHdrs, in HTTPClientSettings http_settings)
 @safe {
 	import std.uni : sicmp;
-	import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
-	import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
+	import vibe.http.client : requestHTTP;
+	import vibe.http.common : HTTPStatus, httpMethodString, httpStatusText;
+	import vibe.stream.memory : createMemoryStream;
+	import vibe.stream.operations;
 
 	URL url = base_url;
 	url.pathString = path;
 
 	if (query.length) url.queryString = query;
 
-	auto reqdg = (scope HTTPClientRequest req) {
+    scope reqdg = (scope HTTPClientRequest req) {
 		req.method = verb;
 		foreach (k, v; hdrs.byKeyValue)
 			req.headers[k] = v;
 
 		if (request_body_filter) {
-			import vibe.stream.memory : createMemoryStream;
 			scope str = createMemoryStream(() @trusted { return cast(ubyte[])body_; } (), false);
 			request_body_filter(req, str);
 		}
@@ -2051,8 +2046,6 @@ private HTTPClientResponse request(URL base_url,
 	HTTPClientResponse client_res;
 	if (http_settings) client_res = requestHTTP(url, reqdg, http_settings);
 	else client_res = requestHTTP(url, reqdg);
-
-	import vibe.stream.operations;
 
 	logDebug(
 			"REST call: %s %s -> %d, %s",
@@ -2113,7 +2106,6 @@ private {
 	{
 		import std.conv : ConvException;
 		import std.uuid : UUID, UUIDParsingException;
-		import vibe.http.common : HTTPStatusException;
 		import vibe.http.status : HTTPStatus;
 		try {
 			static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
@@ -2136,9 +2128,6 @@ private {
 
 	// Converting from invalid JSON string to aggregate should throw bad request
 	unittest {
-		import vibe.http.common : HTTPStatusException;
-		import vibe.http.status : HTTPStatus;
-
 		void assertHTTPStatus(E)(lazy E expression, HTTPStatus expectedStatus,
 			string file = __FILE__, size_t line = __LINE__)
 		{
@@ -2358,7 +2347,6 @@ package string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
 do {
 	import vibe.web.internal.rest.common : ParameterKind, WebParamUDATuple;
-	import std.typetuple : TypeTuple;
 	import std.algorithm : strip;
 
 	// The hack parameter is to kill "Statement is not reachable" warnings.
@@ -2375,7 +2363,7 @@ do {
 		alias PT = ParameterTypeTuple!Func;
 		static if (!__traits(compiles, ParameterIdentifierTuple!Func)) {
 			if (hack) return "%s: A parameter has no name.".format(FuncId);
-			alias PN = TypeTuple!("-DummyInvalid-");
+			alias PN = AliasSeq!("-DummyInvalid-");
 		} else
 			alias PN = ParameterIdentifierTuple!Func;
 		alias WPAT = UDATuple!(WebParamAttribute, Func);
@@ -2416,7 +2404,7 @@ do {
 		foreach (i, SC; ParameterStorageClassTuple!Func) {
 			static if (SC & PSC.out_ || (SC & PSC.ref_ && !is(ConstOf!(PT[i]) == PT[i])) ) {
 				mixin(GenCmp!("Loop", i, PN[i]).Decl);
-				alias Attr = TypeTuple!(
+				alias Attr = AliasSeq!(
 					WebParamUDATuple!(Func, i),
 					Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT),
 				);
