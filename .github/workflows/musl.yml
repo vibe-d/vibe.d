@@ -1,0 +1,30 @@
+name: Musl tests
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+      - github_actions
+
+jobs:
+  main:
+    name: Musl tests
+    strategy:
+      fail-fast: false
+      matrix:
+        dc: [ dmd, ldc ]
+        include:
+          - { dc: dmd, dcname: dmd  }
+          - { dc: ldc, dcname: ldc2 }
+    runs-on: ubuntu-latest
+    container: alpine
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: apk add --no-cache build-base dub ${{ matrix.dc }} openssl-dev zlib-dev
+      - name: Run tests
+        run: dub test --compiler=${{ matrix.dcname }}

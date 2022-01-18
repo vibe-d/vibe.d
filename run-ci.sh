@@ -92,7 +92,7 @@ if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
 
             kill $MONGOPID
 
-            while kill -0 $MONGOPID; do 
+            while kill -0 $MONGOPID; do
                 sleep 1
             done
         fi
@@ -110,15 +110,6 @@ if [[ $PARTS =~ (^|,)meson(,|$) ]]; then
         # due to an LDC bug: https://github.com/ldc-developers/ldc/issues/2280
         # as soon as the bug is fixed, we can run tests again for the fixed LDC versions.
         allow_meson_test="no"
-    fi
-    if [[ ${DC=dmd} = dmd ]]; then
-        dc_version=$("$DC" --version | perl -pe '($_)=/([0-9]+([.][0-9]+)+)/')
-        if [[ ${dc_version} = "2.072.2" ]]; then
-            # The stream test fails with DMD 2.072.2 due to a missing symbol. This is a DMD bug,
-            # so we skip tests here.
-            # This check can be removed when support for that compiler version is dropped.
-            allow_meson_test="no"
-        fi
     fi
 
     # we limit the number of Ninja jobs to 4, so GitHub Actions doesn't kill us
