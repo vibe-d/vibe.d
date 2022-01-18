@@ -2025,7 +2025,7 @@ private HTTPClientResponse request(URL base_url,
 
 	if (query.length) url.queryString = query;
 
-	auto reqdg = (scope HTTPClientRequest req) {
+    scope reqdg = (scope HTTPClientRequest req) {
 		req.method = verb;
 		foreach (k, v; hdrs.byKeyValue)
 			req.headers[k] = v;
