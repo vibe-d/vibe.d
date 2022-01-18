@@ -2019,6 +2019,8 @@ private HTTPClientResponse request(URL base_url,
 	import std.uni : sicmp;
 	import vibe.http.client : requestHTTP;
 	import vibe.http.common : HTTPStatus, httpMethodString, httpStatusText;
+	import vibe.stream.memory : createMemoryStream;
+	import vibe.stream.operations;
 
 	URL url = base_url;
 	url.pathString = path;
@@ -2031,7 +2033,6 @@ private HTTPClientResponse request(URL base_url,
 			req.headers[k] = v;
 
 		if (request_body_filter) {
-			import vibe.stream.memory : createMemoryStream;
 			scope str = createMemoryStream(() @trusted { return cast(ubyte[])body_; } (), false);
 			request_body_filter(req, str);
 		}
@@ -2045,8 +2046,6 @@ private HTTPClientResponse request(URL base_url,
 	HTTPClientResponse client_res;
 	if (http_settings) client_res = requestHTTP(url, reqdg, http_settings);
 	else client_res = requestHTTP(url, reqdg);
-
-	import vibe.stream.operations;
 
 	logDebug(
 			"REST call: %s %s -> %d, %s",
