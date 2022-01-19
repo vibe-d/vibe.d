@@ -557,6 +557,7 @@ struct URL {
 		if (m_schema != rhs.m_schema) return false;
 		if (m_host != rhs.m_host) return false;
 		if (m_path != rhs.m_path) return false;
+		if (m_port != rhs.m_port) return false;
 		return true;
 	}
 	/// ditto
