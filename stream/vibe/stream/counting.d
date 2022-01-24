@@ -122,8 +122,12 @@ class LimitedInputStream : InputStream {
 
 	size_t read(scope ubyte[] dst, IOMode mode)
 	{
-		if (dst.length > m_sizeLimit) onSizeLimitReached();
-		auto ret = m_input.read(dst, mode);
+		import std.algorithm: min;
+
+		if ((mode == IOMode.all || m_sizeLimit == 0) && dst.length > m_sizeLimit) onSizeLimitReached();
+
+		const validReadSize = min(dst.length, m_sizeLimit);
+		auto ret = m_input.read(dst[0 .. validReadSize], mode);
 		m_sizeLimit -= ret;
 		return ret;
 	}
@@ -135,6 +139,56 @@ class LimitedInputStream : InputStream {
 	}
 }
 
+unittest { // issue 2575
+	import vibe.stream.memory : createMemoryStream;
+	import std.exception : assertThrown;
+
+	auto buf = new ubyte[](1024);
+	foreach (i, ref b; buf) b = cast(ubyte) i;
+	auto input = createMemoryStream(buf, false);
+
+	// test IOMode.once and IOMode.immediate
+	static foreach (bufferSize; [100, 128, 200])
+	static foreach (ioMode; [IOMode.once, IOMode.immediate])
+	{{
+		input.seek(0);
+		auto limitedStream = createLimitedInputStream(input, 128);
+
+		ubyte[] result;
+
+		ubyte[bufferSize] buffer;
+		while (!limitedStream.empty) {
+			const chunk = limitedStream.read(buffer[], ioMode);
+			result ~= buffer[0 .. chunk];
+		}
+
+		assert(result[] == buf[0 .. 128]);
+		assertThrown(limitedStream.read(buffer[], ioMode));
+	}}
+
+	// test IOMode.all normal operation
+	{
+		input.seek(0);
+		auto limitedStream = createLimitedInputStream(input, 128);
+
+		ubyte[] result;
+		ubyte[64] buffer;
+		result ~= buffer[0 .. limitedStream.read(buffer[], IOMode.all)];
+		result ~= buffer[0 .. limitedStream.read(buffer[], IOMode.all)];
+		assert(limitedStream.empty);
+		assert(result[] == buf[0 .. 128]);
+		assertThrown(limitedStream.read(buffer[], IOMode.all));
+	}
+
+	// test IOMode.all reading over size limit
+	{
+		input.seek(0);
+		auto limitedStream = createLimitedInputStream(input, 128);
+
+		ubyte[256] buffer;
+		assertThrown(limitedStream.read(buffer[], IOMode.all));
+	}
+}
 
 /**
 	Wraps an existing output stream, counting the bytes that are written.
