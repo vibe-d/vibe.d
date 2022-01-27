@@ -1285,7 +1285,7 @@ package auto getFilteredHost(URL url)
 
 // This object is a placeholder and should to never be modified.
 package @property const(HTTPClientSettings) defaultSettings()
-@trusted {
+@trusted nothrow {
 	__gshared HTTPClientSettings ret = new HTTPClientSettings;
 	return ret;
 }
