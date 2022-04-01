@@ -145,6 +145,7 @@ private final class TaskPipeImpl {
 				} else while (m_buffer.full) {
 					if (mode == IOMode.immediate || mode == IOMode.once && ret > 0)
 						return ret;
+					if (m_closed) throw new Exception("Pipe closed while writing data");
 					() @trusted { m_condition.wait(); } ();
 				}
 
