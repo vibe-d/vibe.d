@@ -90,7 +90,7 @@ void testConn(
 	t2.join();
 }
 
-void test()
+void testValidation()
 {
 	//
 	// Server certificates
@@ -165,13 +165,121 @@ void test()
 		Expected.success, "client.crt", "client.key", null, null, TLSPeerValidationMode.none,
 		Expected.success, "server.crt", "server.key", "ca.crt", null, TLSPeerValidationMode.trustedCert & ~TLSPeerValidationMode.checkPeer
 	);
+}
 
-	exitEventLoop();
+
+void testConn(TLSVersion cli_version, TLSVersion srv_version, bool expect_success)
+{
+	Stream ctunnel, stunnel;
+	logInfo("Test for %s client %s, server %s", expect_success ? "success" : "failure",
+		cli_version, srv_version);
+
+	createPipePair(ctunnel, stunnel);
+	auto t1 = runTask({
+		TLSContext sctx;
+		try sctx = createTLSContext(TLSContextKind.server, srv_version);
+		catch (Exception e) {
+			assert(!expect_success, "Failed to create TLS context: " ~ e.msg);
+			ctunnel.finalize();
+			stunnel.finalize();
+			return;
+		}
+		sctx.useCertificateChainFile("server.crt");
+		sctx.usePrivateKeyFile("server.key");
+		sctx.peerValidationMode = TLSPeerValidationMode.none;
+		TLSStream sconn;
+		try {
+			sconn = createTLSStream(stunnel, sctx, TLSStreamState.accepting, null);
+			logDiagnostic("Successfully initiated server tunnel.");
+			assert(expect_success, "Server expected to fail TLS connection.");
+		} catch (Exception e) {
+			if (expect_success) {
+				logError("Server tunnel failed: %s", e.toString().sanitize);
+				assert(false, "Server not expected to fail TLS connection.");
+			}
+			logDiagnostic("Server tunnel failed as expected: %s", e.msg);
+			return;
+		}
+		if (!expect_success) return;
+		assert(sconn.readLine() == "foo");
+		sconn.write("bar\r\n");
+		sconn.finalize();
+	});
+	auto t2 = runTask({
+		TLSContext cctx;
+		try cctx = createTLSContext(TLSContextKind.client, cli_version);
+		catch (Exception e) {
+			assert(!expect_success, "Failed to create TLS context: " ~ e.msg);
+			ctunnel.finalize();
+			stunnel.finalize();
+			return;
+		}
+		cctx.peerValidationMode = TLSPeerValidationMode.none;
+		TLSStream cconn;
+		try {
+			cconn = createTLSStream(ctunnel, cctx, TLSStreamState.connecting, null);
+			logDiagnostic("Successfully initiated client tunnel.");
+			assert(expect_success, "Client expected to fail TLS connection.");
+		} catch (Exception e) {
+			if (expect_success) {
+				logError("Client tunnel failed: %s", e.toString().sanitize);
+				assert(false, "Client not expected to fail TLS connection.");
+			}
+			logDiagnostic("Client tunnel failed as expected: %s", e.msg);
+			ctunnel.finalize();
+			stunnel.finalize();
+			return;
+		}
+		if (!expect_success) return;
+		cconn.write("foo\r\n");
+		assert(cconn.readLine() == "bar");
+		cconn.finalize();
+	});
+
+	t1.join();
+	t2.join();
+}
+
+void testVersion()
+{
+	// NOTE: SSLv3 is not supported anymore by current OpenSSL versions
+	// NOTE: Ubuntu 20.04 has removed support for TLSv1/TLSv1.1 from OpenSSL
+	version (linux) enum support_old_tls = false;
+	else enum support_old_tls = true;
+
+	testConn(TLSVersion.ssl3, TLSVersion.any, false);
+	testConn(TLSVersion.ssl3, TLSVersion.ssl3, false);
+	testConn(TLSVersion.ssl3, TLSVersion.tls1, false);
+	testConn(TLSVersion.ssl3, TLSVersion.tls1_1, false);
+	testConn(TLSVersion.ssl3, TLSVersion.tls1_2, false);
+
+	if (support_old_tls) testConn(TLSVersion.tls1, TLSVersion.any, true);
+	testConn(TLSVersion.tls1, TLSVersion.ssl3, false);
+	if (support_old_tls) testConn(TLSVersion.tls1, TLSVersion.tls1, true);
+	testConn(TLSVersion.tls1, TLSVersion.tls1_1, false);
+	testConn(TLSVersion.tls1, TLSVersion.tls1_2, false);
+
+	if (support_old_tls) testConn(TLSVersion.tls1_1, TLSVersion.any, true);
+	testConn(TLSVersion.tls1_1, TLSVersion.ssl3, false);
+	testConn(TLSVersion.tls1_1, TLSVersion.tls1, false);
+	if (support_old_tls) testConn(TLSVersion.tls1_1, TLSVersion.tls1_1, true);
+	testConn(TLSVersion.tls1_1, TLSVersion.tls1_2, false);
+
+	testConn(TLSVersion.tls1_2, TLSVersion.any, true);
+	testConn(TLSVersion.tls1_2, TLSVersion.ssl3, false);
+	testConn(TLSVersion.tls1_2, TLSVersion.tls1, false);
+	testConn(TLSVersion.tls1_2, TLSVersion.tls1_1, false);
+	testConn(TLSVersion.tls1_2, TLSVersion.tls1_2, true);
+
+	testConn(TLSVersion.any, TLSVersion.any, true);
+	testConn(TLSVersion.any, TLSVersion.ssl3, false);
+	if (support_old_tls) testConn(TLSVersion.any, TLSVersion.tls1, true);
+	if (support_old_tls) testConn(TLSVersion.any, TLSVersion.tls1_1, true);
+	testConn(TLSVersion.any, TLSVersion.tls1_2, true);
 }
 
 void main()
 {
-	import std.functional : toDelegate;
-	runTask(toDelegate(&test));
-	runEventLoop();
+	testValidation();
+	testVersion();
 }
