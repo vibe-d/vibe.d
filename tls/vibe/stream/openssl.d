@@ -626,9 +626,7 @@ final class OpenSSLContext : TLSContext {
 				final switch (ver) {
 					case TLSVersion.any: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
 					case TLSVersion.ssl3: throw new Exception("SSLv3 is not supported anymore");
-					case TLSVersion.tls1: method = TLSv1_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
-					//case TLSVersion.tls1_1: method = TLSv1_1_client_method(); break;
-					//case TLSVersion.tls1_2: method = TLSv1_2_client_method(); break;
+					case TLSVersion.tls1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2; maxver = TLS1_VERSION; break;
 					case TLSVersion.tls1_1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
 					case TLSVersion.tls1_2: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
 					case TLSVersion.dtls1: method = DTLSv1_client_method(); minver = DTLS1_VERSION; maxver = DTLS1_VERSION; break;
@@ -639,11 +637,9 @@ final class OpenSSLContext : TLSContext {
 				final switch (ver) {
 					case TLSVersion.any: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
 					case TLSVersion.ssl3: throw new Exception("SSLv3 is not supported anymore");
-					case TLSVersion.tls1: method = TLSv1_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
+					case TLSVersion.tls1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2; maxver = TLS1_VERSION; break;
 					case TLSVersion.tls1_1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
 					case TLSVersion.tls1_2: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
-					//case TLSVersion.tls1_1: method = TLSv1_1_server_method(); break;
-					//case TLSVersion.tls1_2: method = TLSv1_2_server_method(); break;
 					case TLSVersion.dtls1: method = DTLSv1_server_method(); minver = DTLS1_VERSION; maxver = DTLS1_VERSION; break;
 				}
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
