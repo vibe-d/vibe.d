@@ -596,6 +596,7 @@ final class OpenSSLContext : TLSContext {
 
 	private {
 		TLSContextKind m_kind;
+		TLSVersion m_version;
 		ssl_ctx_st* m_ctx;
 		TLSPeerValidationCallback m_peerValidationCallback;
 		TLSPeerValidationMode m_validationMode;
@@ -608,6 +609,7 @@ final class OpenSSLContext : TLSContext {
 	this(TLSContextKind kind, TLSVersion ver = TLSVersion.any)
 	{
 		m_kind = kind;
+		m_version = ver;
 
 		const(SSL_METHOD)* method;
 		c_ulong veroptions = SSL_OP_NO_SSLv2;
@@ -623,10 +625,8 @@ final class OpenSSLContext : TLSContext {
 			case TLSContextKind.client:
 				final switch (ver) {
 					case TLSVersion.any: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
-					case TLSVersion.ssl3: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = SSL3_VERSION; maxver = SSL3_VERSION; break;
-					case TLSVersion.tls1: method = TLSv1_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
-					//case TLSVersion.tls1_1: method = TLSv1_1_client_method(); break;
-					//case TLSVersion.tls1_2: method = TLSv1_2_client_method(); break;
+					case TLSVersion.ssl3: throw new Exception("SSLv3 is not supported anymore");
+					case TLSVersion.tls1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2; maxver = TLS1_VERSION; break;
 					case TLSVersion.tls1_1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
 					case TLSVersion.tls1_2: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
 					case TLSVersion.dtls1: method = DTLSv1_client_method(); minver = DTLS1_VERSION; maxver = DTLS1_VERSION; break;
@@ -636,12 +636,10 @@ final class OpenSSLContext : TLSContext {
 			case TLSContextKind.serverSNI:
 				final switch (ver) {
 					case TLSVersion.any: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
-					case TLSVersion.ssl3: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = SSL3_VERSION; maxver = SSL3_VERSION; break;
-					case TLSVersion.tls1: method = TLSv1_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
+					case TLSVersion.ssl3: throw new Exception("SSLv3 is not supported anymore");
+					case TLSVersion.tls1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2; maxver = TLS1_VERSION; break;
 					case TLSVersion.tls1_1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
 					case TLSVersion.tls1_2: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
-					//case TLSVersion.tls1_1: method = TLSv1_1_server_method(); break;
-					//case TLSVersion.tls1_2: method = TLSv1_2_server_method(); break;
 					case TLSVersion.dtls1: method = DTLSv1_server_method(); minver = DTLS1_VERSION; maxver = DTLS1_VERSION; break;
 				}
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
@@ -859,17 +857,39 @@ final class OpenSSLContext : TLSContext {
 		specifications as accepted by OpenSSL. Calling this function
 		without argument will restore the default.
 
+		The default is derived from $(LINK https://wiki.mozilla.org/Security/Server_Side_TLS),
+		using the "intermediate" list for TLSv1.2+ server contexts or using the
+		"old compatibility" list otherwise.
+
 		See_also: $(LINK https://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT)
 	*/
 	void setCipherList(string list = null)
 		@trusted
 	{
-		if (list is null)
-			SSL_CTX_set_cipher_list(m_ctx,
-				"ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:"
-				~ "RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS").enforceSSL("Setting cipher list");
-		else
-			SSL_CTX_set_cipher_list(m_ctx, toStringz(list)).enforceSSL("Setting cipher list");
+		if (list is null) {
+			if (m_kind == TLSContextKind.server && m_version == TLSVersion.tls1_2) {
+				list = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:"
+					~ "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
+					~ "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+					~ "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:"
+					~ "DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384";
+			} else {
+				list =
+					"TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:"
+					~ "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
+					~ "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+					~ "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:"
+					~ "DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305:"
+					~ "ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:"
+					~ "ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:"
+					~ "ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:"
+					~ "DHE-RSA-AES256-SHA256:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:"
+					~ "AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA";
+			}
+		}
+
+		SSL_CTX_set_cipher_list(m_ctx, toStringz(list))
+			.enforceSSL("Setting cipher list");
 	}
 
 	/** Make up a context ID to assign to the SSL context.
