@@ -210,6 +210,14 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 	}
 }
 
+// Deimos had an incorrect translation for this define prior to 2.0.2+1.1.0h
+// See https://github.com/D-Programming-Deimos/openssl/issues/63#issuecomment-840266138
+static if (!is(typeof(GEN_DNS)))
+{
+	private enum GEN_DNS = GENERAL_NAME.GEN_DNS;
+	private enum GEN_IPADD = GENERAL_NAME.GEN_IPADD;
+}
+
 private int SSL_set_tlsext_host_name(ssl_st* s, const(char)* c) @trusted {
 	return cast(int) SSL_ctrl(s, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)c);
 }
@@ -298,7 +306,7 @@ final class OpenSSLStream : TLSStream {
 				readPeerCertInfo();
 				auto result = () @trusted { return SSL_get_verify_result(m_tls); } ();
 				if (result == X509_V_OK && (ctx.peerValidationMode & TLSPeerValidationMode.checkPeer)) {
-					if (!verifyCertName(m_peerCertificate, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
+					if (!verifyCertName(m_peerCertificate, GEN_DNS, vdata.peerName)) {
 						version(Windows) import core.sys.windows.winsock2;
 						else import core.sys.posix.netinet.in_;
 
@@ -317,7 +325,7 @@ final class OpenSSLStream : TLSStream {
 								break;
 						}
 
-						if (!verifyCertName(m_peerCertificate, GENERAL_NAME.GEN_IPADD, () @trusted { return addr[0 .. addrlen]; } ())) {
+						if (!verifyCertName(m_peerCertificate, GEN_IPADD, () @trusted { return addr[0 .. addrlen]; } ())) {
 							logDiagnostic("Error validating TLS peer address");
 							result = X509_V_ERR_APPLICATION_VERIFICATION;
 						}
@@ -1172,12 +1180,12 @@ private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_w
 	int cnid;
 	int alt_type;
 	final switch (field) {
-		case GENERAL_NAME.GEN_DNS:
+		case GEN_DNS:
 			cnid = NID_commonName;
 			alt_type = V_ASN1_IA5STRING;
 			str_match = allow_wildcards ? (in s) => matchWildcard(value, s) : (in s) => s.icmp(value) == 0;
 			break;
-		case GENERAL_NAME.GEN_IPADD:
+		case GEN_IPADD:
 			cnid = 0;
 			alt_type = V_ASN1_OCTET_STRING;
 			str_match = (in s) => s == value;
@@ -1190,7 +1198,7 @@ private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_w
 		foreach (i; 0 .. sk_GENERAL_NAME_num(gens)) {
 			auto gen = sk_GENERAL_NAME_value(gens, i);
 			if (gen.type != field) continue;
-			ASN1_STRING *cstr = field == GENERAL_NAME.GEN_DNS ? gen.d.dNSName : gen.d.iPAddress;
+			ASN1_STRING *cstr = field == GEN_DNS ? gen.d.dNSName : gen.d.iPAddress;
 			if (check_value(cstr, alt_type)) return true;
 		}
 		if (!cnid) return false;
