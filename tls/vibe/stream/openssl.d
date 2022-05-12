@@ -51,8 +51,12 @@ else
 	static if (__traits(compiles, {import openssl_version; }))
 		mixin("public import openssl_version : OPENSSL_VERSION;");
 	else
-		// try 1.1.0 as softfallback if old other means failed
+	{
+		pragma(msg, __MODULE__, ": Could not detect OpenSSL version - Assuming OpenSSL 1.1.0");
+		pragma(msg, "If you're using dub, make sure pkg-config is installed. ",
+			   "You can also define the version explicitly (see documentation), e.g. VibeUseOpenSSL11");
 		enum OPENSSL_VERSION = "1.1.0";
+	}
 }
 
 version (VibePragmaLib) {
