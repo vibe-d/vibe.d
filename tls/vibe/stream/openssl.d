@@ -71,27 +71,6 @@ enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
 // openssl/1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
 static if (OPENSSL_VERSION.startsWith("1.1")) {
-	// this does nothing in > openssl 1.1.0
-	void SSL_load_error_strings() {}
-
-	extern(C)  int OPENSSL_init_ssl(ulong opts, const void* settings);
-
-	// # define SSL_library_init() OPENSSL_init_ssl(0, NULL)
-	int SSL_library_init() {
-		return OPENSSL_init_ssl(0, null);
-	}
-
-	//#  define CRYPTO_num_locks()            (1)
-	int CRYPTO_num_locks() {
-		return 1;
-	}
-
-	void CRYPTO_set_id_callback(T)(T t) {
-	}
-
-	void CRYPTO_set_locking_callback(T)(T t) {
-	}
-
 	// #define SSL_get_ex_new_index(l, p, newf, dupf, freef) \
 	//    CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL, l, p, newf, dupf, freef)
 
@@ -213,6 +192,34 @@ static if (OPENSSL_VERSION.startsWith("1.0"))
 	private void BIO_set_flags(BIO *b, int flags) @safe nothrow {
 		b.flags |= flags;
 	}
+
+    // The need for calling `CRYPTO_set_id_callback` / `CRYPTO_set_locking_callback`
+    // was removed in OpenSSL 1.1.0, which are the only users of those callbacks
+    // and mutexes.
+    private __gshared InterruptibleTaskMutex[] g_cryptoMutexes;
+
+    private extern(C) c_ulong onCryptoGetThreadID() nothrow @safe
+    {
+        try {
+            return cast(c_ulong)(cast(size_t)() @trusted { return cast(void*)Thread.getThis(); } () * 0x35d2c57);
+        } catch (Exception e) {
+            logWarn("OpenSSL: failed to get current thread ID: %s", e.msg);
+            return 0;
+        }
+    }
+
+    private extern(C) void onCryptoLock(int mode, int n, const(char)* file, int line) nothrow @safe
+    {
+        try {
+            enforce(n >= 0 && n < () @trusted { return g_cryptoMutexes; } ().length, "Mutex index out of range.");
+            auto mutex = () @trusted { return g_cryptoMutexes[n]; } ();
+            assert(mutex !is null);
+            if (mode & CRYPTO_LOCK) mutex.lock();
+            else mutex.unlock();
+        } catch (Exception e) {
+            logWarn("OpenSSL: failed to lock/unlock mutex: %s", e.msg);
+        }
+    }
 }
 
 // Deimos had an incorrect translation for this define prior to 2.0.2+1.1.0h
@@ -1135,30 +1142,35 @@ alias SSLState = ssl_st*;
 /**************************************************************************************************/
 
 private {
-	__gshared InterruptibleTaskMutex[] g_cryptoMutexes;
 	__gshared int gs_verifyDataIndex;
 }
 
 shared static this()
 {
-	logDebug("Initializing OpenSSL...");
-	SSL_load_error_strings();
-	SSL_library_init();
+	static if (OPENSSL_VERSION.startsWith("1.0"))
+	{
+		logDebug("Initializing OpenSSL...");
+		// Not required as of OpenSSL 1.1.0, see:
+		// https://wiki.openssl.org/index.php/Library_Initialization
+		SSL_load_error_strings();
+		SSL_library_init();
 
-	g_cryptoMutexes.length = CRYPTO_num_locks();
-	// TODO: investigate if a normal Mutex is enough - not sure if BIO is called in a locked state
-	foreach (i; 0 .. g_cryptoMutexes.length)
-		g_cryptoMutexes[i] = new InterruptibleTaskMutex;
-	foreach (ref m; g_cryptoMutexes) {
-		assert(m !is null);
+		g_cryptoMutexes.length = CRYPTO_num_locks();
+		// TODO: investigate if a normal Mutex is enough - not sure if BIO is called in a locked state
+		foreach (i; 0 .. g_cryptoMutexes.length)
+			g_cryptoMutexes[i] = new InterruptibleTaskMutex;
+		foreach (ref m; g_cryptoMutexes) {
+			assert(m !is null);
+		}
+
+		// Those two were removed in v1.1.0, see:
+		// https://github.com/openssl/openssl/issues/1260
+		CRYPTO_set_id_callback(&onCryptoGetThreadID);
+		CRYPTO_set_locking_callback(&onCryptoLock);
+		logDebug("... done.");
 	}
 
-	CRYPTO_set_id_callback(&onCryptoGetThreadID);
-	CRYPTO_set_locking_callback(&onCryptoLock);
-
 	enforce(RAND_poll(), "Fatal: failed to initialize random number generator entropy (RAND_poll).");
-	logDebug("... done.");
-
 	gs_verifyDataIndex = SSL_get_ex_new_index(0, cast(void*)"VerifyData".ptr, null, null, null);
 }
 
@@ -1310,29 +1322,6 @@ private nothrow @safe extern(C)
 		}
 
 		return 0;
-	}
-
-	c_ulong onCryptoGetThreadID()
-	{
-		try {
-			return cast(c_ulong)(cast(size_t)() @trusted { return cast(void*)Thread.getThis(); } () * 0x35d2c57);
-		} catch (Exception e) {
-			logWarn("OpenSSL: failed to get current thread ID: %s", e.msg);
-			return 0;
-		}
-	}
-
-	void onCryptoLock(int mode, int n, const(char)* file, int line)
-	{
-		try {
-			enforce(n >= 0 && n < () @trusted { return g_cryptoMutexes; } ().length, "Mutex index out of range.");
-			auto mutex = () @trusted { return g_cryptoMutexes[n]; } ();
-			assert(mutex !is null);
-			if (mode & CRYPTO_LOCK) mutex.lock();
-			else mutex.unlock();
-		} catch (Exception e) {
-			logWarn("OpenSSL: failed to lock/unlock mutex: %s", e.msg);
-		}
 	}
 
 	int onBioNew(BIO *b) nothrow
