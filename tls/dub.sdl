@@ -30,6 +30,9 @@ configuration "openssl" {
 	/+ dub.sdl:
 	name "script"
 	+/
+	// Note: A version of this script exists in `../scripts/generate_openssl_version.d`,
+	// which can be used by other build systems that are not based on DUB.
+	// However, due to a bug in DUB < v1.27.0, it cannot be used directly.
 	import std.algorithm;
 	import std.conv;
 	import std.file;
