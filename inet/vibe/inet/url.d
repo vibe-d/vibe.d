@@ -32,26 +32,29 @@ import core.checkedint : addu;
 
 	Params:
 		url = String representation of the URL
+		default_schema = If `url` does not contain a schema name, the URL parser
+			may choose to use this schema instead. A browser might use "http" or
+			"https", for example.
 */
-URL parseUserURL(string url)
+URL parseUserURL(string url, string default_schema)
 {
 	return URL(url, false).normalized;
 }
 
 unittest {
 	// special characters in path
-	auto url = URL("http://example.com/hello-🌍", false);
+	auto url = parseUserURL("http://example.com/hello-🌍", "foo");
 	assert(url.pathString == "/hello-%F0%9F%8C%8D");
-	url = parseUserURL("http://example.com/안녕하세요-세계");
+	url = parseUserURL("http://example.com/안녕하세요-세계", "foo");
 	assert(url.pathString == "/%EC%95%88%EB%85%95%ED%95%98%EC%84%B8%EC%9A%94-%EC%84%B8%EA%B3%84");
 	// special characters in host name
-	url = parseUserURL("http://hello-🌍.com/");
+	url = parseUserURL("http://hello-🌍.com/", "foo");
 	assert(url.host == "xn--hello--8k34e.com");
-	url = parseUserURL("http://hello-🌍.com:8080/");
+	url = parseUserURL("http://hello-🌍.com:8080/", "foo");
 	assert(url.host == "xn--hello--8k34e.com");
-	url = parseUserURL("http://i-❤-이모티콘.io");
+	url = parseUserURL("http://i-❤-이모티콘.io", "foo");
 	assert(url.host == "xn--i---5r6aq903fubqabumj4g.io");
-	url = parseUserURL("https://hello🌍.i-❤-이모티콘.com");
+	url = parseUserURL("https://hello🌍.i-❤-이모티콘.com", "foo");
 	assert(url.host == "xn--hello-oe93d.xn--i---5r6aq903fubqabumj4g.com");
 }
 
