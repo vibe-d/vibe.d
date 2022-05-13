@@ -157,9 +157,8 @@ struct URL {
 			str = str[idx+1 .. $];
 			bool requires_host = false;
 
-			if (isCommonInternetSchema(m_schema)) {
+			if (str.startsWith("//")) {
 				// proto://server/path style
-				enforce(str.startsWith("//"), "URL must start with proto://...");
 				requires_host = true;
 				str = str[2 .. $];
 			}
