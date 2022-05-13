@@ -36,21 +36,31 @@ import deimos.openssl.ssl;
 import deimos.openssl.stack;
 import deimos.openssl.x509v3;
 
-// auto-detect OpenSSL 1.1.0
+// Those versions are set via the subconfiguration, or passed explicitly for other build system
 version (VibeUseOpenSSL11)
 	enum OPENSSL_VERSION = "1.1.0";
 else version (VibeUseOpenSSL10)
 	enum OPENSSL_VERSION = "1.0.0";
 else version (Botan)
 	enum OPENSSL_VERSION = "0.0.0";
+// In the general case, when dub is used, the version will be auto-detected and this file generated
+else static if (__traits(compiles, { import openssl_version; }))
+	mixin("public import openssl_version : OPENSSL_VERSION;");
+// There used to be a fallback, but OpenSSL issues are too frequent, and can be quite cryptic for end user.
 else
 {
-	// Only use the openssl_version file if it has been generated
-	static if (__traits(compiles, {import openssl_version; }))
-		mixin("public import openssl_version : OPENSSL_VERSION;");
-	else
-		// try 1.1.0 as softfallback if old other means failed
-		enum OPENSSL_VERSION = "1.1.0";
+	pragma(msg, "\t==================================================");
+	pragma(msg, "\tCould not detect OpenSSL version, compilation will abort!");
+	version (Posix)
+		pragma(msg, "\tDub users: make sure `pkg-config` is installed and detected via `pkg-config --modversion openssl`");
+	pragma(msg, "\tDub users: If auto-detection is not desired/possible, use one of the subconfiguration in `vibe-d:tls`, see https://vibed.org/docs#http-https");
+	pragma(msg, "\tFor other build systems, either generate `openssl_version.d` via `scripts/generate_openssl_version.d` or define the correct version explicitly");
+
+	static assert(0, "Could not detect OpenSSL version: Define it explicitly or disable SSL support");
+
+	// The D compiler sometimes hides `static assert` errors and shows missing symbol instead,
+	// so keep it defined to ensure
+	enum OPENSSL_VERSION = "1.1.0";
 }
 
 version (VibePragmaLib) {
