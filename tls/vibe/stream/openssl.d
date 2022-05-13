@@ -64,7 +64,7 @@ else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
 // openssl/1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
-static if (OPENSSL_VERSION.startsWith("1.1")) {
+static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0.")) {
 	extern(C) const(SSL_METHOD)* TLS_client_method();
 	alias SSLv23_client_method = TLS_client_method;
 
@@ -167,6 +167,18 @@ static if (OPENSSL_VERSION.startsWith("1.1")) {
 		int BIO_meth_set_destroy(BIO_METHOD* biom, BIOMethDestroyCallback cb);
 
 		c_ulong SSL_CTX_set_options(SSL_CTX *ctx, c_ulong op);
+	}
+
+
+	static if (OPENSSL_VERSION.startsWith("3.")) {
+		extern (C) nothrow {
+			X509 *SSL_get1_peer_certificate(const SSL *ssl);
+			void ERR_new();
+			void ERR_set_debug(const char *file, int line, const char *func);
+			void ERR_set_error(int lib, int reason, const char *fmt, ...);
+		}
+
+		alias SSL_get_peer_certificate = SSL_get1_peer_certificate;
 	}
 } else {
 	private void BIO_set_init(BIO* b, int init_) @safe nothrow {
@@ -1397,7 +1409,13 @@ private nothrow @safe extern(C)
 private void setSSLError(string msg, string submsg, int line = __LINE__, string file = __FILE__)
 @trusted nothrow {
 	import std.string : toStringz;
-	ERR_put_error(ERR_LIB_USER, 0, 1, file.toStringz, line);
+	static if (is(typeof(ERR_new))) {
+		ERR_new();
+		ERR_set_debug(file.toStringz, line, "");
+		ERR_set_error(ERR_LIB_USER, 1, null);
+	} else {
+		ERR_put_error(ERR_LIB_USER, 0, 1, file.toStringz, line);
+	}
 	ERR_add_error_data(3, msg.toStringz, ": ".ptr, submsg.toStringz);
 }
 
