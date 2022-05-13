@@ -1,6 +1,46 @@
 Changelog
 =========
 
+v0.9.5 - 2022-
+-------------------
+
+### Features and improvements ###
+
+- Supports D frontend versions 2.088.1 to 2.099.0
+- Added build support for OpenSSL 3.x.x - [pull #2650][issue2650]
+- URL handling
+	- Added `parseUserURL` for relaxed URL parsing (by Muhammed Kadir Yücel aka mkykadir) - [pull #2624][issue2624], [pull #2653][issue2653]
+	- Added a range based overload of `URL.toString` (by Mathias Lang aka Geod24) - [pull #2621][issue2621]
+	- Added `URL.normalize` and `URL.normalized` (by Muhammed Kadir Yücel aka mkykadir) - [pull #2627][issue2627]
+	- `registerCommonInternetSchema` now takes a default port argument (by Muhammed Kadir Yücel aka mkykadir) - [pull #2620][issue2620]
+- Added an overload of `connectHTTP` that takes a `URL` argument (by Mathias Lang aka Geod24) - [pull #2637][issue2637]
+- Added `HTTPClientSettings.tlsPeerName` to explicitly request a specific TLS host name (by Vitali Karabitski aka vitalka200) - [pull #2644][issue2644]
+
+## Bug fixes ##
+
+- Fixed schema comparisons to be case-insensitive (by Muhammed Kadir Yücel aka mkykadir) - [pull #2620][issue2620]
+- Fixed `URL.toString` to omit the separating ":" for empty passwords (by Muhammed Kadir Yücel aka mkykadir) - [pull #2622][issue2622]
+- Fixed `LimitedInputStream` to properly handle `IOMode.all` (by Yazan Dabain aka yazd) - [issue #2575][issue2575], [pull #2633][issue2633]
+- Fixed `URL.opEquals` to take the port into account (by Muhammed Kadir Yücel aka mkykadir) - [pull #2640][issue2640]
+- Fixed TLS connection issues related to Ubuntu specific OpenSSL libraries - [pull #2646][issue2646]
+
+
+[issue2575]: https://github.com/vibe-d/vibe.d/issues/2575
+[issue2620]: https://github.com/vibe-d/vibe.d/issues/2620
+[issue2620]: https://github.com/vibe-d/vibe.d/issues/2620
+[issue2621]: https://github.com/vibe-d/vibe.d/issues/2621
+[issue2622]: https://github.com/vibe-d/vibe.d/issues/2622
+[issue2624]: https://github.com/vibe-d/vibe.d/issues/2624
+[issue2627]: https://github.com/vibe-d/vibe.d/issues/2627
+[issue2633]: https://github.com/vibe-d/vibe.d/issues/2633
+[issue2637]: https://github.com/vibe-d/vibe.d/issues/2637
+[issue2640]: https://github.com/vibe-d/vibe.d/issues/2640
+[issue2644]: https://github.com/vibe-d/vibe.d/issues/2644
+[issue2646]: https://github.com/vibe-d/vibe.d/issues/2646
+[issue2650]: https://github.com/vibe-d/vibe.d/issues/2650
+[issue2653]: https://github.com/vibe-d/vibe.d/issues/2653
+
+
 v0.9.4 - 2021-09-30
 -------------------
 
@@ -36,7 +76,7 @@ REST systems, as well as making some smaller API additions.
 ### Bug fixes ###
 
 - Fixed rare crashes in `Json` by switching back to use `union` (by Mathis Beer aka FeepingCreature) - [issue #2205][issue2205], [pull #2206][issue2206]
-- Fixed HTTP client handling of keep-alive timeouts (by Yazan Dabain aka yazd) - [pull #2529][issue2529
+- Fixed HTTP client handling of keep-alive timeouts (by Yazan Dabain aka yazd) - [pull #2529][issue2529]
 - Fixed some `-preview=in` related issues (by Mathias Lang aka Geod24) - [pull #2536][issue2536], [pull #2538][issue2538]
 - Fixed various places in `vibe.textfilter` to use `put(rng, items)` instead of `rng.put(items)` (by Steven Schveighoffer aka schveiguy) - [issue #2541][issue2541], [pull #2542][issue2542]
 - Fixed handling of explicit character set declaration in Content-Type headers for JSON bodies in the HTTP/REST system - [issue #2543][issue2543], [pull #2544][issue2544]
