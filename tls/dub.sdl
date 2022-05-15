@@ -83,7 +83,7 @@ configuration "openssl" {
 		if (!output.exists || output.readText.strip != data.strip)
 			data.toFile(output);
 	}
-	' | ${DUB} - || true` platform="posix"
+	' | ${DUB} -` platform="posix"
 }
 
 configuration "openssl-1.1" {
