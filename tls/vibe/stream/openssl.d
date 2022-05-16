@@ -125,6 +125,13 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 		extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
 	}
 
+	static if (!is(typeof(OPENSSL_sk_free)))
+	{
+		// Version v1.x.x of the bindings don't have this,
+		// but it's been available since v1.1.0
+		private extern(C) void *OPENSSL_sk_free(const void *);
+	}
+
 	private enum SSL_CTRL_SET_MIN_PROTO_VERSION = 123;
 	private enum SSL_CTRL_SET_MAX_PROTO_VERSION = 124;
 
@@ -208,6 +215,9 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 	private void BIO_set_flags(BIO *b, int flags) @safe nothrow {
 		b.flags |= flags;
 	}
+
+	// OpenSSL 1.1 renamed `sk_*` to OpenSSL_sk_*`
+	private alias OPENSSL_sk_free = sk_free;
 }
 
 // Deimos had an incorrect translation for this define prior to 2.0.2+1.1.0h
@@ -1193,7 +1203,12 @@ private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_w
 	}
 
 	if (auto gens = cast(STACK_OF!GENERAL_NAME*)X509_get_ext_d2i(cert, NID_subject_alt_name, null, null)) {
-		scope(exit) GENERAL_NAMES_free(gens);
+		// Somehow Deimos' bindings don't allow us to call `sk_GENERAL_NAMES_free`,
+		// as it takes a `stack_st_GENERAL_NAME*` which in C is just what
+		// `STACK_OF(GENERAL_NAME)` aliases to, but not in D (STACK_OF is a template).
+		// Since under the hood all stack APIs are untyped, just use `OPENSSL_sk_free`
+		// directly, see: https://man.openbsd.org/OPENSSL_sk_new.3
+		scope(exit) OPENSSL_sk_free(cast(_STACK*) gens);
 
 		foreach (i; 0 .. sk_GENERAL_NAME_num(gens)) {
 			auto gen = sk_GENERAL_NAME_value(gens, i);
