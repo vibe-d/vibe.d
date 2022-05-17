@@ -125,6 +125,13 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 		extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
 	}
 
+	static if (!is(typeof(OPENSSL_sk_free)))
+	{
+		// Version v1.x.x of the bindings don't have this,
+		// but it's been available since v1.1.0
+		private extern(C) void *OPENSSL_sk_free(const void *);
+	}
+
 	private enum SSL_CTRL_SET_MIN_PROTO_VERSION = 123;
 	private enum SSL_CTRL_SET_MAX_PROTO_VERSION = 124;
 
@@ -208,6 +215,17 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 	private void BIO_set_flags(BIO *b, int flags) @safe nothrow {
 		b.flags |= flags;
 	}
+
+	// OpenSSL 1.1 renamed `sk_*` to OpenSSL_sk_*`
+	private alias OPENSSL_sk_free = sk_free;
+}
+
+// Deimos had an incorrect translation for this define prior to 2.0.2+1.1.0h
+// See https://github.com/D-Programming-Deimos/openssl/issues/63#issuecomment-840266138
+static if (!is(typeof(GEN_DNS)))
+{
+	private enum GEN_DNS = GENERAL_NAME.GEN_DNS;
+	private enum GEN_IPADD = GENERAL_NAME.GEN_IPADD;
 }
 
 private int SSL_set_tlsext_host_name(ssl_st* s, const(char)* c) @trusted {
@@ -298,7 +316,7 @@ final class OpenSSLStream : TLSStream {
 				readPeerCertInfo();
 				auto result = () @trusted { return SSL_get_verify_result(m_tls); } ();
 				if (result == X509_V_OK && (ctx.peerValidationMode & TLSPeerValidationMode.checkPeer)) {
-					if (!verifyCertName(m_peerCertificate, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
+					if (!verifyCertName(m_peerCertificate, GEN_DNS, vdata.peerName)) {
 						version(Windows) import core.sys.windows.winsock2;
 						else import core.sys.posix.netinet.in_;
 
@@ -317,7 +335,7 @@ final class OpenSSLStream : TLSStream {
 								break;
 						}
 
-						if (!verifyCertName(m_peerCertificate, GENERAL_NAME.GEN_IPADD, () @trusted { return addr[0 .. addrlen]; } ())) {
+						if (!verifyCertName(m_peerCertificate, GEN_IPADD, () @trusted { return addr[0 .. addrlen]; } ())) {
 							logDiagnostic("Error validating TLS peer address");
 							result = X509_V_ERR_APPLICATION_VERIFICATION;
 						}
@@ -1172,12 +1190,12 @@ private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_w
 	int cnid;
 	int alt_type;
 	final switch (field) {
-		case GENERAL_NAME.GEN_DNS:
+		case GEN_DNS:
 			cnid = NID_commonName;
 			alt_type = V_ASN1_IA5STRING;
 			str_match = allow_wildcards ? (in s) => matchWildcard(value, s) : (in s) => s.icmp(value) == 0;
 			break;
-		case GENERAL_NAME.GEN_IPADD:
+		case GEN_IPADD:
 			cnid = 0;
 			alt_type = V_ASN1_OCTET_STRING;
 			str_match = (in s) => s == value;
@@ -1185,12 +1203,17 @@ private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_w
 	}
 
 	if (auto gens = cast(STACK_OF!GENERAL_NAME*)X509_get_ext_d2i(cert, NID_subject_alt_name, null, null)) {
-		scope(exit) GENERAL_NAMES_free(gens);
+		// Somehow Deimos' bindings don't allow us to call `sk_GENERAL_NAMES_free`,
+		// as it takes a `stack_st_GENERAL_NAME*` which in C is just what
+		// `STACK_OF(GENERAL_NAME)` aliases to, but not in D (STACK_OF is a template).
+		// Since under the hood all stack APIs are untyped, just use `OPENSSL_sk_free`
+		// directly, see: https://man.openbsd.org/OPENSSL_sk_new.3
+		scope(exit) OPENSSL_sk_free(cast(_STACK*) gens);
 
 		foreach (i; 0 .. sk_GENERAL_NAME_num(gens)) {
 			auto gen = sk_GENERAL_NAME_value(gens, i);
 			if (gen.type != field) continue;
-			ASN1_STRING *cstr = field == GENERAL_NAME.GEN_DNS ? gen.d.dNSName : gen.d.iPAddress;
+			ASN1_STRING *cstr = field == GEN_DNS ? gen.d.dNSName : gen.d.iPAddress;
 			if (check_value(cstr, alt_type)) return true;
 		}
 		if (!cnid) return false;
