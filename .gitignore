@@ -71,5 +71,3 @@ examples/web/web-framework-example
 examples/websocket/websocket-example
 *.exe
 
-# Ignore auto-generated OpenSSL version
-tls/openssl_version.d
