@@ -2280,6 +2280,25 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		logTrace("persist: %s", req.persistent);
 		keep_alive = req.persistent;
 
+		if (context.settings.rejectConnectionPredicate !is null)
+		{
+			import std.socket : Address, parseAddress;
+			
+			auto forward = req.headers.get("X-Forwarded-For", null);
+			if (forward !is null)
+			{
+				try {
+					auto ix = forward.indexOf(',');
+					if (ix != -1)
+						forward = forward[0 .. ix];
+					if (context.settings.rejectConnectionPredicate(NetworkAddress(parseAddress(forward))))
+						errorOut(HTTPStatus.forbidden, 
+							httpStatusText(HTTPStatus.forbidden), null, null);
+				} catch (Exception e)
+					logTrace("Malformed X-Forwarded-For header: %s", e.msg);
+			}
+		}
+
 		// handle the request
 		logTrace("handle request (body %d)", req.bodyReader.leastSize);
 		res.httpVersion = req.httpVersion;
