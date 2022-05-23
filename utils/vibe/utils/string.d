@@ -16,6 +16,7 @@ import std.algorithm;
 import std.array;
 import std.ascii;
 import std.format;
+import std.traits : isUnsigned;
 import std.typecons : Yes;
 import std.uni;
 import std.utf;
@@ -105,9 +106,9 @@ inout(char)[] stripA(inout(char)[] s)
 
 /// Finds the first occurence of any of the characters in `chars`
 sizediff_t indexOfAny(const(char)[] str, const(char)[] chars)
-@safe pure {
+@safe pure nothrow @nogc {
 	foreach (i, char ch; str)
-		if (chars.canFind(ch))
+		if (chars.representation.canFind(ch))
 			return i;
 	return -1;
 }
@@ -206,4 +207,41 @@ int icmp2(const(char)[] a, const(char)[] b)
 
 	assert(i == a.length || j == b.length, "Strings equal but we didn't fully compare them!?");
 	return 0;
+}
+
+package(vibe) T parseInteger10(T)(scope const(char)[] num, T error_value)
+	if (isUnsigned!T)
+{
+	if (!num.length) return error_value;
+
+	T ret = 0;
+	foreach(char c; num) {
+		if (c < '0' || c > '9')
+			return error_value;
+		if (ret > T.max / 10)
+			return error_value;
+		ret *= 10;
+		auto n = cast(T)(c - '0');
+		if (ret > T.max - n)
+			return error_value;
+		ret += n;
+	}
+	return ret;
+}
+
+unittest {
+	assert(parseInteger10!ubyte("", 123) == 123);
+	assert(parseInteger10!ubyte("x", 123) == 123);
+	assert(parseInteger10!ubyte("0x", 123) == 123);
+	assert(parseInteger10!ubyte("x0", 123) == 123);
+	assert(parseInteger10!ubyte("256", 123) == 123);
+	assert(parseInteger10!ubyte("0", 123) == 0);
+	assert(parseInteger10!ubyte("00", 123) == 0);
+	assert(parseInteger10!ubyte("001", 123) == 1);
+	assert(parseInteger10!ubyte("00100", 123) == 100);
+	assert(parseInteger10!ubyte("255", 123) == 255);
+	assert(parseInteger10!ushort("65535", 123) == 65535);
+	pragma(msg, ulong.max);
+	assert(parseInteger10!ulong("18446744073709551615", 123) == ulong.max);
+	assert(parseInteger10!ulong("18446744073709551616", 123) == 123);
 }
