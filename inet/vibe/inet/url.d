@@ -19,7 +19,7 @@ import std.exception;
 import std.string;
 import std.traits : isInstanceOf;
 import std.ascii : isAlpha, isASCII, toLower;
-import std.uri: decode, encode;
+import std.uri: encode;
 
 import core.checkedint : addu;
 
@@ -71,14 +71,7 @@ unittest {
 struct URL {
 @safe:
 	private {
-		string m_schema;
-		InetPath m_path;
-		string m_host;
-		ushort m_port;
-		string m_username;
-		string m_password;
-		string m_queryString;
-		string m_anchor;
+		string m_text;
 	}
 
 	/// Constructs a new URL object from its components.
@@ -88,10 +81,13 @@ struct URL {
 		assert(host.length == 0 || isValidHostName(host), "Invalid URL host name: " ~ host);
 	}
 	do {
-		m_schema = schema;
-		m_host = host;
-		m_port = port;
-		m_path = path;
+		Parts p;
+		p.isCommonInternetSchema = host.length || port != 0;
+		p.schema = schema;
+		p.host = host;
+		p.port = port;
+		p.path = path.toString;
+		this(p);
 	}
 	/// ditto
 	this(string schema, InetPath path) pure nothrow
@@ -186,129 +182,106 @@ struct URL {
 	*/
 	this(string url_string)
 	{
-		this(url_string, true);
+		auto str = url_string;
+		enforce(str.length > 0, "Empty URL.");
+		if (str[0] != '/') {
+			auto idx = str.indexOf(':');
+			enforce(idx > 0, "No schema in URL:"~str);
+
+			enforce(str[0].isAlpha,
+				"Schema must start with an alphabetical char, found: " ~
+				str[0 .. idx]);
+
+			str = str[idx+1 .. $];
+		}
+
+		InetPath(url_string.extractPath);
+
+		// TODO: perform more URL syntax validation!
+
+		m_text = url_string;
 	}
 
 	private this(string url_string, bool encoded)
 	{
-		auto str = url_string;
-		enforce(str.length > 0, "Empty URL.");
-		if( str[0] != '/' ){
-			auto idx = str.indexOf(':');
-			enforce(idx > 0, "No schema in URL:"~str);
-			m_schema = str[0 .. idx];
-			enforce(m_schema[0].isAlpha,
-					"Schema must start with an alphabetical char, found: " ~
-					m_schema[0]);
-			str = str[idx+1 .. $];
-			bool requires_host = false;
+		if (encoded) this(url_string);
+		else {
+			Parts p;
+			p.isCommonInternetSchema = url_string.extractIsCommonInternetSchema;
+			p.schema = url_string.extractSchema;
+			p.username = url_string.extractUsername;
+			p.password = url_string.extractPassword;
+			p.host = url_string.extractHost;
+			p.port = url_string.extractPort;
+			p.path = url_string.extractPath;
+			p.query = url_string.extractQuery;
+			p.anchor = url_string.extractAnchor;
 
-			if (str.startsWith("//")) {
-				// proto://server/path style
-				requires_host = true;
-				str = str[2 .. $];
-			}
+			if (p.host !is null)
+				p.host = p.host.splitter('.').map!(punyEncode).join('.');
+			p.path = p.path.encode;
+			if (p.query !is null) p.query = p.query.encode;
+			if (p.anchor !is null) p.anchor = p.anchor.encode;
 
-			auto si = str.indexOf('/');
-			if( si < 0 ) si = str.length;
-			auto ai = str[0 .. si].indexOf('@');
-			sizediff_t hs = 0;
-			if( ai >= 0 ){
-				hs = ai+1;
-				auto ci = str[0 .. ai].indexOf(':');
-				if( ci >= 0 ){
-					m_username = str[0 .. ci];
-					m_password = str[ci+1 .. ai];
-				} else m_username = str[0 .. ai];
-				enforce(m_username.length > 0, "Empty user name in URL.");
-			}
-
-			m_host = str[hs .. si];
-
-			auto findPort ( string src )
-			{
-				auto pi = src.indexOf(':');
-				if(pi > 0) {
-					enforce(pi < src.length-1, "Empty port in URL.");
-					m_port = to!ushort(src[pi+1..$]);
-				}
-				return pi;
-			}
-
-
-			auto ip6 = m_host.indexOf('[');
-			if (ip6 == 0) { // [ must be first char
-				auto pe = m_host.indexOf(']');
-				if (pe > 0) {
-					findPort(m_host[pe..$]);
-					m_host = m_host[1 .. pe];
-				}
-			}
-			else {
-				auto pi = findPort(m_host);
-				if(pi > 0) {
-					m_host = m_host[0 .. pi];
-				}
-				if (!encoded)
-					m_host = m_host.splitter('.').map!(punyEncode).join('.');
-			}
-
-			enforce(!requires_host || m_schema == "file" || m_host.length > 0,
-					"Empty server name in URL.");
-			str = str[si .. $];
+			this(p);
 		}
-
-		this.localURI = (encoded) ? str : str.encode;
 	}
 	/// ditto
 	static URL parse(string url_string)
 	{
 		return URL(url_string);
 	}
-	/// ditto
+
+	private this(Parts parts)
+	pure nothrow {
+		m_text = parts.toURL();
+	}
+
 	static URL fromString(string url_string)
 	{
 		return URL(url_string);
 	}
 
 	/// The schema/protocol part of the URL
-	@property string schema() const nothrow { return m_schema; }
+	@property string schema() const nothrow @nogc { return m_text.extractSchema; }
 	/// ditto
-	@property void schema(string v) { m_schema = v; }
+	@property void schema(string v) { auto p = this.parts; p.schema = v; this.parts = p; }
 
 	/// The url encoded path part of the URL
-	@property string pathString() const nothrow { return m_path.toString; }
+	@property string pathString() const nothrow @nogc { return m_text.extractPath; }
 
 	/// Set the path part of the URL. It should be properly encoded.
 	@property void pathString(string s)
 	{
 		enforce(isURLEncoded(s), "Wrong URL encoding of the path string '"~s~"'");
-		m_path = InetPath(s);
+		auto p = this.parts;
+		p.path = s;
+		this.parts = p;
 	}
 
 	/// The path part of the URL
-	@property InetPath path() const nothrow { return m_path; }
+	@property InetPath path() const nothrow @nogc { return InetPath.fromTrustedString(this.pathString); }
 	/// ditto
-	@property void path(InetPath p)
-	nothrow {
-		m_path = p;
-	}
+	@property void path(InetPath v) nothrow { auto p = this.parts; p.path = v.toString(); this.parts = p; }
 	/// ditto
 	@property void path(Path)(Path p)
 		if (isInstanceOf!(GenericPath, Path) && !is(Path == InetPath))
 	{
-		m_path = cast(InetPath)p;
+		this.path = cast(InetPath)p;
 	}
 
 	/// The host part of the URL (depends on the schema)
-	@property string host() const pure nothrow { return m_host; }
+	@property string host() const pure nothrow @nogc { return m_text.extractHost; }
 	/// ditto
-	@property void host(string v) { m_host = v; }
+	@property void host(string v) { auto p = this.parts; p.host = v; this.parts = p; }
 
 	/// The port part of the URL (optional)
-	@property ushort port() const nothrow { return m_port ? m_port : defaultPort(m_schema); }
+	@property ushort rawPort() const nothrow @nogc { return m_text.extractPort; }
+
+	/// The port part of the URL (optional)
+	@property ushort port() const nothrow { if (auto p = this.rawPort) return p; return defaultPort(this.schema); }
 	/// ditto
-	@property port(ushort v) nothrow { m_port = v; }
+	@property port(ushort v) nothrow { auto p = this.parts; p.port = v; this.parts = p; }
 
 	/// Get the default port for the given schema or 0
 	static ushort defaultPort(string schema)
@@ -332,110 +305,82 @@ struct URL {
 	/// ditto
 	ushort defaultPort()
 	const nothrow {
-		return defaultPort(m_schema);
+		return defaultPort(this.schema);
 	}
 
 	/// The user name part of the URL (optional)
-	@property string username() const nothrow { return m_username; }
+	@property string username() const nothrow @nogc { return m_text.extractUsername; }
 	/// ditto
-	@property void username(string v) { m_username = v; }
+	@property void username(string v) { auto p = this.parts; p.username = v; this.parts = p; }
 
 	/// The password part of the URL (optional)
-	@property string password() const nothrow { return m_password; }
+	@property string password() const nothrow @nogc { return m_text.extractPassword; }
 	/// ditto
-	@property void password(string v) { m_password = v; }
+	@property void password(string v) { auto p = this.parts; p.password = v; this.parts = p; }
 
 	/// The query string part of the URL (optional)
-	@property string queryString() const nothrow { return m_queryString; }
+	@property string queryString() const nothrow @nogc { return m_text.extractQuery; }
 	/// ditto
-	@property void queryString(string v) { m_queryString = v; }
+	@property void queryString(string v) { auto p = this.parts; p.query = v; this.parts = p; }
 
 	/// The anchor part of the URL (optional)
-	@property string anchor() const nothrow { return m_anchor; }
+	@property string anchor() const nothrow @nogc { return m_text.extractAnchor; }
 
 	/// The path part plus query string and anchor
 	@property string localURI()
 	const nothrow {
 		auto str = appender!string();
-		str.put(m_path.toString);
-		if( queryString.length ) {
+		str.put(this.pathString);
+		if (auto q = this.queryString) {
 			str.put("?");
-			str.put(queryString);
+			str.put(q);
 		}
-		if( anchor.length ) {
+		if (auto a = this.anchor) {
 			str.put("#");
-			str.put(anchor);
+			str.put(a);
 		}
 		return str.data;
 	}
 	/// ditto
 	@property void localURI(string str)
 	{
+		auto p = this.parts;
+
 		auto ai = str.indexOf('#');
-		if( ai >= 0 ){
-			m_anchor = str[ai+1 .. $];
+		if (ai >= 0) {
+			p.anchor = str[ai+1 .. $];
 			str = str[0 .. ai];
-		} else m_anchor = null;
+		} else p.anchor = null;
 
 		auto qi = str.indexOf('?');
-		if( qi >= 0 ){
-			m_queryString = str[qi+1 .. $];
+		if (qi >= 0) {
+			p.query = str[qi+1 .. $];
 			str = str[0 .. qi];
-		} else m_queryString = null;
+		} else p.query = null;
 
-		this.pathString = str;
+		p.path = str;
+
+		this.parts = p;
 	}
 
 	/// The URL to the parent path with query string and anchor stripped.
 	@property URL parentURL()
 	const {
-		URL ret;
-		ret.schema = schema;
-		ret.host = host;
-		ret.port = port;
-		ret.username = username;
-		ret.password = password;
-		ret.path = path.parentPath;
-		return ret;
+		auto p = this.parts;
+		p.path = InetPath(p.path).parentPath.toString();
+		return URL(p);
 	}
 
 	/// Converts this URL object to its string representation.
 	string toString()
-	const nothrow {
-		auto dst = appender!string();
-		try this.toString(dst);
-		catch (Exception e) assert(false, e.msg);
-		return dst.data;
+	const nothrow @nogc {
+		return m_text;
 	}
 
 	/// Ditto
-	void toString(OutputRange) (ref OutputRange dst) const {
-		import std.format;
-		dst.put(schema);
-		dst.put(":");
-		if (isCommonInternetSchema(schema))
-			dst.put("//");
-		if (m_username.length || m_password.length) {
-			dst.put(username);
-			if (m_password.length)
-			{
-				dst.put(':');
-				dst.put(password);
-			}
-			dst.put('@');
-		}
-
-		import std.algorithm : canFind;
-		auto ipv6 = host.canFind(":");
-
-		if ( ipv6 ) dst.put('[');
-		dst.put(host);
-		if ( ipv6 ) dst.put(']');
-
-		if (m_port > 0)
-			formattedWrite(dst, ":%d", m_port);
-
-		dst.put(localURI);
+	void toString(OutputRange) (ref OutputRange dst)
+	const {
+		dst.put(m_text);
 	}
 
 	/** Converts a "file" URL back to a native file system path.
@@ -528,27 +473,33 @@ struct URL {
 	void normalize(bool isDirectory = false)
 	{
 		import std.uni : toLower;
+
+		auto p = this.parts;
 		
 		// Lowercase host and schema
-		this.m_schema = this.m_schema.toLower();
-		this.m_host = this.m_host.toLower();
+		p.schema = p.schema.toLower();
+		p.host = p.host.toLower();
 
 		// Remove default port
-		if (this.m_port == URL.defaultPort(this.m_schema))
-			this.m_port = 0;
+		if (p.port == URL.defaultPort(p.schema))
+			p.port = 0;
 
 		// Normalize percent encoding, decode unreserved or uppercase hex
-		this.m_queryString = normalize_percent_encoding(this.m_queryString);
-		this.m_anchor = normalize_percent_encoding(this.m_anchor);
+		p.query = normalize_percent_encoding(p.query);
+		p.anchor = normalize_percent_encoding(p.anchor);
 
 		// Normalize path (first remove dot segments then normalize path segments)
-		this.m_path = InetPath(this.m_path.normalized.bySegment2.map!(
+		p.path = InetPath(InetPath.fromTrustedString(p.path).normalized.bySegment2.map!(
 				n => InetPath.Segment2.fromTrustedEncodedString(normalize_percent_encoding(n.encodedName))
-			).array);
+			).array).toString;
 
 		// Add trailing slash to empty path
-		if (this.m_path.empty || isDirectory)
-			this.m_path.endsWithSlash = true;		
+		if (p.path.length == 0 || isDirectory) {
+			if (!p.path.endsWith("/"))
+				p.path ~= "/";
+		}
+
+		this.parts = p;
 	}
 
 	/** Returns the normalized form of the URL.
@@ -564,16 +515,16 @@ struct URL {
 
 	bool startsWith(const URL rhs)
 	const nothrow {
-		if( m_schema != rhs.m_schema ) return false;
-		if( m_host != rhs.m_host ) return false;
+		if (this.schema != rhs.schema) return false;
+		if (this.host != rhs.host) return false;
 		// FIXME: also consider user, port, querystring, anchor etc
 		static if (is(InetPath.Segment2))
 			return this.path.bySegment2.startsWith(rhs.path.bySegment2);
 		else return this.path.bySegment.startsWith(rhs.path.bySegment);
 	}
 
-	URL opBinary(string OP, Path)(Path rhs) const if (OP == "~" && isAnyPath!Path) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
-	URL opBinary(string OP, Path)(Path.Segment rhs) const if (OP == "~" && isAnyPath!Path) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
+	URL opBinary(string OP, Path)(Path rhs) const if (OP == "~" && isAnyPath!Path) { URL ret = this; ret.path = this.path ~ rhs; return ret; }
+	URL opBinary(string OP, Path)(Path.Segment rhs) const if (OP == "~" && isAnyPath!Path) { URL ret = this; ret.path = this.path ~ rhs; return ret; }
 	void opOpAssign(string OP, Path)(Path rhs) if (OP == "~" && isAnyPath!Path) { this.path = this.path ~ rhs; }
 	void opOpAssign(string OP, Path)(Path.Segment rhs) if (OP == "~" && isAnyPath!Path) { this.path = this.path ~ rhs; }
 	static if (is(InetPath.Segment2) && !is(InetPath.Segment2 == InetPath.Segment)) {
@@ -584,20 +535,99 @@ struct URL {
 	/// Tests two URLs for equality using '=='.
 	bool opEquals(ref const URL rhs)
 	const nothrow {
-		if (m_schema != rhs.m_schema) return false;
-		if (m_host != rhs.m_host) return false;
-		if (m_path != rhs.m_path) return false;
-		if (m_port != rhs.m_port) return false;
+		if (this.schema != rhs.schema) return false;
+		if (this.host != rhs.host) return false;
+		if (this.path != rhs.path) return false;
+		if (this.port != rhs.port) return false;
 		return true;
 	}
 	/// ditto
 	bool opEquals(const URL other) const nothrow { return opEquals(other); }
 
 	int opCmp(ref const URL rhs) const nothrow {
-		if (m_schema != rhs.m_schema) return m_schema.cmp(rhs.m_schema);
-		if (m_host != rhs.m_host) return m_host.cmp(rhs.m_host);
-		if (m_path != rhs.m_path) return cmp(m_path.toString, rhs.m_path.toString);
+		if (this.schema != rhs.schema) return this.schema.cmp(rhs.schema);
+		if (this.host != rhs.host) return this.host.cmp(rhs.host);
+		if (this.pathString != rhs.pathString) return cmp(this.pathString, rhs.pathString);
 		return true;
+	}
+
+	private @property Parts parts()
+	const nothrow {
+		Parts ret;
+		ret.isCommonInternetSchema = m_text.extractIsCommonInternetSchema;
+		ret.schema = m_text.extractSchema;
+		ret.username = m_text.extractUsername;
+		ret.password = m_text.extractPassword;
+		ret.host = m_text.extractHost;
+		ret.port = m_text.extractPort;
+		ret.path = m_text.extractPath;
+		ret.query = m_text.extractQuery;
+		ret.anchor = m_text.extractAnchor;
+		return ret;
+	}
+
+	private @property parts(Parts v)
+	nothrow {
+		m_text = URL(v).m_text;
+	}
+
+	private static struct Parts {
+		bool isCommonInternetSchema;
+		string schema;
+		string username;
+		string password;
+		string host;
+		ushort port;
+		string path;
+		string query;
+		string anchor;
+
+		string toURL()
+		const @safe pure nothrow {
+			import std.format : formattedWrite;
+
+			auto app = appender!string;
+			app.put(this.schema);
+			app.put(':');
+			if (this.isCommonInternetSchema)
+				app.put("//");
+
+			if (this.username.length || this.password.length) {
+				app.put(this.username);
+				if (this.password.length)
+				{
+					app.put(':');
+					app.put(this.password);
+				}
+				app.put('@');
+			}
+
+			if (this.host.length) {
+				if (this.host.representation.canFind(':')) {
+					app.put('[');
+					app.put(this.host);
+					app.put(']');
+				} else app.put(this.host);
+				if (this.port != 0) {
+					try app.formattedWrite(":%s", this.port);
+					catch (Exception e) assert(false, e.msg);
+				}
+			}
+
+			app.put(this.path);
+
+			if (this.query !is null) {
+				app.put('?');
+				app.put(this.query);
+			}
+
+			if (this.anchor !is null) {
+				app.put('#');
+				app.put(this.anchor);
+			}
+
+			return app.data;
+		}
 	}
 }
 
@@ -930,13 +960,23 @@ private {
 	}
 }
 
+@safe @nogc unittest { // test @nogc and CTFE-ability
+	static immutable url = URL("http://example.com/");
+	static assert(url.toString() == "http://example.com/");
+	assert(url.schema == "http");
+	assert(url.host == "example.com");
+	assert(url.path == InetPath.fromTrustedString("/"));
+	assert(url.toString() == "http://example.com/");
+}
+
 unittest { // IPv6
 	auto urlstr = "http://[2003:46:1a7b:6c01:64b:80ff:fe80:8003]:8091/abc";
 	auto url = URL.parse(urlstr);
 	assert(url.schema == "http", url.schema);
 	assert(url.host == "2003:46:1a7b:6c01:64b:80ff:fe80:8003", url.host);
 	assert(url.port == 8091);
-	assert(url.path == InetPath("/abc"), url.path.toString());
+	assert(url.pathString == "/abc", url.pathString());
+	assert(url.path == InetPath("/abc"), url.path().toString);
 	assert(url.toString == urlstr);
 
 	url.host = "abcd:46:1a7b:6c01:64b:80ff:fe80:8abc";
@@ -1159,4 +1199,246 @@ unittest {
 	url ~= InetPath("foo");
 	url ~= InetPath.Segment("bar");
 	assert(url.toString() == "http://example.com/foo/bar");
+}
+
+private string extractSchema(string uri)
+@safe pure nothrow @nogc {
+	if (uri.length == 0) return null;
+	assert(isAlpha(uri[0]), "Invalid URI");
+
+	auto cidx = uri.indexOf(':');
+	assert(cidx >= 0, "Invalid URI");
+
+	return uri[0 .. cidx];
+}
+
+unittest {
+	assert(extractSchema("") is null);
+	assert(extractSchema("http://example.com/") == "http");
+	assert(extractSchema("http://example.com:80/") == "http");
+	assert(extractSchema("http://") == "http");
+	assert(extractSchema("foo+bar:") == "foo+bar");
+}
+
+private bool extractIsCommonInternetSchema(string uri)
+@safe pure nothrow @nogc {
+	auto sidx = uri.indexOf('/');
+	if (sidx < 0) return false;
+
+	uri = uri[sidx+1 .. $];
+	if (!uri.length || uri[0] != '/') return false;
+	return true;
+}
+
+unittest {
+	assert(!extractIsCommonInternetSchema(""));
+	assert(extractIsCommonInternetSchema("http://example.com/"));
+	assert(!extractIsCommonInternetSchema("mongodb:foo"));
+	assert(extractIsCommonInternetSchema("file:///foo"));
+}
+
+private string extractUsername(string uri)
+@safe pure nothrow @nogc {
+	auto sidx = uri.indexOf('/');
+	if (sidx < 0) return null;
+
+	uri = uri[sidx+1 .. $];
+	if (!uri.length || uri[0] != '/') return null;
+	uri = uri[1 .. $];
+
+	sidx = uri.indexOf('@');
+	if (sidx < 0) return null;
+
+	uri = uri[0 .. sidx];
+
+	auto pidx = uri.indexOf(':');
+	if (pidx < 0) return uri;
+	return uri[0 .. pidx];
+}
+
+unittest {
+	assert(extractUsername("") is null);
+	assert(extractUsername("http://example.com/") is null);
+	assert(extractUsername("http://example.com:80/") is null);
+	assert(extractUsername("http://user:pass@example.com") == "user");
+	assert(extractUsername("http://user@example.com:80") == "user");
+}
+
+
+private string extractPassword(string uri)
+@safe pure nothrow @nogc {
+	auto sidx = uri.indexOf('/');
+	if (sidx < 0) return null;
+
+	uri = uri[sidx+1 .. $];
+	if (!uri.length || uri[0] != '/') return null;
+	uri = uri[1 .. $];
+
+	sidx = uri.indexOf('@');
+	if (sidx < 0) return null;
+
+	uri = uri[0 .. sidx];
+
+	auto pidx = uri.indexOf(':');
+	if (pidx < 0) return null;
+	return uri[pidx+1 .. $];
+}
+
+unittest {
+	assert(extractPassword("") is null);
+	assert(extractPassword("http://example.com/") is null);
+	assert(extractPassword("http://example.com:80/") is null);
+	assert(extractPassword("http://user:pass@example.com") == "pass");
+	assert(extractPassword("http://user:@example.com") !is null);
+	assert(extractPassword("http://user:@example.com") == "");
+	assert(extractPassword("http://user@example.com:80") is null);
+}
+
+private string extractHost(string uri)
+@safe pure nothrow @nogc {
+	auto sidx = uri.indexOf('/');
+	if (sidx < 0) return null;
+
+	uri = uri[sidx+1 .. $];
+	if (!uri.length || uri[0] != '/') return null;
+	uri = uri[1 .. $];
+
+	sidx = vibe.utils.string.indexOfAny(uri, "/?#");
+	if (sidx >= 0) uri = uri[0 .. sidx];
+
+	auto aidx = uri.indexOf('@');
+	if (aidx >= 0) uri = uri[aidx+1 .. $];
+
+	if (uri.startsWith("[")) {
+		auto ccidx = uri.indexOf("]");
+		if (ccidx >= 0) return uri[1 .. ccidx];
+		return null; // ?
+	}
+
+	auto pidx = uri.indexOf(':');
+	if (pidx < 0) return uri;
+	return uri[0 .. pidx];
+}
+
+unittest {
+	assert(extractHost("http://[::1]/") == "::1");
+	assert(extractHost("http://example.com/") == "example.com");
+	assert(extractHost("http://example.com:80/") == "example.com");
+	assert(extractHost("http://example.com") == "example.com");
+	assert(extractHost("http://example.com:80") == "example.com");
+	assert(extractHost("http://example.com?") == "example.com");
+	assert(extractHost("http://example.com:80?") == "example.com");
+	assert(extractHost("http://user:pass@example.com") == "example.com");
+	assert(extractHost("http://user@example.com:80") == "example.com");
+	assert(extractHost("file:///foo") == "");
+	assert(extractHost("file:///foo") !is null);
+	assert(extractHost("file:foo") is null);
+}
+
+private ushort extractPort(string uri)
+@safe pure nothrow @nogc {
+	auto sidx = uri.indexOf('/');
+	if (sidx < 0) return 0;
+
+	uri = uri[sidx+1 .. $];
+	if (!uri.length || uri[0] != '/') return 0;
+	uri = uri[1 .. $];
+
+	sidx = vibe.utils.string.indexOfAny(uri, "/?#");
+	if (sidx >= 0) uri = uri[0 .. sidx];
+
+	auto aidx = uri.indexOf('@');
+	if (aidx >= 0) uri = uri[aidx+1 .. $];
+
+	if (uri.startsWith("[")) {
+		auto ccidx = uri.indexOf("]");
+		if (ccidx >= 0) uri = uri[ccidx+1 .. $];
+	}
+
+	auto pidx = uri.indexOf(':');
+	if (pidx < 0) return 0;
+	uri = uri[pidx+1 .. $];
+
+	return uri.parseInteger10(ushort.max);
+}
+
+unittest {
+	assert(extractPort("http://[::1]/") == 0);
+	assert(extractPort("http://[::1]:80/") == 80);
+	assert(extractPort("http://example.com/") == 0);
+	assert(extractPort("http://example.com:80/") == 80);
+	assert(extractPort("http://example.com") == 0);
+	assert(extractPort("http://example.com:80") == 80);
+	assert(extractPort("http://example.com?") == 0);
+	assert(extractPort("http://example.com:80?") == 80);
+	assert(extractPort("http://user:pass@example.com")== 0);
+	assert(extractPort("http://user:pass@example.com:80") == 80);
+}
+
+private string extractPath(string uri)
+@safe pure nothrow @nogc {
+	auto sidx = uri.indexOf('/');
+	if (sidx < 0) return null;
+	uri = uri[sidx .. $];
+
+	if (uri.startsWith("//")) {
+		uri = uri[2 .. $];
+		sidx = uri.indexOf('/');
+		if (sidx < 0) return null;
+		uri = uri[sidx .. $];
+	}
+
+	auto qaidx = vibe.utils.string.indexOfAny(uri, "?#");
+	if (qaidx >= 0) uri = uri[0 .. qaidx];
+
+	return uri;
+}
+
+unittest {
+	assert(extractPath("http://example.com/") == "/");
+	assert(extractPath("http://example.com/#") == "/");
+	assert(extractPath("http://example.com:80/") == "/");
+	assert(extractPath("http://example.com?foo") == "");
+	assert(extractPath("http://example.com#foo") == "");
+	assert(extractPath("http://example.com/bar/#foo") == "/bar/");
+	assert(extractPath("http:/bar/#foo") == "/bar/");
+}
+
+private string extractQuery(string uri)
+@safe pure nothrow @nogc {
+	auto sidx = uri.indexOf('?');
+	if (sidx < 0) return null;
+
+	uri = uri[sidx+1 .. $];
+
+	auto aidx = uri.indexOf('#');
+	if (aidx >= 0) uri = uri[0 .. aidx];
+
+	return uri;
+}
+
+unittest {
+	assert(extractQuery("http://example.com/") is null);
+	assert(extractQuery("http://example.com/?") !is null);
+	assert(extractQuery("http://example.com/?") == "");
+	assert(extractQuery("http://example.com/#") is null);
+	assert(extractQuery("http://example.com/?#") == "");
+	assert(extractQuery("http://example.com/?foo&bar#") == "foo&bar");
+}
+
+private string extractAnchor(string uri)
+@safe pure nothrow @nogc {
+	auto sidx = uri.indexOf('#');
+	if (sidx < 0) return null;
+
+	return uri[sidx+1 .. $];
+}
+
+unittest {
+	assert(extractAnchor("http://example.com/") is null);
+	assert(extractAnchor("http://example.com/?") is null);
+	assert(extractAnchor("http://example.com/#") !is null);
+	assert(extractAnchor("http://example.com/#") == "");
+	assert(extractAnchor("http://example.com/?#") == "");
+	assert(extractAnchor("http://example.com/?foo&bar#baz") == "baz");
 }
