@@ -76,6 +76,7 @@ unittest
 }
 
 struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey, Allocator = IAllocator)
+	if (is(typeof(Traits.clearValue) : TKey))
 {
 	import core.memory : GC;
 	import vibe.internal.meta.traits : isOpApplyDg;

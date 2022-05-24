@@ -991,7 +991,7 @@ struct BsonObjectID {
 		return ret;
 	}
 
-	inout(ubyte)[] opCast() inout { return m_bytes; }
+	inout(ubyte)[] opCast() inout return { return m_bytes; }
 }
 
 unittest {
