@@ -36,21 +36,12 @@ import deimos.openssl.ssl;
 import deimos.openssl.stack;
 import deimos.openssl.x509v3;
 
-// auto-detect OpenSSL 1.1.0
-version (VibeUseOpenSSL11)
-	enum OPENSSL_VERSION = "1.1.0";
-else version (VibeUseOpenSSL10)
-	enum OPENSSL_VERSION = "1.0.0";
-else version (Botan)
+version (Botan)
 	enum OPENSSL_VERSION = "0.0.0";
 else
 {
-	// Only use the openssl_version file if it has been generated
-	static if (__traits(compiles, {import openssl_version; }))
-		mixin("public import openssl_version : OPENSSL_VERSION;");
-	else
-		// try 1.1.0 as softfallback if old other means failed
-		enum OPENSSL_VERSION = "1.1.0";
+    import deimos.openssl.opensslv;
+    enum OPENSSL_VERSION = OpenSSLVersion.text;
 }
 
 version (VibePragmaLib) {
@@ -979,7 +970,11 @@ final class OpenSSLContext : TLSContext {
 	void setECDHCurve(string curve = null)
 	@trusted {
 		static if (haveECDH) {
-			static if (OPENSSL_VERSION_NUMBER >= 0x10200000) {
+			// `SSL_CTX_set_ecdh_auto` are no longer available in v1.1.0,
+			// as it is always enabled by default.
+			// https://github.com/openssl/openssl/issues/1437
+			// https://github.com/openssl/openssl/commit/2ecb9f2d18614fb7b7b42830a358b7163ed43221
+			static if (OPENSSL_VERSION_NUMBER >= 0x10200000 && OPENSSL_VERSION_NUMBER < OPENSSL_MAKE_VERSION(1, 1, 0, 0)) {
 				// use automatic ecdh curve selection by default
 				if (curve is null) {
 					SSL_CTX_set_ecdh_auto(m_ctx, true);

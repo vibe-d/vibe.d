@@ -3,37 +3,37 @@ environment:
  dub_version: 1.7.2
  matrix:
   - DC: dmd
-    DVersion: 2.098.0
+    DVersion: 2.100.0
     arch: x64
   - DC: dmd
-    DVersion: 2.098.0
+    DVersion: 2.100.0
     arch: x86_mscoff
   - DC: dmd
-    DVersion: 2.092.1
+    DVersion: 2.097.1
     arch: x64
   - DC: dmd
-    DVersion: 2.091.1
+    DVersion: 2.094.1
     arch: x86_mscoff
+  - DC: dmd
+    DVersion: 2.093.1
+    arch: x64
   - DC: dmd
     DVersion: 2.090.1
-    arch: x64
-  - DC: dmd
-    DVersion: 2.088.1
     arch: x86_mscoff
+  - DC: ldc
+    DVersion: 1.29.0
+    arch: x86
   - DC: ldc
     DVersion: 1.28.0
     arch: x86
   - DC: ldc
-    DVersion: 1.21.0
+    DVersion: 1.27.0
+    arch: x64
+  - DC: ldc
+    DVersion: 1.23.0
     arch: x86
   - DC: ldc
     DVersion: 1.20.0
-    arch: x64
-  - DC: ldc
-    DVersion: 1.19.0
-    arch: x86
-  - DC: ldc
-    DVersion: 1.18.0
     arch: x86
 
 branches:
