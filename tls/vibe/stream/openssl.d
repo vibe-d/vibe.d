@@ -163,8 +163,6 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 		int BIO_meth_set_ctrl(BIO_METHOD* biom, BIOMethCtrlCallback cb);
 		int BIO_meth_set_create(BIO_METHOD* biom, BIOMethCreateCallback cb);
 		int BIO_meth_set_destroy(BIO_METHOD* biom, BIOMethDestroyCallback cb);
-
-		c_ulong SSL_CTX_set_options(SSL_CTX *ctx, c_ulong op);
 	}
 
 
@@ -220,12 +218,64 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 	extern(C) int CRYPTO_num_locks();
 	extern(C) void CRYPTO_set_locking_callback(
 		void function(int mode, int type, const(char)* file, int line) func);
+}
 
-    // Those were turned from macro to functions in v1.1.0:
-    // # define SSL_CTX_set_options(ctx,op) SSL_CTX_ctrl((ctx),SSL_CTRL_OPTIONS,(op),NULL)
-    private c_long SSL_CTX_set_options(SSL_CTX* ctx, long op) {
-        return SSL_CTX_ctrl(ctx, SSL_CTRL_OPTIONS, op, null);
-    }
+// Copied from https://github.com/D-Programming-Deimos/openssl/pull/69
+// Remove once we are depending on >= v3.0.2
+static if (OPENSSL_VERSION_AT_LEAST(3, 0, 0))
+{
+	 // The argument type for `SSL_[CTX_][gs]et_options was changed between 1.1.1
+	 // and 3.0.0, from `c_long` to `uint64_t`. See below commit.
+	 // https://github.com/openssl/openssl/commit/56bd17830f2d5855b533d923d4e0649d3ed61d11
+
+	extern(C) nothrow {
+		ulong SSL_CTX_get_options(const SSL_CTX* ctx);
+		ulong SSL_get_options(const SSL* ssl);
+		ulong SSL_CTX_clear_options(SSL_CTX* ctx, ulong op);
+		ulong SSL_clear_options(SSL* ssl, ulong op);
+		ulong SSL_CTX_set_options(SSL_CTX* ctx, ulong op);
+		ulong SSL_set_options(SSL* ssl, ulong op);
+	}
+}
+else static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0))
+{
+	// Note: Despite the manuals listing the return type (as well as parameter)
+	// as 'long', the `.h` was `unsigned long`.
+
+	extern(C) nothrow {
+		c_ulong SSL_CTX_get_options(const SSL_CTX* ctx);
+		c_ulong SSL_get_options(const SSL* ssl);
+		c_ulong SSL_CTX_clear_options(SSL_CTX* ctx, c_ulong op);
+		c_ulong SSL_clear_options(SSL* ssl, c_ulong op);
+		c_ulong SSL_CTX_set_options(SSL_CTX* ctx, c_ulong op);
+		c_ulong SSL_set_options(SSL* ssl, c_ulong op);
+	}
+}
+else
+{
+	// Before v1.1.0, those were macros. See below commit.
+	// https://github.com/openssl/openssl/commit/8106cb8b6d706079cbcabd4631f05e4526a316e1
+
+	extern(C) nothrow {
+		c_ulong SSL_CTX_set_options()(SSL_CTX* ctx, c_ulong op) {
+			return SSL_CTX_ctrl(ctx, SSL_CTRL_OPTIONS, op, null);
+		}
+		c_ulong SSL_CTX_clear_options()(SSL_CTX* ctx, c_ulong op) {
+			return SSL_CTX_ctrl(ctx, SSL_CTRL_CLEAR_OPTIONS, op, null);
+		}
+		c_ulong SSL_CTX_get_options()(SSL_CTX* ctx) {
+			return SSL_CTX_ctrl(ctx, SSL_CTRL_OPTIONS, 0, null);
+		}
+		c_ulong SSL_set_options()(SSL* ssl,op) {
+			return SSL_ctrl(ssl, SSL_CTRL_OPTIONS, op, null);
+		}
+		c_ulong SSL_clear_options()(SSL* ssl, c_long op) {
+			return SSL_ctrl(ssl, SSL_CTRL_CLEAR_OPTIONS, op, null);
+		}
+		c_ulong SSL_get_options()(SSL* ssl) {
+			return SSL_ctrl(ssl, SSL_CTRL_OPTIONS, 0, null);
+		}
+	}
 }
 
 // Deimos had an incorrect translation for this define prior to 2.0.2+1.1.0h
