@@ -209,6 +209,23 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 
 	// OpenSSL 1.1 renamed `sk_*` to OpenSSL_sk_*`
 	private alias OPENSSL_sk_free = sk_free;
+
+	// Temporary hack: Deimos OpenSSL v3.0.1 is missing bindings for OpenSSL v1.0.x
+	// Until it's updated, we have duplicates here, see:
+	// https://github.com/vibe-d/vibe.d/pull/2658
+	// https://github.com/vibe-d/vibe.d/pull/2661
+	extern(C) const(SSL_METHOD)* SSLv23_client_method();
+	extern(C) const(SSL_METHOD)* SSLv23_server_method();
+
+	extern(C) int CRYPTO_num_locks();
+	extern(C) void CRYPTO_set_locking_callback(
+		void function(int mode, int type, const(char)* file, int line) func);
+
+    // Those were turned from macro to functions in v1.1.0:
+    // # define SSL_CTX_set_options(ctx,op) SSL_CTX_ctrl((ctx),SSL_CTRL_OPTIONS,(op),NULL)
+    private c_long SSL_CTX_set_options(SSL_CTX* ctx, long op) {
+        return SSL_CTX_ctrl(ctx, SSL_CTRL_OPTIONS, op, null);
+    }
 }
 
 // Deimos had an incorrect translation for this define prior to 2.0.2+1.1.0h

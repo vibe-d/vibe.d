@@ -1,0 +1,66 @@
+# Test old OpenSSL version(s)
+#
+# As we are using `ubuntu-latest`, we cannot rely on the installed
+# `openssl` package to test all supported versions.
+# Instead, this workflow installs an explicit version, builds it,
+# and test the tls package with it.
+name: OpenSSL
+
+on: [push, pull_request]
+
+jobs:
+  main:
+    name: Run
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        dc:
+          - dmd-latest
+#          - ldc-latest
+        # Currently only testing v1.0.x as 1.1.0 is tested via ubuntu-20.04
+        openssl_version:
+          - 1.0.2u
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Prepare compiler
+      uses: dlang-community/setup-dlang@v1
+      with:
+          compiler: ${{ matrix.dc }}
+
+    # Restore or install build openssl version
+    - name: 'Restore openssl from cache'
+      id: cache-openssl
+      uses: actions/cache@v1
+      with:
+        path: ${{ github.workspace }}/openssl/
+        key: ${{ matrix.os }}-${{ matrix.openssl_version }}
+
+    - name: 'Download and build OpenSSL'
+      if: steps.cache-openssl.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p ${{ github.workspace }}/openssl/
+        pushd ${{ github.workspace }}/openssl/
+        wget -O download.tar.gz https://www.openssl.org/source/old/1.0.2/openssl-${{ matrix.openssl_version }}.tar.gz
+        tar -xf download.tar.gz
+        pushd openssl-${{ matrix.openssl_version }}/
+        ./config --prefix=${{ github.workspace }}/openssl/install/
+        make install
+        echo "OpenSSL ${{ matrix.openssl_version }} has been installed in: ${{ github.workspace }}/openssl/install/"
+
+    - name: 'Run tests for vibe-d:tls'
+      env:
+        VIBED_DRIVER: vibe-core
+        PKG_CONFIG_PATH: ${{ github.workspace }}/openssl/install/lib/pkgconfig/
+      run: |
+        echo "pkg-config uses: $(pkg-config --modversion openssl)"
+        if [ `pkg-config --modversion openssl` != "${{ matrix.openssl_version }}" ]; then
+            echo "Expected version '${{ matrix.openssl_version }}' but got `pkg-config --modversion openssl`"
+            exit 1
+        fi
+        dub test vibe-d:tls
