@@ -60,7 +60,7 @@ void download(HTTPClient_ = void*)(URL url, scope void delegate(scope InputStrea
 				switch( res.statusCode ){
 					default:
 						throw new HTTPStatusException(res.statusCode, "Server responded with "~httpStatusText(res.statusCode)~" for "~url.toString());
-					case HTTPStatus.OK:
+					case HTTPStatus.ok:
 						done = true;
 						callback(res.bodyReader.asInterface!InputStream);
 						break;
