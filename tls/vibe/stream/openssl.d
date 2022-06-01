@@ -49,7 +49,6 @@ version (VibePragmaLib) {
 	version (Windows) pragma(lib, "eay");
 }
 
-private enum haveECDH = OPENSSL_VERSION_NUMBER >= 0x10001000;
 version(VibeForceALPN) enum alpn_forced = true;
 else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
@@ -756,7 +755,7 @@ final class OpenSSLContext : TLSContext {
 
 		if (kind == TLSContextKind.server) {
 			setDHParams();
-			static if (haveECDH) setECDHCurve();
+			setECDHCurve();
 			guessSessionIDContext();
 		}
 
@@ -1036,31 +1035,29 @@ final class OpenSSLContext : TLSContext {
 	 */
 	void setECDHCurve(string curve = null)
 	@trusted {
-		static if (haveECDH) {
-			// `SSL_CTX_set_ecdh_auto` are no longer available in v1.1.0,
-			// as it is always enabled by default.
-			// https://github.com/openssl/openssl/issues/1437
-			// https://github.com/openssl/openssl/commit/2ecb9f2d18614fb7b7b42830a358b7163ed43221
-			static if (OPENSSL_VERSION_NUMBER >= 0x10200000 && OPENSSL_VERSION_NUMBER < OPENSSL_MAKE_VERSION(1, 1, 0, 0)) {
-				// use automatic ecdh curve selection by default
-				if (curve is null) {
-					SSL_CTX_set_ecdh_auto(m_ctx, true);
-					return;
-				}
-				// but disable it when an explicit curve is given
-				SSL_CTX_set_ecdh_auto(m_ctx, false);
+		// `SSL_CTX_set_ecdh_auto` are no longer available in v1.1.0,
+		// as it is always enabled by default.
+		// https://github.com/openssl/openssl/issues/1437
+		// https://github.com/openssl/openssl/commit/2ecb9f2d18614fb7b7b42830a358b7163ed43221
+		static if (OPENSSL_VERSION_NUMBER >= 0x10200000 && OPENSSL_VERSION_NUMBER < OPENSSL_MAKE_VERSION(1, 1, 0, 0)) {
+			// use automatic ecdh curve selection by default
+			if (curve is null) {
+				SSL_CTX_set_ecdh_auto(m_ctx, true);
+				return;
 			}
+			// but disable it when an explicit curve is given
+			SSL_CTX_set_ecdh_auto(m_ctx, false);
+		}
 
-			int nid;
-			if (curve is null)
-				nid = NID_X9_62_prime256v1;
-			else
-				nid = enforce(OBJ_sn2nid(toStringz(curve)), "Unknown ECDH curve '"~curve~"'.");
+		int nid;
+		if (curve is null)
+			nid = NID_X9_62_prime256v1;
+		else
+			nid = enforce(OBJ_sn2nid(toStringz(curve)), "Unknown ECDH curve '"~curve~"'.");
 
-			auto ecdh = enforce(EC_KEY_new_by_curve_name(nid), "Unable to create ECDH curve.");
-			SSL_CTX_set_tmp_ecdh(m_ctx, ecdh);
-			EC_KEY_free(ecdh);
-		} else assert(false, "ECDH curve selection not available for old versions of OpenSSL");
+		auto ecdh = enforce(EC_KEY_new_by_curve_name(nid), "Unable to create ECDH curve.");
+		SSL_CTX_set_tmp_ecdh(m_ctx, ecdh);
+		EC_KEY_free(ecdh);
 	}
 
 	/// Sets a certificate file to use for authenticating to the remote peer
