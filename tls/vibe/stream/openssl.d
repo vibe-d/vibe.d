@@ -31,18 +31,11 @@ import core.thread;
 
 import deimos.openssl.bio;
 import deimos.openssl.err;
+import deimos.openssl.opensslv;
 import deimos.openssl.rand;
 import deimos.openssl.ssl;
 import deimos.openssl.stack;
 import deimos.openssl.x509v3;
-
-version (Botan)
-	enum OPENSSL_VERSION = "0.0.0";
-else
-{
-    import deimos.openssl.opensslv;
-    enum OPENSSL_VERSION = OpenSSLVersion.text;
-}
 
 version (VibePragmaLib) {
 	pragma(lib, "ssl");
@@ -54,7 +47,7 @@ else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
 // openssl/1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
-static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0.")) {
+static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0)) {
 	extern(C) const(SSL_METHOD)* TLS_client_method();
 	alias SSLv23_client_method = TLS_client_method;
 
@@ -164,8 +157,7 @@ static if (!OPENSSL_VERSION.startsWith("1.0.") && !OPENSSL_VERSION.startsWith("0
 		int BIO_meth_set_destroy(BIO_METHOD* biom, BIOMethDestroyCallback cb);
 	}
 
-
-	static if (OPENSSL_VERSION.startsWith("3.")) {
+	static if (OPENSSL_VERSION_AT_LEAST(3, 0, 0)) {
 		extern (C) nothrow {
 			X509 *SSL_get1_peer_certificate(const SSL *ssl);
 			void ERR_new();
@@ -324,7 +316,7 @@ final class OpenSSLStream : TLSStream {
 			m_tls = null;
 		}
 
-		static if (OPENSSL_VERSION.startsWith("1.1")) {
+		static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0)) {
 			if (!s_bio_methods) initBioMethods();
 
 			m_bio = () @trusted { return BIO_new(s_bio_methods); } ();
@@ -701,8 +693,7 @@ final class OpenSSLContext : TLSContext {
 		const(SSL_METHOD)* method;
 		c_ulong veroptions = SSL_OP_NO_SSLv2;
 		c_ulong options = SSL_OP_NO_COMPRESSION;
-		static if (OPENSSL_VERSION.startsWith("1.1")) {}
-		else
+		static if (OPENSSL_VERSION_BEFORE(1, 1, 0))
 			options |= SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE; // There are always enabled in OpenSSL 1.1.0.
 		int minver = TLS1_VERSION;
 		int maxver = TLS1_2_VERSION;
@@ -740,7 +731,7 @@ final class OpenSSLContext : TLSContext {
 			assert(false);
 		}
 
-		static if (OPENSSL_VERSION.startsWith("1.1")) {
+		static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0)) {
 			() @trusted { return SSL_CTX_set_min_proto_version(m_ctx, minver); }()
 				.enforceSSL("Failed setting minimum protocol version");
 			() @trusted { return SSL_CTX_set_max_proto_version(m_ctx, maxver); }()
@@ -1501,7 +1492,7 @@ private void setSSLError(string msg, string submsg, int line = __LINE__, string 
 	ERR_add_error_data(3, msg.toStringz, ": ".ptr, submsg.toStringz);
 }
 
-static if (OPENSSL_VERSION.startsWith("1.1")) {
+static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0)) {
 	private BIO_METHOD* s_bio_methods;
 
 	private void initBioMethods()
@@ -1515,6 +1506,8 @@ static if (OPENSSL_VERSION.startsWith("1.1")) {
 		BIO_meth_set_destroy(s_bio_methods, &onBioFree);
 	}
 } else {
+	// OpenSSL 1.1.0 made BIO opaque, this is for older versions
+	//https://github.com/openssl/openssl/commit/a146ae55ba479a5c7aa2a6afba1b2b93102a152c
 	private BIO_METHOD s_bio_methods = {
 		57, "SslStream",
 		&onBioWrite,
