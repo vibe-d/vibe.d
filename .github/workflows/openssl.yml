@@ -50,7 +50,7 @@ jobs:
         tar -xf download.tar.gz
         pushd openssl-${{ matrix.openssl_version }}/
         ./config --prefix=${{ github.workspace }}/openssl/install/
-        make install
+        make install_sw
         echo "OpenSSL ${{ matrix.openssl_version }} has been installed in: ${{ github.workspace }}/openssl/install/"
 
     - name: 'Run tests for vibe-d:tls'
