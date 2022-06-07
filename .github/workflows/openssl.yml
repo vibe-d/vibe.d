@@ -45,7 +45,7 @@ jobs:
         tar -xf download.tar.gz
         pushd openssl-${{ matrix.openssl.version }}/
         ./config --prefix=${{ github.workspace }}/openssl/install/
-        make install_sw
+        make install
         echo "OpenSSL ${{ matrix.openssl.version }} has been installed in: ${{ github.workspace }}/openssl/install/"
   # The previous job was separated to avoid a build once per matrix row,
   # as opposed to once per platform / version as we want.
