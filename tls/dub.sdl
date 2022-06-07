@@ -14,7 +14,7 @@ copyFiles "../lib/win-amd64/libssl-1_1-x64.dll" "../lib/win-amd64/libcrypto-1_1-
 
 configuration "openssl-mscoff" {
 	platforms "windows-x86_mscoff" "windows-x86_64" "windows-x86-ldc"
-	dependency "openssl" version="~>3.0"
+	dependency "openssl" version="~>3.1"
 	subConfiguration "openssl" "library-manual-version"
 	versions "DeimosOpenSSL_1_1_0"
 	sourceFiles "../lib/win-i386-mscoff/libssl.lib" "../lib/win-i386-mscoff/libcrypto.lib" platform="windows-x86"
@@ -23,12 +23,12 @@ configuration "openssl-mscoff" {
 
 configuration "openssl" {
 	platforms "posix"
-	dependency "openssl" version="~>3.0"
+	dependency "openssl" version="~>3.1"
 }
 
 configuration "openssl-1.1" {
 	platforms "posix" "windows"
-	dependency "openssl" version="~>3.0"
+	dependency "openssl" version="~>3.1"
 	subConfiguration "openssl" "library-manual-version"
 	versions "DeimosOpenSSL_1_1_0"
 	sourceFiles "../lib/win-i386-mscoff/libssl.lib" "../lib/win-i386-mscoff/libcrypto.lib" platform="windows-x86"
@@ -37,7 +37,7 @@ configuration "openssl-1.1" {
 
 configuration "openssl-1.1-optlink" {
 	platforms "windows-x86-dmd"
-	dependency "openssl" version="~>3.0"
+	dependency "openssl" version="~>3.1"
 	subConfiguration "openssl" "library-manual-version"
 	versions "DeimosOpenSSL_1_1_0"
 	sourceFiles "../lib/win-i386/libssl.lib" "../lib/win-i386/libcrypto.lib" platform="windows-x86-dmd"
@@ -45,7 +45,7 @@ configuration "openssl-1.1-optlink" {
 
 configuration "openssl-1.0" {
 	platforms "posix"
-	dependency "openssl" version="~>3.0"
+	dependency "openssl" version="~>3.1"
 	subConfiguration "openssl" "library-manual-version"
 	versions "DeimosOpenSSL_1_0_0"
 }

@@ -48,66 +48,10 @@ enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
 // openssl/1.1.0 hack: provides a 1.0.x API in terms of the 1.1.x API
 static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0)) {
-	extern(C) const(SSL_METHOD)* TLS_client_method();
-	alias SSLv23_client_method = TLS_client_method;
-
-	extern(C) const(SSL_METHOD)* TLS_server_method();
-	alias SSLv23_server_method = TLS_server_method;
-
-	// #define SSL_get_ex_new_index(l, p, newf, dupf, freef) \
-	//    CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL, l, p, newf, dupf, freef)
-
-	extern(C) int CRYPTO_get_ex_new_index(int class_index, c_long argl, void *argp,
-	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
-	                            CRYPTO_EX_free *free_func);
-
-	int SSL_get_ex_new_index(c_long argl, void *argp,
-	                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
-	                            CRYPTO_EX_free *free_func) {
-		// # define CRYPTO_EX_INDEX_SSL              0
-		return CRYPTO_get_ex_new_index(0, argl, argp, new_func, dup_func,
-				free_func);
-	}
 
 	extern(C) BIGNUM* BN_get_rfc3526_prime_2048(BIGNUM *bn);
 
 	alias get_rfc3526_prime_2048 = BN_get_rfc3526_prime_2048;
-
-	// #  define sk_num OPENSSL_sk_num
-	static if (!is(typeof(OPENSSL_sk_num)))
-	{
-		extern(C) int OPENSSL_sk_num(const void *);
-		extern(C) int sk_num(const(_STACK)* p) { return OPENSSL_sk_num(p); }
-	}
-
-	// #  define sk_value OPENSSL_sk_value
-	static if (!is(typeof(OPENSSL_sk_value)))
-	{
-		extern(C) void *OPENSSL_sk_value(const void *, int);
-		extern(C) void* sk_value(const(_STACK)* p, int i) { return OPENSSL_sk_value(p, i); }
-	}
-
-	static if (!is(typeof(OPENSSL_sk_free)))
-	{
-		// Version v1.x.x of the bindings don't have this,
-		// but it's been available since v1.1.0
-		private extern(C) void *OPENSSL_sk_free(const void *);
-	}
-
-	private enum SSL_CTRL_SET_MIN_PROTO_VERSION = 123;
-	private enum SSL_CTRL_SET_MAX_PROTO_VERSION = 124;
-
-	private int SSL_CTX_set_min_proto_version(ssl_ctx_st* ctx, int ver) {
-		return cast(int) SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MIN_PROTO_VERSION, ver, null);
-	}
-
-	private int SSL_CTX_set_max_proto_version(ssl_ctx_st* ctx, int ver) {
-		return cast(int) SSL_CTX_ctrl(ctx, SSL_CTRL_SET_MAX_PROTO_VERSION, ver, null);
-	}
-
-	private int SSL_set_min_proto_version(ssl_st* s, int ver) {
-		return cast(int) SSL_ctrl(s, SSL_CTRL_SET_MIN_PROTO_VERSION, ver, null);
-	}
 
 	extern(C) nothrow {
 		void BIO_set_init(BIO* bio, int init_) @trusted;
@@ -134,17 +78,6 @@ static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0)) {
 		int BIO_meth_set_ctrl(BIO_METHOD* biom, BIOMethCtrlCallback cb);
 		int BIO_meth_set_create(BIO_METHOD* biom, BIOMethCreateCallback cb);
 		int BIO_meth_set_destroy(BIO_METHOD* biom, BIOMethDestroyCallback cb);
-	}
-
-	static if (OPENSSL_VERSION_AT_LEAST(3, 0, 0)) {
-		extern (C) nothrow {
-			X509 *SSL_get1_peer_certificate(const SSL *ssl);
-			void ERR_new();
-			void ERR_set_debug(const char *file, int line, const char *func);
-			void ERR_set_error(int lib, int reason, const char *fmt, ...);
-		}
-
-		alias SSL_get_peer_certificate = SSL_get1_peer_certificate;
 	}
 } else {
 	private void BIO_set_init(BIO* b, int init_) @safe nothrow {
@@ -175,78 +108,13 @@ static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0)) {
 		b.flags |= flags;
 	}
 
-	// OpenSSL 1.1 renamed `sk_*` to OpenSSL_sk_*`
-	private alias OPENSSL_sk_free = sk_free;
-
-	// Temporary hack: Deimos OpenSSL v3.0.1 is missing bindings for OpenSSL v1.0.x
-	// Until it's updated, we have duplicates here, see:
-	// https://github.com/vibe-d/vibe.d/pull/2658
-	// https://github.com/vibe-d/vibe.d/pull/2661
-	extern(C) const(SSL_METHOD)* SSLv23_client_method();
-	extern(C) const(SSL_METHOD)* SSLv23_server_method();
-
 	extern(C) int CRYPTO_num_locks();
 	extern(C) void CRYPTO_set_locking_callback(
 		void function(int mode, int type, const(char)* file, int line) func);
 }
 
-// Copied from https://github.com/D-Programming-Deimos/openssl/pull/69
-// Remove once we are depending on >= v3.0.2
-static if (OPENSSL_VERSION_AT_LEAST(3, 0, 0))
+static if (OPENSSL_VERSION_BEFORE(1, 1, 0))
 {
-	 // The argument type for `SSL_[CTX_][gs]et_options was changed between 1.1.1
-	 // and 3.0.0, from `c_long` to `uint64_t`. See below commit.
-	 // https://github.com/openssl/openssl/commit/56bd17830f2d5855b533d923d4e0649d3ed61d11
-
-	extern(C) nothrow {
-		ulong SSL_CTX_get_options(const SSL_CTX* ctx);
-		ulong SSL_get_options(const SSL* ssl);
-		ulong SSL_CTX_clear_options(SSL_CTX* ctx, ulong op);
-		ulong SSL_clear_options(SSL* ssl, ulong op);
-		ulong SSL_CTX_set_options(SSL_CTX* ctx, ulong op);
-		ulong SSL_set_options(SSL* ssl, ulong op);
-	}
-}
-else static if (OPENSSL_VERSION_AT_LEAST(1, 1, 0))
-{
-	// Note: Despite the manuals listing the return type (as well as parameter)
-	// as 'long', the `.h` was `unsigned long`.
-
-	extern(C) nothrow {
-		c_ulong SSL_CTX_get_options(const SSL_CTX* ctx);
-		c_ulong SSL_get_options(const SSL* ssl);
-		c_ulong SSL_CTX_clear_options(SSL_CTX* ctx, c_ulong op);
-		c_ulong SSL_clear_options(SSL* ssl, c_ulong op);
-		c_ulong SSL_CTX_set_options(SSL_CTX* ctx, c_ulong op);
-		c_ulong SSL_set_options(SSL* ssl, c_ulong op);
-	}
-}
-else
-{
-	// Before v1.1.0, those were macros. See below commit.
-	// https://github.com/openssl/openssl/commit/8106cb8b6d706079cbcabd4631f05e4526a316e1
-
-	extern(C) nothrow {
-		c_ulong SSL_CTX_set_options()(SSL_CTX* ctx, c_ulong op) {
-			return SSL_CTX_ctrl(ctx, SSL_CTRL_OPTIONS, op, null);
-		}
-		c_ulong SSL_CTX_clear_options()(SSL_CTX* ctx, c_ulong op) {
-			return SSL_CTX_ctrl(ctx, SSL_CTRL_CLEAR_OPTIONS, op, null);
-		}
-		c_ulong SSL_CTX_get_options()(SSL_CTX* ctx) {
-			return SSL_CTX_ctrl(ctx, SSL_CTRL_OPTIONS, 0, null);
-		}
-		c_ulong SSL_set_options()(SSL* ssl,op) {
-			return SSL_ctrl(ssl, SSL_CTRL_OPTIONS, op, null);
-		}
-		c_ulong SSL_clear_options()(SSL* ssl, c_long op) {
-			return SSL_ctrl(ssl, SSL_CTRL_CLEAR_OPTIONS, op, null);
-		}
-		c_ulong SSL_get_options()(SSL* ssl) {
-			return SSL_ctrl(ssl, SSL_CTRL_OPTIONS, 0, null);
-		}
-	}
-
 	// The need for calling `CRYPTO_set_id_callback` / `CRYPTO_set_locking_callback`
 	// was removed in OpenSSL 1.1.0, which are the only users of those callbacks
 	// and mutexes.
@@ -274,14 +142,6 @@ else
 			logWarn("OpenSSL: failed to lock/unlock mutex: %s", e.msg);
 		}
 	}
-}
-
-// Deimos had an incorrect translation for this define prior to 2.0.2+1.1.0h
-// See https://github.com/D-Programming-Deimos/openssl/issues/63#issuecomment-840266138
-static if (!is(typeof(GEN_DNS)))
-{
-	private enum GEN_DNS = GENERAL_NAME.GEN_DNS;
-	private enum GEN_IPADD = GENERAL_NAME.GEN_IPADD;
 }
 
 private int SSL_set_tlsext_host_name(ssl_st* s, const(char)* c) @trusted {
@@ -639,7 +499,7 @@ final class OpenSSLStream : TLSStream {
 	}
 }
 
-private int enforceSSL(int ret, string message)
+private T enforceSSL (T : long = int)(T ret, string message)
 @safe {
 	if (ret > 0) return ret;
 	throwSSL(message);
@@ -709,22 +569,22 @@ final class OpenSSLContext : TLSContext {
 		final switch (kind) {
 			case TLSContextKind.client:
 				final switch (ver) {
-					case TLSVersion.any: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
+					case TLSVersion.any: method = TLS_client_method(); veroptions |= SSL_OP_NO_SSLv3; break;
 					case TLSVersion.ssl3: throw new Exception("SSLv3 is not supported anymore");
-					case TLSVersion.tls1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2; maxver = TLS1_VERSION; break;
-					case TLSVersion.tls1_1: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
-					case TLSVersion.tls1_2: method = SSLv23_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
+					case TLSVersion.tls1: method = TLS_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2; maxver = TLS1_VERSION; break;
+					case TLSVersion.tls1_1: method = TLS_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
+					case TLSVersion.tls1_2: method = TLS_client_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
 					case TLSVersion.dtls1: method = DTLSv1_client_method(); minver = DTLS1_VERSION; maxver = DTLS1_VERSION; break;
 				}
 				break;
 			case TLSContextKind.server:
 			case TLSContextKind.serverSNI:
 				final switch (ver) {
-					case TLSVersion.any: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
+					case TLSVersion.any: method = TLS_server_method(); veroptions |= SSL_OP_NO_SSLv3; break;
 					case TLSVersion.ssl3: throw new Exception("SSLv3 is not supported anymore");
-					case TLSVersion.tls1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2; maxver = TLS1_VERSION; break;
-					case TLSVersion.tls1_1: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
-					case TLSVersion.tls1_2: method = SSLv23_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
+					case TLSVersion.tls1: method = TLS_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2; maxver = TLS1_VERSION; break;
+					case TLSVersion.tls1_1: method = TLS_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; minver = TLS1_1_VERSION; maxver = TLS1_1_VERSION; break;
+					case TLSVersion.tls1_2: method = TLS_server_method(); veroptions |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; minver = TLS1_2_VERSION; break;
 					case TLSVersion.dtls1: method = DTLSv1_server_method(); minver = DTLS1_VERSION; maxver = DTLS1_VERSION; break;
 				}
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
