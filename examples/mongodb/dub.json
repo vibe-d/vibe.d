@@ -1,7 +1,0 @@
-﻿{
-	"name": "mongodb-example",
-	"description": "Basic MongoDB usage example.",
-	"dependencies": {
-		"vibe-d:mongodb": {"path": "../../"}
-	}
-}

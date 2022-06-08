@@ -110,3 +110,10 @@ jobs:
             exit 1
         fi
         dub --skip-registry=all test vibe-d:tls
+
+    - name: '[POSIX] Run tests'
+      env:
+        VIBED_DRIVER: vibe-core
+        PARTS: builds,unittests,examples,tests
+      run: |
+        ./run-ci.sh
