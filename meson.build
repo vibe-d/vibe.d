@@ -6,7 +6,7 @@ project('Vibe.d', 'd',
 )
 
 project_soversion      = '0'
-project_version_suffix = '~beta1'
+project_version_suffix = ''
 project_version        = meson.project_version()
 project_version_full   = project_version + project_version_suffix
 
@@ -24,10 +24,6 @@ ssl_dep = dependency('libssl')
 #
 flag_new_openssl_ldc = []
 flag_new_openssl_dmd = []
-if ssl_dep.version().version_compare('>=1.1')
-    flag_new_openssl_ldc = '-d-version=VibeUseOpenSSL11'
-    flag_new_openssl_dmd = '-version=VibeUseOpenSSL11'
-endif
 
 if meson.is_subproject() == false
     if meson.get_compiler('d').get_id() == 'llvm'
