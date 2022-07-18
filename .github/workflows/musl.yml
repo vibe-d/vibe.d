@@ -27,4 +27,6 @@ jobs:
       - name: Install dependencies
         run: apk add --no-cache build-base dub ${{ matrix.dc }} openssl-dev zlib-dev
       - name: Run tests
+        env:
+          DC: ${{ matrix.dcname }}
         run: dub test --compiler=${{ matrix.dcname }}

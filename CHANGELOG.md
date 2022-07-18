@@ -1,12 +1,12 @@
 Changelog
 =========
 
-v0.9.5 - 2022-
+v0.9.5 - 2022-07-13
 -------------------
 
 ### Features and improvements ###
 
-- Supports D frontend versions 2.088.1 to 2.099.0
+- Supports D frontend versions 2.090.1 to 2.100.1
 - Added build support for OpenSSL 3.x.x - [pull #2650][issue2650]
 - URL handling
 	- Added `parseUserURL` for relaxed URL parsing (by Muhammed Kadir Yücel aka mkykadir) - [pull #2624][issue2624], [pull #2653][issue2653]
