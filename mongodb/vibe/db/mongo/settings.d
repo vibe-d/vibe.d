@@ -155,6 +155,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			switch( option.toLower() ){
 				default: logWarn("Unknown MongoDB option %s", option); break;
 				case "appname": cfg.appName = value; break;
+				case "authsource": cfg.database = value; break;
 				case "slaveok": bool v; if( setBool(v) && v ) cfg.defQueryFlags |= QueryFlags.SlaveOk; break;
 				case "replicaset": cfg.replicaSet = value; warnNotImplemented(); break;
 				case "safe": setBool(cfg.safe); break;
@@ -297,6 +298,11 @@ unittest
 	assert(cfg.hosts.length == 1);
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
+
+	// authSource
+	cfg = MongoClientSettings.init;
+	assert(parseMongoDBUrl(cfg, "mongodb://fred:@localhost/?authSource=test"));
+	assert(cfg.database == "test");
 }
 
 /**
