@@ -7,10 +7,7 @@
 */
 module vibe.http.status;
 
-/**
-	Definitions of all standard HTTP status codes.
-*/
-enum HTTPStatus {
+enum HTTPStatusBase {
 	continue_                    = 100,
 	switchingProtocols           = 101,
 	ok                           = 200,
@@ -104,6 +101,28 @@ enum HTTPStatus {
 	deprecated("Use `httpVersionNotSupported` instead") HTTPVersionNotSupported = httpVersionNotSupported,
 }
 
+private string buildNonDeprecatedEnum(EnumType)()
+{
+	string result;
+	foreach(m; __traits(allMembers, EnumType))
+	{
+		static if(!__traits(isDeprecated, __traits(getMember, EnumType, m)))
+			result ~= m ~ " = " ~ __traits(identifier, EnumType) ~ "." ~ m ~ ",";
+	}
+	return result;
+}
+
+/**
+	Definitions of all standard HTTP status codes.
+*/
+version(VibeNoDeprecatedEnums)
+{
+	mixin("enum HTTPStatus { ", buildNonDeprecatedEnum!HTTPStatusBase(), " } ");
+}
+else
+{
+	alias HTTPStatus = HTTPStatusBase;
+}
 
 @safe nothrow @nogc pure:
 
