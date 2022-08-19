@@ -1259,12 +1259,6 @@ final class RedisSubscriberImpl {
 		}
 
 	}
-	/// ditto
-	deprecated("Use an @safe message callback")
-	void blisten(void delegate(string, string) @system onMessage, Duration timeout = 0.seconds)
-	{
-		blisten((string ch, string msg) @trusted => onMessage(ch, msg));
-	}
 
 	/// Waits for messages and calls the callback with the channel and the message as arguments.
 	/// The timeout is passed over to the listener, which closes after the period of inactivity.
@@ -1305,21 +1299,6 @@ final class RedisSubscriberImpl {
 		}
 		inTask(&impl);
 		return m_listener;
-	}
-	/// ditto
-	deprecated("Use an `@safe` message callback")
-	Task listen(void delegate(string, string) @system onMessage, Duration timeout = 0.seconds)
-	{
-		return listen((string ch, string msg) @trusted => onMessage(ch, msg));
-	}
-	/// ditto
-	deprecated("Use a `nothrow` message callback")
-	Task listen(void delegate(string, string) @safe callback, Duration timeout = 0.seconds)
-	{
-		return listen((ch, msg) @safe nothrow {
-			try callback(ch, msg);
-			catch (Exception e) logException(e, "Uncaught exception in Redis listen callback");
-		}, timeout);
 	}
 }
 

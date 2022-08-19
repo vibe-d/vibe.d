@@ -16,7 +16,6 @@ import std.array : array;
 import std.algorithm : map, max, min;
 import std.exception;
 
-deprecated alias MongoCursor(Q, R = Bson, S = Bson) = MongoCursor!R;
 
 /**
 	Represents a cursor for a MongoDB query.

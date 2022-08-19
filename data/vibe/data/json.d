@@ -150,14 +150,14 @@ struct Json {
 		array,      /// Array of JSON values
 		object,     /// JSON object aka. dictionary from string to Json
 
-		Undefined = undefined,  /// Compatibility alias - will be deprecated soon
-		Null = null_,           /// Compatibility alias - will be deprecated soon
-		Bool = bool_,           /// Compatibility alias - will be deprecated soon
-		Int = int_,             /// Compatibility alias - will be deprecated soon
-		Float = float_,         /// Compatibility alias - will be deprecated soon
-		String = string,        /// Compatibility alias - will be deprecated soon
-		Array = array,          /// Compatibility alias - will be deprecated soon
-		Object = object         /// Compatibility alias - will be deprecated soon
+		deprecated("Use `undefined` instead.") Undefined = undefined,  /// Compatibility alias
+		deprecated("Use `null_` instead.") Null = null_,           /// Compatibility alias
+		deprecated("Use `bool_` instead.") Bool = bool_,           /// Compatibility alias
+		deprecated("Use `int_` instead.") Int = int_,             /// Compatibility alias
+		deprecated("Use `float_` instead.") Float = float_,         /// Compatibility alias
+		deprecated("Use `string` instead.") String = string,        /// Compatibility alias
+		deprecated("Use `array` instead.") Array = array,          /// Compatibility alias
+		deprecated("Use `object` instead.") Object = object         /// Compatibility alias
 	}
 
 	/// New JSON value of Type.Undefined

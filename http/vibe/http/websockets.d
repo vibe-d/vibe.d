@@ -690,13 +690,6 @@ final class WebSocket {
 		});
 	}
 
-	/// Compatibility overload - will be removed soon.
-	deprecated("Call the overload which requires an explicit FrameOpcode.")
-	void send(scope void delegate(scope OutgoingWebSocketMessage) @safe sender)
-	{
-		send(sender, FrameOpcode.text);
-	}
-
 	/**
 		Actively closes the connection.
 

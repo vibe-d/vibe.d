@@ -386,12 +386,6 @@ final class ChunkedInputStream : InputStream
 		ulong m_bytesInCurrentChunk = 0;
 	}
 
-	deprecated("Use createChunkedInputStream() instead.")
-	this(InputStream stream)
-	{
-		this(interfaceProxy!InputStream(stream), true);
-	}
-
 	/// private
 	this(InterfaceProxy!InputStream stream, bool dummy)
 	{
@@ -488,12 +482,6 @@ final class ChunkedOutputStream : OutputStream {
 		size_t m_maxBufferSize = 4*1024;
 		bool m_finalized = false;
 		ChunkExtensionCallback m_chunkExtensionCallback = null;
-	}
-
-	deprecated("Use createChunkedOutputStream() instead.")
-	this(OutputStream stream, IAllocator alloc = vibeThreadAllocator())
-	{
-		this(interfaceProxy!OutputStream(stream), alloc, true);
 	}
 
 	/// private

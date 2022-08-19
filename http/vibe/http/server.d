@@ -585,8 +585,6 @@ enum HTTPServerOption {
 		option if the code is compiled in debug mode.
 	*/
 	defaults                  = () { auto ret = reuseAddress; debug ret |= errorStackTraces; return ret; } (),
-
-	deprecated("None has been renamed to none.") None = none
 }
 
 

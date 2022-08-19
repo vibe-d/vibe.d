@@ -37,7 +37,6 @@ x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
 
 subPackage "utils"
 subPackage "data"
-subPackage "core"
 subPackage "stream"
 subPackage "tls"
 subPackage "crypto"
