@@ -1,7 +1,7 @@
-﻿{
+{
 	"name": "file-operations-example",
 	"description": "Read/write/append with task yielding.",
 	"dependencies": {
-		"vibe-d:core": {"path": "../../"}
+		"vibe-core": "~>1.0"
 	},
 }

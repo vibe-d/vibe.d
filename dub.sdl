@@ -35,22 +35,6 @@ x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
 	"--ex" "diet.internal" "--ex" "stdx." "--ex" "eventcore.internal." "--ex" "eventcore.drivers."\
 	"--ex" "mir." "--ex" "openssl_version"
 
-configuration "vibe-core" {
-	subConfiguration "vibe-d:core" "vibe-core"
-}
-configuration "win32_mscoff" {
-	subConfiguration "vibe-d:core" "win32_mscoff"
-}
-configuration "libevent" {
-	subConfiguration "vibe-d:core" "libevent"
-}
-configuration "libasync" {
-	subConfiguration "vibe-d:core" "libasync"
-}
-configuration "win32" {
-	subConfiguration "vibe-d:core" "win32"
-}
-
 subPackage "utils"
 subPackage "data"
 subPackage "core"

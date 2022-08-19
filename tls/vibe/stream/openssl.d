@@ -822,7 +822,7 @@ final class OpenSSLContext : TLSContext {
 	{
 		static if (!haveALPN) assert(false, "OpenSSL support not compiled with ALPN enabled. Use VibeForceALPN.");
 		else {
-			import vibe.utils.memory : allocArray, freeArray, manualAllocator;
+			import vibe.internal.memory_legacy : allocArray, freeArray, manualAllocator;
 			ubyte[] alpn;
 			size_t len;
 			foreach (string alpn_value; alpn_list)

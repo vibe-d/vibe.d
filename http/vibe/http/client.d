@@ -781,13 +781,7 @@ final class HTTPClient {
 
 private auto connectTCPWithTimeout(NetworkAddress addr, NetworkAddress bind_address, Duration timeout)
 {
-	version (Have_vibe_core) {
-		return connectTCP(addr, bind_address, timeout);
-	} else {
-		if (timeout != Duration.max)
-			logWarn("HTTP client connect timeout is set, but not supported by the legacy vibe-d:core module.");
-		return connectTCP(addr, bind_address);
-	}
+	return connectTCP(addr, bind_address, timeout);
 }
 
 /**
