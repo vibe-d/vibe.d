@@ -61,6 +61,8 @@ unittest {
 
 public import vibe.data.json;
 
+import vibe.internal.conv : enumToString;
+
 import std.algorithm;
 import std.array;
 import std.base64;
@@ -460,7 +462,7 @@ struct Bson {
 		else static if( is(T == UUID) ){
 			checkType(Type.binData);
 			auto bbd = this.get!BsonBinData();
-			enforce(bbd.type == BsonBinData.Type.uuid, "BsonBinData value is type '"~to!string(bbd.type)~"', expected to be uuid");
+			enforce(bbd.type == BsonBinData.Type.uuid, "BsonBinData value is type '"~bbd.type.enumToString~"', expected to be uuid");
 			const ubyte[16] b = bbd.rawData;
 			return UUID(b);
 		}
@@ -494,7 +496,7 @@ struct Bson {
 	*/
 	@property size_t length() const {
 		switch( m_type ){
-			default: enforce(false, "Bson objects of type "~to!string(m_type)~" do not have a length field."); break;
+			default: enforce(false, "Bson objects of type "~m_type.enumToString~" do not have a length field."); break;
 			case Type.string, Type.code, Type.symbol: return (cast(string)this).length;
 			case Type.array: return byValue.walkLength;
 			case Type.object: return byValue.walkLength;
@@ -810,7 +812,7 @@ struct Bson {
 		foreach( t; valid_types )
 			if( m_type == t )
 				return;
-		throw new Exception("BSON value is type '"~to!string(m_type)~"', expected to be one of "~to!string(valid_types));
+		throw new Exception("BSON value is type '"~m_type.enumToString~"', expected to be one of "~valid_types.map!(t => t.enumToString).join(", "));
 	}
 }
 
@@ -1558,7 +1560,7 @@ struct BsonSerializer {
 	//
 	void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 	{
-		enforce(m_inputData.type == Bson.Type.object, "Expected object instead of "~m_inputData.type.to!string());
+		enforce(m_inputData.type == Bson.Type.object, "Expected object instead of "~m_inputData.type.enumToString);
 		auto old = m_inputData;
 		foreach (string name, value; old.byKeyValue) {
 			m_inputData = value;
@@ -1572,7 +1574,7 @@ struct BsonSerializer {
 
 	void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 	{
-		enforce(m_inputData.type == Bson.Type.array, "Expected array instead of "~m_inputData.type.to!string());
+		enforce(m_inputData.type == Bson.Type.array, "Expected array instead of "~m_inputData.type.enumToString);
 		auto old = m_inputData;
 		foreach (value; old.byValue) {
 			m_inputData = value;
