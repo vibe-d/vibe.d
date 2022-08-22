@@ -2,7 +2,7 @@
     "name": "tests",
     "description": "Redis pubsub tests",
     "dependencies": {
-        "vibe-d:core": {"path": "../../"},
+        "vibe-core": "~>1.0",
         "vibe-d:redis": {"path": "../../"}
     }
 }

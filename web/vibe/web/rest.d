@@ -2095,10 +2095,10 @@ private {
 	@safe {
 		switch (value.type) {
 			default: return value.toString();
-			case Json.Type.Bool: return value.get!bool ? "true" : "false";
-			case Json.Type.Int: return to!string(value.get!long);
-			case Json.Type.Float: return to!string(value.get!double);
-			case Json.Type.String: return value.get!string;
+			case Json.Type.bool_: return value.get!bool ? "true" : "false";
+			case Json.Type.int_: return to!string(value.get!long);
+			case Json.Type.float_: return to!string(value.get!double);
+			case Json.Type.string: return value.get!string;
 		}
 	}
 

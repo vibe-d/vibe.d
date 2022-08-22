@@ -67,8 +67,10 @@ module vibe.data.json;
 
 
 public import vibe.data.serialization;
-
 public import std.json : JSONException;
+
+import vibe.internal.conv : enumToString;
+
 import std.algorithm;
 import std.array;
 import std.bigint;
@@ -150,14 +152,14 @@ struct Json {
 		array,      /// Array of JSON values
 		object,     /// JSON object aka. dictionary from string to Json
 
-		Undefined = undefined,  /// Compatibility alias - will be deprecated soon
-		Null = null_,           /// Compatibility alias - will be deprecated soon
-		Bool = bool_,           /// Compatibility alias - will be deprecated soon
-		Int = int_,             /// Compatibility alias - will be deprecated soon
-		Float = float_,         /// Compatibility alias - will be deprecated soon
-		String = string,        /// Compatibility alias - will be deprecated soon
-		Array = array,          /// Compatibility alias - will be deprecated soon
-		Object = object         /// Compatibility alias - will be deprecated soon
+		deprecated("Use `undefined` instead.") Undefined = undefined,  /// Compatibility alias
+		deprecated("Use `null_` instead.") Null = null_,           /// Compatibility alias
+		deprecated("Use `bool_` instead.") Bool = bool_,           /// Compatibility alias
+		deprecated("Use `int_` instead.") Int = int_,             /// Compatibility alias
+		deprecated("Use `float_` instead.") Float = float_,         /// Compatibility alias
+		deprecated("Use `string` instead.") String = string,        /// Compatibility alias
+		deprecated("Use `array` instead.") Array = array,          /// Compatibility alias
+		deprecated("Use `object` instead.") Object = object         /// Compatibility alias
 	}
 
 	/// New JSON value of Type.Undefined
@@ -840,7 +842,7 @@ struct Json {
 	*/
 	Json opBinary(string op)(ref const(Json) other)
 	const @trusted {
-		enforceJson(m_type == other.m_type, "Binary operation '"~op~"' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
+		enforceJson(m_type == other.m_type, "Binary operation '"~op~"' between "~m_type.enumToString~" and "~other.m_type.enumToString~" JSON objects.");
 		static if( op == "&&" ){
 			checkType!(bool)(op);
 			return Json(m_bool && other.m_bool);
@@ -900,38 +902,38 @@ struct Json {
 		if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op =="~")
 	{
 		enforceJson(m_type == other.m_type || op == "~" && m_type == Type.array,
-				"Binary operation '"~op~"=' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
+				"Binary operation '"~op~"=' between "~m_type.enumToString~" and "~other.m_type.enumToString~" JSON objects.");
 		static if( op == "+" ){
 			if( m_type == Type.int_ ) m_int += other.m_int;
 			else if( m_type == Type.bigInt ) m_bigInt += other.m_bigInt;
 			else if( m_type == Type.float_ ) m_float += other.m_float;
-			else enforceJson(false, "'+=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceJson(false, "'+=' only allowed for scalar types, not "~m_type.enumToString~".");
 		} else static if( op == "-" ){
 			if( m_type == Type.int_ ) m_int -= other.m_int;
 			else if( m_type == Type.bigInt ) m_bigInt -= other.m_bigInt;
 			else if( m_type == Type.float_ ) m_float -= other.m_float;
-			else enforceJson(false, "'-=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceJson(false, "'-=' only allowed for scalar types, not "~m_type.enumToString~".");
 		} else static if( op == "*" ){
 			if( m_type == Type.int_ ) m_int *= other.m_int;
 			else if( m_type == Type.bigInt ) m_bigInt *= other.m_bigInt;
 			else if( m_type == Type.float_ ) m_float *= other.m_float;
-			else enforceJson(false, "'*=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceJson(false, "'*=' only allowed for scalar types, not "~m_type.enumToString~".");
 		} else static if( op == "/" ){
 			if( m_type == Type.int_ ) m_int /= other.m_int;
 			else if( m_type == Type.bigInt ) m_bigInt /= other.m_bigInt;
 			else if( m_type == Type.float_ ) m_float /= other.m_float;
-			else enforceJson(false, "'/=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceJson(false, "'/=' only allowed for scalar types, not "~m_type.enumToString~".");
 		} else static if( op == "%" ){
 			if( m_type == Type.int_ ) m_int %= other.m_int;
 			else if( m_type == Type.bigInt ) m_bigInt %= other.m_bigInt;
 			else if( m_type == Type.float_ ) m_float %= other.m_float;
-			else enforceJson(false, "'%=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceJson(false, "'%=' only allowed for scalar types, not "~m_type.enumToString~".");
 		} else static if( op == "~" ){
 			if (m_type == Type.string) m_string ~= other.m_string;
 			else if (m_type == Type.array) {
 				if (other.m_type == Type.array) m_array ~= other.m_array;
 				else appendArrayElement(other);
-			} else enforceJson(false, "'~=' only allowed for string and array types, not "~.to!string(m_type)~".");
+			} else enforceJson(false, "'~=' only allowed for string and array types, not "~m_type.enumToString~".");
 		} else static assert(0, "Unsupported operator '"~op~"=' for type JSON.");
 	}
 	/// ditto
@@ -1031,7 +1033,7 @@ struct Json {
 	 */
 	void appendArrayElement(Json element)
 	@trusted {
-		enforceJson(m_type == Type.array, "'appendArrayElement' only allowed for array types, not "~.to!string(m_type)~".");
+		enforceJson(m_type == Type.array, "'appendArrayElement' only allowed for array types, not "~m_type.enumToString~".");
 		m_array ~= element;
 	}
 
@@ -1200,16 +1202,16 @@ struct Json {
 
 		string name;
 		version (VibeJsonFieldNames) {
-			if (m_name.length) name = m_name ~ " of type " ~ m_type.to!string;
-			else name = "JSON of type " ~ m_type.to!string;
-		} else name = "JSON of type " ~ m_type.to!string;
+			if (m_name.length) name = m_name ~ " of type " ~ m_type.enumToString;
+			else name = "JSON of type " ~ m_type.enumToString;
+		} else name = "JSON of type " ~ m_type.enumToString;
 
 		string expected;
-		static if (TYPES.length == 1) expected = typeId!(TYPES[0]).to!string;
+		static if (TYPES.length == 1) expected = typeId!(TYPES[0]).enumToString;
 		else {
 			foreach (T; TYPES) {
 				if (expected.length > 0) expected ~= ", ";
-				expected ~= typeId!T.to!string;
+				expected ~= typeId!T.enumToString;
 			}
 		}
 
@@ -1241,7 +1243,7 @@ struct Json {
 
 	private long bigIntToLong() inout @trusted
 	{
-		assert(m_type == Type.bigInt, format("Converting non-bigInt type with bitIntToLong!?: %s", cast(Type)m_type));
+		assert(m_type == Type.bigInt, format("Converting non-bigInt type with bitIntToLong!?: %s", (cast(Type)m_type).enumToString));
 		enforceJson(m_bigInt >= long.min && m_bigInt <= long.max, "Number out of range while converting BigInt("~format("%d", m_bigInt)~") to long.");
 		return m_bigInt.toLong();
 	}
@@ -1863,7 +1865,7 @@ struct JsonSerializer {
 	//
 	void readDictionary(Traits)(scope void delegate(string) @safe field_handler)
 	{
-		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
+		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.enumToString);
 		auto old = m_current;
 		foreach (string key, value; m_current.get!(Json[string])) {
 			if (value.type == Json.Type.undefined) {
@@ -1881,7 +1883,7 @@ struct JsonSerializer {
 
 	void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 	{
-		enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.to!string);
+		enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.enumToString);
 		auto old = m_current;
 		size_callback(m_current.length);
 		foreach (ent; old.get!(Json[])) {

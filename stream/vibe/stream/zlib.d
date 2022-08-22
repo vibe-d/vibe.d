@@ -81,29 +81,6 @@ FreeListRef!ZlibOutputStream createGzipOutputStreamFL(OutputStream)(OutputStream
 
 
 /**
-	Writes any data compressed in deflate format to the specified output stream.
-*/
-deprecated("Use createDeflateOutputStream instead.")
-final class DeflateOutputStream : ZlibOutputStream {
-	@safe this(OutputStream dst)
-	{
-		super(dst, HeaderFormat.deflate);
-	}
-}
-
-
-/**
-	Writes any data compressed in gzip format to the specified output stream.
-*/
-deprecated("Use createGzipOutputStream instead.")
-final class GzipOutputStream : ZlibOutputStream {
-	@safe this(OutputStream dst)
-	{
-		super(dst, HeaderFormat.gzip);
-	}
-}
-
-/**
 	Generic zlib output stream.
 */
 class ZlibOutputStream : OutputStream {
@@ -120,12 +97,6 @@ class ZlibOutputStream : OutputStream {
 	enum HeaderFormat {
 		gzip,
 		deflate
-	}
-
-	deprecated("Use createGzipOutputStream/createDeflateOutputStream instead.")
-	this(OutputStream dst, HeaderFormat type, int level = Z_DEFAULT_COMPRESSION)
-	{
-		this(interfaceProxy!OutputStream(dst), type, level, true);
 	}
 
 	/// private
@@ -202,31 +173,6 @@ class ZlibOutputStream : OutputStream {
 }
 
 
-/**
-	Takes an input stream that contains data in deflate compressed format and outputs the
-	uncompressed data.
-*/
-deprecated("Use createDeflateInputStream instead.")
-class DeflateInputStream : ZlibInputStream {
-	@safe this(InputStream dst)
-	{
-		super(dst, HeaderFormat.deflate);
-	}
-}
-
-
-/**
-	Takes an input stream that contains data in gzip compressed format and outputs the
-	uncompressed data.
-*/
-deprecated("Use createGzipInputStream instead.")
-class GzipInputStream : ZlibInputStream {
-	this(InputStream dst)
-	@safe {
-		super(dst, HeaderFormat.gzip);
-	}
-}
-
 unittest {
 	import vibe.stream.memory;
 	import vibe.stream.operations;
@@ -278,12 +224,6 @@ class ZlibInputStream : InputStream {
 		gzip,
 		deflate,
 		automatic
-	}
-
-	deprecated("Use createGzipInputStream/createDeflateInputStream instead.")
-	this(InputStream src, HeaderFormat type)
-	{
-		this(interfaceProxy!InputStream(src), type, true);
 	}
 
 	/// private

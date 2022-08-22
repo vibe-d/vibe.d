@@ -120,7 +120,6 @@ test_script:
  - '%DC% --version'
  - dub test :utils --arch=%Darch% --compiler=%DC%
  - dub test :data --arch=%Darch% --compiler=%DC%
- - dub test :core --arch=%Darch% --compiler=%DC%
  - dub test :stream --arch=%Darch% --compiler=%DC%
  - dub test :crypto --arch=%Darch% --compiler=%DC%
  - dub test :tls --arch=%Darch% --compiler=%DC%

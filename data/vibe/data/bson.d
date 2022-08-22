@@ -61,6 +61,8 @@ unittest {
 
 public import vibe.data.json;
 
+import vibe.internal.conv : enumToString;
+
 import std.algorithm;
 import std.array;
 import std.base64;
@@ -108,27 +110,27 @@ struct Bson {
 		minKey     = 0xff,  /// Internal value
 		maxKey     = 0x7f,  /// Internal value
 
-		End = end,                /// Compatibility alias - will be deprecated soon.
-		Double = double_,         /// Compatibility alias - will be deprecated soon.
-		String = string,          /// Compatibility alias - will be deprecated soon.
-		Object = object,          /// Compatibility alias - will be deprecated soon.
-		Array = array,            /// Compatibility alias - will be deprecated soon.
-		BinData = binData,        /// Compatibility alias - will be deprecated soon.
-		Undefined = undefined,    /// Compatibility alias - will be deprecated soon.
-		ObjectID = objectID,      /// Compatibility alias - will be deprecated soon.
-		Bool = bool_,             /// Compatibility alias - will be deprecated soon.
-		Date = date,              /// Compatibility alias - will be deprecated soon.
-		Null = null_,             /// Compatibility alias - will be deprecated soon.
-		Regex = regex,            /// Compatibility alias - will be deprecated soon.
-		DBRef = dbRef,            /// Compatibility alias - will be deprecated soon.
-		Code = code,              /// Compatibility alias - will be deprecated soon.
-		Symbol = symbol,          /// Compatibility alias - will be deprecated soon.
-		CodeWScope = codeWScope,  /// Compatibility alias - will be deprecated soon.
-		Int = int_,               /// Compatibility alias - will be deprecated soon.
-		Timestamp = timestamp,    /// Compatibility alias - will be deprecated soon.
-		Long = long_,             /// Compatibility alias - will be deprecated soon.
-		MinKey = minKey,          /// Compatibility alias - will be deprecated soon.
-		MaxKey = maxKey           /// Compatibility alias - will be deprecated soon.
+		deprecated("Use `end` instead.") End = end,                /// Compatibility alias
+		deprecated("Use `double_` instead.") Double = double_,         /// Compatibility alias
+		deprecated("Use `string` instead.") String = string,          /// Compatibility alias
+		deprecated("Use `object` instead.") Object = object,          /// Compatibility alias
+		deprecated("Use `array` instead.") Array = array,            /// Compatibility alias
+		deprecated("Use `binData` instead.") BinData = binData,        /// Compatibility alias
+		deprecated("Use `undefined` instead.") Undefined = undefined,    /// Compatibility alias
+		deprecated("Use `objectID` instead.") ObjectID = objectID,      /// Compatibility alias
+		deprecated("Use `bool_` instead.") Bool = bool_,             /// Compatibility alias
+		deprecated("Use `date` instead.") Date = date,              /// Compatibility alias
+		deprecated("Use `null_` instead.") Null = null_,             /// Compatibility alias
+		deprecated("Use `regex` instead.") Regex = regex,            /// Compatibility alias
+		deprecated("Use `dBRef` instead.") DBRef = dbRef,            /// Compatibility alias
+		deprecated("Use `code` instead.") Code = code,              /// Compatibility alias
+		deprecated("Use `symbol` instead.") Symbol = symbol,          /// Compatibility alias
+		deprecated("Use `codeWScope` instead.") CodeWScope = codeWScope,  /// Compatibility alias
+		deprecated("Use `int_` instead.") Int = int_,               /// Compatibility alias
+		deprecated("Use `timestamp` instead.") Timestamp = timestamp,    /// Compatibility alias
+		deprecated("Use `long_` instead.") Long = long_,             /// Compatibility alias
+		deprecated("Use `minKey` instead.") MinKey = minKey,          /// Compatibility alias
+		deprecated("Use `maxKey` instead.") MaxKey = maxKey           /// Compatibility alias
 	}
 
 	// length + 0 byte end for empty lists (map, array)
@@ -460,7 +462,7 @@ struct Bson {
 		else static if( is(T == UUID) ){
 			checkType(Type.binData);
 			auto bbd = this.get!BsonBinData();
-			enforce(bbd.type == BsonBinData.Type.uuid, "BsonBinData value is type '"~to!string(bbd.type)~"', expected to be uuid");
+			enforce(bbd.type == BsonBinData.Type.uuid, "BsonBinData value is type '"~bbd.type.enumToString~"', expected to be uuid");
 			const ubyte[16] b = bbd.rawData;
 			return UUID(b);
 		}
@@ -494,7 +496,7 @@ struct Bson {
 	*/
 	@property size_t length() const {
 		switch( m_type ){
-			default: enforce(false, "Bson objects of type "~to!string(m_type)~" do not have a length field."); break;
+			default: enforce(false, "Bson objects of type "~m_type.enumToString~" do not have a length field."); break;
 			case Type.string, Type.code, Type.symbol: return (cast(string)this).length;
 			case Type.array: return byValue.walkLength;
 			case Type.object: return byValue.walkLength;
@@ -810,7 +812,7 @@ struct Bson {
 		foreach( t; valid_types )
 			if( m_type == t )
 				return;
-		throw new Exception("BSON value is type '"~to!string(m_type)~"', expected to be one of "~to!string(valid_types));
+		throw new Exception("BSON value is type '"~m_type.enumToString~"', expected to be one of "~valid_types.map!(t => t.enumToString).join(", "));
 	}
 }
 
@@ -829,12 +831,12 @@ struct BsonBinData {
 		md5 = 0x05,
 		userDefined = 0x80,
 
-		Generic = generic,          /// Compatibility alias - will be deprecated soon
-		Function = function_,       /// Compatibility alias - will be deprecated soon
-		BinaryOld = binaryOld,      /// Compatibility alias - will be deprecated soon
-		UUID = uuid,                /// Compatibility alias - will be deprecated soon
-		MD5 = md5,                  /// Compatibility alias - will be deprecated soon
-		UserDefined	= userDefined,  /// Compatibility alias - will be deprecated soon
+		deprecated("Use `generic` instead") Generic = generic,          /// Compatibility alias
+		deprecated("Use `function_` instead") Function = function_,       /// Compatibility alias
+		deprecated("Use `binaryOld` instead") BinaryOld = binaryOld,      /// Compatibility alias
+		deprecated("Use `uuid` instead") UUID = uuid,                /// Compatibility alias
+		deprecated("Use `md5` instead") MD5 = md5,                  /// Compatibility alias
+		deprecated("Use `userDefined` instead") UserDefined	= userDefined,  /// Compatibility alias
 	}
 
 	private {
@@ -1558,7 +1560,7 @@ struct BsonSerializer {
 	//
 	void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 	{
-		enforce(m_inputData.type == Bson.Type.object, "Expected object instead of "~m_inputData.type.to!string());
+		enforce(m_inputData.type == Bson.Type.object, "Expected object instead of "~m_inputData.type.enumToString);
 		auto old = m_inputData;
 		foreach (string name, value; old.byKeyValue) {
 			m_inputData = value;
@@ -1572,7 +1574,7 @@ struct BsonSerializer {
 
 	void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 	{
-		enforce(m_inputData.type == Bson.Type.array, "Expected array instead of "~m_inputData.type.to!string());
+		enforce(m_inputData.type == Bson.Type.array, "Expected array instead of "~m_inputData.type.enumToString);
 		auto old = m_inputData;
 		foreach (value; old.byValue) {
 			m_inputData = value;

@@ -9,7 +9,7 @@ import core.stdc.stdlib : exit;
 __gshared Tid t1, t2;
 shared watchdog_count = 0;
 
-shared static this()
+void main()
 {
 	t1 = spawn({
 		// ensure that asynchronous operations run in parallel to receive()

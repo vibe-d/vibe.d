@@ -15,24 +15,6 @@ import std.traits;
 static import std.utf;
 
 
-deprecated("This function was accidentally exposed and should not be used")
-void removeFromArray(T)(ref T[] array, T item)
-{
-	foreach( i; 0 .. array.length )
-		if( array[i] is item ){
-			removeFromArrayIdx(array, i);
-			return;
-		}
-}
-
-deprecated("This function was accidentally exposed and should not be used")
-void removeFromArrayIdx(T)(ref T[] array, size_t idx)
-{
-	foreach( j; idx+1 .. array.length)
-		array[j-1] = array[j];
-	array.length = array.length-1;
-}
-
 enum AppenderResetMode {
 	keepData,
 	freeData,

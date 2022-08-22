@@ -8,7 +8,7 @@ import std.functional;
 
 import core.time;
 
-void printReply(string channel, string message) @safe
+void printReply(string channel, string message) @safe nothrow
 {
 	logInfo("Received a message from channel %s: %s", channel, message);
 }

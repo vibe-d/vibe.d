@@ -88,12 +88,6 @@ class LimitedInputStream : InputStream {
 		bool m_silentLimit;
 	}
 
-	deprecated("Use createLimitedInputStream instead.")
-	this(InputStream stream, ulong byte_limit, bool silent_limit = false)
-	{
-		this(interfaceProxy!InputStream(stream), byte_limit, silent_limit, true);
-	}
-
 	/// private
 	this(InterfaceProxy!InputStream stream, ulong byte_limit, bool silent_limit, bool dummy)
 	{
@@ -202,12 +196,6 @@ class CountingOutputStream : OutputStream {
 		InterfaceProxy!OutputStream m_out;
 	}
 
-	deprecated("Use createCountingOutputStream instead.")
-	this(OutputStream stream, ulong write_limit = ulong.max)
-	{
-		this(interfaceProxy!OutputStream(stream), write_limit, true);
-	}
-
 	/// private
 	this(InterfaceProxy!OutputStream stream, ulong write_limit, bool dummy)
 	{
@@ -259,12 +247,6 @@ class CountingInputStream : InputStream {
 		InterfaceProxy!InputStream m_in;
 	}
 
-	deprecated("Use createCountingOutputStream instead.")
-	this(InputStream stream)
-	{
-		this(interfaceProxy!InputStream(stream), true);
-	}
-
 	/// private
 	this(InterfaceProxy!InputStream stream, bool dummy)
 	{
@@ -313,12 +295,6 @@ class EndCallbackInputStream : InputStream {
 		InterfaceProxy!InputStream m_in;
 		bool m_eof = false;
 		void delegate() @safe m_callback;
-	}
-
-	deprecated("use createEndCallbackInputStream instead.")
-	this(InputStream input, void delegate() @safe callback)
-	{
-		this(interfaceProxy!InputStream(input), callback, true);
 	}
 
 	/// private
