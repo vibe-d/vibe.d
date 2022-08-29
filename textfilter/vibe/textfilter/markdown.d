@@ -937,6 +937,7 @@ pure @safe {
 	auto cols = ln.splitter('|');
 	size_t cnt = 0;
 	foreach (c; cols) {
+		c = c.strip();
 		if (c.startsWith(':')) c = c[1 .. $];
 		if (c.endsWith(':')) c = c[0 .. $-1];
 		if (c.length < 3 || !c.allOf("-"))
@@ -944,6 +945,16 @@ pure @safe {
 		cnt++;
 	}
 	return cnt >= 2;
+}
+
+unittest {
+	assert(isTableSeparatorLine("|----|---|"));
+	assert(isTableSeparatorLine("|:----:|---|"));
+	assert(isTableSeparatorLine("---|----"));
+	assert(isTableSeparatorLine("| --- | :---- |"));
+	assert(!isTableSeparatorLine("| ---- |"));
+	assert(!isTableSeparatorLine("| -- | -- |"));
+	assert(!isTableSeparatorLine("| --- - | ---- |"));
 }
 
 private auto getTableColumns(string line)
