@@ -23,7 +23,7 @@ jobs:
     container: alpine
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Install dependencies
         run: apk add --no-cache build-base dub ${{ matrix.dc }} openssl-dev zlib-dev
       - name: Run tests
