@@ -12,8 +12,8 @@ public import vibe.data.bson;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
 
-import std.array : array;
-import std.algorithm : map, max, min;
+import std.array : array, split;
+import std.algorithm : map, max, min, canFind, endsWith;
 import std.exception;
 
 
@@ -351,20 +351,26 @@ private class MongoFindCursor(Q, R, S) : MongoCursorData!R {
 			query = () @trusted { return serializeToBson(m_query, query_buf); } ();
 		}
 
-		Bson full_query;
+		Bson full_query = Bson.emptyObject;
 
-		if (!query["query"].isNull() || !query["$query"].isNull()) {
-			// TODO: emit deprecation warning
-			full_query = query;
+		string collection;
+		if (query["aggregate"].isNull && m_collection.canFind(".") && !m_collection.endsWith("$cmd")) {
+			collection = m_collection.split(".")[1];
 		} else {
-			full_query = Bson.emptyObject;
-			full_query["$query"] = query;
+			collection = m_collection;
+		}
+
+		if (query["aggregate"].isNull) {
+			full_query["find"] = Bson(collection);
+			full_query["filter"] = query;
+		} else {
+			full_query = query;
 		}
 
 		if (!m_sort.isNull()) full_query["orderby"] = m_sort;
 
-		conn.query!R(m_collection, m_flags, m_nskip, m_nret, full_query, selector, &handleReply, &handleDocument);
-
+		conn.query!R(collection, m_flags, m_nskip, m_nret, full_query, selector, &handleReply, &handleDocument, !query["aggregate"].isNull);
+		
 		m_iterationStarted = true;
 	}
 }
