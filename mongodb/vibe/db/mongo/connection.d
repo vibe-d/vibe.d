@@ -266,11 +266,40 @@ final class MongoConnection {
 			authenticate();
 			break;
 		}
+
+		logInfo("Connected to: %s master=%s secondary=%s", m_description.me, m_description.ismaster, m_description.secondary);
 	}
 
 	void connect()
 	{
-		connectToHost(m_settings.hosts[0]);
+		Exception e;
+
+		foreach (host; m_settings.hosts) {
+			try {
+				connectToHost(host);
+			} catch(Exception ex) {
+				e = ex;
+				logError(e.msg);
+			}
+
+			if(!m_description.ismaster && m_description.secondary) {
+				logInfo("Connected to a secondary MongoDb node. The primary is: %s", m_description.primary);
+
+				auto split = m_description.primary.indexOf(":");
+
+				if(split != -1 && split < m_description.primary.length - 1) {
+					disconnect();
+					logInfo("Disconnected from the secondary MongoDb node.");
+
+					connectToHost(MongoHost(m_description.primary[0..split], m_description.primary[split+1..$].to!ushort));
+					return;
+				}
+			}
+		}
+
+		if(e !is null) {
+			throw e;
+		}
 	}
 
 	void disconnect()
@@ -745,6 +774,8 @@ struct ServerDescription
 	Nullable!int setVersion;
 	Nullable!BsonObjectID electionId;
 	string primary;
+	bool secondary;
+	bool ismaster;
 	string lastUpdateTime = "infinity ago";
 	Nullable!int logicalSessionTimeoutMinutes;
 
