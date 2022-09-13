@@ -147,15 +147,9 @@ final class MongoConnection {
 	this(MongoClientSettings cfg)
 	{
 		m_settings = cfg;
-
-		// Now let's check for features that are not yet supported.
-		if(m_settings.hosts.length > 1)
-			logWarn("Multiple mongodb hosts are not yet supported. Using first one: %s:%s",
-					m_settings.hosts[0].name, m_settings.hosts[0].port);
 	}
 
-	void connect()
-	{
+	void connectToHost(MongoHost host) {
 		bool isTLS;
 
 		/*
@@ -163,7 +157,7 @@ final class MongoConnection {
 		 * options such as connect timeouts and so on.
 		 */
 		try {
-			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
+			m_conn = connectTCP(host.name, host.port);
 			m_conn.tcpNoDelay = true;
 			if (m_settings.ssl) {
 				auto ctx =  createTLSContext(TLSContextKind.client);
@@ -178,7 +172,7 @@ final class MongoConnection {
 					ctx.useTrustedCertificateFile(m_settings.sslCAFile);
 				}
 
-				m_stream = createTLSStream(m_conn, ctx, m_settings.hosts[0].name);
+				m_stream = createTLSStream(m_conn, ctx, host.name);
 				isTLS = true;
 			}
 			else {
@@ -187,7 +181,7 @@ final class MongoConnection {
 			m_outRange = streamOutputRange(m_stream);
 		}
 		catch (Exception e) {
-			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
+			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", host.name, host.port), __FILE__, __LINE__, e);
 		}
 
 		m_allowReconnect = false;
@@ -271,6 +265,40 @@ final class MongoConnection {
 		case MongoAuthMechanism.mongoDBCR:
 			authenticate();
 			break;
+		}
+
+		logInfo("Connected to: %s master=%s secondary=%s", m_description.me, m_description.ismaster, m_description.secondary);
+	}
+
+	void connect()
+	{
+		Exception e;
+
+		foreach (host; m_settings.hosts) {
+			try {
+				connectToHost(host);
+			} catch(Exception ex) {
+				e = ex;
+				logError(e.msg);
+			}
+
+			if(!m_description.ismaster && m_description.secondary) {
+				logInfo("Connected to a secondary MongoDb node. The primary is: %s", m_description.primary);
+
+				auto split = m_description.primary.indexOf(":");
+
+				if(split != -1 && split < m_description.primary.length - 1) {
+					disconnect();
+					logInfo("Disconnected from the secondary MongoDb node.");
+
+					connectToHost(MongoHost(m_description.primary[0..split], m_description.primary[split+1..$].to!ushort));
+					return;
+				}
+			}
+		}
+
+		if(e !is null) {
+			throw e;
 		}
 	}
 
@@ -746,6 +774,8 @@ struct ServerDescription
 	Nullable!int setVersion;
 	Nullable!BsonObjectID electionId;
 	string primary;
+	bool secondary;
+	bool ismaster;
 	string lastUpdateTime = "infinity ago";
 	Nullable!int logicalSessionTimeoutMinutes;
 
