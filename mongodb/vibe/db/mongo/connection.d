@@ -678,7 +678,8 @@ final class MongoConnection {
 		ubyte[4] size;
 		recv(size[]);
 		ubyte[] dst = new ubyte[fromBsonData!uint(size)];
-		recv(dst);
+		dst[0 .. 4] = size;
+		recv(dst[4 .. $]);
 		return Bson(Bson.Type.Object, cast(immutable)dst);
 	}
 	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
