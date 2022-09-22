@@ -239,15 +239,9 @@ final class MongoConnection {
 			handshake["client"]["application"] = Bson(["name": Bson(m_settings.appName)]);
 		}
 
-		runCommand!Bson("admin", handshake,
-			(cursor, flags, first_doc, num_docs) {
-				enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure) && num_docs == 1,
-					"Authentication handshake failed.");
-			},
-			(idx, ref doc) {
-				enforce!MongoAuthException(doc["ok"].get!double == 1.0, "Authentication failed.");
-				m_description = deserializeBson!ServerDescription(doc);
-			});
+		auto reply = runCommand!Bson("admin", handshake);
+		enforce!MongoAuthException(reply["ok"].get!double == 1.0, "Authentication failed.");
+		m_description = deserializeBson!ServerDescription(reply);
 
 		if (m_description.satisfiesVersion(WireVersion.v36))
 			m_supportsOpMsg = true;
@@ -350,19 +344,47 @@ final class MongoConnection {
 		recvReply!T(id, on_msg, on_doc);
 	}
 
-	void runCommand(T)(string database, Bson command, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
+	Bson runCommand(T)(string database, Bson command)
 	{
+		import std.array;
+
 		scope (failure) disconnect();
 		if (m_supportsOpMsg)
 		{
 			command["$db"] = Bson(database);
 			auto id = sendMsg(-1, 0, command);
-			recvMsg!T(id, on_msg, on_doc);
+			Bson ret;
+			Appender!(Bson[])[string] docs;
+			recvMsg(id, (flags, root) {
+				ret = root;
+			}, (ident, size) {
+				docs[ident] = appender!(Bson[]);
+			}, (ident, push) {
+				docs[ident].put(push);
+			});
+
+			foreach (ident, app; docs)
+				ret[ident] = Bson(app.data);
+
+			static if (is(T == Bson)) return ret;
+			else {
+				T doc = deserializeBson!T(bson);
+				return doc;
+			}
 		}
 		else
 		{
 			auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
-			recvReply!T(id, on_msg, on_doc);
+			T ret;
+			recvReply!T(id,
+				(cursor, flags, first_doc, num_docs) {
+					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure) && num_docs == 1,
+						"command failed or returned more than one document");
+				},
+				(idx, ref doc) {
+					ret = deserializeBson!T(doc);
+				});
+			return ret;
 		}
 	}
 
@@ -473,7 +495,7 @@ final class MongoConnection {
 		return result.byValue.map!toInfo;
 	}
 
-	private int recvMsg(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc) @trusted
+	private int recvMsg(int reqid, scope MsgReplyDelegate on_sec0, scope MsgSection1StartDelegate on_sec1_start, scope MsgSection1Delegate on_sec1_doc)
 	{
 		import std.traits;
 
@@ -486,27 +508,28 @@ final class MongoConnection {
 		enforce(respto == reqid, "Reply is not for the expected message on a sequential connection!");
 		enforce(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG)");
 
-		import std.stdio : stderr;
 		uint flagBits = recvUInt();
-		stderr.writefln!"flag bits: %b"(flagBits);
 		int sectionLength = cast(int)(msglen - 4 * int.sizeof - flagBits.sizeof);
 		if ((flagBits & (1 << 16)) != 0)
 			sectionLength -= uint.sizeof; // CRC present
+		bool gotSec0;
 		while (m_bytesRead - bytes_read < sectionLength) {
-			ubyte[256] buf = void;
-			ubyte[] bufsl = buf;
 			ubyte payloadType = recvUByte();
 			switch (payloadType) {
 				case 0:
-					stderr.writeln("payload 0: ", recvBson(bufsl));
+					gotSec0 = true;
+					on_sec0(flagBits, recvBsonDup());
 					break;
 				case 1:
+					if (!gotSec0)
+						throw new MongoDriverException("Got OP_MSG section 1 before section 0, which is not supported by vibe.d");
+
 					auto section_bytes_read = m_bytesRead;
 					int size = recvInt();
 					auto identifier = recvCString();
-					stderr.writeln("payload 1 = \"", identifier, "\" (size ", size, ")");
+					on_sec1_start(identifier, size);
 					while (m_bytesRead - section_bytes_read < size) {
-						stderr.writeln("payload 1 section: ", recvBson(bufsl));
+						on_sec1_doc(identifier, recvBsonDup());
 					}
 					break;
 				default:
@@ -514,7 +537,7 @@ final class MongoConnection {
 			}
 		}
 
-		assert(false);
+		return resid;
 	}
 
 	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
@@ -551,14 +574,7 @@ final class MongoConnection {
 		static if (hasIndirections!T || is(T == Bson))
 			auto buf = new ubyte[msglen - cast(size_t)(m_bytesRead - bytes_read)];
 		foreach (i; 0 .. cast(size_t)numret) {
-			// TODO: directly deserialize from the wire
-			static if (!hasIndirections!T && !is(T == Bson)) {
-				ubyte[256] buf = void;
-				ubyte[] bufsl = buf;
-				auto bson = () @trusted { return recvBson(bufsl); } ();
-			} else {
-				auto bson = () @trusted { return recvBson(buf); } ();
-			}
+			auto bson = recvBsonDup();
 
 			// logDebugV("Received mongo response on %s:%s: %s", reqid, i, bson);
 
@@ -608,10 +624,6 @@ final class MongoConnection {
 		sendValue!ubyte(0);
 		sendValue(document);
 		m_outRange.flush();
-		(() @trusted {
-			import std.stdio : stderr;
-			stderr.writefln("Sent mongo msg in response to %s with args %s", id, response_to, flagBits, document);
-		})();
 		return id;
 	}
 
@@ -649,6 +661,13 @@ final class MongoConnection {
 		}
 		dst[0 .. 4] = toBsonData(len)[];
 		recv(dst[4 .. $]);
+		return Bson(Bson.Type.Object, cast(immutable)dst);
+	}
+	private Bson recvBsonDup()
+	@trusted {
+		ubyte[4] size;
+		recv(size[]);
+		ubyte[] dst = new ubyte[fromBsonData!uint(size)];
 		return Bson(Bson.Type.Object, cast(immutable)dst);
 	}
 	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
@@ -818,8 +837,12 @@ private enum OpCode : int {
 	Msg          = 2013,
 }
 
-alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs) @safe;
-template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc) @safe; }
+private alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs) @safe;
+private template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc) @safe; }
+
+private alias MsgReplyDelegate = void delegate(uint flags, Bson document) @safe;
+private alias MsgSection1StartDelegate = void delegate(scope const(char)[] identifier, int size) @safe;
+private alias MsgSection1Delegate = void delegate(scope const(char)[] identifier, Bson document) @safe;
 
 struct MongoDBInfo
 {
