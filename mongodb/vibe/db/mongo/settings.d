@@ -153,6 +153,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			}
 
 			switch( option.toLower() ){
+				import std.string : split;
+
 				default: logWarn("Unknown MongoDB option %s", option); break;
 				case "appname": cfg.appName = value; break;
 				case "slaveok": bool v; if( setBool(v) && v ) cfg.defQueryFlags |= QueryFlags.SlaveOk; break;
@@ -166,6 +168,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "ssl": setBool(cfg.ssl); break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
 				case "authmechanism": cfg.authMechanism = parseAuthMechanism(value); break;
+				case "authmechanismproperties": cfg.authMechanismProperties = value.split(","); warnNotImplemented(); break;
+				case "authsource": cfg.authSource = value; break;
 				case "wtimeoutms": setLong(cfg.wTimeoutMS); break;
 				case "w":
 					try {
@@ -490,6 +494,20 @@ class MongoClientSettings
 	 */
 	string sslCAFile;
 
+	/** 
+	 * Specify the database name associated with the user's credentials. If
+	 * `authSource` is unspecified, `authSource` defaults to the `defaultauthdb`
+	 * specified in the connection string. If `defaultauthdb` is unspecified,
+	 * then `authSource` defaults to `admin`.
+	 *
+	 * The `PLAIN` (LDAP), `GSSAPI` (Kerberos), and `MONGODB-AWS` (IAM)
+	 * authentication mechanisms require that `authSource` be set to `$external`,
+	 * as these mechanisms delegate credential storage to external services.
+	 *
+	 * Ignored if no username is provided.
+	 */
+	string authSource;
+
 	/**
 	 * Use the given authentication mechanism when connecting to the server. If
 	 * unsupported by the server, throw a MongoAuthException.
@@ -498,6 +516,14 @@ class MongoClientSettings
 	 * determines a suitable authentication mechanism based on server version.
 	 */
 	MongoAuthMechanism authMechanism;
+
+	/** 
+	 * Specify properties for the specified authMechanism as a comma-separated
+	 * list of colon-separated key-value pairs.
+	 *
+	 * Currently none are used by the vibe.d Mongo driver.
+	 */
+	string[] authMechanismProperties;
 
 	/**
 	 * Application name for the connection information when connected.
@@ -552,6 +578,20 @@ class MongoClientSettings
 		this.username = username;
 		this.sslPEMKeyFile = sslPEMKeyFile;
 		this.sslCAFile = sslCAFile;
+	}
+
+	/** 
+	 * Resolves the database to run authentication commands on.
+	 * (authSource if set, otherwise the URI's database if set, otherwise "admin")
+	 */
+	string getAuthDatabase() @safe @nogc nothrow pure
+	{
+		if (authSource.length)
+			return authSource;
+		else if (database.length)
+			return database;
+		else
+			return "admin";
 	}
 }
 
