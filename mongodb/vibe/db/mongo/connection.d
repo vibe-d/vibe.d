@@ -533,8 +533,14 @@ final class MongoConnection {
 					}
 					break;
 				default:
-					throw new MongoDriverException("Received unexpected payload section type");
+					throw new MongoDriverException("Received unexpected payload section type " ~ payloadType.to!string);
 			}
+		}
+
+		if ((flagBits & (1 << 16)) != 0)
+		{
+			uint crc = recvUInt();
+			// TODO: validate CRC
 		}
 
 		return resid;
