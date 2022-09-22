@@ -133,6 +133,7 @@ final class MongoConnection {
 		/// Flag to prevent recursive connections when server closes connection while connecting
 		bool m_allowReconnect;
 		bool m_isAuthenticating;
+		bool m_supportsOpMsg;
 	}
 
 	enum ushort defaultPort = MongoClientSettings.defaultPort;
@@ -163,6 +164,8 @@ final class MongoConnection {
 		 * options such as connect timeouts and so on.
 		 */
 		try {
+			import core.time : msecs;
+
 			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port, null, 0, m_settings.connectTimeoutMS.msecs);
 			m_conn.tcpNoDelay = true;
 			m_conn.readTimeout = m_settings.socketTimeoutMS.msecs;
@@ -196,7 +199,22 @@ final class MongoConnection {
 			m_allowReconnect = true;
 
 		Bson handshake = Bson.emptyObject;
-		handshake["isMaster"] = Bson(1);
+		static assert(!is(typeof(m_settings.loadBalanced)), "loadBalanced was added to the API, set legacy if it's true here!");
+		// TODO: must use legacy handshake if m_settings.loadBalanced is true
+		// and also once we allow configuring a server API version in the driver
+		// (https://github.com/mongodb/specifications/blob/master/source/versioned-api/versioned-api.rst)
+		m_supportsOpMsg = false;
+		bool legacyHandshake = false;
+		if (legacyHandshake)
+		{
+			handshake["isMaster"] = Bson(1);
+			handshake["helloOk"] = Bson(1);
+		}
+		else
+		{
+			handshake["hello"] = Bson(1);
+			m_supportsOpMsg = true;
+		}
 
 		import os = std.system;
 		import compiler = std.compiler;
@@ -216,7 +234,7 @@ final class MongoConnection {
 			handshake["client"]["application"] = Bson(["name": Bson(m_settings.appName)]);
 		}
 
-		query!Bson("$external.$cmd", QueryFlags.none, 0, -1, handshake, Bson(null),
+		runCommand!Bson("admin", handshake,
 			(cursor, flags, first_doc, num_docs) {
 				enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure) && num_docs == 1,
 					"Authentication handshake failed.");
@@ -225,6 +243,9 @@ final class MongoConnection {
 				enforce!MongoAuthException(doc["ok"].get!double == 1.0, "Authentication failed.");
 				m_description = deserializeBson!ServerDescription(doc);
 			});
+
+		if (m_description.satisfiesVersion(WireVersion.v36))
+			m_supportsOpMsg = true;
 
 		m_bytesRead = 0;
 		auto authMechanism = m_settings.authMechanism;
@@ -311,6 +332,7 @@ final class MongoConnection {
 		if (m_settings.safe) checkForError(collection_name);
 	}
 
+	deprecated("Non-functional since MongoDB 5.1: use `find` to query collections instead - instead of `$cmd` use `runCommand` to send commands - use listIndices and listCollections instead of `<database>.system.indexes` and `<database>.system.namsepsaces`")
 	void query(T)(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		scope(failure) disconnect();
@@ -321,6 +343,22 @@ final class MongoConnection {
 		else
 			id = send(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query, returnFieldSelector);
 		recvReply!T(id, on_msg, on_doc);
+	}
+
+	void runCommand(T)(string database, Bson command, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
+	{
+		scope (failure) disconnect();
+		if (m_supportsOpMsg)
+		{
+			command["$db"] = Bson(database);
+			auto id = sendMsg(-1, 0, command);
+			recvMsg!T(id, on_msg, on_doc);
+		}
+		else
+		{
+			auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
+			recvReply!T(id, on_msg, on_doc);
+		}
 	}
 
 	void getMore(T)(string collection_name, int nret, long cursor_id, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
@@ -430,6 +468,50 @@ final class MongoConnection {
 		return result.byValue.map!toInfo;
 	}
 
+	private int recvMsg(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc) @trusted
+	{
+		import std.traits;
+
+		auto bytes_read = m_bytesRead;
+		int msglen = recvInt();
+		int resid = recvInt();
+		int respto = recvInt();
+		int opcode = recvInt();
+
+		enforce(respto == reqid, "Reply is not for the expected message on a sequential connection!");
+		enforce(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG)");
+
+		import std.stdio : stderr;
+		uint flagBits = recvUInt();
+		stderr.writefln!"flag bits: %b"(flagBits);
+		int sectionLength = cast(int)(msglen - 4 * int.sizeof - flagBits.sizeof);
+		if ((flagBits & (1 << 16)) != 0)
+			sectionLength -= uint.sizeof; // CRC present
+		while (m_bytesRead - bytes_read < sectionLength) {
+			ubyte[256] buf = void;
+			ubyte[] bufsl = buf;
+			ubyte payloadType = recvUByte();
+			switch (payloadType) {
+				case 0:
+					stderr.writeln("payload 0: ", recvBson(bufsl));
+					break;
+				case 1:
+					auto section_bytes_read = m_bytesRead;
+					int size = recvInt();
+					auto identifier = recvCString();
+					stderr.writeln("payload 1 = \"", identifier, "\" (size ", size, ")");
+					while (m_bytesRead - section_bytes_read < size) {
+						stderr.writeln("payload 1 section: ", recvBson(bufsl));
+					}
+					break;
+				default:
+					throw new MongoDriverException("Received unexpected payload section type");
+			}
+		}
+
+		assert(false);
+	}
+
 	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		import std.traits;
@@ -504,10 +586,32 @@ final class MongoConnection {
 		return id;
 	}
 
+	private int sendMsg(int response_to, uint flagBits, Bson document)
+	{
+		if( !connected() ) {
+			if (m_allowReconnect) connect();
+			else if (m_isAuthenticating) throw new MongoAuthException("Connection got closed while authenticating");
+			else throw new MongoDriverException("Connection got closed while connecting");
+		}
+		int id = nextMessageId();
+		// sendValue!int to make sure we don't accidentally send other types after arithmetic operations/changing types
+		sendValue!int(21 + sendLength(document));
+		sendValue!int(id);
+		sendValue!int(response_to);
+		sendValue!int(cast(int)OpCode.Msg);
+		sendValue!uint(flagBits);
+		sendValue!ubyte(0);
+		sendValue(document);
+		m_outRange.flush();
+		// logDebugV("Sent mongo opcode %s (id %s) in response to %s with args %s", code, id, response_to, tuple(args));
+		return id;
+	}
+
 	private void sendValue(T)(T value)
 	{
 		import std.traits;
-		static if (is(T == int)) sendBytes(toBsonData(value));
+		static if (is(T == ubyte)) m_outRange.put(value);
+		else static if (is(T == int) || is(T == uint)) sendBytes(toBsonData(value));
 		else static if (is(T == long)) sendBytes(toBsonData(value));
 		else static if (is(T == Bson)) sendBytes(value.data);
 		else static if (is(T == string)) {
@@ -521,8 +625,11 @@ final class MongoConnection {
 
 	private void sendBytes(in ubyte[] data){ m_outRange.put(data); }
 
-	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
-	private long recvLong() { ubyte[long.sizeof] ret; recv(ret); return fromBsonData!long(ret); }
+	private T recvInteger(T)() { ubyte[T.sizeof] ret; recv(ret); return fromBsonData!T(ret); }
+	private alias recvUByte = recvInteger!ubyte;
+	private alias recvInt = recvInteger!int;
+	private alias recvUInt = recvInteger!uint;
+	private alias recvLong = recvInteger!long;
 	private Bson recvBson(ref ubyte[] buf)
 	@system {
 		int len = recvInt();
@@ -537,6 +644,18 @@ final class MongoConnection {
 		return Bson(Bson.Type.Object, cast(immutable)dst);
 	}
 	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
+	private const(char)[] recvCString()
+	{
+		auto buf = new ubyte[32];
+		ptrdiff_t i = -1;
+		do
+		{
+			i++;
+			if (i == buf.length) buf.length *= 2;
+			recv(buf[i .. i + 1]);
+		} while (buf[i] != 0);
+		return cast(const(char)[])buf[0 .. i];
+	}
 
 	private int nextMessageId() { return m_msgid++; }
 
@@ -679,14 +798,16 @@ final class MongoConnection {
 
 private enum OpCode : int {
 	Reply        = 1, // sent only by DB
-	Msg          = 1000,
 	Update       = 2001,
 	Insert       = 2002,
 	Reserved1    = 2003,
 	Query        = 2004,
 	GetMore      = 2005,
 	Delete       = 2006,
-	KillCursors  = 2007
+	KillCursors  = 2007,
+
+	Compressed   = 2012,
+	Msg          = 2013,
 }
 
 alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs) @safe;
@@ -759,15 +880,20 @@ struct ServerDescription
 
 enum WireVersion : int
 {
-	old,
-	v26,
-	v26_2,
-	v30,
-	v32,
-	v34,
-	v36,
-	v40,
-	v42
+	old = 0,
+	v26 = 1,
+	v26_2 = 2,
+	v30 = 3,
+	v32 = 4,
+	v34 = 5,
+	v36 = 6,
+	v40 = 7,
+	v42 = 8,
+	v44 = 9,
+	v50 = 13,
+	v51 = 14,
+	v52 = 15,
+	v53 = 16
 }
 
 private string getHostArchitecture()
