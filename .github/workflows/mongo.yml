@@ -1,0 +1,53 @@
+name: MongoDB Tests
+
+on: [push, pull_request]
+
+jobs:
+  main:
+    name: Run
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-20.04 ]
+        dc: [ dmd-latest ]
+        mongo:
+        - '3.6'
+        - '4.0'
+        - '4.2'
+        - '4.4'
+        - '5.0'
+        - '6.0'
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Prepare compiler
+      uses: dlang-community/setup-dlang@v1
+      with:
+          compiler: ${{ matrix.dc }}
+
+    - name: variable-mapper
+      uses: kanga333/variable-mapper@v0.2.2
+      with:
+        key: "${{ matrix.mongo }}"
+        map: |
+          {
+            "^3\\.6$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/3.6/multiverse/binary-amd64/mongodb-org-server_3.6.23_amd64.deb"},
+            "^4\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/4.0/multiverse/binary-amd64/mongodb-org-server_4.0.28_amd64.deb"},
+            "^4\\.2$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/4.2/multiverse/binary-amd64/mongodb-org-server_4.2.22_amd64.deb"},
+            "^4\\.4$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/4.4/multiverse/binary-amd64/mongodb-org-server_4.4.16_amd64.deb"},
+            "^5\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/5.0/multiverse/binary-amd64/mongodb-org-server_5.0.12_amd64.deb"},
+            "^6\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/6.0/multiverse/binary-amd64/mongodb-org-server_6.0.1_amd64.deb"}
+          }
+
+    - name: 'Install MongoDB'
+      run: wget "$MONGO_URL" && sudo dpkg -i "$(basename "$MONGO_URL")"
+    - name: 'Run tests'
+      env:
+        VIBED_DRIVER: vibe-core
+        PARTS: mongo
+      run: |
+        ./run-ci.sh
