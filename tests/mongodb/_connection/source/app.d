@@ -20,10 +20,12 @@ int main(string[] args)
 		return 1;
 	}
 
-	runTask({ sleep(10.seconds); assert(false, "Timeout exceeded"); });
+	runTask({ sleep(20.seconds); assert(false, "Timeout exceeded"); });
 
 	port = args[1].to!ushort;
 	MongoClientSettings settings = new MongoClientSettings;
+	settings.connectTimeoutMS = 5_000;
+	settings.socketTimeoutMS = 2_000;
 
 	int authStep = 0;
 	foreach (arg; args[2 .. $])
