@@ -160,8 +160,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
-				case "connecttimeoutms": setLong(cfg.connectTimeoutMS); warnNotImplemented(); break;
-				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); warnNotImplemented(); break;
+				case "connecttimeoutms": setLong(cfg.connectTimeoutMS); break;
+				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); break;
 				case "tls": setBool(cfg.ssl); break;
 				case "ssl": setBool(cfg.ssl); break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
@@ -454,16 +454,14 @@ class MongoClientSettings
 
 	/**
 	 * The time in milliseconds to attempt a connection before timing out.
-	 *
-	 * Bugs: Not yet implemented
 	 */
-	long connectTimeoutMS;
+	long connectTimeoutMS = 10_000;
 
 	/**
 	 * The time in milliseconds to attempt a send or receive on a socket before
 	 * the attempt times out.
 	 *
-	 * Bugs: Not yet implemented
+	 * Bugs: Not implemented for sending
 	 */
 	long socketTimeoutMS;
 
