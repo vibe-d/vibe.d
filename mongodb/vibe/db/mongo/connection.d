@@ -164,11 +164,16 @@ final class MongoConnection {
 		 * options such as connect timeouts and so on.
 		 */
 		try {
-			import core.time : msecs;
+			import core.time : Duration, msecs;
 
-			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port, null, 0, m_settings.connectTimeoutMS.msecs);
+			auto connectTimeout = m_settings.connectTimeoutMS.msecs;
+			if (m_settings.connectTimeoutMS == 0)
+				connectTimeout = Duration.max;
+
+			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port, null, 0, connectTimeout);
 			m_conn.tcpNoDelay = true;
-			m_conn.readTimeout = m_settings.socketTimeoutMS.msecs;
+			if (m_settings.socketTimeoutMS)
+				m_conn.readTimeout = m_settings.socketTimeoutMS.msecs;
 			if (m_settings.ssl) {
 				auto ctx =  createTLSContext(TLSContextKind.client);
 				if (!m_settings.sslverifycertificate) {
@@ -603,7 +608,10 @@ final class MongoConnection {
 		sendValue!ubyte(0);
 		sendValue(document);
 		m_outRange.flush();
-		// logDebugV("Sent mongo opcode %s (id %s) in response to %s with args %s", code, id, response_to, tuple(args));
+		(() @trusted {
+			import std.stdio : stderr;
+			stderr.writefln("Sent mongo msg in response to %s with args %s", id, response_to, flagBits, document);
+		})();
 		return id;
 	}
 
