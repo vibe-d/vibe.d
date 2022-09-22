@@ -505,8 +505,8 @@ final class MongoConnection {
 		int respto = recvInt();
 		int opcode = recvInt();
 
-		enforce(respto == reqid, "Reply is not for the expected message on a sequential connection!");
-		enforce(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG)");
+		enforce!MongoDriverException(respto == reqid, "Reply is not for the expected message on a sequential connection!");
+		enforce!MongoDriverException(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG)");
 
 		uint flagBits = recvUInt();
 		int sectionLength = cast(int)(msglen - 4 * int.sizeof - flagBits.sizeof);
@@ -560,8 +560,8 @@ final class MongoConnection {
 		int respto = recvInt();
 		int opcode = recvInt();
 
-		enforce(respto == reqid, "Reply is not for the expected message on a sequential connection!");
-		enforce(opcode == OpCode.Reply, "Got a non-'Reply' reply!");
+		enforce!MongoDriverException(respto == reqid, "Reply is not for the expected message on a sequential connection!");
+		enforce!MongoDriverException(opcode == OpCode.Reply, "Got a non-'Reply' reply!");
 
 		auto flags = cast(ReplyFlags)recvInt();
 		long cursor = recvLong();
@@ -678,6 +678,7 @@ final class MongoConnection {
 		ubyte[4] size;
 		recv(size[]);
 		ubyte[] dst = new ubyte[fromBsonData!uint(size)];
+		recv(dst);
 		return Bson(Bson.Type.Object, cast(immutable)dst);
 	}
 	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
