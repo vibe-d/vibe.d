@@ -344,16 +344,24 @@ final class MongoConnection {
 		recvReply!T(id, on_msg, on_doc);
 	}
 
-	Bson runCommand(T)(string database, Bson command)
+	Bson runCommand(T, CommandFailException = MongoDriverException)(string database, Bson command, bool testOk = true,
+		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 	{
 		import std.array;
 
 		scope (failure) disconnect();
+
+		string formatErrorInfo(string msg)
+		{
+			return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
+		}
+
+		Bson ret;
+
 		if (m_supportsOpMsg)
 		{
 			command["$db"] = Bson(database);
 			auto id = sendMsg(-1, 0, command);
-			Bson ret;
 			Appender!(Bson[])[string] docs;
 			recvMsg(id, (flags, root) {
 				ret = root;
@@ -365,26 +373,29 @@ final class MongoConnection {
 
 			foreach (ident, app; docs)
 				ret[ident] = Bson(app.data);
-
-			static if (is(T == Bson)) return ret;
-			else {
-				T doc = deserializeBson!T(bson);
-				return doc;
-			}
 		}
 		else
 		{
 			auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
-			T ret;
 			recvReply!T(id,
 				(cursor, flags, first_doc, num_docs) {
-					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure) && num_docs == 1,
-						"command failed or returned more than one document");
+					logTrace("runCommand(%s) flags: %s, cursor: %s, documents: %s", database, flags, cursor, num_docs);
+					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), formatErrorInfo("command query failed"));
+					enforce!MongoDriverException(num_docs == 1, formatErrorInfo("received more than one document in command response"));
 				},
 				(idx, ref doc) {
-					ret = deserializeBson!T(doc);
+					ret = doc;
 				});
-			return ret;
+		}
+
+		if (testOk && ret["ok"].get!double != 1.0)
+			throw new CommandFailException(formatErrorInfo("command failed: "
+				~ ret["errmsg"].opt!string("(no message)")));
+
+		static if (is(T == Bson)) return ret;
+		else {
+			T doc = deserializeBson!T(bson);
+			return doc;
 		}
 	}
 
@@ -428,32 +439,19 @@ final class MongoConnection {
 
 		_MongoErrorDescription ret;
 
-		query!Bson(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
-			0, -1, command_and_options, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				logTrace("getLastEror(%s) flags: %s, cursor: %s, documents: %s", db, flags, cursor, num_docs);
-				enforce(!(flags & ReplyFlags.QueryFailure),
-					new MongoDriverException(format("MongoDB error: getLastError(%s) call failed.", db))
-				);
-				enforce(
-					num_docs == 1,
-					new MongoDriverException(format("getLastError(%s) returned %s documents instead of one.", db, num_docs))
-				);
-			},
-			(idx, ref error) {
-				try {
-					ret = MongoErrorDescription(
-						error["err"].opt!string(""),
-						error["code"].opt!int(-1),
-						error["connectionId"].opt!int(-1),
-						error["n"].get!int(),
-						error["ok"].get!double()
-					);
-				} catch (Exception e) {
-					throw new MongoDriverException(e.msg);
-				}
-			}
-		);
+		auto error = runCommand!Bson(db, command_and_options);
+
+		try {
+			ret = MongoErrorDescription(
+				error["errmsg"].opt!string(error["err"].opt!string("")),
+				error["code"].opt!int(-1),
+				error["connectionId"].opt!int(-1),
+				error["n"].get!int(),
+				error["ok"].get!double()
+			);
+		} catch (Exception e) {
+			throw new MongoDriverException(e.msg);
+		}
 
 		return ret;
 	}
@@ -465,14 +463,9 @@ final class MongoConnection {
 	*/
 	auto listDatabases()
 	{
-		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
+		string cn = m_settings.database == string.init ? "admin" : m_settings.database;
 
 		auto cmd = Bson(["listDatabases":Bson(1)]);
-
-		void on_msg(long cursor, ReplyFlags flags, int first_doc, int num_docs) {
-			if ((flags & ReplyFlags.QueryFailure))
-				throw new MongoDriverException("Calling listDatabases failed.");
-		}
 
 		static MongoDBInfo toInfo(const(Bson) db_doc) {
 			return MongoDBInfo(
@@ -482,15 +475,7 @@ final class MongoConnection {
 			);
 		}
 
-		Bson result;
-		void on_doc(size_t idx, ref Bson doc) {
-			if (doc["ok"].get!double != 1.0)
-				throw new MongoAuthException("listDatabases failed.");
-
-			result = doc["databases"];
-		}
-
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
+		auto result = runCommand!Bson(cn, cmd)["databases"];
 
 		return result.byValue.map!toInfo;
 	}
@@ -711,7 +696,6 @@ final class MongoConnection {
 
 	private void certAuthenticate()
 	{
-		string cn = m_settings.getAuthDatabase ~ ".$cmd";
 		Bson cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
 		cmd["mechanism"] = Bson("MONGODB-X509");
@@ -727,37 +711,17 @@ final class MongoConnection {
 
 			cmd["user"] = Bson(m_settings.username);
 		}
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("Calling authenticate failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("Authentication failed.");
-			}
-		);
+		runCommand!(Bson, MongoAuthException)(m_settings.getAuthDatabase, cmd);
 	}
 
 	private void authenticate()
 	{
-		string cn = m_settings.getAuthDatabase ~ ".$cmd";
+		string cn = m_settings.getAuthDatabase;
 
-		string nonce, key;
-
-		auto cmd = Bson(["getnonce":Bson(1)]);
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("Calling getNonce failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoDriverException("getNonce failed.");
-				nonce = doc["nonce"].get!string;
-				key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
-			}
-		);
+		auto cmd = Bson(["getnonce": Bson(1)]);
+		auto result = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		string nonce = result["nonce"].get!string;
+		string key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
 
 		cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
@@ -765,22 +729,14 @@ final class MongoConnection {
 		cmd["nonce"] = Bson(nonce);
 		cmd["user"] = Bson(m_settings.username);
 		cmd["key"] = Bson(key);
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("Calling authenticate failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("Authentication failed.");
-			}
-		);
+		runCommand!(Bson, MongoAuthException)(cn, cmd);
 	}
 
 	private void scramAuthenticate()
 	{
 		import vibe.db.mongo.sasl;
-		string cn = m_settings.getAuthDatabase ~ ".$cmd";
+
+		string cn = m_settings.getAuthDatabase;
 
 		ScramState state;
 		string payload = state.createInitialRequest(m_settings.username);
@@ -789,49 +745,26 @@ final class MongoConnection {
 		cmd["saslStart"] = Bson(1);
 		cmd["mechanism"] = Bson("SCRAM-SHA-1");
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		string response;
-		Bson conversationId;
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("SASL start failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("Authentication failed.");
-				response = cast(string)doc["payload"].get!BsonBinData().rawData;
-				conversationId = doc["conversationId"];
-			});
+
+		auto doc = runCommand!Bson(cn, cmd);
+		string response = cast(string)doc["payload"].get!BsonBinData().rawData;
+		Bson conversationId = doc["conversationId"];
+
 		payload = state.update(m_settings.digest, response);
 		cmd = Bson.emptyObject;
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("SASL continue failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("Authentication failed.");
-				response = cast(string)doc["payload"].get!BsonBinData().rawData;
-			});
+
+		doc = runCommand!Bson(cn, cmd);
+		response = cast(string)doc["payload"].get!BsonBinData().rawData;
 
 		payload = state.finalize(response);
 		cmd = Bson.emptyObject;
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("SASL finish failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("Authentication failed.");
-			});
+		runCommand!Bson(cn, cmd);
 	}
 }
 

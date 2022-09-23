@@ -205,8 +205,7 @@ struct MongoCollection {
 		cmd.query = query;
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
-		auto ret = database.runCommand(cmd);
-		if( !ret["ok"].get!double ) throw new Exception("findAndModify failed.");
+		auto ret = database.runCommand(cmd, true);
 		return ret["value"];
 	}
 
@@ -245,8 +244,7 @@ struct MongoCollection {
 			cmd[key] = value;
 			return 0;
 		});
-		auto ret = database.runCommand(cmd);
-		enforce(ret["ok"].get!double != 0, "findAndModifyExt failed: "~ret["errmsg"].opt!string);
+		auto ret = database.runCommand(cmd, true);
 		return ret["value"];
 	}
 
@@ -336,8 +334,7 @@ struct MongoCollection {
 				continue;
 			cmd[k] = v;
 		}
-		auto ret = database.runCommand(cmd);
-		enforce(ret["ok"].get!double == 1, "Aggregate command failed: "~ret["errmsg"].opt!string);
+		auto ret = database.runCommand(cmd, true);
 		R[] existing;
 		static if (is(R == Bson))
 			existing = ret["cursor"]["firstBatch"].get!(Bson[]);
@@ -404,10 +401,8 @@ struct MongoCollection {
 		cmd.distinct = m_name;
 		cmd.key = key;
 		cmd.query = query;
-		auto res = m_db.runCommand(cmd);
 
-		enforce(res["ok"].get!double != 0, "Distinct query failed: "~res["errmsg"].opt!string);
-
+		auto res = m_db.runCommand(cmd, true);
 		static if (is(R == Bson)) return res["values"].byValue;
 		else return res["values"].byValue.map!(b => deserializeBson!R(b));
 	}
@@ -487,8 +482,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = name;
-		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "dropIndex command failed: "~reply["errmsg"].opt!string);
+		database.runCommand(cmd, true);
 	}
 
 	/// ditto
@@ -536,8 +530,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = "*";
-		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "dropIndexes command failed: "~reply["errmsg"].opt!string);
+		database.runCommand(cmd, true);
 	}
 
 	/// Unofficial API extension, more efficient multi-index removal on
@@ -554,8 +547,7 @@ struct MongoCollection {
 			CMD cmd;
 			cmd.dropIndexes = m_name;
 			cmd.index = names;
-			auto reply = database.runCommand(cmd);
-			enforce(reply["ok"].get!double == 1, "dropIndexes command failed: "~reply["errmsg"].opt!string);
+			database.runCommand(cmd, true);
 		} else {
 			foreach (name; names)
 				dropIndex(name);
@@ -653,9 +645,7 @@ struct MongoCollection {
 				indexes ~= index;
 			}
 			cmd["indexes"] = Bson(indexes);
-			auto reply = database.runCommand(cmd);
-			enforce(reply["ok"].get!double == 1, "createIndex command failed: "
-				~ reply["errmsg"].opt!string);
+			database.runCommand(cmd, true);
 		} else {
 			foreach (model; models) {
 				// trusted to support old compilers which think opt_dup has
@@ -688,8 +678,7 @@ struct MongoCollection {
 			CMD cmd;
 			cmd.listIndexes = m_name;
 
-			auto reply = database.runCommand(cmd);
-			enforce(reply["ok"].get!double == 1, "getIndexes command failed: "~reply["errmsg"].opt!string);
+			auto reply = database.runCommand(cmd, true);
 			return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
 		} else {
 			return database["system.indexes"].find!R();
@@ -723,8 +712,7 @@ struct MongoCollection {
 
 		CMD cmd;
 		cmd.drop = m_name;
-		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "drop command failed: "~reply["errmsg"].opt!string);
+		database.runCommand(cmd, true);
 	}
 }
 
@@ -975,7 +963,7 @@ struct AggregateOptions {
 
 	/// Specifies the initial batch size for the cursor.
 	ref inout(Nullable!int) batchSize()
-	@property inout @safe pure nothrow @nogc @ignore {
+	return @property inout @safe pure nothrow @nogc @ignore {
 		return cursor.batchSize;
 	}
 
