@@ -215,7 +215,7 @@ unittest
 	assert(cfg.wTimeoutMS == long.init);
 	assert(cfg.fsync == false);
 	assert(cfg.journal == false);
-	assert(cfg.connectTimeoutMS == long.init);
+	assert(cfg.connectTimeoutMS == 10_000);
 	assert(cfg.socketTimeoutMS == long.init);
 	assert(cfg.ssl == bool.init);
 	assert(cfg.sslverifycertificate == true);
