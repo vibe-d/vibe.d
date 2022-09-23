@@ -160,6 +160,6 @@ struct MongoDatabase
 		static if (is(R == Bson))
 			auto existing = cur["cursor"]["firstBatch"].get!(Bson[]);
 		else auto existing = cur["cursor"]["firstBatch"].deserializeBson!(R[]);
-		return MongoCursor!R(m_client, m_commandCollection, cursorid, existing);
+		return MongoCursor!R(m_client, m_name ~ ".$cmd", cursorid, existing);
 	}
 }
