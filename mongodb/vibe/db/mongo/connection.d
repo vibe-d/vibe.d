@@ -746,7 +746,7 @@ final class MongoConnection {
 		cmd["mechanism"] = Bson("SCRAM-SHA-1");
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 
-		auto doc = runCommand!Bson(cn, cmd);
+		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
 		string response = cast(string)doc["payload"].get!BsonBinData().rawData;
 		Bson conversationId = doc["conversationId"];
 
@@ -756,7 +756,7 @@ final class MongoConnection {
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 
-		doc = runCommand!Bson(cn, cmd);
+		doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
 		response = cast(string)doc["payload"].get!BsonBinData().rawData;
 
 		payload = state.finalize(response);
@@ -764,7 +764,7 @@ final class MongoConnection {
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		runCommand!Bson(cn, cmd);
+		runCommand!(Bson, MongoAuthException)(cn, cmd);
 	}
 }
 
