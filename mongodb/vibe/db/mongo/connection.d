@@ -12,8 +12,9 @@ public import vibe.data.bson;
 import vibe.core.core : vibeVersionString;
 import vibe.core.log;
 import vibe.core.net;
-import vibe.db.mongo.settings;
+import vibe.data.bson;
 import vibe.db.mongo.flags;
+import vibe.db.mongo.settings;
 import vibe.inet.webform;
 import vibe.stream.tls;
 
@@ -25,7 +26,9 @@ import std.exception;
 import std.range;
 import std.string;
 import std.typecons;
+import std.traits : hasIndirections;
 
+import core.time;
 
 private struct _MongoErrorDescription
 {
@@ -316,14 +319,14 @@ final class MongoConnection {
 
 	@property const(ServerDescription) description() const { return m_description; }
 
-	void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
+	deprecated("Non-functional since MongoDB 5.1") void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
 	{
 		scope(failure) disconnect();
 		send(OpCode.Update, -1, cast(int)0, collection_name, cast(int)flags, selector, update);
 		if (m_settings.safe) checkForError(collection_name);
 	}
 
-	void insert(string collection_name, InsertFlags flags, Bson[] documents)
+	deprecated("Non-functional since MongoDB 5.1") void insert(string collection_name, InsertFlags flags, Bson[] documents)
 	{
 		scope(failure) disconnect();
 		foreach (d; documents) if (d["_id"].isNull()) d["_id"] = Bson(BsonObjectID.generate());
@@ -331,7 +334,7 @@ final class MongoConnection {
 		if (m_settings.safe) checkForError(collection_name);
 	}
 
-	deprecated("Non-functional since MongoDB 5.1: use `find` to query collections instead - instead of `$cmd` use `runCommand` to send commands - use listIndices and listCollections instead of `<database>.system.indexes` and `<database>.system.namsepsaces`")
+	deprecated("Non-functional since MongoDB 5.1: use `find` to query collections instead - instead of `$cmd` use `runCommand` to send commands - use listIndexes and listCollections instead of `<database>.system.indexes` and `<database>.system.namsepsaces`")
 	void query(T)(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		scope(failure) disconnect();
@@ -360,10 +363,12 @@ final class MongoConnection {
 
 		if (m_supportsOpMsg)
 		{
-			command["$db"] = Bson(database);
+			if (database !is null)
+				command["$db"] = Bson(database);
+
 			auto id = sendMsg(-1, 0, command);
 			Appender!(Bson[])[string] docs;
-			recvMsg(id, (flags, root) {
+			recvMsg!true(id, (flags, root) {
 				ret = root;
 			}, (ident, size) {
 				docs[ident] = appender!(Bson[]);
@@ -376,6 +381,8 @@ final class MongoConnection {
 		}
 		else
 		{
+			if (database is null)
+				database = "$external";
 			auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
 			recvReply!T(id,
 				(cursor, flags, first_doc, num_docs) {
@@ -399,24 +406,180 @@ final class MongoConnection {
 		}
 	}
 
-	void getMore(T)(string collection_name, int nret, long cursor_id, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
+	template getMore(T)
 	{
-		scope(failure) disconnect();
-		auto id = send(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
-		recvReply!T(id, on_msg, on_doc);
+		deprecated("use the modern overload instead")
+		void getMore(string collection_name, int nret, long cursor_id, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
+		{
+			scope(failure) disconnect();
+			auto id = send(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
+			recvReply!T(id, on_msg, on_doc);
+		}
+
+		/**
+		* Modern (MongoDB 3.2+ compatible) getMore implementation using the getMore
+		* command and OP_MSG. (if supported)
+		*
+		* Falls back to compatibility for older MongoDB versions, but those are not
+		* officially supported anymore.
+		*
+		* Upgrade_notes:
+		* - error checking is now done inside this function
+		* - document index is no longer sent, instead the callback is called sequentially
+		*
+		* Throws: $(LREF MongoDriverException) in case the command fails.
+		*/
+		void getMore(long cursor_id, string collection_name, long nret,
+			scope GetMoreHeaderDelegate on_header,
+			scope GetMoreDocumentDelegate!T on_doc,
+			Duration timeout = Duration.max,
+			string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
+		{
+			Bson command = Bson.emptyObject;
+			command["getMore"] = Bson(cursor_id);
+			command["collection"] = Bson(collection_name);
+			command["batchSize"] = Bson(nret);
+			if (timeout != Duration.max && timeout.total!"msecs" < int.max)
+				command["maxTimeMS"] = Bson(cast(int)timeout.total!"msecs");
+
+			string formatErrorInfo(string msg)
+			{
+				return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
+			}
+
+			scope (failure) disconnect();
+
+			if (m_supportsOpMsg)
+			{
+				enum needsDup = hasIndirections!T || is(T == Bson);
+
+				auto id = sendMsg(-1, 0, command);
+				recvMsg!needsDup(id, (flags, root) {
+					if (root["ok"].get!double != 1.0)
+						throw new MongoDriverException(formatErrorInfo("getMore failed: "
+							~ root["errmsg"].opt!string("(no message)")));
+
+					auto cursor = root["cursor"];
+					auto batch = cursor["nextBatch"].get!(Bson[]);
+					on_header(cursor["id"].get!long, cursor["ns"].get!string, batch.length);
+
+					foreach (ref push; batch)
+					{
+						T doc = deserializeBson!T(push);
+						on_doc(doc);
+					}
+				}, (ident, size) {}, (ident, push) {
+					throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in getMore response"));
+				});
+			}
+			else
+			{
+				int brokenId = 0;
+				int nextId = 0;
+				int num_docs;
+				// array to store out-of-order items, to push them into the callback properly
+				T[] compatibilitySort;
+				auto id = send(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
+				recvReply!T(id, (long cursor, ReplyFlags flags, int first_doc, int num_docs)
+				{
+					enforce!MongoDriverException(!(flags & ReplyFlags.CursorNotFound),
+						formatErrorInfo("Invalid cursor handle."));
+					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure),
+						formatErrorInfo("Query failed. Does the database exist?"));
+
+					on_header(cursor, collection_name, num_docs);
+				}, (size_t idx, ref T doc) {
+					if (cast(int)idx == nextId) {
+						on_doc(doc);
+						nextId++;
+						brokenId = nextId;
+					} else {
+						enforce!MongoDriverException(idx >= brokenId,
+							formatErrorInfo("Got legacy document with same id after having already processed it!"));
+						enforce!MongoDriverException(idx < num_docs,
+							formatErrorInfo("Received more documents than the database reported to us"));
+
+						size_t arrayIndex = cast(int)idx - brokenId;
+						if (!compatibilitySort.length)
+							compatibilitySort.length = num_docs - brokenId;
+						compatibilitySort[arrayIndex] = doc;
+					}
+				});
+
+				foreach (doc; compatibilitySort)
+					on_doc(doc);
+			}
+		}
 	}
 
-	void delete_(string collection_name, DeleteFlags flags, Bson selector)
+	/// Forwards the `find` command passed in to the database, handles the
+	/// callbacks like with getMore. This exists for easier integration with
+	/// MongoCursor!T.
+	package void startFind(T)(Bson command,
+		scope GetMoreHeaderDelegate on_header,
+		scope GetMoreDocumentDelegate!T on_doc,
+		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
+	{
+		string formatErrorInfo(string msg)
+		{
+			return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
+		}
+
+		scope (failure) disconnect();
+
+		enforce!MongoDriverException(m_supportsOpMsg, formatErrorInfo("Database does not support required OP_MSG for new style queries"));
+
+		enum needsDup = hasIndirections!T || is(T == Bson);
+
+		auto id = sendMsg(-1, 0, command);
+		recvMsg!needsDup(id, (flags, root) {
+			if (root["ok"].get!double != 1.0)
+				throw new MongoDriverException(formatErrorInfo("find failed: "
+					~ root["errmsg"].opt!string("(no message)")));
+
+			auto cursor = root["cursor"];
+			auto batch = cursor["firstBatch"].get!(Bson[]);
+			on_header(cursor["id"].get!long, cursor["ns"].get!string, batch.length);
+
+			foreach (ref push; batch)
+			{
+				T doc = deserializeBson!T(push);
+				on_doc(doc);
+			}
+		}, (ident, size) {}, (ident, push) {
+			throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in find response"));
+		});
+	}
+
+	deprecated("Non-functional since MongoDB 5.1") void delete_(string collection_name, DeleteFlags flags, Bson selector)
 	{
 		scope(failure) disconnect();
 		send(OpCode.Delete, -1, cast(int)0, collection_name, cast(int)flags, selector);
 		if (m_settings.safe) checkForError(collection_name);
 	}
 
-	void killCursors(long[] cursors)
+	deprecated("Non-functional since MongoDB 5.1, use the overload taking the collection as well")
+	void killCursors(scope long[] cursors)
 	{
 		scope(failure) disconnect();
 		send(OpCode.KillCursors, -1, cast(int)0, cast(int)cursors.length, cursors);
+	}
+
+	void killCursors(string collection, scope long[] cursors)
+	{
+		scope(failure) disconnect();
+		// TODO: could add special case to runCommand to not return anything
+		if (m_supportsOpMsg)
+		{
+			Bson command = Bson.emptyObject;
+			command["killCursors"] = Bson(collection);
+			command["cursors"] = cursors.serializeToBson;
+			runCommand!Bson(null, command);
+		}
+		else
+		{
+			send(OpCode.KillCursors, -1, cast(int)0, cast(int)cursors.length, cursors);
+		}
 	}
 
 	MongoErrorDescription getLastError(string db)
@@ -480,7 +643,10 @@ final class MongoConnection {
 		return result.byValue.map!toInfo;
 	}
 
-	private int recvMsg(int reqid, scope MsgReplyDelegate on_sec0, scope MsgSection1StartDelegate on_sec1_start, scope MsgSection1Delegate on_sec1_doc)
+	private int recvMsg(bool dupBson = true)(int reqid,
+		scope MsgReplyDelegate!dupBson on_sec0,
+		scope MsgSection1StartDelegate on_sec1_start,
+		scope MsgSection1Delegate!dupBson on_sec1_doc)
 	{
 		import std.traits;
 
@@ -494,16 +660,28 @@ final class MongoConnection {
 		enforce!MongoDriverException(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG)");
 
 		uint flagBits = recvUInt();
+		const bool hasCRC = (flagBits & (1 << 16)) != 0;
+
 		int sectionLength = cast(int)(msglen - 4 * int.sizeof - flagBits.sizeof);
-		if ((flagBits & (1 << 16)) != 0)
+		if (hasCRC)
 			sectionLength -= uint.sizeof; // CRC present
+
 		bool gotSec0;
 		while (m_bytesRead - bytes_read < sectionLength) {
+			// TODO: directly deserialize from the wire
+			static if (!dupBson) {
+				ubyte[256] buf = void;
+				ubyte[] bufsl = buf;
+			}
+
 			ubyte payloadType = recvUByte();
 			switch (payloadType) {
 				case 0:
 					gotSec0 = true;
-					on_sec0(flagBits, recvBsonDup());
+					static if (dupBson)
+						on_sec0(flagBits, recvBsonDup());
+					else
+						on_sec0(flagBits, recvBson(bufsl));
 					break;
 				case 1:
 					if (!gotSec0)
@@ -514,7 +692,10 @@ final class MongoConnection {
 					auto identifier = recvCString();
 					on_sec1_start(identifier, size);
 					while (m_bytesRead - section_bytes_read < size) {
-						on_sec1_doc(identifier, recvBsonDup());
+						static if (dupBson)
+							on_sec1_doc(identifier, recvBsonDup());
+						else
+							on_sec1_doc(identifier, recvBson(bufsl));
 					}
 					break;
 				default:
@@ -522,7 +703,7 @@ final class MongoConnection {
 			}
 		}
 
-		if ((flagBits & (1 << 16)) != 0)
+		if (hasCRC)
 		{
 			uint crc = recvUInt();
 			// TODO: validate CRC
@@ -537,8 +718,6 @@ final class MongoConnection {
 
 	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
-		import std.traits;
-
 		auto bytes_read = m_bytesRead;
 		int msglen = recvInt();
 		int resid = recvInt();
@@ -569,7 +748,14 @@ final class MongoConnection {
 		static if (hasIndirections!T || is(T == Bson))
 			auto buf = new ubyte[msglen - cast(size_t)(m_bytesRead - bytes_read)];
 		foreach (i; 0 .. cast(size_t)numret) {
-			auto bson = recvBsonDup();
+			// TODO: directly deserialize from the wire
+			static if (!hasIndirections!T && !is(T == Bson)) {
+				ubyte[256] buf = void;
+				ubyte[] bufsl = buf;
+				auto bson = () @trusted { return recvBson(bufsl); } ();
+			} else {
+				auto bson = () @trusted { return recvBson(buf); } ();
+			}
 
 			// logDebugV("Received mongo response on %s:%s: %s", reqid, i, bson);
 
@@ -583,7 +769,7 @@ final class MongoConnection {
 		return resid;
 	}
 
-	private int send(ARGS...)(OpCode code, int response_to, ARGS args)
+	private int send(ARGS...)(OpCode code, int response_to, scope ARGS args)
 	{
 		if( !connected() ) {
 			if (m_allowReconnect) connect();
@@ -622,7 +808,7 @@ final class MongoConnection {
 		return id;
 	}
 
-	private void sendValue(T)(T value)
+	private void sendValue(T)(scope T value)
 	{
 		import std.traits;
 		static if (is(T == ubyte)) m_outRange.put(value);
@@ -785,9 +971,14 @@ private enum OpCode : int {
 private alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs) @safe;
 private template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc) @safe; }
 
-private alias MsgReplyDelegate = void delegate(uint flags, Bson document) @safe;
+private alias MsgReplyDelegate(bool dupBson : true) = void delegate(uint flags, Bson document) @safe;
+private alias MsgReplyDelegate(bool dupBson : false) = void delegate(uint flags, scope Bson document) @safe;
 private alias MsgSection1StartDelegate = void delegate(scope const(char)[] identifier, int size) @safe;
-private alias MsgSection1Delegate = void delegate(scope const(char)[] identifier, Bson document) @safe;
+private alias MsgSection1Delegate(bool dupBson : true) = void delegate(scope const(char)[] identifier, Bson document) @safe;
+private alias MsgSection1Delegate(bool dupBson : false) = void delegate(scope const(char)[] identifier, scope Bson document) @safe;
+
+alias GetMoreHeaderDelegate = void delegate(long id, string ns, size_t count) @safe;
+alias GetMoreDocumentDelegate(T) = void delegate(ref T document) @safe;
 
 struct MongoDBInfo
 {
@@ -866,6 +1057,7 @@ enum WireVersion : int
 	v40 = 7,
 	v42 = 8,
 	v44 = 9,
+	v49 = 12,
 	v50 = 13,
 	v51 = 14,
 	v52 = 15,

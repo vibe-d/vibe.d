@@ -9,7 +9,7 @@ module vibe.db.mongo.settings;
 
 import vibe.core.log;
 import vibe.data.bson;
-import vibe.db.mongo.flags : QueryFlags;
+deprecated import vibe.db.mongo.flags : QueryFlags;
 import vibe.inet.webform;
 
 import std.conv : to;
@@ -157,7 +157,6 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 				default: logWarn("Unknown MongoDB option %s", option); break;
 				case "appname": cfg.appName = value; break;
-				case "slaveok": bool v; if( setBool(v) && v ) cfg.defQueryFlags |= QueryFlags.SlaveOk; break;
 				case "replicaset": cfg.replicaSet = value; warnNotImplemented(); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
@@ -208,7 +207,6 @@ unittest
 	assert(cfg.database == "");
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
-	assert(cfg.defQueryFlags == QueryFlags.None);
 	assert(cfg.replicaSet == "");
 	assert(cfg.safe == false);
 	assert(cfg.w == Bson.init);
@@ -241,7 +239,7 @@ unittest
 	assert(cfg.hosts[0].port == 27017);
 
 	cfg = MongoClientSettings.init;
-	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=true&ssl=true&sslverifycertificate=false"));
+	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&ssl=true&sslverifycertificate=false"));
 	assert(cfg.username == "");
 	//assert(cfg.password == "");
 	assert(cfg.digest == "");
@@ -256,7 +254,6 @@ unittest
 	assert(cfg.safe == true);
 	assert(cfg.w == Bson(2L));
 	assert(cfg.wTimeoutMS == 2000);
-	assert(cfg.defQueryFlags == QueryFlags.SlaveOk);
 	assert(cfg.ssl == true);
 	assert(cfg.sslverifycertificate == false);
 
@@ -402,12 +399,7 @@ class MongoClientSettings
 	 */
 	string database;
 
-	/**
-	 * Flags to use on all database query commands. The
-	 * $(REF slaveOk, vibe,db,mongo,flags,QueryFlags) bit may be set using the
-	 * "slaveok" query parameter inside the MongoDB URL.
-	 */
-	QueryFlags defQueryFlags = QueryFlags.None;
+	deprecated("unused since at least before v3.6") QueryFlags defQueryFlags = QueryFlags.None;
 
 	/**
 	 * Specifies the name of the replica set, if the mongod is a member of a

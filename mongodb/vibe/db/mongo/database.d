@@ -151,15 +151,14 @@ struct MongoDatabase
 		return m_client.lockConnection().runCommand!(Bson, MongoException)(m_name, cmd, checkOk, errorInfo, errorFile, errorLine);
 	}
 	/// ditto
-	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options)
+	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options, int batchSize = 0, long getMoreMaxTimeMS = long.max)
 	{
-		auto cur = runCommand(command_and_options, true);
+		Bson cmd;
+		static if (is(T : Bson))
+			cmd = command_and_options;
+		else
+			cmd = command_and_options.serializeToBson;
 
-		// TODO: use cursor API
-		auto cursorid = cur["cursor"]["id"].get!long;
-		static if (is(R == Bson))
-			auto existing = cur["cursor"]["firstBatch"].get!(Bson[]);
-		else auto existing = cur["cursor"]["firstBatch"].deserializeBson!(R[]);
-		return MongoCursor!R(m_client, m_name ~ ".$cmd", cursorid, existing);
+		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTimeMS);
 	}
 }

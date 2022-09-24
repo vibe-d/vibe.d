@@ -8,6 +8,7 @@
 module vibe.db.mongo.cursor;
 
 public import vibe.data.bson;
+public import vibe.db.mongo.impl.crud;
 
 import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
@@ -16,6 +17,7 @@ import std.array : array;
 import std.algorithm : map, max, min;
 import std.exception;
 
+import core.time;
 
 /**
 	Represents a cursor for a MongoDB query.
@@ -25,29 +27,94 @@ import std.exception;
 	This struct uses reference counting to destroy the underlying MongoDB cursor.
 */
 struct MongoCursor(DocType = Bson) {
-	private MongoCursorData!DocType m_data;
+	private IMongoCursorData!DocType m_data;
 
-	package this(Q, S)(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
+	package deprecated this(Q, S)(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
 	{
 		// TODO: avoid memory allocation, if possible
-		m_data = new MongoFindCursor!(Q, DocType, S)(client, collection, flags, nskip, nret, query, return_field_selector);
+		m_data = new MongoQueryCursor!(Q, DocType, S)(client, collection, flags, nskip, nret, query, return_field_selector);
 	}
 
-	package this(MongoClient client, string collection, long cursor, DocType[] existing_documents)
+	package deprecated this(MongoClient client, string collection, long cursor, DocType[] existing_documents)
 	{
 		// TODO: avoid memory allocation, if possible
 		m_data = new MongoGenericCursor!DocType(client, collection, cursor, existing_documents);
 	}
 
+	this(Q)(MongoClient client, string collection, Q query, FindOptions options)
+	{
+		Bson command = Bson.emptyObject;
+		command["find"] = Bson(collection);
+		static if (is(Q == Bson))
+			command["filter"] = query;
+		else
+			command["filter"] = serializeToBson(query);
+
+		MongoConnection conn = client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
+
+		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst#mapping-op_query-behavior-to-the-find-command-limit-and-batchsize-fields
+		bool singleBatch;
+		if (!options.limit.isNull && options.limit.get < 0)
+		{
+			singleBatch = true;
+			options.limit = -options.limit.get;
+			options.batchSize = cast(int)options.limit.get;
+		}
+		if (!options.batchSize.isNull && options.batchSize.get < 0)
+		{
+			singleBatch = true;
+			options.batchSize = -options.batchSize.get;
+		}
+		if (singleBatch)
+			command["singleBatch"] = Bson(true);
+
+		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst#semantics-of-maxtimems-for-a-driver
+		bool allowMaxTime = true;
+		if (options.cursorType == CursorType.tailable
+			|| options.cursorType == CursorType.tailableAwait)
+			command["tailable"] = Bson(true);
+		else
+		{
+			options.maxAwaitTimeMS.nullify();
+			allowMaxTime = false;
+		}
+
+		if (options.cursorType == CursorType.tailableAwait)
+			command["awaitData"] = Bson(true);
+		else
+		{
+			options.maxAwaitTimeMS.nullify();
+			allowMaxTime = false;
+		}
+
+		// see table: https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst#find
+		auto optionsBson = serializeToBson(options);
+		foreach (string key, value; optionsBson.byKeyValue)
+			command[key] = value;
+
+		this(client, command,
+			options.batchSize.isNull ? 0 : options.batchSize.get,
+			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get
+				: allowMaxTime && !options.maxTimeMS.isNull ? options.maxTimeMS.get
+				: long.max);
+	}
+
+	this(MongoClient client, Bson command, int batchSize = 0, long getMoreMaxTimeMS = long.max)
+	{
+		// TODO: avoid memory allocation, if possible
+		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTimeMS);
+	}
+
 	this(this)
 	{
-		if( m_data ) m_data.m_refCount++;
+		if( m_data ) m_data.refCount++;
 	}
 
 	~this()
 	{
-		if( m_data && --m_data.m_refCount == 0 ){
-			m_data.destroy();
+		if( m_data && --m_data.refCount == 0 ){
+			m_data.killCursors();
 		}
 	}
 
@@ -129,7 +196,7 @@ struct MongoCursor(DocType = Bson) {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.limit)
 	*/
-	MongoCursor limit(size_t count)
+	MongoCursor limit(long count)
 	{
 		m_data.limit(count);
 		return this;
@@ -149,7 +216,7 @@ struct MongoCursor(DocType = Bson) {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.skip)
 	*/
-	MongoCursor skip(int count)
+	MongoCursor skip(long count)
 	{
 		m_data.skip(count);
 		return this;
@@ -167,7 +234,7 @@ struct MongoCursor(DocType = Bson) {
 			try { coll.drop(); } catch (Exception) {}
 
 			for (int i = 0; i < 10000; i++)
-				coll.insert(["i": i]);
+				coll.insertOne(["i": i]);
 
 			static struct Order { int i; }
 			auto data = coll.find().sort(Order(1)).skip(2000).limit(2000).array;
@@ -197,41 +264,53 @@ struct MongoCursor(DocType = Bson) {
 	{
 		import std.typecons : Tuple, tuple;
 		static struct Rng {
-			private MongoCursorData!DocType data;
+			private IMongoCursorData!DocType data;
 			@property bool empty() { return data.empty; }
-			@property Tuple!(size_t, DocType) front() { return tuple(data.index, data.front); }
+			@property Tuple!(long, DocType) front() { return tuple(data.index, data.front); }
 			void popFront() { data.popFront(); }
 		}
 		return Rng(m_data);
 	}
 }
 
+private interface IMongoCursorData(DocType) {
+	@property bool empty() @safe;
+	@property long index() @safe;
+	@property DocType front() @safe;
+	void sort(Bson order) @safe;
+	void limit(long count) @safe;
+	void skip(long count) @safe;
+	void popFront() @safe;
+	void startIterating() @safe;
+	void killCursors() @safe;
+	ref int refCount() @safe;
+}
+
 
 /**
-	Internal class exposed through MongoCursor.
+	Deprecated query internals exposed through MongoCursor.
 */
-private abstract class MongoCursorData(DocType) {
+private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorData!DocType {
 	private {
 		int m_refCount = 1;
 		MongoClient m_client;
 		string m_collection;
 		long m_cursor;
-		int m_nskip;
+		long m_nskip;
 		int m_nret;
 		Bson m_sort = Bson(null);
 		int m_offset;
 		size_t m_currentDoc = 0;
 		DocType[] m_documents;
 		bool m_iterationStarted = false;
-		size_t m_limit = 0;
-		bool m_needDestroy = false;
+		long m_limit = 0;
 	}
 
 	final @property bool empty()
 	@safe {
 		if (!m_iterationStarted) startIterating();
 		if (m_limit > 0 && index >= m_limit) {
-			destroy();
+			killCursors();
 			return true;
 		}
 		if( m_currentDoc < m_documents.length )
@@ -244,7 +323,7 @@ private abstract class MongoCursorData(DocType) {
 		return m_currentDoc >= m_documents.length;
 	}
 
-	final @property size_t index()
+	final @property long index()
 	@safe {
 		return m_offset + m_currentDoc;
 	}
@@ -262,19 +341,19 @@ private abstract class MongoCursorData(DocType) {
 		m_sort = order;
 	}
 
-	final void limit(size_t count)
+	final void limit(long count)
 	@safe {
 		// A limit() value of 0 (e.g. “.limit(0)”) is equivalent to setting no limit.
 		if (count > 0) {
 			if (m_nret == 0 || m_nret > count)
-				m_nret = min(count, 1024);
+				m_nret = cast(int)min(count, 1024);
 
 			if (m_limit == 0 || m_limit > count)
 				m_limit = count;
 		}
 	}
 
-	final void skip(int count)
+	final void skip(long count)
 	@safe {
 		// A skip() value of 0 (e.g. “.skip(0)”) is equivalent to setting no skip.
 		m_nskip = max(m_nskip, count);
@@ -289,15 +368,15 @@ private abstract class MongoCursorData(DocType) {
 
 	abstract void startIterating() @safe;
 
-	final private void destroy()
+	final void killCursors()
 	@safe {
 		if (m_cursor == 0) return;
 		auto conn = m_client.lockConnection();
-		conn.killCursors(() @trusted { return (&m_cursor)[0 .. 1]; } ());
+		conn.killCursors(m_collection, () @trusted { return (&m_cursor)[0 .. 1]; } ());
 		m_cursor = 0;
 	}
 
-	final private void handleReply(long cursor, ReplyFlags flags, int first_doc, int num_docs)
+	final void handleReply(long cursor, ReplyFlags flags, int first_doc, int num_docs)
 	{
 		enforce!MongoDriverException(!(flags & ReplyFlags.CursorNotFound), "Invalid cursor handle.");
 		enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), "Query failed. Does the database exist?");
@@ -308,16 +387,138 @@ private abstract class MongoCursorData(DocType) {
 		m_currentDoc = 0;
 	}
 
-	final private void handleDocument(size_t idx, ref DocType doc)
+	final void handleDocument(size_t idx, ref DocType doc)
 	{
 		m_documents[idx] = doc;
 	}
+
+	final ref int refCount() { return m_refCount; }
+}
+
+/**
+	Find + getMore internals exposed through MongoCursor. Unifies the old
+	LegacyMongoCursorData approach, so it can be used both for find queries and
+	for custom commands.
+*/
+private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
+	private {
+		int m_refCount = 1;
+		MongoClient m_client;
+		Bson m_findQuery;
+		string m_collection;
+		long m_cursor;
+		int m_batchSize;
+		long m_maxTimeMS;
+		long m_totalReceived;
+		size_t m_readDoc;
+		size_t m_insertDoc;
+		DocType[] m_documents;
+		bool m_iterationStarted = false;
+		long m_queryLimit;
+	}
+
+	this(MongoClient client, Bson command, int batchSize = 0, long getMoreMaxTimeMS = long.max)
+	{
+		m_client = client;
+		m_findQuery = command;
+		m_batchSize = batchSize;
+		m_maxTimeMS = getMoreMaxTimeMS;
+	}
+
+	@property bool empty()
+	@safe {
+		if (!m_iterationStarted) startIterating();
+		if (m_queryLimit > 0 && index >= m_queryLimit) {
+			killCursors();
+			return true;
+		}
+		if( m_readDoc < m_documents.length )
+			return false;
+		if( m_cursor == 0 )
+			return true;
+
+		auto conn = m_client.lockConnection();
+		conn.getMore!DocType(m_cursor, m_collection, m_batchSize, &handleReply, &handleDocument,
+			m_maxTimeMS >= int.max ? Duration.max : m_maxTimeMS.msecs);
+		return m_readDoc >= m_documents.length;
+	}
+
+	final @property long index()
+	@safe {
+		return m_totalReceived + m_readDoc;
+	}
+
+	final @property DocType front()
+	@safe {
+		if (!m_iterationStarted) startIterating();
+		assert(!empty(), "Cursor has no more data.");
+		return m_documents[m_readDoc];
+	}
+
+	final void sort(Bson order)
+	@safe {
+		assert(!m_iterationStarted, "Cursor cannot be modified after beginning iteration");
+		m_findQuery["sort"] = order;
+	}
+
+	final void limit(long count)
+	@safe {
+		assert(!m_iterationStarted, "Cursor cannot be modified after beginning iteration");
+		m_findQuery["limit"] = Bson(count);
+	}
+
+	final void skip(long count)
+	@safe {
+		assert(!m_iterationStarted, "Cursor cannot be modified after beginning iteration");
+		m_findQuery["skip"] = Bson(count);
+	}
+
+	final void popFront()
+	@safe {
+		if (!m_iterationStarted) startIterating();
+		assert(!empty(), "Cursor has no more data.");
+		m_readDoc++;
+	}
+
+	void startIterating()
+	@safe {
+		auto conn = m_client.lockConnection();
+		m_totalReceived = 0;
+		m_queryLimit = m_findQuery["limit"].opt!long(0);
+		conn.startFind!DocType(m_findQuery, &handleReply, &handleDocument);
+		m_iterationStarted = true;
+	}
+
+	final void killCursors()
+	@safe {
+		if (m_cursor == 0) return;
+		auto conn = m_client.lockConnection();
+		conn.killCursors(m_collection, () @trusted { return (&m_cursor)[0 .. 1]; } ());
+		m_cursor = 0;
+	}
+
+	final void handleReply(long id, string ns, size_t count)
+	{
+		m_cursor = id;
+		m_collection = ns;
+		m_documents.length = count;
+		m_readDoc = 0;
+		m_insertDoc = 0;
+	}
+
+	final void handleDocument(ref DocType doc)
+	{
+		m_documents[m_insertDoc++] = doc;
+		m_totalReceived++;
+	}
+
+	final ref int refCount() { return m_refCount; }
 }
 
 /**
 	Internal class implementing MongoCursorData for find queries
  */
-private class MongoFindCursor(Q, R, S) : MongoCursorData!R {
+private deprecated class MongoQueryCursor(Q, R, S) : LegacyMongoCursorData!R {
 	private {
 		QueryFlags m_flags;
 		Q m_query;
@@ -363,7 +564,7 @@ private class MongoFindCursor(Q, R, S) : MongoCursorData!R {
 
 		if (!m_sort.isNull()) full_query["orderby"] = m_sort;
 
-		conn.query!R(m_collection, m_flags, m_nskip, m_nret, full_query, selector, &handleReply, &handleDocument);
+		conn.query!R(m_collection, m_flags, cast(int)m_nskip, cast(int)m_nret, full_query, selector, &handleReply, &handleDocument);
 
 		m_iterationStarted = true;
 	}
@@ -372,7 +573,7 @@ private class MongoFindCursor(Q, R, S) : MongoCursorData!R {
 /**
 	Internal class implementing MongoCursorData for already initialized generic cursors
  */
-private class MongoGenericCursor(DocType) : MongoCursorData!DocType {
+private deprecated class MongoGenericCursor(DocType) : LegacyMongoCursorData!DocType {
 	this(MongoClient client, string collection, long cursor, DocType[] existing_documents)
 	{
 		m_client = client;
