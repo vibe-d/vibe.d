@@ -41,10 +41,11 @@ struct MongoCursor(DocType = Bson) {
 		m_data = new MongoGenericCursor!DocType(client, collection, cursor, existing_documents);
 	}
 
-	this(Q)(MongoClient client, string collection, Q query, FindOptions options)
+	this(Q)(MongoClient client, string database, string collection, Q query, FindOptions options)
 	{
 		Bson command = Bson.emptyObject;
 		command["find"] = Bson(collection);
+		command["$db"] = Bson(database);
 		static if (is(Q == Bson))
 			command["filter"] = query;
 		else
@@ -405,6 +406,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		int m_refCount = 1;
 		MongoClient m_client;
 		Bson m_findQuery;
+		string m_database;
 		string m_collection;
 		long m_cursor;
 		int m_batchSize;
@@ -423,6 +425,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		m_findQuery = command;
 		m_batchSize = batchSize;
 		m_maxTimeMS = getMoreMaxTimeMS;
+		m_database = command["$db"].opt!string;
 	}
 
 	@property bool empty()
@@ -438,7 +441,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 			return true;
 
 		auto conn = m_client.lockConnection();
-		conn.getMore!DocType(m_cursor, m_collection, m_batchSize, &handleReply, &handleDocument,
+		conn.getMore!DocType(m_cursor, m_database, m_collection, m_batchSize, &handleReply, &handleDocument,
 			m_maxTimeMS >= int.max ? Duration.max : m_maxTimeMS.msecs);
 		return m_readDoc >= m_documents.length;
 	}

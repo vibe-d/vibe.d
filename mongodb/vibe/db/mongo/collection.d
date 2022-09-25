@@ -18,7 +18,7 @@ import vibe.core.log;
 import vibe.db.mongo.client;
 
 import core.time;
-import std.algorithm : among, countUntil, find;
+import std.algorithm : among, countUntil, find, findSplit;
 import std.array;
 import std.conv;
 import std.exception;
@@ -373,7 +373,7 @@ struct MongoCollection {
 	MongoCursor!R find(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
-		return MongoCursor!R(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
+		return MongoCursor!R(m_client, m_db.name, m_name, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
 	}
 
 	/**
@@ -385,7 +385,7 @@ struct MongoCollection {
 	 */
 	MongoCursor!R find(R = Bson, Q)(Q query, FindOptions options)
 	{
-		return MongoCursor!R(m_client, m_fullPath, query, options);
+		return MongoCursor!R(m_client, m_db.name, m_name, query, options);
 	}
 
 	/// ditto
@@ -668,6 +668,7 @@ struct MongoCollection {
 
 		Bson cmd = Bson.emptyObject; // empty object because order is important
 		cmd["aggregate"] = Bson(m_name);
+		cmd["$db"] = Bson(m_db.name);
 		cmd["pipeline"] = serializeToBson(pipeline);
 		MongoConnection conn = m_client.lockConnection();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
@@ -1018,6 +1019,7 @@ struct MongoCollection {
 		if (conn.description.satisfiesVersion(WireVersion.v30)) {
 			Bson command = Bson.emptyObject;
 			command["listIndexes"] = Bson(m_name);
+			command["$db"] = Bson(m_db.name);
 			return MongoCursor!R(m_client, command);
 		} else {
 			throw new MongoDriverException("listIndexes not supported on MongoDB <3.0");

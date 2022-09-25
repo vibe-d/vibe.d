@@ -18,15 +18,15 @@ import vibe.db.mongo.settings;
 import vibe.inet.webform;
 import vibe.stream.tls;
 
-import std.algorithm : map, splitter;
+import std.algorithm : findSplit, map, splitter;
 import std.array;
 import std.conv;
 import std.digest.md;
 import std.exception;
 import std.range;
 import std.string;
-import std.typecons;
 import std.traits : hasIndirections;
+import std.typecons;
 
 import core.time;
 
@@ -349,6 +349,7 @@ final class MongoConnection {
 
 	Bson runCommand(T, CommandFailException = MongoDriverException)(string database, Bson command, bool testOk = true,
 		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
+	in(database.length, "runCommand requires a database argument")
 	{
 		import std.array;
 
@@ -363,8 +364,7 @@ final class MongoConnection {
 
 		if (m_supportsOpMsg)
 		{
-			if (database !is null)
-				command["$db"] = Bson(database);
+			command["$db"] = Bson(database);
 
 			auto id = sendMsg(-1, 0, command);
 			Appender!(Bson[])[string] docs;
@@ -381,8 +381,6 @@ final class MongoConnection {
 		}
 		else
 		{
-			if (database is null)
-				database = "$external";
 			auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
 			recvReply!T(id,
 				(cursor, flags, first_doc, num_docs) {
@@ -412,7 +410,8 @@ final class MongoConnection {
 		void getMore(string collection_name, int nret, long cursor_id, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 		{
 			scope(failure) disconnect();
-			auto id = send(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
+			auto parts = collection_name.findSplit(".");
+			auto id = send(OpCode.GetMore, -1, cast(int)0, parts[0], parts[2], nret, cursor_id);
 			recvReply!T(id, on_msg, on_doc);
 		}
 
@@ -429,7 +428,7 @@ final class MongoConnection {
 		*
 		* Throws: $(LREF MongoDriverException) in case the command fails.
 		*/
-		void getMore(long cursor_id, string collection_name, long nret,
+		void getMore(long cursor_id, string database, string collection_name, long nret,
 			scope GetMoreHeaderDelegate on_header,
 			scope GetMoreDocumentDelegate!T on_doc,
 			Duration timeout = Duration.max,
@@ -437,6 +436,7 @@ final class MongoConnection {
 		{
 			Bson command = Bson.emptyObject;
 			command["getMore"] = Bson(cursor_id);
+			command["$db"] = Bson(database);
 			command["collection"] = Bson(collection_name);
 			command["batchSize"] = Bson(nret);
 			if (timeout != Duration.max && timeout.total!"msecs" < int.max)
@@ -479,7 +479,8 @@ final class MongoConnection {
 				int num_docs;
 				// array to store out-of-order items, to push them into the callback properly
 				T[] compatibilitySort;
-				auto id = send(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
+				string full_name = database ~ '.' ~ collection_name;
+				auto id = send(OpCode.GetMore, -1, cast(int)0, full_name, nret, cursor_id);
 				recvReply!T(id, (long cursor, ReplyFlags flags, int first_doc, int num_docs)
 				{
 					enforce!MongoDriverException(!(flags & ReplyFlags.CursorNotFound),
@@ -487,7 +488,7 @@ final class MongoConnection {
 					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure),
 						formatErrorInfo("Query failed. Does the database exist?"));
 
-					on_header(cursor, collection_name, num_docs);
+					on_header(cursor, full_name, num_docs);
 				}, (size_t idx, ref T doc) {
 					if (cast(int)idx == nextId) {
 						on_doc(doc);
@@ -572,9 +573,10 @@ final class MongoConnection {
 		if (m_supportsOpMsg)
 		{
 			Bson command = Bson.emptyObject;
-			command["killCursors"] = Bson(collection);
+			auto parts = collection.findSplit(".");
+			command["killCursors"] = Bson(parts[2]);
 			command["cursors"] = cursors.serializeToBson;
-			runCommand!Bson(null, command);
+			runCommand!Bson(parts[0], command);
 		}
 		else
 		{

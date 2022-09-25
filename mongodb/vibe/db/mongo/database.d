@@ -158,6 +158,7 @@ struct MongoDatabase
 			cmd = command_and_options;
 		else
 			cmd = command_and_options.serializeToBson;
+		cmd["$db"] = Bson(m_name);
 
 		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTimeMS);
 	}
