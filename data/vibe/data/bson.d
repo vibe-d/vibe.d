@@ -556,7 +556,42 @@ struct Bson {
 	*/
 	string toString()
 	const {
-		return toJson().toString();
+		auto ret = appender!string;
+		toString(ret);
+		return ret.data;
+	}
+
+	void toString(R)(ref R range)
+	const {
+		switch (type)
+		{
+		case Bson.Type.object:
+			// keep ordering of objects
+			range.put("{");
+			bool first = true;
+			foreach (k, v; this.byKeyValue)
+			{
+				if (!first) range.put(",");
+				first = false;
+				range.put(Json(k).toString());
+				range.put(":");
+				v.toString(range);
+			}
+			range.put("}");
+			break;
+		case Bson.Type.array:
+			range.put("[");
+			foreach (i, v; this.byIndexValue)
+			{
+				if (i != 0) range.put(",");
+				v.toString(range);
+			}
+			range.put("]");
+			break;
+		default:
+			range.put(toJson().toString());
+			break;
+		}
 	}
 
 	import std.typecons : Nullable;
