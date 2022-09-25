@@ -100,7 +100,7 @@ struct MongoCollection {
 	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Inserting)
 	 */
-	deprecated("Use the overload taking options, this method breaks in MongoDB 5.1 and onwards.")
+	deprecated("Use the insertOne or insertMany, this method breaks in MongoDB 5.1 and onwards.")
 	void insert(T)(T document_or_documents, InsertFlags flags = InsertFlags.None)
 	{
 		assert(m_client !is null, "Inserting into uninitialized MongoCollection.");
@@ -370,7 +370,7 @@ struct MongoCollection {
 	}
 
 	deprecated("Use the overload taking FindOptions instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
-	MongoCursor!R find(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	MongoCursor!R find(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 		return MongoCursor!R(m_client, m_db.name, m_name, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
@@ -383,19 +383,16 @@ struct MongoCollection {
 
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	 */
-	MongoCursor!R find(R = Bson, Q)(Q query, FindOptions options)
+	MongoCursor!R find(R = Bson, Q)(Q query, FindOptions options = FindOptions.init)
 	{
 		return MongoCursor!R(m_client, m_db.name, m_name, query, options);
 	}
 
 	/// ditto
-	MongoCursor!R find(R = Bson, Q)(Q query) { return find!R(query, FindOptions.init); }
-
-	/// ditto
 	MongoCursor!R find(R = Bson)() { return find!R(Bson.emptyObject, FindOptions.init); }
 
 	deprecated("Use the overload taking FindOptions instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
-	auto findOne(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None)
+	auto findOne(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags)
 	{
 		import std.traits;
 		import std.typecons;
@@ -466,7 +463,7 @@ struct MongoCollection {
 	}
 
 	/// ditto
-	deprecated("Use deleteOne or deleteMany taking DeleteOptions instead, this method breaks in MongoDB 5.1 and onwards.")
+	deprecated("Use deleteMany taking DeleteOptions instead, this method breaks in MongoDB 5.1 and onwards.")
 	void remove()() { remove(Bson.emptyObject); }
 
 	/**
