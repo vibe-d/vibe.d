@@ -7,6 +7,9 @@
 */
 module vibe.db.mongo.connection;
 
+// /// prints ALL modern OP_MSG queries and legacy runCommand invocations to logDiagnostic
+// debug = VibeVerboseMongo;
+
 public import vibe.data.bson;
 
 import vibe.core.core : vibeVersionString;
@@ -364,6 +367,9 @@ final class MongoConnection {
 
 		if (m_supportsOpMsg)
 		{
+			debug (VibeVerboseMongo)
+				logDiagnostic("runCommand: [db=%s] %s", database, command);
+
 			command["$db"] = Bson(database);
 
 			auto id = sendMsg(-1, 0, command);
@@ -381,6 +387,8 @@ final class MongoConnection {
 		}
 		else
 		{
+			debug (VibeVerboseMongo)
+				logDiagnostic("runCommand(legacy): [db=%s] %s", database, command);
 			auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
 			recvReply!T(id,
 				(cursor, flags, first_doc, num_docs) {
@@ -453,6 +461,9 @@ final class MongoConnection {
 			{
 				enum needsDup = hasIndirections!T || is(T == Bson);
 
+				debug (VibeVerboseMongo)
+					logDiagnostic("getMore: [db=%s] %s", database, command);
+
 				auto id = sendMsg(-1, 0, command);
 				recvMsg!needsDup(id, (flags, root) {
 					if (root["ok"].get!double != 1.0)
@@ -474,6 +485,9 @@ final class MongoConnection {
 			}
 			else
 			{
+				debug (VibeVerboseMongo)
+					logDiagnostic("getMore(legacy): [db=%s] collection=%s, cursor=%s, nret=%s", database, collection_name, cursor_id, nret);
+
 				int brokenId = 0;
 				int nextId = 0;
 				int num_docs;
@@ -531,6 +545,9 @@ final class MongoConnection {
 		enforce!MongoDriverException(m_supportsOpMsg, formatErrorInfo("Database does not support required OP_MSG for new style queries"));
 
 		enum needsDup = hasIndirections!T || is(T == Bson);
+
+		debug (VibeVerboseMongo)
+			logDiagnostic("startFind: %s", command);
 
 		auto id = sendMsg(-1, 0, command);
 		recvMsg!needsDup(id, (flags, root) {
@@ -680,10 +697,15 @@ final class MongoConnection {
 			switch (payloadType) {
 				case 0:
 					gotSec0 = true;
+					scope Bson data;
 					static if (dupBson)
-						on_sec0(flagBits, recvBsonDup());
+						data = recvBsonDup();
 					else
-						on_sec0(flagBits, recvBson(bufsl));
+						data = recvBson(bufsl);
+
+					debug (VibeVerboseMongo)
+						logDiagnostic("recvData: sec0[flags=%x]: %s", flagBits, data);
+					on_sec0(flagBits, data);
 					break;
 				case 1:
 					if (!gotSec0)
@@ -694,10 +716,16 @@ final class MongoConnection {
 					auto identifier = recvCString();
 					on_sec1_start(identifier, size);
 					while (m_bytesRead - section_bytes_read < size) {
+						scope Bson data;
 						static if (dupBson)
-							on_sec1_doc(identifier, recvBsonDup());
+							data = recvBsonDup();
 						else
-							on_sec1_doc(identifier, recvBson(bufsl));
+							data = recvBson(bufsl);
+
+						debug (VibeVerboseMongo)
+							logDiagnostic("recvData: sec1[%s]: %s", identifier, data);
+
+						on_sec1_doc(identifier, data);
 					}
 					break;
 				default:
@@ -709,6 +737,7 @@ final class MongoConnection {
 		{
 			uint crc = recvUInt();
 			// TODO: validate CRC
+			logDiagnostic("recvData: crc=%s (discarded)", crc);
 		}
 
 		assert(bytes_read + msglen == m_bytesRead,
@@ -844,7 +873,7 @@ final class MongoConnection {
 		}
 		dst[0 .. 4] = toBsonData(len)[];
 		recv(dst[4 .. $]);
-		return Bson(Bson.Type.Object, cast(immutable)dst);
+		return Bson(Bson.Type.object, cast(immutable)dst);
 	}
 	private Bson recvBsonDup()
 	@trusted {
@@ -853,7 +882,7 @@ final class MongoConnection {
 		ubyte[] dst = new ubyte[fromBsonData!uint(size)];
 		dst[0 .. 4] = size;
 		recv(dst[4 .. $]);
-		return Bson(Bson.Type.Object, cast(immutable)dst);
+		return Bson(Bson.Type.object, cast(immutable)dst);
 	}
 	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
 	private const(char)[] recvCString()

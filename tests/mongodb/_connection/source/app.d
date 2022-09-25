@@ -13,6 +13,8 @@ int main(string[] args)
 	string username, password;
 	ushort port;
 
+	setLogLevel(LogLevel.diagnostic);
+
 	if (args.length < 2)
 	{
 		logError("Usage: %s [port] (failconnect) (faildb) (failauth) (auth [username] [password])",
@@ -107,7 +109,7 @@ int main(string[] args)
 	try
 	{
 		logInfo(`Trying to insert {"_id": "%s", "hello": "world"}`, objID);
-		coll.insert(Bson(["_id": Bson(objID), "hello": Bson("world")]));
+		coll.insertOne(Bson(["_id": Bson(objID), "hello": Bson("world")]));
 	}
 	catch (MongoDriverException e)
 	{
