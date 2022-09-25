@@ -233,6 +233,16 @@ struct FindOptions
 	Nullable!Bson sort;
 
 	/**
+		If true, when an insert fails, return without performing the remaining
+		writes. If false, when a write fails, continue with the remaining writes,
+		if any.
+
+		Defaults to true.
+	*/
+	@embedNullable
+	Nullable!bool ordered;
+
+	/**
 		Specifies the read concern. Only compatible with a write stage. (e.g.
 		`$out`, `$merge`)
 
@@ -530,7 +540,8 @@ struct BulkWriteOptions {
 
 		Defaults to true.
 	*/
-	bool ordered = true;
+	@embedNullable
+	Nullable!bool ordered;
 
 	/**
 		If true, allows the write to opt-out of document level validation.
@@ -613,7 +624,8 @@ struct InsertManyOptions {
 
 		Defaults to true.
 	*/
-	bool ordered = true;
+	@embedNullable
+	Nullable!bool ordered;
 
 	/**
 		A document that expresses the
@@ -640,9 +652,6 @@ struct UpdateOptions {
 	/**
 		A set of filters specifying to which array elements an update should
 		apply.
-
-		This option is sent only if the caller explicitly provides a value. The
-		default is to not send a value.
 	*/
 	@embedNullable @errorBefore(WireVersion.v36)
 	Nullable!(Bson[]) arrayFilters;
@@ -653,7 +662,7 @@ struct UpdateOptions {
 		For servers < 3.2, this option is ignored and not sent as document
 		validation is not available.
 	*/
-	@embedNullable
+	@embedNullable @since(WireVersion.v32)
 	Nullable!bool bypassDocumentValidation;
 
 	/**
@@ -786,6 +795,17 @@ struct DeleteOptions {
 	*/
 	@embedNullable
 	Nullable!string comment;
+
+	/**
+		Map of parameter names and values. Values must be constant or closed
+		expressions that do not reference document fields. Parameters can then
+		be accessed as variables in an aggregate expression context
+		(e.g. `"$$var"`).
+
+		This option is only supported by servers >= 5.0. Older servers >= 2.6 (and possibly earlier) will report an error for using this option.
+	*/
+	@embedNullable
+	Nullable!Bson let;
 }
 
 struct BulkWriteResult {
@@ -858,18 +878,9 @@ struct UpdateResult {
 	long modifiedCount;
 
 	/**
-		The number of documents that were upserted.
-	*
-		NOT REQUIRED: Drivers may choose to not provide this property so long as
-		it is always possible to infer whether an upsert has taken place. Since
-		the "_id" of an upserted document could be null, a null "upsertedId" may
-		be ambiguous in some drivers. If so, this field can be used to indicate
-		whether an upsert has taken place.
+		The identifier of the inserted document if an upsert took place. Can be
+		none if no upserts took place, can be multiple if using the updateImpl
+		helper.
 	*/
-	long upsertedCount;
-
-	/**
-		The identifier of the inserted document if an upsert took place.
-	*/
-	Bson upsertedId;
+	BsonObjectID[] upsertedIds;
 }

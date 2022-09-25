@@ -18,12 +18,13 @@ import vibe.core.log;
 import vibe.db.mongo.client;
 
 import core.time;
-import std.algorithm : countUntil, find;
+import std.algorithm : among, countUntil, find;
 import std.array;
 import std.conv;
 import std.exception;
+import std.meta : AliasSeq;
 import std.string;
-import std.typecons : Tuple, tuple, Nullable;
+import std.typecons : Nullable, tuple, Tuple;
 
 
 /**
@@ -169,6 +170,203 @@ struct MongoCollection {
 		
 		database.runCommand(cmd, true);
 		return InsertManyResult(insertedIds);
+	}
+
+	/**
+		Deletes at most one document matching the query `filter`. The returned
+		result identifies how many documents have been deleted.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.deleteOne/#mongodb-method-db.collection.deleteOne)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
+	*/
+	DeleteResult deleteOne(T)(T filter, DeleteOptions options = DeleteOptions.init)
+	{
+		int limit = 1;
+		return deleteImpl([filter], options, (&limit)[0 .. 1]);
+	}
+
+	/**
+		Deletes all documents matching the query `filter`. The returned result
+		identifies how many documents have been deleted.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.deleteMany/#mongodb-method-db.collection.deleteMany)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
+	*/
+	DeleteResult deleteMany(T)(T filter, DeleteOptions options = DeleteOptions.init)
+	{
+		return deleteImpl([filter], options);
+	}
+
+	/// Implementation helper. It's possible to set custom delete limits with
+	/// this method, otherwise it's identical to `deleteOne` and `deleteMany`.
+	DeleteResult deleteImpl(T)(T[] queries, DeleteOptions options = DeleteOptions.init, scope int[] limits = null)
+	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+
+		alias FieldsMovedIntoChildren = AliasSeq!("limit", "collation", "hint");
+
+		Bson cmd = Bson.emptyObject; // empty object because order is important
+		cmd["delete"] = Bson(m_name);
+
+		MongoConnection conn = m_client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
+		auto optionsBson = serializeToBson(options);
+		foreach (string k, v; optionsBson.byKeyValue)
+			if (!k.among!FieldsMovedIntoChildren)
+				cmd[k] = v;
+
+		Bson[] deletesBson = new Bson[queries.length];
+		foreach (i, q; queries)
+		{
+			auto deleteBson = Bson.emptyObject;
+			deleteBson["q"] = serializeToBson(q);
+			foreach (string k, v; optionsBson.byKeyValue)
+				if (k.among!FieldsMovedIntoChildren)
+					deleteBson[k] = v;
+			if (i < limits.length)
+				deleteBson["limit"] = Bson(limits[i]);
+			deletesBson[i] = deleteBson;
+		}
+		cmd["deletes"] = Bson(deletesBson);
+
+		auto n = database.runCommand(cmd, true)["n"].get!long;
+		return DeleteResult(n);
+	}
+
+	/**
+		Replaces at most single document within the collection based on the filter.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.replaceOne/#mongodb-method-db.collection.replaceOne)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
+	*/
+	UpdateResult replaceOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	{
+		Bson opts = Bson.emptyObject;
+		opts["multi"] = Bson(false);
+		return updateImpl([filter], [replacement], [opts], options, true, false);
+	}
+
+	/**
+		Updates at most single document within the collection based on the filter.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.updateOne/#mongodb-method-db.collection.updateOne)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
+	*/
+	UpdateResult updateOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	{
+		Bson opts = Bson.emptyObject;
+		opts["multi"] = Bson(false);
+		return updateImpl([filter], [replacement], [opts], options, false, true);
+	}
+
+	/**
+		Updates all matching document within the collection based on the filter.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.updateMany/#mongodb-method-db.collection.updateMany)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
+	*/
+	UpdateResult updateMany(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	{
+		Bson opts = Bson.emptyObject;
+		opts["multi"] = Bson(true);
+		return updateImpl([filter], [replacement], [opts], options, false, true);
+	}
+
+	/// Implementation helper. It's possible to set custom per-update object
+	/// options with this method, otherwise it's identical to `replaceOne`,
+	/// `updateOne` and `updateMany`.
+	UpdateResult updateImpl(T, U, O)(T[] queries, U[] documents, O[] perUpdateOptions, UpdateOptions options = UpdateOptions.init,
+		bool mustBeDocument = false, bool mustBeModification = false)
+	in(queries.length == documents.length && documents.length == perUpdateOptions.length,
+		"queries, documents and perUpdateOptions must have same length")
+	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+
+		alias FieldsMovedIntoChildren = AliasSeq!("arrayFilters",
+			"collation",
+			"hint",
+			"upsert");
+
+		Bson cmd = Bson.emptyObject; // empty object because order is important
+		cmd["update"] = Bson(m_name);
+
+		MongoConnection conn = m_client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
+		auto optionsBson = serializeToBson(options);
+		foreach (string k, v; optionsBson.byKeyValue)
+			if (!k.among!FieldsMovedIntoChildren)
+				cmd[k] = v;
+
+		Bson[] updatesBson = new Bson[queries.length];
+		foreach (i, q; queries)
+		{
+			auto updateBson = Bson.emptyObject;
+			auto qbson = serializeToBson(q);
+			updateBson["q"] = qbson;
+			if (mustBeDocument)
+			{
+				if (qbson.type != Bson.Type.object)
+					assert(false, "Passed in non-document into a place where only replacements are expected. "
+						~ "Maybe you want to call updateOne or updateMany instead?");
+
+				foreach (string k, v; qbson)
+				{
+					if (k.startsWith("$"))
+						assert(false, "Passed in atomic modifiers (" ~ k
+							~ ") into a place where only replacements are expected. "
+							~ "Maybe you want to call updateOne or updateMany instead?");
+					debug break; // server checks that the rest is consistent (only $ or only non-$ allowed)
+					// however in debug mode we check the full document, as we can give better error messages to the dev
+				}
+			}
+			if (mustBeModification)
+			{
+				if (qbson.type == Bson.Type.object)
+				{
+					bool anyDollar = false;
+					foreach (string k, v; qbson)
+					{
+						if (k.startsWith("$"))
+							anyDollar = true;
+						debug break; // server checks that the rest is consistent (only $ or only non-$ allowed)
+						// however in debug mode we check the full document, as we can give better error messages to the dev
+						// also nice side effect: if this is an empty document, this also matches the assert(false) branch.
+					}
+
+					if (!anyDollar)
+						assert(false, "Passed in a regular document into a place where only updates are expected. "
+							~ "Maybe you want to call replaceOne instead? "
+							~ "(this update call would otherwise replace the entire matched object with the passed in update object)");
+				}
+			}
+			updateBson["u"] = serializeToBson(documents[i]);
+			foreach (string k, v; optionsBson.byKeyValue)
+				if (k.among!FieldsMovedIntoChildren)
+					updateBson[k] = v;
+			foreach (string k, v; perUpdateOptions[i].byKeyValue)
+				updateBson[k] = v;
+			updatesBson[i] = updateBson;
+		}
+		cmd["updates"] = Bson(updatesBson);
+
+		auto res = database.runCommand(cmd, true);
+		auto ret = UpdateResult(
+			res["n"].get!long,
+			res["nModified"].get!long,
+		);
+		auto upserted = res["upserted"].get!(Bson[]);
+		if (upserted.length)
+		{
+			ret.upsertedIds.length = upserted.length;
+			foreach (i, id; upserted)
+				ret.upsertedIds[i] = id.get!BsonObjectID;
+		}
+		return ret;
 	}
 
 	deprecated("Use the overload taking FindOptions instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
