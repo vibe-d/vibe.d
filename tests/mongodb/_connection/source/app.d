@@ -143,6 +143,10 @@ int main(string[] args)
 	foreach (v; coll.find())
 		logInfo("\t%s", v);
 
+	logInfo("Filtering for target:", objID);
+	foreach (v; coll.find(["_id": objID]))
+		logInfo("\t%s", v);
+
 	auto v = coll.findOne(["_id": objID]);
 	assert(!v.isNull, "Just-inserted entry is not added to the database");
 	assert(v["hello"].get!string == "world",
