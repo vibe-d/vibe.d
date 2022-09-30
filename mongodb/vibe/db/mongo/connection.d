@@ -701,7 +701,7 @@ final class MongoConnection {
 					static if (dupBson)
 						data = recvBsonDup();
 					else
-						data = recvBson(bufsl);
+						data = (() @trusted => recvBson(bufsl))();
 
 					debug (VibeVerboseMongo)
 						logDiagnostic("recvData: sec0[flags=%x]: %s", flagBits, data);
@@ -720,7 +720,7 @@ final class MongoConnection {
 						static if (dupBson)
 							data = recvBsonDup();
 						else
-							data = recvBson(bufsl);
+							data = (() @trusted => recvBson(bufsl))();
 
 						debug (VibeVerboseMongo)
 							logDiagnostic("recvData: sec1[%s]: %s", identifier, data);
