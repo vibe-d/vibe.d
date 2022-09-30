@@ -140,7 +140,7 @@ struct MongoDatabase
 		return runCommand(command_and_options, false, errorInfo, errorFile, errorLine);
 	}
 	/// ditto
-	Bson runCommand(T)(T command_and_options, bool checkOk,
+	Bson runCommand(T, ExceptionT = MongoDriverException)(T command_and_options, bool checkOk,
 		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 	{
 		Bson cmd;
@@ -148,7 +148,7 @@ struct MongoDatabase
 			cmd = command_and_options;
 		else
 			cmd = command_and_options.serializeToBson;
-		return m_client.lockConnection().runCommand!(Bson, MongoException)(m_name, cmd, checkOk, errorInfo, errorFile, errorLine);
+		return m_client.lockConnection().runCommand!(Bson, ExceptionT)(m_name, cmd, checkOk, errorInfo, errorFile, errorLine);
 	}
 	/// ditto
 	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options, int batchSize = 0, long getMoreMaxTimeMS = long.max)
