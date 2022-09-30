@@ -448,7 +448,8 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 
 	final @property long index()
 	@safe {
-		return m_totalReceived + m_readDoc;
+		assert(m_totalReceived >= m_documents.length);
+		return m_totalReceived - m_documents.length + m_readDoc;
 	}
 
 	final @property DocType front()

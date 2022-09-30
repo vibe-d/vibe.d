@@ -140,12 +140,12 @@ int main(string[] args)
 	}
 
 	logInfo("Everything in DB (target=%s):", objID);
-	foreach (v; coll.find())
+	size_t indexCheck;
+	foreach (v; coll.find().byPair)
+	{
+		assert(v[0] == indexCheck++);
 		logInfo("\t%s", v);
-
-	logInfo("Filtering for target:", objID);
-	foreach (v; coll.find(["_id": objID]))
-		logInfo("\t%s", v);
+	}
 
 	auto v = coll.findOne(["_id": objID]);
 	assert(!v.isNull, "Just-inserted entry is not added to the database");
