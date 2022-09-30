@@ -479,7 +479,7 @@ final class MongoConnection {
 						T doc = deserializeBson!T(push);
 						on_doc(doc);
 					}
-				}, (scope ident, size) @safe {}, (scope ident, push) @safe {
+				}, (scope ident, size) @safe {}, (scope ident, scope push) @safe {
 					throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in getMore response"));
 				});
 			}
@@ -564,7 +564,7 @@ final class MongoConnection {
 				T doc = deserializeBson!T(push);
 				on_doc(doc);
 			}
-		}, (scope ident, size) @safe {}, (scope ident, push) @safe {
+		}, (scope ident, size) @safe {}, (scope ident, scope push) @safe {
 			throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in find response"));
 		});
 	}
