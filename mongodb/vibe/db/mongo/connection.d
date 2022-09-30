@@ -833,6 +833,8 @@ final class MongoConnection {
 		sendValue!int(response_to);
 		sendValue!int(cast(int)OpCode.Msg);
 		sendValue!uint(flagBits);
+		const bool hasCRC = (flagBits & (1 << 16)) != 0;
+		assert(!hasCRC, "sending with CRC bits not yet implemented");
 		sendValue!ubyte(0);
 		sendValue(document);
 		m_outRange.flush();
