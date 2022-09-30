@@ -465,7 +465,7 @@ final class MongoConnection {
 					logDiagnostic("getMore: [db=%s] %s", database, command);
 
 				auto id = sendMsg(-1, 0, command);
-				recvMsg!needsDup(id, (flags, root) @safe {
+				recvMsg!needsDup(id, (flags, scope root) @safe {
 					if (root["ok"].get!double != 1.0)
 						throw new MongoDriverException(formatErrorInfo("getMore failed: "
 							~ root["errmsg"].opt!string("(no message)")));
@@ -550,7 +550,7 @@ final class MongoConnection {
 			logDiagnostic("startFind: %s", command);
 
 		auto id = sendMsg(-1, 0, command);
-		recvMsg!needsDup(id, (flags, root) @safe {
+		recvMsg!needsDup(id, (flags, scope root) @safe {
 			if (root["ok"].get!double != 1.0)
 				throw new MongoDriverException(formatErrorInfo("find failed: "
 					~ root["errmsg"].opt!string("(no message)")));
