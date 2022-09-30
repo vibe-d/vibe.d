@@ -358,7 +358,7 @@ final class MongoConnection {
 
 		scope (failure) disconnect();
 
-		string formatErrorInfo(string msg)
+		string formatErrorInfo(string msg) @safe
 		{
 			return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
 		}
@@ -374,11 +374,11 @@ final class MongoConnection {
 
 			auto id = sendMsg(-1, 0, command);
 			Appender!(Bson[])[string] docs;
-			recvMsg!true(id, (flags, root) {
+			recvMsg!true(id, (flags, root) @safe {
 				ret = root;
-			}, (ident, size) {
+			}, (ident, size) @safe {
 				docs[ident] = appender!(Bson[]);
-			}, (ident, push) {
+			}, (ident, push) @safe {
 				docs[ident].put(push);
 			});
 
@@ -450,7 +450,7 @@ final class MongoConnection {
 			if (timeout != Duration.max && timeout.total!"msecs" < int.max)
 				command["maxTimeMS"] = Bson(cast(int)timeout.total!"msecs");
 
-			string formatErrorInfo(string msg)
+			string formatErrorInfo(string msg) @safe
 			{
 				return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
 			}
@@ -465,7 +465,7 @@ final class MongoConnection {
 					logDiagnostic("getMore: [db=%s] %s", database, command);
 
 				auto id = sendMsg(-1, 0, command);
-				recvMsg!needsDup(id, (flags, root) {
+				recvMsg!needsDup(id, (flags, root) @safe {
 					if (root["ok"].get!double != 1.0)
 						throw new MongoDriverException(formatErrorInfo("getMore failed: "
 							~ root["errmsg"].opt!string("(no message)")));
@@ -479,7 +479,7 @@ final class MongoConnection {
 						T doc = deserializeBson!T(push);
 						on_doc(doc);
 					}
-				}, (ident, size) {}, (ident, push) {
+				}, (ident, size) @safe {}, (ident, push) @safe {
 					throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in getMore response"));
 				});
 			}
@@ -535,7 +535,7 @@ final class MongoConnection {
 		scope GetMoreDocumentDelegate!T on_doc,
 		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 	{
-		string formatErrorInfo(string msg)
+		string formatErrorInfo(string msg) @safe
 		{
 			return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
 		}
@@ -550,7 +550,7 @@ final class MongoConnection {
 			logDiagnostic("startFind: %s", command);
 
 		auto id = sendMsg(-1, 0, command);
-		recvMsg!needsDup(id, (flags, root) {
+		recvMsg!needsDup(id, (flags, root) @safe {
 			if (root["ok"].get!double != 1.0)
 				throw new MongoDriverException(formatErrorInfo("find failed: "
 					~ root["errmsg"].opt!string("(no message)")));
@@ -564,7 +564,7 @@ final class MongoConnection {
 				T doc = deserializeBson!T(push);
 				on_doc(doc);
 			}
-		}, (ident, size) {}, (ident, push) {
+		}, (ident, size) @safe {}, (ident, push) @safe {
 			throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in find response"));
 		});
 	}
