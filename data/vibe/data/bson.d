@@ -565,6 +565,11 @@ struct Bson {
 	const {
 		switch (type)
 		{
+		case Bson.Type.objectID:
+			range.put("ObjectID(");
+			range.put(get!BsonObjectID().toString());
+			range.put(")");
+			break;
 		case Bson.Type.object:
 			// keep ordering of objects
 			range.put("{");
