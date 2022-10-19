@@ -85,7 +85,7 @@ final class MongoSessionStore : SessionStore {
 	Session create()
 	{
 		auto s = createSessionInstance();
-		m_sessions.insert(SessionEntry(s.id, Clock.currTime(UTC())));
+		m_sessions.insertOne(SessionEntry(s.id, Clock.currTime(UTC())));
 		return s;
 	}
 
@@ -104,7 +104,9 @@ final class MongoSessionStore : SessionStore {
 	Variant get(string id, string name, lazy Variant defaultVal)
 	@trusted {
 		auto f = name.escape;
-		auto r = m_sessions.findOne(["_id": id], [f: 1]);
+		FindOptions options;
+		options.projection = Bson([f: Bson(1)]);
+		auto r = m_sessions.findOne(["_id": id], options);
 		if (r.isNull) return defaultVal;
 		auto v = r.tryIndex(f);
 		if (v.isNull) return defaultVal;
@@ -114,7 +116,9 @@ final class MongoSessionStore : SessionStore {
 	bool isKeySet(string id, string key)
 	{
 		auto f = key.escape;
-		auto r = m_sessions.findOne(["_id": id], [f: 1]);
+		FindOptions options;
+		options.projection = Bson([f: Bson(1)]);
+		auto r = m_sessions.findOne(["_id": id], options);
 		if (r.isNull) return false;
 		return !r.tryIndex(f).isNull;
 	}

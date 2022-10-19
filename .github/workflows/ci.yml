@@ -41,10 +41,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      mongodb:
-        image: mongo
-        ports:
-          - 27017:27017
 
     steps:
     - uses: actions/checkout@v3
@@ -57,7 +53,7 @@ jobs:
     - name: '[POSIX] Run tests'
       env:
         VIBED_DRIVER: vibe-core
-        PARTS: builds,unittests,examples,tests,mongo
+        PARTS: builds,unittests,examples,tests
       run: |
         ./run-ci.sh
 

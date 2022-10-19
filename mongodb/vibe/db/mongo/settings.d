@@ -9,9 +9,10 @@ module vibe.db.mongo.settings;
 
 import vibe.core.log;
 import vibe.data.bson;
-import vibe.db.mongo.flags : QueryFlags;
+deprecated import vibe.db.mongo.flags : QueryFlags;
 import vibe.inet.webform;
 
+import core.time;
 import std.conv : to;
 import std.digest : toHexString;
 import std.digest.md : md5Of;
@@ -147,25 +148,39 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				}
 			}
 
+			bool setMsecs(ref Duration dst)
+			{
+				try {
+					dst = to!long(value).msecs;
+					return true;
+				} catch( Exception e ){
+					logError("Value for '%s' must be an integer but was '%s'.", option, value);
+					return false;
+				}
+			}
+
 			void warnNotImplemented()
 			{
 				logDiagnostic("MongoDB option %s not yet implemented.", option);
 			}
 
 			switch( option.toLower() ){
+				import std.string : split;
+
 				default: logWarn("Unknown MongoDB option %s", option); break;
 				case "appname": cfg.appName = value; break;
-				case "slaveok": bool v; if( setBool(v) && v ) cfg.defQueryFlags |= QueryFlags.SlaveOk; break;
 				case "replicaset": cfg.replicaSet = value; warnNotImplemented(); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
-				case "connecttimeoutms": setLong(cfg.connectTimeoutMS); warnNotImplemented(); break;
-				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); warnNotImplemented(); break;
+				case "connecttimeoutms": setMsecs(cfg.connectTimeout); break;
+				case "sockettimeoutms": setMsecs(cfg.socketTimeout); break;
 				case "tls": setBool(cfg.ssl); break;
 				case "ssl": setBool(cfg.ssl); break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
 				case "authmechanism": cfg.authMechanism = parseAuthMechanism(value); break;
+				case "authmechanismproperties": cfg.authMechanismProperties = value.split(","); warnNotImplemented(); break;
+				case "authsource": cfg.authSource = value; break;
 				case "wtimeoutms": setLong(cfg.wTimeoutMS); break;
 				case "w":
 					try {
@@ -204,14 +219,13 @@ unittest
 	assert(cfg.database == "");
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
-	assert(cfg.defQueryFlags == QueryFlags.None);
 	assert(cfg.replicaSet == "");
 	assert(cfg.safe == false);
 	assert(cfg.w == Bson.init);
 	assert(cfg.wTimeoutMS == long.init);
 	assert(cfg.fsync == false);
 	assert(cfg.journal == false);
-	assert(cfg.connectTimeoutMS == long.init);
+	assert(cfg.connectTimeoutMS == 10_000);
 	assert(cfg.socketTimeoutMS == long.init);
 	assert(cfg.ssl == bool.init);
 	assert(cfg.sslverifycertificate == true);
@@ -237,7 +251,7 @@ unittest
 	assert(cfg.hosts[0].port == 27017);
 
 	cfg = MongoClientSettings.init;
-	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=true&ssl=true&sslverifycertificate=false"));
+	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&ssl=true&sslverifycertificate=false"));
 	assert(cfg.username == "");
 	//assert(cfg.password == "");
 	assert(cfg.digest == "");
@@ -252,7 +266,6 @@ unittest
 	assert(cfg.safe == true);
 	assert(cfg.w == Bson(2L));
 	assert(cfg.wTimeoutMS == 2000);
-	assert(cfg.defQueryFlags == QueryFlags.SlaveOk);
 	assert(cfg.ssl == true);
 	assert(cfg.sslverifycertificate == false);
 
@@ -398,12 +411,7 @@ class MongoClientSettings
 	 */
 	string database;
 
-	/**
-	 * Flags to use on all database query commands. The
-	 * $(REF slaveOk, vibe,db,mongo,flags,QueryFlags) bit may be set using the
-	 * "slaveok" query parameter inside the MongoDB URL.
-	 */
-	QueryFlags defQueryFlags = QueryFlags.None;
+	deprecated("unused since at least before v3.6") QueryFlags defQueryFlags = QueryFlags.None;
 
 	/**
 	 * Specifies the name of the replica set, if the mongod is a member of a
@@ -453,19 +461,41 @@ class MongoClientSettings
 	bool journal;
 
 	/**
-	 * The time in milliseconds to attempt a connection before timing out.
-	 *
-	 * Bugs: Not yet implemented
+	 * The time to attempt a connection before timing out.
 	 */
-	long connectTimeoutMS;
+	Duration connectTimeout = 10.seconds;
+
+	/// ditto
+	long connectTimeoutMS() const @property
+	@safe {
+		return connectTimeout.total!"msecs";
+	}
+
+	/// ditto
+	void connectTimeoutMS(long ms) @property
+	@safe {
+		connectTimeout = ms.msecs;
+	}
 
 	/**
-	 * The time in milliseconds to attempt a send or receive on a socket before
-	 * the attempt times out.
+	 * The time to attempt a send or receive on a socket before the attempt
+	 * times out.
 	 *
-	 * Bugs: Not yet implemented
+	 * Bugs: Not implemented for sending
 	 */
-	long socketTimeoutMS;
+	Duration socketTimeout = Duration.zero;
+
+	/// ditto
+	long socketTimeoutMS() const @property
+	@safe {
+		return socketTimeout.total!"msecs";
+	}
+
+	/// ditto
+	void socketTimeoutMS(long ms) @property
+	@safe {
+		socketTimeout = ms.msecs;
+	}
 
 	/**
 	 * Enables or disables TLS/SSL for the connection.
@@ -492,6 +522,20 @@ class MongoClientSettings
 	 */
 	string sslCAFile;
 
+	/** 
+	 * Specify the database name associated with the user's credentials. If
+	 * `authSource` is unspecified, `authSource` defaults to the `defaultauthdb`
+	 * specified in the connection string. If `defaultauthdb` is unspecified,
+	 * then `authSource` defaults to `admin`.
+	 *
+	 * The `PLAIN` (LDAP), `GSSAPI` (Kerberos), and `MONGODB-AWS` (IAM)
+	 * authentication mechanisms require that `authSource` be set to `$external`,
+	 * as these mechanisms delegate credential storage to external services.
+	 *
+	 * Ignored if no username is provided.
+	 */
+	string authSource;
+
 	/**
 	 * Use the given authentication mechanism when connecting to the server. If
 	 * unsupported by the server, throw a MongoAuthException.
@@ -500,6 +544,14 @@ class MongoClientSettings
 	 * determines a suitable authentication mechanism based on server version.
 	 */
 	MongoAuthMechanism authMechanism;
+
+	/** 
+	 * Specify properties for the specified authMechanism as a comma-separated
+	 * list of colon-separated key-value pairs.
+	 *
+	 * Currently none are used by the vibe.d Mongo driver.
+	 */
+	string[] authMechanismProperties;
 
 	/**
 	 * Application name for the connection information when connected.
@@ -554,6 +606,20 @@ class MongoClientSettings
 		this.username = username;
 		this.sslPEMKeyFile = sslPEMKeyFile;
 		this.sslCAFile = sslCAFile;
+	}
+
+	/** 
+	 * Resolves the database to run authentication commands on.
+	 * (authSource if set, otherwise the URI's database if set, otherwise "admin")
+	 */
+	string getAuthDatabase()
+	@safe @nogc nothrow pure const return {
+		if (authSource.length)
+			return authSource;
+		else if (database.length)
+			return database;
+		else
+			return "admin";
 	}
 }
 

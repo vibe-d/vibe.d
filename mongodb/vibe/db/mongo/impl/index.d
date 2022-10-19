@@ -1,3 +1,10 @@
+/**
+	MongoDB index API definitions.
+
+	Copyright: © 2020-2022 Jan Jurzitza
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Jan Jurzitza
+*/
 module vibe.db.mongo.impl.index;
 
 @safe:

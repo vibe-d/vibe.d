@@ -13,6 +13,8 @@ int main(string[] args)
 	string username, password;
 	ushort port;
 
+	setLogLevel(LogLevel.diagnostic);
+
 	if (args.length < 2)
 	{
 		logError("Usage: %s [port] (failconnect) (faildb) (failauth) (auth [username] [password])",
@@ -20,10 +22,12 @@ int main(string[] args)
 		return 1;
 	}
 
-	runTask({ sleep(10.seconds); assert(false, "Timeout exceeded"); });
+	runTask({ sleep(20.seconds); assert(false, "Timeout exceeded"); });
 
 	port = args[1].to!ushort;
 	MongoClientSettings settings = new MongoClientSettings;
+	settings.connectTimeoutMS = 5_000;
+	settings.socketTimeoutMS = 2_000;
 
 	int authStep = 0;
 	foreach (arg; args[2 .. $])
@@ -105,7 +109,7 @@ int main(string[] args)
 	try
 	{
 		logInfo(`Trying to insert {"_id": "%s", "hello": "world"}`, objID);
-		coll.insert(Bson(["_id": Bson(objID), "hello": Bson("world")]));
+		coll.insertOne(Bson(["_id": Bson(objID), "hello": Bson("world")]));
 	}
 	catch (MongoDriverException e)
 	{
@@ -136,8 +140,12 @@ int main(string[] args)
 	}
 
 	logInfo("Everything in DB (target=%s):", objID);
-	foreach (v; coll.find())
+	size_t indexCheck;
+	foreach (v; coll.find().byPair)
+	{
+		assert(v[0] == indexCheck++);
 		logInfo("\t%s", v);
+	}
 
 	auto v = coll.findOne(["_id": objID]);
 	assert(!v.isNull, "Just-inserted entry is not added to the database");

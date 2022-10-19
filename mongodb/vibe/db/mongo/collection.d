@@ -12,17 +12,19 @@ public import vibe.db.mongo.connection;
 public import vibe.db.mongo.flags;
 
 public import vibe.db.mongo.impl.index;
+public import vibe.db.mongo.impl.crud;
 
 import vibe.core.log;
 import vibe.db.mongo.client;
 
 import core.time;
-import std.algorithm : countUntil, find;
+import std.algorithm : among, countUntil, find, findSplit;
 import std.array;
 import std.conv;
 import std.exception;
+import std.meta : AliasSeq;
 import std.string;
-import std.typecons : Tuple, tuple, Nullable;
+import std.typecons : Nullable, tuple, Tuple;
 
 
 /**
@@ -78,6 +80,7 @@ struct MongoCollection {
 	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Updating)
 	 */
+	deprecated("Use updateOne or updateMany taking UpdateOptions instead, this method breaks in MongoDB 5.1 and onwards.")
 	void update(T, U)(T selector, U update, UpdateFlags flags = UpdateFlags.None)
 	{
 		assert(m_client !is null, "Updating uninitialized MongoCollection.");
@@ -97,6 +100,7 @@ struct MongoCollection {
 	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Inserting)
 	 */
+	deprecated("Use the insertOne or insertMany, this method breaks in MongoDB 5.1 and onwards.")
 	void insert(T)(T document_or_documents, InsertFlags flags = InsertFlags.None)
 	{
 		assert(m_client !is null, "Inserting into uninitialized MongoCollection.");
@@ -109,35 +113,286 @@ struct MongoCollection {
 	}
 
 	/**
+		Inserts the provided document(s). If a document is missing an identifier,
+		one is generated automatically by vibe.d.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.insertOne/#mongodb-method-db.collection.insertOne)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/insert/)
+	*/
+	InsertOneResult insertOne(T)(T document, InsertOneOptions options = InsertOneOptions.init)
+	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+
+		Bson cmd = Bson.emptyObject; // empty object because order is important
+		cmd["insert"] = Bson(m_name);
+		auto doc = serializeToBson(document);
+		enforce(doc.type == Bson.Type.object, "Can only insert objects into collections");
+		InsertOneResult res;
+		if ("_id" !in doc.get!(Bson[string]))
+		{
+			doc["_id"] = Bson(res.insertedId = BsonObjectID.generate);
+		}
+		cmd["documents"] = Bson([doc]);
+		MongoConnection conn = m_client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
+		foreach (string k, v; serializeToBson(options).byKeyValue)
+			cmd[k] = v;
+		
+		database.runCommandChecked(cmd);
+		return res;
+	}
+
+	/// ditto
+	InsertOneResult insertMany(T)(T[] documents, InsertManyOptions options = InsertManyOptions.init)
+	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+
+		Bson cmd = Bson.emptyObject; // empty object because order is important
+		cmd["insert"] = Bson(m_name);
+		Bson[] arr = new Bson[documents.length];
+		BsonObjectID[size_t] insertedIds;
+		foreach (i, document; documents)
+		{
+			auto doc = serializeToBson(document);
+			arr[i] = doc;
+			enforce(doc.type == Bson.Type.object, "Can only insert objects into collections");
+			if ("_id" !in doc.get!(Bson[string]))
+			{
+				doc["_id"] = Bson(insertedIds[i] = BsonObjectID.generate);
+			}
+		}
+		cmd["documents"] = Bson(arr);
+		MongoConnection conn = m_client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
+		foreach (string k, v; serializeToBson(options).byKeyValue)
+			cmd[k] = v;
+		
+		database.runCommandChecked(cmd);
+		return InsertManyResult(insertedIds);
+	}
+
+	/**
+		Deletes at most one document matching the query `filter`. The returned
+		result identifies how many documents have been deleted.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.deleteOne/#mongodb-method-db.collection.deleteOne)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
+	*/
+	DeleteResult deleteOne(T)(T filter, DeleteOptions options = DeleteOptions.init)
+	{
+		int limit = 1;
+		return deleteImpl([filter], options, (&limit)[0 .. 1]);
+	}
+
+	/**
+		Deletes all documents matching the query `filter`. The returned result
+		identifies how many documents have been deleted.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.deleteMany/#mongodb-method-db.collection.deleteMany)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
+	*/
+	DeleteResult deleteMany(T)(T filter, DeleteOptions options = DeleteOptions.init)
+	{
+		return deleteImpl([filter], options);
+	}
+
+	/// Implementation helper. It's possible to set custom delete limits with
+	/// this method, otherwise it's identical to `deleteOne` and `deleteMany`.
+	DeleteResult deleteImpl(T)(T[] queries, DeleteOptions options = DeleteOptions.init, scope int[] limits = null)
+	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+
+		alias FieldsMovedIntoChildren = AliasSeq!("limit", "collation", "hint");
+
+		Bson cmd = Bson.emptyObject; // empty object because order is important
+		cmd["delete"] = Bson(m_name);
+
+		MongoConnection conn = m_client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
+		auto optionsBson = serializeToBson(options);
+		foreach (string k, v; optionsBson.byKeyValue)
+			if (!k.among!FieldsMovedIntoChildren)
+				cmd[k] = v;
+
+		Bson[] deletesBson = new Bson[queries.length];
+		foreach (i, q; queries)
+		{
+			auto deleteBson = Bson.emptyObject;
+			deleteBson["q"] = serializeToBson(q);
+			foreach (string k, v; optionsBson.byKeyValue)
+				if (k.among!FieldsMovedIntoChildren)
+					deleteBson[k] = v;
+			if (i < limits.length)
+				deleteBson["limit"] = Bson(limits[i]);
+			deletesBson[i] = deleteBson;
+		}
+		cmd["deletes"] = Bson(deletesBson);
+
+		auto n = database.runCommandChecked(cmd)["n"].get!long;
+		return DeleteResult(n);
+	}
+
+	/**
+		Replaces at most single document within the collection based on the filter.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.replaceOne/#mongodb-method-db.collection.replaceOne)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
+	*/
+	UpdateResult replaceOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	{
+		Bson opts = Bson.emptyObject;
+		opts["multi"] = Bson(false);
+		return updateImpl([filter], [replacement], [opts], options, true, false);
+	}
+
+	/**
+		Updates at most single document within the collection based on the filter.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.updateOne/#mongodb-method-db.collection.updateOne)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
+	*/
+	UpdateResult updateOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	{
+		Bson opts = Bson.emptyObject;
+		opts["multi"] = Bson(false);
+		return updateImpl([filter], [replacement], [opts], options, false, true);
+	}
+
+	/**
+		Updates all matching document within the collection based on the filter.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.updateMany/#mongodb-method-db.collection.updateMany)
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
+	*/
+	UpdateResult updateMany(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	{
+		Bson opts = Bson.emptyObject;
+		opts["multi"] = Bson(true);
+		return updateImpl([filter], [replacement], [opts], options, false, true);
+	}
+
+	/// Implementation helper. It's possible to set custom per-update object
+	/// options with this method, otherwise it's identical to `replaceOne`,
+	/// `updateOne` and `updateMany`.
+	UpdateResult updateImpl(T, U, O)(T[] queries, U[] documents, O[] perUpdateOptions, UpdateOptions options = UpdateOptions.init,
+		bool mustBeDocument = false, bool mustBeModification = false)
+	in(queries.length == documents.length && documents.length == perUpdateOptions.length,
+		"queries, documents and perUpdateOptions must have same length")
+	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+
+		alias FieldsMovedIntoChildren = AliasSeq!("arrayFilters",
+			"collation",
+			"hint",
+			"upsert");
+
+		Bson cmd = Bson.emptyObject; // empty object because order is important
+		cmd["update"] = Bson(m_name);
+
+		MongoConnection conn = m_client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
+		auto optionsBson = serializeToBson(options);
+		foreach (string k, v; optionsBson.byKeyValue)
+			if (!k.among!FieldsMovedIntoChildren)
+				cmd[k] = v;
+
+		Bson[] updatesBson = new Bson[queries.length];
+		foreach (i, q; queries)
+		{
+			auto updateBson = Bson.emptyObject;
+			auto qbson = serializeToBson(q);
+			updateBson["q"] = qbson;
+			if (mustBeDocument)
+			{
+				if (qbson.type != Bson.Type.object)
+					assert(false, "Passed in non-document into a place where only replacements are expected. "
+						~ "Maybe you want to call updateOne or updateMany instead?");
+
+				foreach (string k, v; qbson)
+				{
+					if (k.startsWith("$"))
+						assert(false, "Passed in atomic modifiers (" ~ k
+							~ ") into a place where only replacements are expected. "
+							~ "Maybe you want to call updateOne or updateMany instead?");
+					debug break; // server checks that the rest is consistent (only $ or only non-$ allowed)
+					// however in debug mode we check the full document, as we can give better error messages to the dev
+				}
+			}
+			if (mustBeModification)
+			{
+				if (qbson.type == Bson.Type.object)
+				{
+					bool anyDollar = false;
+					foreach (string k, v; qbson)
+					{
+						if (k.startsWith("$"))
+							anyDollar = true;
+						debug break; // server checks that the rest is consistent (only $ or only non-$ allowed)
+						// however in debug mode we check the full document, as we can give better error messages to the dev
+						// also nice side effect: if this is an empty document, this also matches the assert(false) branch.
+					}
+
+					if (!anyDollar)
+						assert(false, "Passed in a regular document into a place where only updates are expected. "
+							~ "Maybe you want to call replaceOne instead? "
+							~ "(this update call would otherwise replace the entire matched object with the passed in update object)");
+				}
+			}
+			updateBson["u"] = serializeToBson(documents[i]);
+			foreach (string k, v; optionsBson.byKeyValue)
+				if (k.among!FieldsMovedIntoChildren)
+					updateBson[k] = v;
+			foreach (string k, v; perUpdateOptions[i].byKeyValue)
+				updateBson[k] = v;
+			updatesBson[i] = updateBson;
+		}
+		cmd["updates"] = Bson(updatesBson);
+
+		auto res = database.runCommandChecked(cmd);
+		auto ret = UpdateResult(
+			res["n"].get!long,
+			res["nModified"].get!long,
+		);
+		auto upserted = res["upserted"].get!(Bson[]);
+		if (upserted.length)
+		{
+			ret.upsertedIds.length = upserted.length;
+			foreach (i, id; upserted)
+				ret.upsertedIds[i] = id.get!BsonObjectID;
+		}
+		return ret;
+	}
+
+	deprecated("Use the overload taking FindOptions instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
+	MongoCursor!R find(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags, int num_skip = 0, int num_docs_per_chunk = 0)
+	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+		return MongoCursor!R(m_client, m_db.name, m_name, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
+	}
+
+	/**
 	  Queries the collection for existing documents.
 
 	  If no arguments are passed to find(), all documents of the collection will be returned.
 
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	 */
-	MongoCursor!R find(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	MongoCursor!R find(R = Bson, Q)(Q query, FindOptions options = FindOptions.init)
 	{
-		assert(m_client !is null, "Querying uninitialized MongoCollection.");
-		return MongoCursor!R(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
+		return MongoCursor!R(m_client, m_db.name, m_name, query, options);
 	}
 
 	/// ditto
-	MongoCursor!R find(R = Bson, T)(T query) { return find!R(query, null); }
+	MongoCursor!R find(R = Bson)() { return find!R(Bson.emptyObject, FindOptions.init); }
 
-	/// ditto
-	MongoCursor!R find(R = Bson)() { return find!R(Bson.emptyObject, null); }
-
-	/** Queries the collection for existing documents.
-
-		Returns:
-			By default, a Bson value of the matching document is returned, or $(D Bson(null))
-			when no document matched. For types R that are not Bson, the returned value is either
-			of type $(D R), or of type $(Nullable!R), if $(D R) is not a reference/pointer type.
-
-		Throws: Exception if a DB communication error or a query error occurred.
-		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
-	 */
-	auto findOne(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None)
+	deprecated("Use the overload taking FindOptions instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
+	auto findOne(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags)
 	{
 		import std.traits;
 		import std.typecons;
@@ -158,8 +413,39 @@ struct MongoCollection {
 			return Nullable!R.init;
 		}
 	}
-	/// ditto
-	auto findOne(R = Bson, T)(T query) { return findOne!R(query, Bson(null)); }
+
+	/** Queries the collection for existing documents.
+
+		Returns:
+			By default, a Bson value of the matching document is returned, or $(D Bson(null))
+			when no document matched. For types R that are not Bson, the returned value is either
+			of type $(D R), or of type $(Nullable!R), if $(D R) is not a reference/pointer type.
+
+		Throws: Exception if a DB communication error or a query error occurred.
+		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
+	 */
+	auto findOne(R = Bson, T)(T query, FindOptions options = FindOptions.init)
+	{
+		import std.traits;
+		import std.typecons;
+
+		options.limit = 1;
+		auto c = find!R(query, options);
+		static if (is(R == Bson)) {
+			foreach (doc; c) return doc;
+			return Bson(null);
+		} else static if (is(R == class) || isPointer!R || isDynamicArray!R || isAssociativeArray!R) {
+			foreach (doc; c) return doc;
+			return null;
+		} else {
+			foreach (doc; c) {
+				Nullable!R ret;
+				ret = doc;
+				return ret;
+			}
+			return Nullable!R.init;
+		}
+	}
 
 	/**
 	  Removes documents from the collection.
@@ -167,6 +453,7 @@ struct MongoCollection {
 	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Removing)
 	 */
+	deprecated("Use deleteOne or deleteMany taking DeleteOptions instead, this method breaks in MongoDB 5.1 and onwards.")
 	void remove(T)(T selector, DeleteFlags flags = DeleteFlags.None)
 	{
 		assert(m_client !is null, "Removing from uninitialized MongoCollection.");
@@ -176,6 +463,7 @@ struct MongoCollection {
 	}
 
 	/// ditto
+	deprecated("Use deleteMany taking DeleteOptions instead, this method breaks in MongoDB 5.1 and onwards.")
 	void remove()() { remove(Bson.emptyObject); }
 
 	/**
@@ -205,8 +493,7 @@ struct MongoCollection {
 		cmd.query = query;
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
-		auto ret = database.runCommand(cmd);
-		if( !ret["ok"].get!double ) throw new Exception("findAndModify failed.");
+		auto ret = database.runCommandChecked(cmd);
 		return ret["value"];
 	}
 
@@ -245,8 +532,7 @@ struct MongoCollection {
 			cmd[key] = value;
 			return 0;
 		});
-		auto ret = database.runCommand(cmd);
-		enforce(ret["ok"].get!double != 0, "findAndModifyExt failed: "~ret["errmsg"].opt!string);
+		auto ret = database.runCommandChecked(cmd);
 		return ret["value"];
 	}
 
@@ -261,31 +547,82 @@ struct MongoCollection {
 		}
 	}
 
-	/**
-		Counts the results of the specified query expression.
+	deprecated("deprecated since MongoDB v4.0, use countDocuments or estimatedDocumentCount instead")
+	alias count = countImpl;
 
-		Throws Exception if a DB communication error occurred.
-		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQueries-{{count%28%29}})
-	*/
-	ulong count(T)(T query)
+	private ulong countImpl(T)(T query)
 	{
-		static struct Empty {}
-		static struct CMD {
-			string count;
-			T query;
-			Empty fields;
-		}
-
-		CMD cmd;
-		cmd.count = m_name;
-		cmd.query = query;
-		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].opt!double == 1 || reply["ok"].opt!int == 1, "Count command failed: "~reply["errmsg"].opt!string);
+		Bson cmd = Bson.emptyObject;
+		cmd["count"] = m_name;
+		cmd["query"] = serializeToBson(query);
+		auto reply = database.runCommandChecked(cmd);
 		switch (reply["n"].type) with (Bson.Type) {
 			default: assert(false, "Unsupported data type in BSON reply for COUNT");
 			case double_: return cast(ulong)reply["n"].get!double; // v2.x
 			case int_: return reply["n"].get!int; // v3.x
 			case long_: return reply["n"].get!long; // just in case
+		}
+	}
+
+	/**
+		Returns the count of documents that match the query for a collection or
+		view.
+		
+		The method wraps the `$group` aggregation stage with a `$sum` expression
+		to perform the count.
+
+		Throws Exception if a DB communication error occurred.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.countDocuments/)
+	*/
+	ulong countDocuments(T)(T filter, CountOptions options = CountOptions.init)
+	{
+		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details
+		Bson[] pipeline = [Bson(["$match": serializeToBson(filter)])];
+		if (!options.skip.isNull)
+			pipeline ~= Bson(["$skip": Bson(options.skip.get)]);
+		if (!options.limit.isNull)
+			pipeline ~= Bson(["$limit": Bson(options.limit.get)]);
+		pipeline ~= Bson(["$group": Bson([
+			"_id": Bson(1),
+			"n": Bson(["$sum": Bson(1)])
+		])]);
+		AggregateOptions aggOptions;
+		foreach (i, field; options.tupleof)
+		{
+			enum name = CountOptions.tupleof[i].stringof;
+			if (name != "filter" && name != "skip" && name != "limit")
+				__traits(getMember, aggOptions, name) = field;
+		}
+		auto reply = aggregate(pipeline, aggOptions).front;
+		return reply["n"].get!long;
+	}
+
+	/**
+		Returns the count of all documents in a collection or view.
+
+		Throws Exception if a DB communication error occurred.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.estimatedDocumentCount/)
+	*/
+	ulong estimatedDocumentCount(EstimatedDocumentCountOptions options = EstimatedDocumentCountOptions.init)
+	{
+		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details
+		MongoConnection conn = m_client.lockConnection();
+		if (conn.description.satisfiesVersion(WireVersion.v49)) {
+			Bson[] pipeline = [
+				Bson(["$collStats": Bson(["count": Bson.emptyObject])]),
+				Bson(["$group": Bson([
+					"_id": Bson(1),
+					"n": Bson(["$sum": Bson("$count")])
+				])])
+			];
+			AggregateOptions aggOptions;
+			aggOptions.maxTimeMS = options.maxTimeMS;
+			auto reply = aggregate(pipeline, aggOptions).front;
+			return reply["n"].get!long;
+		} else {
+			return countImpl(null);
 		}
 	}
 
@@ -328,7 +665,10 @@ struct MongoCollection {
 
 		Bson cmd = Bson.emptyObject; // empty object because order is important
 		cmd["aggregate"] = Bson(m_name);
+		cmd["$db"] = Bson(m_db.name);
 		cmd["pipeline"] = serializeToBson(pipeline);
+		MongoConnection conn = m_client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 		{
 			// spec recommends to omit cursor field when explain is true
@@ -336,14 +676,11 @@ struct MongoCollection {
 				continue;
 			cmd[k] = v;
 		}
-		auto ret = database.runCommand(cmd);
-		enforce(ret["ok"].get!double == 1, "Aggregate command failed: "~ret["errmsg"].opt!string);
-		R[] existing;
-		static if (is(R == Bson))
-			existing = ret["cursor"]["firstBatch"].get!(Bson[]);
-		else
-			existing = ret["cursor"]["firstBatch"].deserializeBson!(R[]);
-		return MongoCursor!R(m_client, ret["cursor"]["ns"].get!string, ret["cursor"]["id"].get!long, existing);
+		return MongoCursor!R(m_client, cmd,
+			!options.batchSize.isNull ? options.batchSize.get : 0,
+			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get.msecs
+				: !options.maxTimeMS.isNull ? options.maxTimeMS.get.msecs
+				: Duration.max);
 	}
 
 	/// Example taken from the MongoDB documentation
@@ -384,30 +721,30 @@ struct MongoCollection {
 		records matching the given query.
 
 		Params:
-			key = Name of the field for which to collect unique values
+			fieldName = Name of the field for which to collect unique values
 			query = The query used to select records
+			options = Options to apply
 
 		Returns:
 			An input range with items of type `R` (`Bson` by default) is
 			returned.
 	*/
-	auto distinct(R = Bson, Q)(string key, Q query)
+	auto distinct(R = Bson, Q)(string fieldName, Q query, DistinctOptions options = DistinctOptions.init)
 	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+
+		Bson cmd = Bson.emptyObject; // empty object because order is important
+		cmd["distinct"] = Bson(m_name);
+		cmd["key"] = Bson(fieldName);
+		cmd["query"] = serializeToBson(query);
+		MongoConnection conn = m_client.lockConnection();
+		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
+		foreach (string k, v; serializeToBson(options).byKeyValue)
+			cmd[k] = v;
+
 		import std.algorithm : map;
 
-		static struct CMD {
-			string distinct;
-			string key;
-			Q query;
-		}
-		CMD cmd;
-		cmd.distinct = m_name;
-		cmd.key = key;
-		cmd.query = query;
-		auto res = m_db.runCommand(cmd);
-
-		enforce(res["ok"].get!double != 0, "Distinct query failed: "~res["errmsg"].opt!string);
-
+		auto res = m_db.runCommandChecked(cmd);
 		static if (is(R == Bson)) return res["values"].byValue;
 		else return res["values"].byValue.map!(b => deserializeBson!R(b));
 	}
@@ -423,11 +760,11 @@ struct MongoCollection {
 			auto coll = db["collection"];
 
 			coll.drop();
-			coll.insert(["a": "first", "b": "foo"]);
-			coll.insert(["a": "first", "b": "bar"]);
-			coll.insert(["a": "first", "b": "bar"]);
-			coll.insert(["a": "second", "b": "baz"]);
-			coll.insert(["a": "second", "b": "bam"]);
+			coll.insertOne(["a": "first", "b": "foo"]);
+			coll.insertOne(["a": "first", "b": "bar"]);
+			coll.insertOne(["a": "first", "b": "bar"]);
+			coll.insertOne(["a": "second", "b": "baz"]);
+			coll.insertOne(["a": "second", "b": "bam"]);
 
 			auto result = coll.distinct!string("b", ["a": "first"]);
 
@@ -487,8 +824,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = name;
-		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "dropIndex command failed: "~reply["errmsg"].opt!string);
+		database.runCommandChecked(cmd);
 	}
 
 	/// ditto
@@ -536,8 +872,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = "*";
-		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "dropIndexes command failed: "~reply["errmsg"].opt!string);
+		database.runCommandChecked(cmd);
 	}
 
 	/// Unofficial API extension, more efficient multi-index removal on
@@ -554,8 +889,7 @@ struct MongoCollection {
 			CMD cmd;
 			cmd.dropIndexes = m_name;
 			cmd.index = names;
-			auto reply = database.runCommand(cmd);
-			enforce(reply["ok"].get!double == 1, "dropIndexes command failed: "~reply["errmsg"].opt!string);
+			database.runCommandChecked(cmd);
 		} else {
 			foreach (name; names)
 				dropIndex(name);
@@ -633,7 +967,8 @@ struct MongoCollection {
 		See_Also: $(LINK https://docs.mongodb.com/manual/reference/command/createIndexes/)
 	*/
 	string[] createIndexes(scope const(IndexModel)[] models,
-		CreateIndexesOptions options = CreateIndexesOptions.init)
+		CreateIndexesOptions options = CreateIndexesOptions.init,
+		string file = __FILE__, size_t line = __LINE__)
 	@safe {
 		string[] keys = new string[models.length];
 
@@ -646,28 +981,26 @@ struct MongoCollection {
 				// trusted to support old compilers which think opt_dup has
 				// longer lifetime than model.options
 				IndexOptions opt_dup = (() @trusted => model.options)();
-				enforceWireVersionConstraints(opt_dup, conn.description.maxWireVersion);
+				enforceWireVersionConstraints(opt_dup, conn.description.maxWireVersion, file, line);
 				Bson index = serializeToBson(opt_dup);
 				index["key"] = model.keys;
 				index["name"] = model.name;
 				indexes ~= index;
 			}
 			cmd["indexes"] = Bson(indexes);
-			auto reply = database.runCommand(cmd);
-			enforce(reply["ok"].get!double == 1, "createIndex command failed: "
-				~ reply["errmsg"].opt!string);
+			database.runCommandChecked(cmd);
 		} else {
 			foreach (model; models) {
 				// trusted to support old compilers which think opt_dup has
 				// longer lifetime than model.options
 				IndexOptions opt_dup = (() @trusted => model.options)();
-				enforceWireVersionConstraints(opt_dup, WireVersion.old);
+				enforceWireVersionConstraints(opt_dup, WireVersion.old, file, line);
 				Bson doc = serializeToBson(opt_dup);
 				doc["v"] = 1;
 				doc["key"] = model.keys;
 				doc["ns"] = m_fullPath;
 				doc["name"] = model.name;
-				database["system.indexes"].insert(doc);
+				database["system.indexes"].insertOne(doc);
 			}
 		}
 
@@ -681,18 +1014,12 @@ struct MongoCollection {
 	@safe {
 		MongoConnection conn = m_client.lockConnection();
 		if (conn.description.satisfiesVersion(WireVersion.v30)) {
-			static struct CMD {
-				string listIndexes;
-			}
-
-			CMD cmd;
-			cmd.listIndexes = m_name;
-
-			auto reply = database.runCommand(cmd);
-			enforce(reply["ok"].get!double == 1, "getIndexes command failed: "~reply["errmsg"].opt!string);
-			return MongoCursor!R(m_client, reply["cursor"]["ns"].get!string, reply["cursor"]["id"].get!long, reply["cursor"]["firstBatch"].get!(Bson[]));
+			Bson command = Bson.emptyObject;
+			command["listIndexes"] = Bson(m_name);
+			command["$db"] = Bson(m_db.name);
+			return MongoCursor!R(m_client, command);
 		} else {
-			return database["system.indexes"].find!R();
+			throw new MongoDriverException("listIndexes not supported on MongoDB <3.0");
 		}
 	}
 
@@ -723,8 +1050,7 @@ struct MongoCollection {
 
 		CMD cmd;
 		cmd.drop = m_name;
-		auto reply = database.runCommand(cmd);
-		enforce(reply["ok"].get!double == 1, "drop command failed: "~reply["errmsg"].opt!string);
+		database.runCommandChecked(cmd);
 	}
 }
 
@@ -740,11 +1066,11 @@ unittest {
 		MongoCollection users = client.getCollection("myapp.users");
 
 		// canonical version using a Bson object
-		users.insert(Bson(["name": Bson("admin"), "password": Bson("secret")]));
+		users.insertOne(Bson(["name": Bson("admin"), "password": Bson("secret")]));
 
 		// short version using a string[string] AA that is automatically
 		// serialized to Bson
-		users.insert(["name": "admin", "password": "secret"]);
+		users.insertOne(["name": "admin", "password": "secret"]);
 
 		// BSON specific types are also serialized automatically
 		auto uid = BsonObjectID.fromString("507f1f77bcf86cd799439011");
@@ -752,7 +1078,7 @@ unittest {
 
 		// JSON is another possibility
 		Json jusr = parseJsonString(`{"name": "admin", "password": "secret"}`);
-		users.insert(jusr);
+		users.insertOne(jusr);
 	}
 }
 
@@ -788,7 +1114,7 @@ unittest {
 		usr.id = BsonObjectID.generate();
 		usr.loginName = "admin";
 		usr.password = "secret";
-		users.insert(usr);
+		users.insertOne(usr);
 
 		// find supports direct de-serialization of the returned documents
 		foreach (usr2; users.find!User()) {
@@ -822,6 +1148,36 @@ struct ReadConcern {
 
 	/// The level of the read concern.
 	string level;
+}
+
+struct WriteConcern {
+	/**
+		If true, wait for the the write operation to get committed to the
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/core/write-concern/#journaled)
+	*/
+	@embedNullable @name("j")
+	Nullable!bool journal;
+
+	/**
+		When an integer, specifies the number of nodes that should acknowledge
+		the write and MUST be greater than or equal to 0.
+
+		When a string, indicates tags. "majority" is defined, but users could
+		specify other custom error modes.
+	*/
+	@embedNullable
+	Nullable!Bson w;
+
+	/**
+		If provided, and the write concern is not satisfied within the specified
+		timeout (in milliseconds), the server will return an error for the
+		operation.
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/core/write-concern/#timeouts)
+	*/
+	@embedNullable @name("wtimeout")
+	Nullable!long wtimeoutMS;
 }
 
 /**
@@ -896,6 +1252,32 @@ struct MinWireVersion
 /// ditto
 MinWireVersion since(WireVersion v) @safe { return MinWireVersion(v); }
 
+/// UDA to warn when a nullable field is set and the server wire version matches
+/// the given version. (inclusive)
+///
+/// Use with $(LREF enforceWireVersionConstraints)
+struct DeprecatedSinceWireVersion
+{
+	///
+	WireVersion v;
+}
+
+/// ditto
+DeprecatedSinceWireVersion deprecatedSince(WireVersion v) @safe { return DeprecatedSinceWireVersion(v); }
+
+/// UDA to throw a MongoException when a nullable field is set and the server
+/// wire version doesn't match the version. (inclusive)
+///
+/// Use with $(LREF enforceWireVersionConstraints)
+struct ErrorBeforeWireVersion
+{
+	///
+	WireVersion v;
+}
+
+/// ditto
+ErrorBeforeWireVersion errorBefore(WireVersion v) @safe { return ErrorBeforeWireVersion(v); }
+
 /// UDA to unset a nullable field if the server wire version is newer than the
 /// given version. (inclusive)
 ///
@@ -909,13 +1291,28 @@ struct MaxWireVersion
 MaxWireVersion until(WireVersion v) @safe { return MaxWireVersion(v); }
 
 /// Unsets nullable fields not matching the server version as defined per UDAs.
-void enforceWireVersionConstraints(T)(ref T field, WireVersion serverVersion)
+void enforceWireVersionConstraints(T)(ref T field, WireVersion serverVersion,
+	string file = __FILE__, size_t line = __LINE__)
 @safe {
 	import std.traits : getUDAs;
+
+	string exception;
 
 	foreach (i, ref v; field.tupleof) {
 		enum minV = getUDAs!(field.tupleof[i], MinWireVersion);
 		enum maxV = getUDAs!(field.tupleof[i], MaxWireVersion);
+		enum deprecateV = getUDAs!(field.tupleof[i], DeprecatedSinceWireVersion);
+		enum errorV = getUDAs!(field.tupleof[i], ErrorBeforeWireVersion);
+
+		static foreach (depr; deprecateV)
+			if (serverVersion >= depr.v && !v.isNull)
+				logInfo("User-set field '%s' is deprecated since MongoDB %s (from %s:%s)",
+					T.tupleof[i].stringof, depr.v, file, line);
+
+		static foreach (err; errorV)
+			if (serverVersion < err.v && !v.isNull)
+				exception ~= format("User-set field '%s' is not supported before MongoDB %s\n",
+					T.tupleof[i].stringof, err.v);
 
 		static foreach (min; minV)
 			if (serverVersion < min.v)
@@ -925,6 +1322,9 @@ void enforceWireVersionConstraints(T)(ref T field, WireVersion serverVersion)
 			if (serverVersion > max.v)
 				v.nullify();
 	}
+
+	if (exception.length)
+		throw new MongoException(exception ~ "from " ~ file ~ ":" ~ line.to!string);
 }
 
 ///
@@ -959,79 +1359,4 @@ unittest
 	enforceWireVersionConstraints(test, WireVersion.v34);
 	assert(!test.a.isNull);
 	assert(test.b.isNull);
-}
-
-/**
-  Represents available options for an aggregate call
-
-  See_Also: $(LINK https://docs.mongodb.com/manual/reference/method/db.collection.aggregate/)
-
-  Standards: $(LINK https://github.com/mongodb/specifications/blob/0c6e56141c867907aacf386e0cbe56d6562a0614/source/crud/crud.rst#api)
- */
-struct AggregateOptions {
-	// non-optional since 3.6
-	// get/set by `batchSize`, undocumented in favor of that field
-	CursorInitArguments cursor;
-
-	/// Specifies the initial batch size for the cursor.
-	ref inout(Nullable!int) batchSize()
-	@property inout @safe pure nothrow @nogc @ignore {
-		return cursor.batchSize;
-	}
-
-	// undocumented because this field isn't a spec field because it is
-	// out-of-scope for a driver
-	@embedNullable Nullable!bool explain;
-
-	/**
-		Enables writing to temporary files. When set to true, aggregation
-		operations can write data to the _tmp subdirectory in the dbPath
-		directory.
-	*/
-	@embedNullable Nullable!bool allowDiskUse;
-
-	/**
-		Specifies a time limit in milliseconds for processing operations on a
-		cursor. If you do not specify a value for maxTimeMS, operations will not
-		time out.
-	*/
-	@embedNullable Nullable!long maxTimeMS;
-
-	/**
-		If true, allows the write to opt-out of document level validation.
-		This only applies when the $out or $merge stage is specified.
-	*/
-	@embedNullable Nullable!bool bypassDocumentValidation;
-
-	/**
-		Specifies the read concern. Only compatible with a write stage. (e.g.
-		`$out`, `$merge`)
-
-		Aggregate commands do not support the $(D ReadConcern.Level.linearizable)
-		level.
-
-		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
-	*/
-	@embedNullable Nullable!ReadConcern readConcern;
-
-	/// Specifies a collation.
-	@embedNullable Nullable!Collation collation;
-
-	/**
-		The index to use for the aggregation. The index is on the initial
-		collection / view against which the aggregation is run.
-
-		The hint does not apply to $lookup and $graphLookup stages.
-
-		Specify the index either by the index name as a string or the index key
-		pattern. If specified, then the query system will only consider plans
-		using the hinted index.
-	 */
-	@embedNullable Nullable!Bson hint;
-
-	/**
-		Users can specify an arbitrary string to help trace the operation
-		through the database profiler, currentOp, and logs.
-	*/
-	@embedNullable Nullable!string comment;
 }

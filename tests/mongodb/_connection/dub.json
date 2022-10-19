@@ -3,5 +3,6 @@
 	"description": "MongoDB connection tests",
 	"dependencies": {
 		"vibe-d:mongodb": {"path": "../../../"}
-	}
+	},
+	"debugVersions": ["VibeVerboseMongo"]
 }

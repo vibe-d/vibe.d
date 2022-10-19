@@ -14,6 +14,7 @@ import vibe.db.mongo.client;
 import vibe.db.mongo.collection;
 import vibe.data.bson;
 
+import core.time;
 
 /** Represents a single database accessible through a given MongoClient.
 */
@@ -23,7 +24,6 @@ struct MongoDatabase
 
 	private {
 		string m_name;
-		string m_commandCollection;
 		MongoClient m_client;
 	}
 
@@ -41,7 +41,6 @@ struct MongoDatabase
 				"Compound collection path provided to MongoDatabase constructor instead of single database name"
 		  );
 		m_name = name;
-		m_commandCollection = m_name ~ ".$cmd";
 	}
 
 	/// The name of this database
@@ -94,7 +93,7 @@ struct MongoDatabase
 		}
 		CMD cmd;
 		cmd.getLog = mask;
-		return runCommand(cmd);
+		return runCommandChecked(cmd);
 	}
 
 	/** Performs a filesystem/disk sync of the database on the server.
@@ -111,9 +110,15 @@ struct MongoDatabase
 		}
 		CMD cmd;
 		cmd.async = async;
-		return runCommand(cmd);
+		return runCommandChecked(cmd);
 	}
 
+	deprecated("use runCommandChecked or runCommandUnchecked instead")
+	Bson runCommand(T)(T command_and_options,
+		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
+	{
+		return runCommandUnchecked(command_and_options, errorInfo, errorFile, errorLine);
+	}
 
 	/** Generic means to run commands on the database.
 
@@ -121,8 +126,15 @@ struct MongoDatabase
 		of possible values for command_and_options.
 
 		Note that some commands return a cursor instead of a single document.
-		In this case, use `runListCommand` instead of `runCommand` to be able
-		to properly iterate over the results.
+		In this case, use `runListCommand` instead of `runCommandChecked` or
+		`runCommandUnchecked` to be able to properly iterate over the results.
+
+		Usually commands respond with a `double ok` field in them, the `Checked`
+		version of this function checks that they equal to `1.0`. The `Unchecked`
+		version of this function does not check that parameter.
+
+		With cursor functions on `runListCommand` the error checking is well
+		defined.
 
 		Params:
 			command_and_options = Bson object containing the command to be executed
@@ -130,21 +142,49 @@ struct MongoDatabase
 
 		Returns: The raw response of the MongoDB server
 	*/
-	Bson runCommand(T)(T command_and_options)
+	Bson runCommandChecked(T, ExceptionT = MongoDriverException)(
+		T command_and_options,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
 	{
-		return m_client.getCollection(m_commandCollection).findOne(command_and_options);
+		Bson cmd;
+		static if (is(T : Bson))
+			cmd = command_and_options;
+		else
+			cmd = command_and_options.serializeToBson;
+		return m_client.lockConnection().runCommand!(Bson, ExceptionT)(
+			m_name, cmd, errorInfo, errorFile, errorLine);
 	}
-	/// ditto
-	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options)
-	{
-		auto cur = runCommand(command_and_options);
-		if (cur["ok"].get!double != 1.0)
-			throw new MongoException("MongoDB list command failed: " ~ cur["errmsg"].get!string);
 
-		auto cursorid = cur["cursor"]["id"].get!long;
-		static if (is(R == Bson))
-			auto existing = cur["cursor"]["firstBatch"].get!(Bson[]);
-		else auto existing = cur["cursor"]["firstBatch"].deserializeBson!(R[]);
-		return MongoCursor!R(m_client, m_commandCollection, cursorid, existing);
+	/// ditto
+	Bson runCommandUnchecked(T, ExceptionT = MongoDriverException)(
+		T command_and_options,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
+	{
+		Bson cmd;
+		static if (is(T : Bson))
+			cmd = command_and_options;
+		else
+			cmd = command_and_options.serializeToBson;
+		return m_client.lockConnection().runCommandUnchecked!(Bson, ExceptionT)(
+			m_name, cmd, errorInfo, errorFile, errorLine);
+	}
+
+	/// ditto
+	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
+	{
+		Bson cmd;
+		static if (is(T : Bson))
+			cmd = command_and_options;
+		else
+			cmd = command_and_options.serializeToBson;
+		cmd["$db"] = Bson(m_name);
+
+		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTime);
 	}
 }
