@@ -103,10 +103,10 @@ struct MongoCursor(DocType = Bson) {
 				: long.max);
 	}
 
-	this(MongoClient client, Bson command, int batchSize = 0, long getMoreMaxTimeMS = long.max)
+	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
 	{
 		// TODO: avoid memory allocation, if possible
-		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTimeMS);
+		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTime);
 	}
 
 	this(this)
@@ -421,7 +421,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		string m_collection;
 		long m_cursor;
 		int m_batchSize;
-		long m_maxTimeMS;
+		Duration m_maxTime;
 		long m_totalReceived;
 		size_t m_readDoc;
 		size_t m_insertDoc;
@@ -430,12 +430,12 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		long m_queryLimit;
 	}
 
-	this(MongoClient client, Bson command, int batchSize = 0, long getMoreMaxTimeMS = long.max)
+	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
 	{
 		m_client = client;
 		m_findQuery = command;
 		m_batchSize = batchSize;
-		m_maxTimeMS = getMoreMaxTimeMS;
+		m_maxTime = getMoreMaxTime;
 		m_database = command["$db"].opt!string;
 	}
 
@@ -452,8 +452,8 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 			return true;
 
 		auto conn = m_client.lockConnection();
-		conn.getMore!DocType(m_cursor, m_database, m_collection, m_batchSize, &handleReply, &handleDocument,
-			m_maxTimeMS >= int.max ? Duration.max : m_maxTimeMS.msecs);
+		conn.getMore!DocType(m_cursor, m_database, m_collection, m_batchSize,
+			&handleReply, &handleDocument, m_maxTime);
 		return m_readDoc >= m_documents.length;
 	}
 

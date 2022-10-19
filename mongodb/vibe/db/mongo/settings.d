@@ -12,6 +12,7 @@ import vibe.data.bson;
 deprecated import vibe.db.mongo.flags : QueryFlags;
 import vibe.inet.webform;
 
+import core.time;
 import std.conv : to;
 import std.digest : toHexString;
 import std.digest.md : md5Of;
@@ -449,17 +450,41 @@ class MongoClientSettings
 	bool journal;
 
 	/**
-	 * The time in milliseconds to attempt a connection before timing out.
+	 * The time to attempt a connection before timing out.
 	 */
-	long connectTimeoutMS = 10_000;
+	Duration connectTimeout = 10.seconds;
+
+	/// ditto
+	long connectTimeoutMS() const @property
+	@safe {
+		return connectTimeout.total!"msecs";
+	}
+
+	/// ditto
+	void connectTimeoutMS(long ms) @property
+	@safe {
+		connectTimeout = ms.msecs;
+	}
 
 	/**
-	 * The time in milliseconds to attempt a send or receive on a socket before
-	 * the attempt times out.
+	 * The time to attempt a send or receive on a socket before the attempt
+	 * times out.
 	 *
 	 * Bugs: Not implemented for sending
 	 */
-	long socketTimeoutMS;
+	Duration socketTimeout = Duration.zero;
+
+	/// ditto
+	long socketTimeoutMS() const @property
+	@safe {
+		return socketTimeout.total!"msecs";
+	}
+
+	/// ditto
+	void socketTimeoutMS(long ms) @property
+	@safe {
+		socketTimeout = ms.msecs;
+	}
 
 	/**
 	 * Enables or disables TLS/SSL for the connection.

@@ -14,6 +14,7 @@ import vibe.db.mongo.client;
 import vibe.db.mongo.collection;
 import vibe.data.bson;
 
+import core.time;
 
 /** Represents a single database accessible through a given MongoClient.
 */
@@ -175,7 +176,7 @@ struct MongoDatabase
 	}
 
 	/// ditto
-	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options, int batchSize = 0, long getMoreMaxTimeMS = long.max)
+	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
 	{
 		Bson cmd;
 		static if (is(T : Bson))
@@ -184,6 +185,6 @@ struct MongoDatabase
 			cmd = command_and_options.serializeToBson;
 		cmd["$db"] = Bson(m_name);
 
-		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTimeMS);
+		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTime);
 	}
 }

@@ -178,8 +178,8 @@ final class MongoConnection {
 
 			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port, null, 0, connectTimeout);
 			m_conn.tcpNoDelay = true;
-			if (m_settings.socketTimeoutMS)
-				m_conn.readTimeout = m_settings.socketTimeoutMS.msecs;
+			if (m_settings.socketTimeout != Duration.zero)
+				m_conn.readTimeout = m_settings.socketTimeout;
 			if (m_settings.ssl) {
 				auto ctx =  createTLSContext(TLSContextKind.client);
 				if (!m_settings.sslverifycertificate) {
