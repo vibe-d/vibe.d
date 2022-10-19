@@ -1,3 +1,10 @@
+/**
+	MongoDB CRUD API definitions.
+
+	Copyright: © 2022 Jan Jurzitza
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Jan Jurzitza
+*/
 module vibe.db.mongo.impl.crud;
 
 import core.time;
@@ -9,6 +16,7 @@ import std.typecons;
 
 @safe:
 
+deprecated("Use UpdateOptions instead")
 enum UpdateFlags {
 	none         = 0,    /// Normal update of a single document.
 	upsert       = 1<<0, /// Creates a document if none exists.
@@ -19,6 +27,7 @@ enum UpdateFlags {
 	MultiUpdate = multiUpdate /// Deprecated compatibility alias
 }
 
+deprecated("Use InsertOneOptions or InsertManyOptions instead")
 enum InsertFlags {
 	none             = 0,    /// Normal insert.
 	continueOnError  = 1<<0, /// For multiple inserted documents, continues inserting further documents after a failure.
@@ -48,6 +57,7 @@ enum QueryFlags {
 	Partial = partial /// Deprecated compatibility alias
 }
 
+deprecated("Use DeleteOptions instead")
 enum DeleteFlags {
 	none          = 0,
 	singleRemove  = 1<<0,

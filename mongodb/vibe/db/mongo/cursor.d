@@ -29,13 +29,15 @@ import core.time;
 struct MongoCursor(DocType = Bson) {
 	private IMongoCursorData!DocType m_data;
 
-	package deprecated this(Q, S)(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
+	deprecated("Old (MongoDB <3.6) style cursor iteration no longer supported")
+	package this(Q, S)(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
 	{
 		// TODO: avoid memory allocation, if possible
 		m_data = new MongoQueryCursor!(Q, DocType, S)(client, collection, flags, nskip, nret, query, return_field_selector);
 	}
 
-	package deprecated this(MongoClient client, string collection, long cursor, DocType[] existing_documents)
+	deprecated("Old (MongoDB <3.6) style cursor iteration no longer supported")
+	package this(MongoClient client, string collection, long cursor, DocType[] existing_documents)
 	{
 		// TODO: avoid memory allocation, if possible
 		m_data = new MongoGenericCursor!DocType(client, collection, cursor, existing_documents);
@@ -274,16 +276,25 @@ struct MongoCursor(DocType = Bson) {
 	}
 }
 
+/// Actual iteration implementation details for MongoCursor. Abstracted using an
+/// interface because we still have code for legacy (<3.6) MongoDB servers,
+/// which may still used with the old legacy overloads.
 private interface IMongoCursorData(DocType) {
-	@property bool empty() @safe;
-	@property long index() @safe;
-	@property DocType front() @safe;
+	bool empty() @safe; /// Range implementation
+	long index() @safe; /// Range implementation
+	DocType front() @safe; /// Range implementation
+	void popFront() @safe; /// Range implementation
+	/// Before iterating, specify a MongoDB sort order
 	void sort(Bson order) @safe;
+	/// Before iterating, specify maximum number of returned items
 	void limit(long count) @safe;
+	/// Before iterating, skip the specified number of items (when sorted)
 	void skip(long count) @safe;
-	void popFront() @safe;
-	void startIterating() @safe;
+	/// Kills the MongoDB cursor, further iteration attempts will result in
+	/// errors. Call this in the destructor.
 	void killCursors() @safe;
+	/// Define an reference count property on the class, which is returned by
+	/// reference with this method.
 	ref int refCount() @safe;
 }
 
@@ -307,7 +318,7 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 		long m_limit = 0;
 	}
 
-	final @property bool empty()
+	final bool empty()
 	@safe {
 		if (!m_iterationStarted) startIterating();
 		if (m_limit > 0 && index >= m_limit) {
@@ -324,12 +335,12 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 		return m_currentDoc >= m_documents.length;
 	}
 
-	final @property long index()
+	final long index()
 	@safe {
 		return m_offset + m_currentDoc;
 	}
 
-	final @property DocType front()
+	final DocType front()
 	@safe {
 		if (!m_iterationStarted) startIterating();
 		assert(!empty(), "Cursor has no more data.");
@@ -428,7 +439,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		m_database = command["$db"].opt!string;
 	}
 
-	@property bool empty()
+	bool empty()
 	@safe {
 		if (!m_iterationStarted) startIterating();
 		if (m_queryLimit > 0 && index >= m_queryLimit) {
@@ -446,13 +457,13 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		return m_readDoc >= m_documents.length;
 	}
 
-	final @property long index()
+	final long index()
 	@safe {
 		assert(m_totalReceived >= m_documents.length);
 		return m_totalReceived - m_documents.length + m_readDoc;
 	}
 
-	final @property DocType front()
+	final DocType front()
 	@safe {
 		if (!m_iterationStarted) startIterating();
 		assert(!empty(), "Cursor has no more data.");
@@ -484,7 +495,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		m_readDoc++;
 	}
 
-	void startIterating()
+	private void startIterating()
 	@safe {
 		auto conn = m_client.lockConnection();
 		m_totalReceived = 0;
@@ -540,7 +551,7 @@ private deprecated class MongoQueryCursor(Q, R, S) : LegacyMongoCursorData!R {
 		m_returnFieldSelector = return_field_selector;
 	}
 
-	override void startIterating()
+	void startIterating()
 	@safe {
 		auto conn = m_client.lockConnection();
 

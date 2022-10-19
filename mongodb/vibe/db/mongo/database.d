@@ -92,7 +92,7 @@ struct MongoDatabase
 		}
 		CMD cmd;
 		cmd.getLog = mask;
-		return runCommand(cmd, true);
+		return runCommandChecked(cmd);
 	}
 
 	/** Performs a filesystem/disk sync of the database on the server.
@@ -109,9 +109,15 @@ struct MongoDatabase
 		}
 		CMD cmd;
 		cmd.async = async;
-		return runCommand(cmd, true);
+		return runCommandChecked(cmd);
 	}
 
+	deprecated("use runCommandChecked or runCommandUnchecked instead")
+	Bson runCommand(T)(T command_and_options,
+		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
+	{
+		return runCommandUnchecked(command_and_options, errorInfo, errorFile, errorLine);
+	}
 
 	/** Generic means to run commands on the database.
 
@@ -119,37 +125,55 @@ struct MongoDatabase
 		of possible values for command_and_options.
 
 		Note that some commands return a cursor instead of a single document.
-		In this case, use `runListCommand` instead of `runCommand` to be able
-		to properly iterate over the results.
+		In this case, use `runListCommand` instead of `runCommandChecked` or
+		`runCommandUnchecked` to be able to properly iterate over the results.
+
+		Usually commands respond with a `double ok` field in them, the `Checked`
+		version of this function checks that they equal to `1.0`. The `Unchecked`
+		version of this function does not check that parameter.
+
+		With cursor functions on `runListCommand` the error checking is well
+		defined.
 
 		Params:
 			command_and_options = Bson object containing the command to be executed
 				as well as the command parameters as fields
-			checkOk = usually commands respond with a `double ok` field in them,
-				which is not checked if this parameter is false. Explicitly
-				specify this parameter to avoid issues with error checking.
-				Currently defaults to `false` (meaning don't check "ok" field),
-				omitting the argument may change to `true` in the future.
 
 		Returns: The raw response of the MongoDB server
 	*/
-	deprecated("use runCommand with explicit checkOk overload")
-	Bson runCommand(T)(T command_and_options,
-		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
-	{
-		return runCommand(command_and_options, false, errorInfo, errorFile, errorLine);
-	}
-	/// ditto
-	Bson runCommand(T, ExceptionT = MongoDriverException)(T command_and_options, bool checkOk,
-		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
+	Bson runCommandChecked(T, ExceptionT = MongoDriverException)(
+		T command_and_options,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
 	{
 		Bson cmd;
 		static if (is(T : Bson))
 			cmd = command_and_options;
 		else
 			cmd = command_and_options.serializeToBson;
-		return m_client.lockConnection().runCommand!(Bson, ExceptionT)(m_name, cmd, checkOk, errorInfo, errorFile, errorLine);
+		return m_client.lockConnection().runCommand!(Bson, ExceptionT)(
+			m_name, cmd, errorInfo, errorFile, errorLine);
 	}
+
+	/// ditto
+	Bson runCommandUnchecked(T, ExceptionT = MongoDriverException)(
+		T command_and_options,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
+	{
+		Bson cmd;
+		static if (is(T : Bson))
+			cmd = command_and_options;
+		else
+			cmd = command_and_options.serializeToBson;
+		return m_client.lockConnection().runCommandUnchecked!(Bson, ExceptionT)(
+			m_name, cmd, errorInfo, errorFile, errorLine);
+	}
+
 	/// ditto
 	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options, int batchSize = 0, long getMoreMaxTimeMS = long.max)
 	{

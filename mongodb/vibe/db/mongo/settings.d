@@ -576,8 +576,8 @@ class MongoClientSettings
 	 * Resolves the database to run authentication commands on.
 	 * (authSource if set, otherwise the URI's database if set, otherwise "admin")
 	 */
-	string getAuthDatabase() @safe @nogc nothrow pure
-	{
+	string getAuthDatabase()
+	@safe @nogc nothrow pure const return {
 		if (authSource.length)
 			return authSource;
 		else if (database.length)

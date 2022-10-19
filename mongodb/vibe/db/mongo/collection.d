@@ -139,7 +139,7 @@ struct MongoCollection {
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
 		
-		database.runCommand(cmd, true);
+		database.runCommandChecked(cmd);
 		return res;
 	}
 
@@ -168,7 +168,7 @@ struct MongoCollection {
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
 		
-		database.runCommand(cmd, true);
+		database.runCommandChecked(cmd);
 		return InsertManyResult(insertedIds);
 	}
 
@@ -231,7 +231,7 @@ struct MongoCollection {
 		}
 		cmd["deletes"] = Bson(deletesBson);
 
-		auto n = database.runCommand(cmd, true)["n"].get!long;
+		auto n = database.runCommandChecked(cmd)["n"].get!long;
 		return DeleteResult(n);
 	}
 
@@ -354,7 +354,7 @@ struct MongoCollection {
 		}
 		cmd["updates"] = Bson(updatesBson);
 
-		auto res = database.runCommand(cmd, true);
+		auto res = database.runCommandChecked(cmd);
 		auto ret = UpdateResult(
 			res["n"].get!long,
 			res["nModified"].get!long,
@@ -493,7 +493,7 @@ struct MongoCollection {
 		cmd.query = query;
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
-		auto ret = database.runCommand(cmd, true);
+		auto ret = database.runCommandChecked(cmd);
 		return ret["value"];
 	}
 
@@ -532,7 +532,7 @@ struct MongoCollection {
 			cmd[key] = value;
 			return 0;
 		});
-		auto ret = database.runCommand(cmd, true);
+		auto ret = database.runCommandChecked(cmd);
 		return ret["value"];
 	}
 
@@ -555,7 +555,7 @@ struct MongoCollection {
 		Bson cmd = Bson.emptyObject;
 		cmd["count"] = m_name;
 		cmd["query"] = serializeToBson(query);
-		auto reply = database.runCommand(cmd, true);
+		auto reply = database.runCommandChecked(cmd);
 		switch (reply["n"].type) with (Bson.Type) {
 			default: assert(false, "Unsupported data type in BSON reply for COUNT");
 			case double_: return cast(ulong)reply["n"].get!double; // v2.x
@@ -744,7 +744,7 @@ struct MongoCollection {
 
 		import std.algorithm : map;
 
-		auto res = m_db.runCommand(cmd, true);
+		auto res = m_db.runCommandChecked(cmd);
 		static if (is(R == Bson)) return res["values"].byValue;
 		else return res["values"].byValue.map!(b => deserializeBson!R(b));
 	}
@@ -824,7 +824,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = name;
-		database.runCommand(cmd, true);
+		database.runCommandChecked(cmd);
 	}
 
 	/// ditto
@@ -872,7 +872,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = "*";
-		database.runCommand(cmd, true);
+		database.runCommandChecked(cmd);
 	}
 
 	/// Unofficial API extension, more efficient multi-index removal on
@@ -889,7 +889,7 @@ struct MongoCollection {
 			CMD cmd;
 			cmd.dropIndexes = m_name;
 			cmd.index = names;
-			database.runCommand(cmd, true);
+			database.runCommandChecked(cmd);
 		} else {
 			foreach (name; names)
 				dropIndex(name);
@@ -988,7 +988,7 @@ struct MongoCollection {
 				indexes ~= index;
 			}
 			cmd["indexes"] = Bson(indexes);
-			database.runCommand(cmd, true);
+			database.runCommandChecked(cmd);
 		} else {
 			foreach (model; models) {
 				// trusted to support old compilers which think opt_dup has
@@ -1050,7 +1050,7 @@ struct MongoCollection {
 
 		CMD cmd;
 		cmd.drop = m_name;
-		database.runCommand(cmd, true);
+		database.runCommandChecked(cmd);
 	}
 }
 

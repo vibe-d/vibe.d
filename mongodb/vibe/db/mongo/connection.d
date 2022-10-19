@@ -247,8 +247,7 @@ final class MongoConnection {
 			handshake["client"]["application"] = Bson(["name": Bson(m_settings.appName)]);
 		}
 
-		auto reply = runCommand!Bson("admin", handshake);
-		enforce!MongoAuthException(reply["ok"].get!double == 1.0, "Authentication failed.");
+		auto reply = runCommand!(Bson, MongoAuthException)("admin", handshake);
 		m_description = deserializeBson!ServerDescription(reply);
 
 		if (m_description.satisfiesVersion(WireVersion.v36))
@@ -352,8 +351,57 @@ final class MongoConnection {
 		recvReply!T(id, on_msg, on_doc);
 	}
 
-	Bson runCommand(T, CommandFailException = MongoDriverException)(string database, Bson command, bool testOk = true,
-		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
+	/**
+		Runs the given Bson command (Bson object with the first entry in the map
+		being the command name) on the given database.
+
+		Using `runCommand` checks that the command completed successfully by
+		checking that `result["ok"].get!double == 1.0`. Throws the
+		`CommandFailException` on failure.
+
+		Using `runCommandUnchecked` will return the result as-is. Developers may
+		check the `result["ok"]` value themselves. (It's a double that needs to
+		be compared with 1.0 by default)
+
+		Throws:
+			- `CommandFailException` (template argument) only in the
+				`runCommand` overload, when the command response is not ok.
+			- `MongoDriverException` when internal protocol errors occur.
+	*/
+	Bson runCommand(T, CommandFailException = MongoDriverException)(
+		string database,
+		Bson command,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
+	in(database.length, "runCommand requires a database argument")
+	{
+		return runCommandImpl!(T, CommandFailException)(
+			database, command, true, errorInfo, errorFile, errorLine);
+	}
+
+	Bson runCommandUnchecked(T, CommandFailException = MongoDriverException)(
+		string database,
+		Bson command,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
+	in(database.length, "runCommand requires a database argument")
+	{
+		return runCommandImpl!(T, CommandFailException)(
+			database, command, false, errorInfo, errorFile, errorLine);
+	}
+
+	private Bson runCommandImpl(T, CommandFailException)(
+		string database,
+		Bson command,
+		bool testOk = true,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
 	in(database.length, "runCommand requires a database argument")
 	{
 		import std.array;
@@ -621,7 +669,7 @@ final class MongoConnection {
 
 		_MongoErrorDescription ret;
 
-		auto error = runCommand!Bson(db, command_and_options);
+		auto error = runCommandUnchecked!Bson(db, command_and_options);
 
 		try {
 			ret = MongoErrorDescription(
