@@ -98,9 +98,9 @@ struct MongoCursor(DocType = Bson) {
 
 		this(client, command,
 			options.batchSize.isNull ? 0 : options.batchSize.get,
-			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get
-				: allowMaxTime && !options.maxTimeMS.isNull ? options.maxTimeMS.get
-				: long.max);
+			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get.msecs
+				: allowMaxTime && !options.maxTimeMS.isNull ? options.maxTimeMS.get.msecs
+				: Duration.max);
 	}
 
 	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max)

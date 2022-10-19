@@ -678,9 +678,9 @@ struct MongoCollection {
 		}
 		return MongoCursor!R(m_client, cmd,
 			!options.batchSize.isNull ? options.batchSize.get : 0,
-			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get
-				: !options.maxTimeMS.isNull ? options.maxTimeMS.get
-				: long.max);
+			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get.msecs
+				: !options.maxTimeMS.isNull ? options.maxTimeMS.get.msecs
+				: Duration.max);
 	}
 
 	/// Example taken from the MongoDB documentation

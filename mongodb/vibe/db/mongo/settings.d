@@ -148,6 +148,17 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				}
 			}
 
+			bool setMsecs(ref Duration dst)
+			{
+				try {
+					dst = to!long(value).msecs;
+					return true;
+				} catch( Exception e ){
+					logError("Value for '%s' must be an integer but was '%s'.", option, value);
+					return false;
+				}
+			}
+
 			void warnNotImplemented()
 			{
 				logDiagnostic("MongoDB option %s not yet implemented.", option);
@@ -162,8 +173,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
-				case "connecttimeoutms": setLong(cfg.connectTimeoutMS); break;
-				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); break;
+				case "connecttimeoutms": setMsecs(cfg.connectTimeout); break;
+				case "sockettimeoutms": setMsecs(cfg.socketTimeout); break;
 				case "tls": setBool(cfg.ssl); break;
 				case "ssl": setBool(cfg.ssl); break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
