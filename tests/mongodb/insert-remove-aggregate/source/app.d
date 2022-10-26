@@ -22,9 +22,6 @@ void runTest(ushort port)
 	MongoClient client = connectMongoDB("127.0.0.1", port);
 
 	auto coll = client.getCollection("test.collection");
-	assert(coll.database.getLastError().code < 0);
-	assert(coll.name == "collection");
-	assert(coll.database.name == "test");
 	coll.deleteAll();
 	coll.insertOne(["key1": "value1", "key2": "value2"]);
 	auto replaceResult = coll.replaceOne(["key1": "value1"], ["key1": "value1", "key2": "1337"]);

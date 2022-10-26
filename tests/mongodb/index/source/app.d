@@ -22,9 +22,6 @@ void runTest(ushort port)
 	MongoClient client = connectMongoDB("127.0.0.1", port);
 
 	MongoCollection coll = client.getCollection("test.indextest.collection");
-	assert(coll.database.getLastError().code < 0);
-	assert(coll.name == "indextest.collection");
-	assert(coll.database.name == "test");
 	coll.deleteAll();
 	coll.insertOne(Bson.fromJson(parseJsonString(`{ "_id": 1, "key": "hello", "idioma": "portuguese", "quote": "A sorte protege os audazes" }`)));
 	coll.insertOne(Bson.fromJson(parseJsonString(`{ "_id": 2, "key": "foo", "idioma": "spanish", "quote": "Nada hay más surrealista que la realidad." }`)));

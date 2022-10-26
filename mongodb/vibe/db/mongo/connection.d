@@ -676,7 +676,7 @@ final class MongoConnection {
 				error["errmsg"].opt!string(error["err"].opt!string("")),
 				error["code"].opt!int(-1),
 				error["connectionId"].opt!int(-1),
-				error["n"].get!int(),
+				error["n"].opt!int(-1),
 				error["ok"].get!double()
 			);
 		} catch (Exception e) {
