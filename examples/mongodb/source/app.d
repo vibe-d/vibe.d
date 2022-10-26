@@ -6,7 +6,7 @@ import std.array;
 void main()
 {
 	logInfo("Connecting to DB...");
-	auto db = connectMongoDB("localhost").getDatabase("test");
+	auto db = connectMongoDB("127.0.0.1").getDatabase("test");
 	auto coll = db["test"];
 
 	logInfo("Querying DB...");

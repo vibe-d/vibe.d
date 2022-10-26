@@ -25,10 +25,10 @@ void runTest(ushort port)
 	assert(coll.database.getLastError().code < 0);
 	assert(coll.name == "indextest.collection");
 	assert(coll.database.name == "test");
-	coll.remove();
-	coll.insert(Bson.fromJson(parseJsonString(`{ "_id": 1, "key": "hello", "idioma": "portuguese", "quote": "A sorte protege os audazes" }`)));
-	coll.insert(Bson.fromJson(parseJsonString(`{ "_id": 2, "key": "foo", "idioma": "spanish", "quote": "Nada hay más surrealista que la realidad." }`)));
-	coll.insert(Bson.fromJson(parseJsonString(`{ "_id": 3, "key": "bar", "idioma": "english", "quote": "is this a dagger which I see before me" }`)));
+	coll.deleteAll();
+	coll.insertOne(Bson.fromJson(parseJsonString(`{ "_id": 1, "key": "hello", "idioma": "portuguese", "quote": "A sorte protege os audazes" }`)));
+	coll.insertOne(Bson.fromJson(parseJsonString(`{ "_id": 2, "key": "foo", "idioma": "spanish", "quote": "Nada hay más surrealista que la realidad." }`)));
+	coll.insertOne(Bson.fromJson(parseJsonString(`{ "_id": 3, "key": "bar", "idioma": "english", "quote": "is this a dagger which I see before me" }`)));
 
 	struct CustomIndex
 	{
@@ -160,9 +160,10 @@ int main(string[] args)
 {
 	int ret = 0;
 	ushort port = args.length > 1 ? args[1].to!ushort : MongoClientSettings.defaultPort;
-	runTask({
-		scope (exit) exitEventLoop(true);
-		runTest(port);
+	runTask(() nothrow {
+		try runTest(port);
+		catch (Exception e) assert(false, e.toString());
+		finally exitEventLoop(true);
 	});
 	runEventLoop();
 	return ret;

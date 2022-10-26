@@ -80,7 +80,7 @@ struct MongoCollection {
 	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Updating)
 	 */
-	deprecated("Use updateOne or updateMany taking UpdateOptions instead, this method breaks in MongoDB 5.1 and onwards.")
+	deprecated("Use `replaceOne`, `updateOne` or `updateMany` taking `UpdateOptions` instead, this method breaks in MongoDB 5.1 and onwards.")
 	void update(T, U)(T selector, U update, UpdateFlags flags = UpdateFlags.None)
 	{
 		assert(m_client !is null, "Updating uninitialized MongoCollection.");
@@ -100,7 +100,7 @@ struct MongoCollection {
 	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Inserting)
 	 */
-	deprecated("Use the insertOne or insertMany, this method breaks in MongoDB 5.1 and onwards.")
+	deprecated("Use `insertOne` or `insertMany`, this method breaks in MongoDB 5.1 and onwards.")
 	void insert(T)(T document_or_documents, InsertFlags flags = InsertFlags.None)
 	{
 		assert(m_client !is null, "Inserting into uninitialized MongoCollection.");
@@ -181,7 +181,7 @@ struct MongoCollection {
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
 	*/
 	DeleteResult deleteOne(T)(T filter, DeleteOptions options = DeleteOptions.init)
-	{
+	@trusted {
 		int limit = 1;
 		return deleteImpl([filter], options, (&limit)[0 .. 1]);
 	}
@@ -195,14 +195,29 @@ struct MongoCollection {
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
 	*/
 	DeleteResult deleteMany(T)(T filter, DeleteOptions options = DeleteOptions.init)
+	@safe
+	if (!is(T == DeleteOptions))
 	{
 		return deleteImpl([filter], options);
+	}
+
+	/**
+		Deletes all documents in the collection. The returned result identifies
+		how many documents have been deleted.
+
+		Same as calling `deleteMany` with `Bson.emptyObject` as filter.
+
+		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
+	*/
+	DeleteResult deleteAll(DeleteOptions options = DeleteOptions.init)
+	@safe {
+		return deleteImpl([Bson.emptyObject], options);
 	}
 
 	/// Implementation helper. It's possible to set custom delete limits with
 	/// this method, otherwise it's identical to `deleteOne` and `deleteMany`.
 	DeleteResult deleteImpl(T)(T[] queries, DeleteOptions options = DeleteOptions.init, scope int[] limits = null)
-	{
+	@safe {
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
 		alias FieldsMovedIntoChildren = AliasSeq!("limit", "collation", "hint");
@@ -227,6 +242,8 @@ struct MongoCollection {
 					deleteBson[k] = v;
 			if (i < limits.length)
 				deleteBson["limit"] = Bson(limits[i]);
+			else
+				deleteBson["limit"] = Bson(0);
 			deletesBson[i] = deleteBson;
 		}
 		cmd["deletes"] = Bson(deletesBson);
@@ -243,7 +260,7 @@ struct MongoCollection {
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
 	*/
 	UpdateResult replaceOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
-	{
+	@safe {
 		Bson opts = Bson.emptyObject;
 		opts["multi"] = Bson(false);
 		return updateImpl([filter], [replacement], [opts], options, true, false);
@@ -257,7 +274,7 @@ struct MongoCollection {
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
 	*/
 	UpdateResult updateOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
-	{
+	@safe {
 		Bson opts = Bson.emptyObject;
 		opts["multi"] = Bson(false);
 		return updateImpl([filter], [replacement], [opts], options, false, true);
@@ -271,7 +288,7 @@ struct MongoCollection {
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
 	*/
 	UpdateResult updateMany(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
-	{
+	@safe {
 		Bson opts = Bson.emptyObject;
 		opts["multi"] = Bson(true);
 		return updateImpl([filter], [replacement], [opts], options, false, true);
@@ -282,6 +299,7 @@ struct MongoCollection {
 	/// `updateOne` and `updateMany`.
 	UpdateResult updateImpl(T, U, O)(T[] queries, U[] documents, O[] perUpdateOptions, UpdateOptions options = UpdateOptions.init,
 		bool mustBeDocument = false, bool mustBeModification = false)
+	@safe
 	in(queries.length == documents.length && documents.length == perUpdateOptions.length,
 		"queries, documents and perUpdateOptions must have same length")
 	{
@@ -314,7 +332,7 @@ struct MongoCollection {
 					assert(false, "Passed in non-document into a place where only replacements are expected. "
 						~ "Maybe you want to call updateOne or updateMany instead?");
 
-				foreach (string k, v; qbson)
+				foreach (string k, v; qbson.byKeyValue)
 				{
 					if (k.startsWith("$"))
 						assert(false, "Passed in atomic modifiers (" ~ k
@@ -329,7 +347,7 @@ struct MongoCollection {
 				if (qbson.type == Bson.Type.object)
 				{
 					bool anyDollar = false;
-					foreach (string k, v; qbson)
+					foreach (string k, v; qbson.byKeyValue)
 					{
 						if (k.startsWith("$"))
 							anyDollar = true;
@@ -359,7 +377,7 @@ struct MongoCollection {
 			res["n"].get!long,
 			res["nModified"].get!long,
 		);
-		auto upserted = res["upserted"].get!(Bson[]);
+		auto upserted = res["upserted"].opt!(Bson[]);
 		if (upserted.length)
 		{
 			ret.upsertedIds.length = upserted.length;
@@ -369,11 +387,38 @@ struct MongoCollection {
 		return ret;
 	}
 
-	deprecated("Use the overload taking FindOptions instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
+	deprecated("Use the overload taking `FindOptions` instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
 	MongoCursor!R find(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 		return MongoCursor!R(m_client, m_db.name, m_name, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
+	}
+
+	/**
+	  Queries the collection for existing documents, limiting what fields are
+	  returned by the database. (called projection)
+
+	  See_Also:
+	  - Querying: $(LINK http://www.mongodb.org/display/DOCS/Querying)
+	  - Projection: $(LINK https://www.mongodb.com/docs/manual/tutorial/project-fields-from-query-results/#std-label-projections)
+	 */
+	MongoCursor!R find(R = Bson, T, U)(T query, U projection, FindOptions options = FindOptions.init)
+	if (!is(U == FindOptions))
+	{
+		options.projection = serializeToBson(projection);
+		return find(query, options);
+	}
+
+	///
+	@safe unittest {
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			// find documents with status == "A", return list of {"item":..., "status":...}
+			coll.find(["status": "A"], ["item": 1, "status": 1]);
+		}
 	}
 
 	/**
@@ -388,10 +433,38 @@ struct MongoCollection {
 		return MongoCursor!R(m_client, m_db.name, m_name, query, options);
 	}
 
-	/// ditto
+	///
+	@safe unittest {
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			// find documents with status == "A"
+			coll.find(["status": "A"]);
+		}
+	}
+
+	/**
+	  Queries all documents of the collection.
+
+	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
+	 */
 	MongoCursor!R find(R = Bson)() { return find!R(Bson.emptyObject, FindOptions.init); }
 
-	deprecated("Use the overload taking FindOptions instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
+	///
+	@safe unittest {
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			// find all documents in the "test" collection.
+			coll.find();
+		}
+	}
+
+	deprecated("Use the overload taking `FindOptions` instead, this method breaks in MongoDB 5.1 and onwards. Note: using a `$query` / `query` member to override the query arguments is no longer supported in the new overload.")
 	auto findOne(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags)
 	{
 		import std.traits;
@@ -453,7 +526,7 @@ struct MongoCollection {
 	  Throws: Exception if a DB communication error occurred.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Removing)
 	 */
-	deprecated("Use deleteOne or deleteMany taking DeleteOptions instead, this method breaks in MongoDB 5.1 and onwards.")
+	deprecated("Use `deleteOne` or `deleteMany` taking DeleteOptions instead, this method breaks in MongoDB 5.1 and onwards.")
 	void remove(T)(T selector, DeleteFlags flags = DeleteFlags.None)
 	{
 		assert(m_client !is null, "Removing from uninitialized MongoCollection.");
@@ -463,7 +536,7 @@ struct MongoCollection {
 	}
 
 	/// ditto
-	deprecated("Use deleteMany taking DeleteOptions instead, this method breaks in MongoDB 5.1 and onwards.")
+	deprecated("Use `deleteMany` taking `DeleteOptions` instead, this method breaks in MongoDB 5.1 and onwards.")
 	void remove()() { remove(Bson.emptyObject); }
 
 	/**
@@ -537,7 +610,7 @@ struct MongoCollection {
 	}
 
 	///
-	unittest {
+	@safe unittest {
 		import vibe.db.mongo.mongo;
 
 		void test()
@@ -698,7 +771,7 @@ struct MongoCollection {
 	}
 
 	/// The same example, but using an array of arguments with custom options
-	unittest {
+	@safe unittest {
 		import vibe.db.mongo.mongo;
 
 		void test() {
@@ -750,7 +823,7 @@ struct MongoCollection {
 	}
 
 	///
-	unittest {
+	@safe unittest {
 		import std.algorithm : equal;
 		import vibe.db.mongo.mongo;
 
@@ -1055,7 +1128,7 @@ struct MongoCollection {
 }
 
 ///
-unittest {
+@safe unittest {
 	import vibe.data.bson;
 	import vibe.data.json;
 	import vibe.db.mongo.mongo;
@@ -1083,7 +1156,7 @@ unittest {
 }
 
 /// Using the type system to define a document "schema"
-unittest {
+@safe unittest {
 	import vibe.db.mongo.mongo;
 	import vibe.data.serialization : name;
 	import std.typecons : Nullable;
@@ -1150,6 +1223,9 @@ struct ReadConcern {
 	string level;
 }
 
+/**
+  See_Also: $(LINK https://docs.mongodb.com/manual/reference/write-concern/)
+ */
 struct WriteConcern {
 	/**
 		If true, wait for the the write operation to get committed to the
@@ -1328,7 +1404,7 @@ void enforceWireVersionConstraints(T)(ref T field, WireVersion serverVersion,
 }
 
 ///
-unittest
+@safe unittest
 {
 	struct SomeMongoCommand
 	{
