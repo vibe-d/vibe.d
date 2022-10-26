@@ -29,7 +29,7 @@ void runTest(ushort port)
 	auto data = coll.findOne(["key1": "value1"]);
 	assert(!data.isNull());
 	assert(data["key2"].get!string() == "1337");
-	coll.database.fsync();
+	client.getDatabase("admin").fsync();
 	auto logBson = client.getDatabase("admin").getLog("global");
 	assert(!logBson.isNull());
 

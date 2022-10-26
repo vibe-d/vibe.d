@@ -98,6 +98,8 @@ struct MongoDatabase
 
 	/** Performs a filesystem/disk sync of the database on the server.
 
+		This method can only be called on the admin database.
+
 		See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
 
 		Returns: check documentation
