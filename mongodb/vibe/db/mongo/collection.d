@@ -394,6 +394,22 @@ struct MongoCollection {
 		return MongoCursor!R(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
 	}
 
+	///
+	@safe deprecated unittest {
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			// find documents with status == "A"
+			auto x = coll.find(["status": "A"], ["status": true], QueryFlags.none);
+			foreach (item; x)
+			{
+				// only for legacy overload
+			}
+		}
+	}
+
 	/**
 	  Queries the collection for existing documents, limiting what fields are
 	  returned by the database. (called projection)
@@ -514,6 +530,19 @@ struct MongoCollection {
 	{
 		options.projection = serializeToBson(projection);
 		return findOne!(R, T)(query, options);
+	}
+
+	///
+	@safe unittest {
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			// find documents with status == "A"
+			auto x = coll.findOne(["status": "A"], ["status": true, "otherField": true]);
+			// x now only contains _id (implicit, unless you make it `false`), status and otherField
+		}
 	}
 
 	/** Queries the collection for existing documents.
