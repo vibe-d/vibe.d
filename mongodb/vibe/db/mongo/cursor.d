@@ -551,7 +551,7 @@ private deprecated class MongoQueryCursor(Q, R, S) : LegacyMongoCursorData!R {
 		m_returnFieldSelector = return_field_selector;
 	}
 
-	void startIterating()
+	override void startIterating()
 	@safe {
 		auto conn = m_client.lockConnection();
 
