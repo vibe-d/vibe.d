@@ -98,7 +98,7 @@ final class MongoSessionStore : SessionStore {
 
 	void set(string id, string name, Variant value)
 	@trusted {
-		m_sessions.update(["_id": id], ["$set": [name.escape: value.get!Bson, "time": Clock.currTime(UTC()).serializeToBson]]);
+		m_sessions.updateOne(["_id": id], ["$set": [name.escape: value.get!Bson, "time": Clock.currTime(UTC()).serializeToBson]]);
 	}
 
 	Variant get(string id, string name, lazy Variant defaultVal)
@@ -125,12 +125,12 @@ final class MongoSessionStore : SessionStore {
 
 	void remove(string id, string key)
 	{
-		m_sessions.update(["_id": id], ["$unset": [key.escape: 1]]);
+		m_sessions.updateOne(["_id": id], ["$unset": [key.escape: 1]]);
 	}
 
 	void destroy(string id)
 	{
-		m_sessions.remove(["_id": id]);
+		m_sessions.deleteOne(["_id": id]);
 	}
 
 	int iterateSession(string id, scope int delegate(string key) @safe del)

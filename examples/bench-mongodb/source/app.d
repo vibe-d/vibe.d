@@ -24,7 +24,7 @@ void main()
 		//string s;
 	}
 
-	auto db = connectMongoDB("localhost").getDatabase("test");
+	auto db = connectMongoDB("127.0.0.1").getDatabase("test");
 	auto coll = db["benchmark"];
 	coll.remove();
 	foreach (i; 0 .. 10) {
@@ -33,7 +33,7 @@ void main()
 		itm.i = i;
 		itm.d = i * 1.3;
 		//itm.s = "Hello, World!";
-		coll.insert(itm);
+		coll.insertOne(itm);
 	}
 
 	logInfo("Running queries...");

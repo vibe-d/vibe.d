@@ -676,7 +676,7 @@ final class MongoConnection {
 				error["errmsg"].opt!string(error["err"].opt!string("")),
 				error["code"].opt!int(-1),
 				error["connectionId"].opt!int(-1),
-				error["n"].get!int(),
+				error["n"].opt!int(-1),
 				error["ok"].get!double()
 			);
 		} catch (Exception e) {
@@ -700,7 +700,8 @@ final class MongoConnection {
 		static MongoDBInfo toInfo(const(Bson) db_doc) {
 			return MongoDBInfo(
 				db_doc["name"].get!string,
-				db_doc["sizeOnDisk"].get!double,
+				// double on MongoDB < 5.0, long afterwards
+				db_doc["sizeOnDisk"].to!double,
 				db_doc["empty"].get!bool
 			);
 		}
