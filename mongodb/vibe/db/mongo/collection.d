@@ -391,7 +391,7 @@ struct MongoCollection {
 	MongoCursor!R find(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
-		return MongoCursor!R(m_client, m_db.name, m_name, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
+		return MongoCursor!R(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
 	}
 
 	/**
