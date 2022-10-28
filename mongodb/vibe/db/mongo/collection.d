@@ -401,6 +401,7 @@ struct MongoCollection {
 	  See_Also:
 	  - Querying: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	  - Projection: $(LINK https://www.mongodb.com/docs/manual/tutorial/project-fields-from-query-results/#std-label-projections)
+	  - $(LREF findOne)
 	 */
 	MongoCursor!R find(R = Bson, T, U)(T query, U projection, FindOptions options = FindOptions.init)
 	if (!is(U == FindOptions))
@@ -426,7 +427,9 @@ struct MongoCollection {
 
 	  If no arguments are passed to find(), all documents of the collection will be returned.
 
-	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
+	  See_Also:
+	  - $(LINK http://www.mongodb.org/display/DOCS/Querying)
+	  - $(LREF findOne)
 	 */
 	MongoCursor!R find(R = Bson, Q)(Q query, FindOptions options = FindOptions.init)
 	{
@@ -448,7 +451,9 @@ struct MongoCollection {
 	/**
 	  Queries all documents of the collection.
 
-	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
+	  See_Also:
+	  - $(LINK http://www.mongodb.org/display/DOCS/Querying)
+	  - $(LREF findOne)
 	 */
 	MongoCursor!R find(R = Bson)() { return find!R(Bson.emptyObject, FindOptions.init); }
 
@@ -494,8 +499,34 @@ struct MongoCollection {
 			when no document matched. For types R that are not Bson, the returned value is either
 			of type $(D R), or of type $(Nullable!R), if $(D R) is not a reference/pointer type.
 
+			The projection parameter limits what fields are returned by the database,
+			see projection documentation linked below.
+
 		Throws: Exception if a DB communication error or a query error occurred.
-		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
+
+		See_Also:
+		- Querying: $(LINK http://www.mongodb.org/display/DOCS/Querying)
+		- Projection: $(LINK https://www.mongodb.com/docs/manual/tutorial/project-fields-from-query-results/#std-label-projections)
+		- $(LREF find)
+	 */
+	auto findOne(R = Bson, T, U)(T query, U projection, FindOptions options = FindOptions.init)
+	if (!is(U == FindOptions))
+	{
+		options.projection = serializeToBson(projection);
+		return findOne!(R, T)(query, options);
+	}
+
+	/** Queries the collection for existing documents.
+
+		Returns:
+			By default, a Bson value of the matching document is returned, or $(D Bson(null))
+			when no document matched. For types R that are not Bson, the returned value is either
+			of type $(D R), or of type $(Nullable!R), if $(D R) is not a reference/pointer type.
+
+		Throws: Exception if a DB communication error or a query error occurred.
+		See_Also:
+		- $(LINK http://www.mongodb.org/display/DOCS/Querying)
+		- $(LREF find)
 	 */
 	auto findOne(R = Bson, T)(T query, FindOptions options = FindOptions.init)
 	{
