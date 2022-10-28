@@ -1892,7 +1892,7 @@ unittest // Testing corner case: member function returning by ref
 	static struct S
 	{
 		int i;
-		ref int foo() { return i; }
+		ref int foo() return { return i; }
 	}
 
 	static assert(__traits(compiles, { S().serializeToJson(); }));

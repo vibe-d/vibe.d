@@ -286,7 +286,7 @@ struct Bson {
 		auto app = appender!bdata_t();
 		foreach( i, ref v; value ){
 			app.put(v.type);
-			putCString(app, to!string(i));
+			putCString(app, .to!string(i));
 			app.put(v.data);
 		}
 
@@ -389,7 +389,7 @@ struct Bson {
 
 		If the BSON type of the value does not match the D type, an exception is thrown.
 
-		See_Also: `deserializeBson`, `opt`
+		See_Also: `deserializeBson`, `opt`, `to`
 	*/
 	T opCast(T)() const { return get!T(); }
 	/// ditto
@@ -471,6 +471,112 @@ struct Bson {
 			return BsonDate(fromBsonData!long(m_data)).toSysTime();
 		}
 		else static assert(false, "Cannot cast "~typeof(this).stringof~" to '"~T.stringof~"'.");
+	}
+
+	/**
+		Converts the BSON value to a D value.
+
+		In addition to working like `get!T`, the following conversions are done:
+		- `to!double` - casts int and long to double
+		- `to!long` - casts int to long
+		- `to!string` - returns the same as toString 
+
+		See_Also: `deserializeBson`, `opt`, `get`
+	*/
+	@property T to(T)()
+	const {
+		static if( is(T == double) ){
+			checkType(Type.double_, Type.long_, Type.int_);
+			if (m_type == Type.double_)
+				return fromBsonData!double(m_data);
+			else if (m_type == Type.int_)
+				return cast(double)fromBsonData!int(m_data);
+			else if (m_type == Type.long_)
+				return cast(double)fromBsonData!long(m_data);
+			else
+				assert(false);
+		}
+		else static if( is(T == string) ){
+			return toString();
+		}
+		else static if( is(Unqual!T == Bson[string]) || is(Unqual!T == const(Bson)[string]) ){
+			checkType(Type.object);
+			Bson[string] ret;
+			auto d = m_data[4 .. $];
+			while( d.length > 0 ){
+				auto tp = cast(Type)d[0];
+				if( tp == Type.end ) break;
+				d = d[1 .. $];
+				auto key = skipCString(d);
+				auto value = Bson(tp, d);
+				d = d[value.data.length .. $];
+
+				ret[key] = value;
+			}
+			return cast(T)ret;
+		}
+		else static if( is(Unqual!T == Bson[]) || is(Unqual!T == const(Bson)[]) ){
+			checkType(Type.array);
+			Bson[] ret;
+			auto d = m_data[4 .. $];
+			while( d.length > 0 ){
+				auto tp = cast(Type)d[0];
+				if( tp == Type.end ) break;
+				/*auto key = */skipCString(d); // should be '0', '1', ...
+				auto value = Bson(tp, d);
+				d = d[value.data.length .. $];
+
+				ret ~= value;
+			}
+			return cast(T)ret;
+		}
+		else static if( is(T == BsonBinData) ){
+			checkType(Type.binData);
+			auto size = fromBsonData!int(m_data);
+			auto type = cast(BsonBinData.Type)m_data[4];
+			return BsonBinData(type, m_data[5 .. 5+size]);
+		}
+		else static if( is(T == BsonObjectID) ){ checkType(Type.objectID); return BsonObjectID(m_data[0 .. 12]); }
+		else static if( is(T == bool) ){ checkType(Type.bool_); return m_data[0] != 0; }
+		else static if( is(T == BsonDate) ){ checkType(Type.date); return BsonDate(fromBsonData!long(m_data)); }
+		else static if( is(T == SysTime) ){
+			checkType(Type.date);
+			string data = cast(string)m_data[4 .. 4+fromBsonData!int(m_data)-1];
+			return SysTime.fromISOString(data);
+		}
+		else static if( is(T == BsonRegex) ){
+			checkType(Type.regex);
+			auto d = m_data[0 .. $];
+			auto expr = skipCString(d);
+			auto options = skipCString(d);
+			return BsonRegex(expr, options);
+		}
+		else static if( is(T == int) ){ checkType(Type.int_); return fromBsonData!int(m_data); }
+		else static if( is(T == BsonTimestamp) ){ checkType(Type.timestamp); return BsonTimestamp(fromBsonData!long(m_data)); }
+		else static if( is(T == long) ){
+			checkType(Type.long_, Type.int_);
+			if (m_type == Type.int_)
+				return cast(long)fromBsonData!int(m_data);
+			else if (m_type == Type.long_)
+				return fromBsonData!long(m_data);
+			else
+				assert(false);
+		}
+		else static if( is(T == Json) ){
+			return this.toJson();
+		}
+		else static if( is(T == UUID) ){
+			checkType(Type.binData);
+			auto bbd = this.get!BsonBinData();
+			enforce(bbd.type == BsonBinData.Type.uuid, "BsonBinData value is type '"~bbd.type.enumToString~"', expected to be uuid");
+			const ubyte[16] b = bbd.rawData;
+			return UUID(b);
+		}
+		else static if( is(T == SysTime) ) {
+			checkType(Type.date);
+			return BsonDate(fromBsonData!long(m_data)).toSysTime();
+		}
+		else static assert(false, "Cannot convert "~typeof(this).stringof~" to '"~T.stringof~"'.");
 	}
 
 	/** Returns the native type for this BSON if it matches the current runtime type.

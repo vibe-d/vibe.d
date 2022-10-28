@@ -248,7 +248,7 @@ struct MongoCollection {
 		}
 		cmd["deletes"] = Bson(deletesBson);
 
-		auto n = database.runCommandChecked(cmd)["n"].get!long;
+		auto n = database.runCommandChecked(cmd)["n"].to!long;
 		return DeleteResult(n);
 	}
 
@@ -374,8 +374,8 @@ struct MongoCollection {
 
 		auto res = database.runCommandChecked(cmd);
 		auto ret = UpdateResult(
-			res["n"].get!long,
-			res["nModified"].get!long,
+			res["n"].to!long,
+			res["nModified"].to!long,
 		);
 		auto upserted = res["upserted"].opt!(Bson[]);
 		if (upserted.length)
@@ -668,7 +668,7 @@ struct MongoCollection {
 				__traits(getMember, aggOptions, name) = field;
 		}
 		auto reply = aggregate(pipeline, aggOptions).front;
-		return reply["n"].get!long;
+		return reply["n"].to!long;
 	}
 
 	/**
@@ -693,7 +693,7 @@ struct MongoCollection {
 			AggregateOptions aggOptions;
 			aggOptions.maxTimeMS = options.maxTimeMS;
 			auto reply = aggregate(pipeline, aggOptions).front;
-			return reply["n"].get!long;
+			return reply["n"].to!long;
 		} else {
 			return countImpl(null);
 		}
