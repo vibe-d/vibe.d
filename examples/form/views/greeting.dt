@@ -1,0 +1,6 @@
+doctype html
+html
+	head
+		title Greeting
+	body
+		p #{say} #{to}
