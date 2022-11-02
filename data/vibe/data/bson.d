@@ -1768,7 +1768,7 @@ struct BsonSerializer {
 		} else static if (is(T : const(ubyte)[])) {
 			auto ret = m_inputData.get!BsonBinData.rawData;
 			static if (isStaticArray!T) return cast(T)ret[0 .. T.length];
-			else static if (is(T : immutable(char)[])) return ret;
+			else static if (is(T : immutable(ubyte)[])) return ret;
 			else return cast(T)ret.dup;
 		} else return m_inputData.get!T();
 	}
@@ -1900,6 +1900,17 @@ unittest
 	auto fields = getPipeline(a, b).serializeToBson()["pipeline"].get!(Bson[]);
 	assert(fields[0]["foo"].get!string == "bar");
 	assert(fields[1].get!int == 42);
+}
+
+@safe unittest {
+	struct S {
+		immutable(ubyte)[][] arrays;
+	}
+
+	S s = S([[1, 2, 3], [4, 5, 6]]);
+	S t;
+	deserializeBson(t, serializeToBson(s));
+	assert(t == s);
 }
 
 private string skipCString(ref bdata_t data)
