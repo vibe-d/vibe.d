@@ -1641,6 +1641,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				auto ret = () @trusted {
 					return evaluateOutputModifiers!CFunc(
 						__traits(getMember, inst, Method)(params), req, res); } ();
+				res.headers["Content-Type"] = "application/octet-stream";
 				ret.pipe(res.bodyWriter);
 			} else {
 				// TODO: remove after deprecation period
@@ -1834,6 +1835,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	(const scope ref RestInterface!I intf, scope void delegate(HTTPClientRequest) @safe request_filter,
 		scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter)
 {
+	import vibe.internal.interfaceproxy : asInterface;
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.stream.operations : readAll;
 	import vibe.textfilter.urlencode : filterURLEncode, urlEncode;
@@ -1940,7 +1942,15 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		}
 	}
 
-	headers["Accept"] = settings.content_type;
+	static if (!is(RT == void)) {{
+		alias result_serializers = ResultSerializersT!Func;
+		static if (is(result_serializers == AliasSeq!(DefaultSerializerT)))
+			headers["Accept"] = settings.content_type;
+		else
+			headers["Accept"] = result_serializers[0].contentType;
+	}} else {
+		headers["Accept"] = settings.content_type;
+	}
 
 	// Do not require a `Content-Type` header if no response is expected
 	// https://github.com/vibe-d/vibe.d/issues/2521
@@ -1953,7 +1963,9 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs,
 		intf.settings.httpClientSettings);
 
-	static if (isInputStream!RT) {
+	static if (is(RT == InputStream)) {
+		return ret.bodyReader.asInterface!InputStream;
+	} else static if (isInputStream!RT) {
 		return RT(ret.bodyReader);
 	} else static if (!is(RT == void)) {
 		scope(exit) ret.dropBody();
