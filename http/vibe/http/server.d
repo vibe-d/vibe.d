@@ -1774,7 +1774,7 @@ struct HTTPListener {
 	private this(size_t[] ids) @safe { m_virtualHostIDs = ids; }
 
 	@property NetworkAddress[] bindAddresses()
-	{
+	@safe {
 		NetworkAddress[] ret;
 		foreach (l; s_listeners)
 			if (l.m_virtualHosts.canFind!(v => m_virtualHostIDs.canFind(v.id))) {
