@@ -681,7 +681,10 @@ struct MongoCollection {
 	}
 
 	deprecated("deprecated since MongoDB v4.0, use countDocuments or estimatedDocumentCount instead")
-	alias count = countImpl;
+	ulong count(T)(T query)
+	{
+		return countImpl!T(query);
+	}
 
 	private ulong countImpl(T)(T query)
 	{
