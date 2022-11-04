@@ -509,8 +509,10 @@ struct SubInterface {
 
 template SubInterfaceType(alias F) {
 	import std.traits : ReturnType, isInstanceOf;
+	import vibe.core.stream : isInputStream;
 	alias RT = ReturnType!F;
-	static if (is(RT == interface)) alias SubInterfaceType = RT;
+	static if (isInputStream!RT) alias SubInterfaceType = void;
+	else static if (is(RT == interface)) alias SubInterfaceType = RT;
 	else static if (isInstanceOf!(Collection, RT)) alias SubInterfaceType = RT.Interface;
 	else alias SubInterfaceType = void;
 }

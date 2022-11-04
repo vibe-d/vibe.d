@@ -578,7 +578,7 @@ package alias DefaultSerializerT = ResultSerializer!(
 /// Convenience template to get all the ResultSerializers for a function
 package template ResultSerializersT(alias func) {
 	alias DefinedSerializers = getUDAs!(func, ResultSerializer);
-	static if (getUDAs!(func, ResultSerializer).length)
+	static if (DefinedSerializers.length)
 		alias ResultSerializersT = DefinedSerializers;
 	else
 		alias ResultSerializersT = AliasSeq!(DefaultSerializerT);

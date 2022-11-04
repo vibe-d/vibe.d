@@ -1,8 +1,7 @@
-﻿{
-	"name": "bench-urlrouter",
-	"description": "Benchmark for the URLRouter class",
+{
+	"name": "bench-mongodb",
+	"description": "Benchmark for the MongoDB client driver",
 	"dependencies": {
 		"vibe-d:mongodb": {"path": "../../"}
-	},
-	"versions": [ "VibeRouterTreeMatch" ]
+	}
 }
