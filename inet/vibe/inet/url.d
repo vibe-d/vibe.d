@@ -38,6 +38,9 @@ import core.checkedint : addu;
 */
 URL parseUserURL(string url, string default_schema)
 {
+	if (default_schema.length && !url.startsWith("/") && !url.canFind("://"))
+		url = default_schema ~ "://" ~ url;
+
 	return URL(url, false).normalized;
 }
 
@@ -56,6 +59,9 @@ unittest {
 	assert(url.host == "xn--i---5r6aq903fubqabumj4g.io");
 	url = parseUserURL("https://hello🌍.i-❤-이모티콘.com", "foo");
 	assert(url.host == "xn--hello-oe93d.xn--i---5r6aq903fubqabumj4g.com");
+	// default schema addition
+	assert(parseUserURL("example.com/foo/bar", "sftp") == URL("sftp://example.com/foo/bar"));
+	assert(parseUserURL("example.com:1234", "https") == URL("https://example.com:1234/"));
 }
 
 
