@@ -77,8 +77,13 @@ final class Base64OutputStreamImpl(char C62, char C63, char CPAD = '=', OutputSt
 		m_maxBytesPerLine = max_bytes_per_line;
 	}
 
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		size_t write(scope const(ubyte)[] bytes_, IOMode mode) @safe { return doWrite(bytes_, mode); }
+	} else {
+		size_t write(in ubyte[] bytes_, IOMode mode) @safe { return doWrite(bytes_, mode); }
+	}
 
-	size_t write(in ubyte[] bytes_, IOMode)
+	private size_t doWrite(scope const(ubyte)[] bytes_, IOMode)
 	@trusted { // StreamOutputRange is not @safe
 		import vibe.stream.wrapper;
 

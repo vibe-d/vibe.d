@@ -907,7 +907,15 @@ final class OutgoingWebSocketMessage : OutputStream {
 		m_rng = rng;
 	}
 
-	size_t write(in ubyte[] bytes, IOMode mode)
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		override size_t write(scope const(ubyte)[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	} else {
+		override size_t write(in ubyte[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	}
+
+	alias write = OutputStream.write;
+
+	private size_t doWrite(scope const(ubyte)[] bytes, IOMode mode)
 	{
 		assert(!m_finalized);
 

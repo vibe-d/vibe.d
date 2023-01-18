@@ -220,7 +220,15 @@ class CountingOutputStream : OutputStream {
 		m_bytesWritten += bytes;
 	}
 
-	size_t write(in ubyte[] bytes, IOMode mode)
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		override size_t write(scope const(ubyte)[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	} else {
+		override size_t write(in ubyte[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	}
+
+	alias write = OutputStream.write;
+
+	private size_t doWrite(scope const(ubyte)[] bytes, IOMode mode)
 	{
 		enforce(m_bytesWritten + bytes.length <= m_writeLimit, "Writing past end of output stream.");
 
@@ -228,8 +236,6 @@ class CountingOutputStream : OutputStream {
 		m_bytesWritten += ret;
 		return ret;
 	}
-
-	alias write = OutputStream.write;
 
 	void flush() { m_out.flush(); }
 	void finalize() { m_out.flush(); }
