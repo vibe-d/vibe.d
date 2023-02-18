@@ -50,5 +50,9 @@ configuration "openssl-1.0" {
 	versions "DeimosOpenSSL_1_0_0"
 }
 
+configuration "openssl-static" {
+	dependency "openssl-static" version="~>1.0"
+}
+
 configuration "notls" {
 }
