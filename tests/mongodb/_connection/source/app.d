@@ -22,7 +22,7 @@ int main(string[] args)
 		return 1;
 	}
 
-	runTask({ sleep(20.seconds); assert(false, "Timeout exceeded"); });
+	runTask({ sleepUninterruptible(20.seconds); assert(false, "Timeout exceeded"); });
 
 	port = args[1].to!ushort;
 	MongoClientSettings settings = new MongoClientSettings;

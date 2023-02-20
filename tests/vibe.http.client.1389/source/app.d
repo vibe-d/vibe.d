@@ -25,17 +25,20 @@ shared static this()
 	runTask({
 		scope(exit) exitEventLoop(true);
 
-		auto url = "http://"~serverAddr.toString;
-		logInfo(url);
+		try {
 
-		auto cs = new HTTPClientSettings;
-		cs.networkInterface = resolveHost("127.0.0.1");
-		auto res = requestHTTP(url, null, cs).bodyReader.readAllUTF8();
-		assert(res == "local", "Unexpected reply: "~res);
+			auto url = "http://"~serverAddr.toString;
+			logInfo(url);
 
-		auto cs2 = new HTTPClientSettings;
-		cs2.networkInterface = resolveHost(externalAddr.toAddressString());
-		res = requestHTTP(url, null, cs2).bodyReader.readAllUTF8();
-		assert(res == "remote", "Unexpected reply: "~res);
-    });
+			auto cs = new HTTPClientSettings;
+			cs.networkInterface = resolveHost("127.0.0.1");
+			auto res = requestHTTP(url, null, cs).bodyReader.readAllUTF8();
+			assert(res == "local", "Unexpected reply: "~res);
+
+			auto cs2 = new HTTPClientSettings;
+			cs2.networkInterface = resolveHost(externalAddr.toAddressString());
+			res = requestHTTP(url, null, cs2).bodyReader.readAllUTF8();
+			assert(res == "remote", "Unexpected reply: "~res);
+		} catch (Exception e) assert(false, e.msg);
+	});
 }
