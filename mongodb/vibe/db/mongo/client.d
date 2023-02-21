@@ -56,26 +56,23 @@ final class MongoClient {
 	{
 		MongoClientSettings settings;
 		auto goodUrl = parseMongoDBUrl(settings, url);
-
 		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
-
-		m_connections = new ConnectionPool!MongoConnection(() @safe {
-				auto ret = new MongoConnection(settings);
-				ret.connect();
-				return ret;
-			},
-			settings.maxConnections
-		);
-
-		// force a connection to cause an exception for wrong URLs
-		lockConnection();
+		this(settings);
 	}
 
 	package this(MongoClientSettings settings)
 	{
 		m_connections = new ConnectionPool!MongoConnection({
 				auto ret = new MongoConnection(settings);
-				ret.connect();
+				try ret.connect();
+				catch (Exception e) {
+					// avoid leaking the connection to the GC, which might
+					// destroy it during shutdown when all of vibe.d has
+					// already been destroyed, which in turn causes a null
+					// pointer
+					() @trusted { destroy(ret); } ();
+					throw e;
+				}
 				return ret;
 			},
 			settings.maxConnections
