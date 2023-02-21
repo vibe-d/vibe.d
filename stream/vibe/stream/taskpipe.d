@@ -133,7 +133,7 @@ private final class TaskPipeImpl {
 
 	/** Writes the given byte array to the pipe.
 	*/
-	size_t write(const(ubyte)[] data, IOMode mode)
+	size_t write(scope const(ubyte)[] data, IOMode mode)
 	{
 		size_t ret = 0;
 
