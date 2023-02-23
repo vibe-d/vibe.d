@@ -26,6 +26,8 @@ jobs:
           - { parts: 'builds,unittests,examples,tests,mongo', extra_dflags: '' }
           # Custom part for coverage
           - { dc: dmd-latest, parts: 'unittests,tests', extra_dflags: "-cov -version=VibedSetCoverageMerge" }
+          # Custom part for vibe-core 2.x.x testing
+          - { dc: dmd-latest, parts: 'unittests,tests,vibe-core-2' }
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
