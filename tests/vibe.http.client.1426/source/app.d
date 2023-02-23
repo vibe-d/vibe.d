@@ -14,12 +14,13 @@ int main ()
 	}, "127.0.0.1").bindAddress;
 
 	runTask({
-		requestHTTP("http://" ~ serverAddr.toString,
+		try requestHTTP("http://" ~ serverAddr.toString,
 			(scope req) {},
 			(scope res) {
 				assert(res.bodyReader.readAllUTF8() == "qwerty");
 			}
 		);
+		catch (Exception e) assert(false, e.msg);
 		exitEventLoop();
 	});
     return runEventLoop();

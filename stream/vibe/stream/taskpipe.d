@@ -217,16 +217,30 @@ unittest { // issue #1501 - deadlock in TaskPipe
 		p.bufferSize = 2048;
 
 		Task a, b;
-		a = runTask({ ubyte[2100] buf; if (i == 0) p.read(buf, IOMode.all); else p.write(buf, IOMode.all); });
-		b = runTask({ ubyte[2100] buf; if (i == 0) p.write(buf, IOMode.all); else p.read(buf, IOMode.all); });
+		a = runTask({
+			ubyte[2100] buf;
+			try {
+				if (i == 0) p.read(buf, IOMode.all);
+				else p.write(buf, IOMode.all);
+			} catch (Exception e) assert(false, e.msg);
+		});
+		b = runTask({
+			ubyte[2100] buf;
+			try {
+				if (i == 0) p.write(buf, IOMode.all);
+				else p.read(buf, IOMode.all);
+			} catch (Exception e) assert(false, e.msg);
+		});
 
 		auto joiner = runTask({
-			auto starttime = Clock.currTime(UTC());
-			while (a.running || b.running) {
-				if (Clock.currTime(UTC()) - starttime > 500.msecs)
-					assert(false, "TaskPipe is dead locked.");
-				yield();
-			}
+			try {
+				auto starttime = Clock.currTime(UTC());
+				while (a.running || b.running) {
+					if (Clock.currTime(UTC()) - starttime > 500.msecs)
+						assert(false, "TaskPipe is dead locked.");
+					yield();
+				}
+			} catch (Exception e) assert(false, e.msg);
 		});
 
 		joiner.join();
@@ -235,12 +249,14 @@ unittest { // issue #1501 - deadlock in TaskPipe
 
 unittest { // issue #
 	auto t = runTask({
-		auto tp = new TaskPipeImpl;
-		tp.waitForData(10.msecs);
-		exitEventLoop();
+		try {
+			auto tp = new TaskPipeImpl;
+			tp.waitForData(10.msecs);
+			exitEventLoop();
+		} catch (Exception e) assert(false, e.msg);
 	});
 	runTask({
-		sleep(500.msecs);
+		sleepUninterruptible(500.msecs);
 		assert(!t.running, "TaskPipeImpl.waitForData didn't timeout.");
 	});
 	runEventLoop();

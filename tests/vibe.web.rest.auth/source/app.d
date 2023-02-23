@@ -27,13 +27,14 @@ shared static this()
         scope (exit) exitEventLoop();
 
         void test(string url, string user, HTTPStatus expected)
-        {
-            requestHTTP("http://" ~ serverAddr.toString ~ url, (scope req) {
+        nothrow {
+            try requestHTTP("http://" ~ serverAddr.toString ~ url, (scope req) {
                 if (user !is null) req.addBasicAuth(user, "secret");
             }, (scope res) {
                 res.dropBody();
                 assert(res.statusCode == expected, format("Unexpected status code for GET %s (%s): %s", url, user, res.statusCode));
             });
+            catch (Exception e) assert(false, e.msg);
         }
 
         test("/public", null, HTTPStatus.ok);

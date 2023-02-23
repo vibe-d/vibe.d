@@ -31,8 +31,8 @@ shared static this()
 
 	runTask({
 		scope (exit) exitEventLoop();
-		void test(string url, HTTPStatus expectedStatus, string expectedBody = "") {
-			requestHTTP("http://" ~ serverAddr.toString ~ url,
+		void test(string url, HTTPStatus expectedStatus, string expectedBody = "") nothrow {
+			try requestHTTP("http://" ~ serverAddr.toString ~ url,
 				(scope req) {
 				},
 				(scope res) {
@@ -43,6 +43,7 @@ shared static this()
 					}
 				}
 			);
+			catch (Exception e) assert(false, e.msg);
 		}
 		test("/foo", HTTPStatus.notFound);
 		test("/bar", HTTPStatus.ok, "ok");

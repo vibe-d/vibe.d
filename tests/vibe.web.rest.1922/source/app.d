@@ -14,13 +14,15 @@ void main()
 	runTask({
 		scope(exit) exitEventLoop();
 
-		void test(string url, string user, HTTPStatus expected = HTTPStatus.ok){
-			requestHTTP("http://" ~ serverAddr.toString ~ url, (scope req){
+		void test(string url, string user, HTTPStatus expected = HTTPStatus.ok)
+		nothrow {
+			try requestHTTP("http://" ~ serverAddr.toString ~ url, (scope req){
 				if(user !is null)
 					req.headers["AuthUser"] = user;
 			}, (scope res) {
 				assert(res.statusCode == expected, format("Unexpected status code for GET %s (%s): %s\n%s", url, user, res.statusCode,res.readJson));
 			});
+			catch (Exception e) assert(false, e.msg);
 		}
 
 		test("/non_auth_number?num=5", null);

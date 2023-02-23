@@ -146,10 +146,12 @@ void testLocking(RedisDatabase _db)
 	auto testMethod = {
 		foreach(i; 0..100)
 		{
-			lock.performLocked({
-				assert(_db.setNX("lockedWriteTest","foo"));
-				assert(1 == _db.del("lockedWriteTest"));
-			});
+			try {
+				lock.performLocked({
+					assert(_db.setNX("lockedWriteTest","foo"));
+					assert(1 == _db.del("lockedWriteTest"));
+				});
+			} catch (Exception e) assert(false, e.msg);
 		}
 	};
 

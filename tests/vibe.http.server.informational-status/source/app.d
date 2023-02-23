@@ -28,7 +28,7 @@ void main()
 		bool got102, got200;
 		scope (exit) exitEventLoop();
 
-		requestHTTP("http://127.0.0.1:8099/", null,
+		try requestHTTP("http://127.0.0.1:8099/", null,
 			(scope res) {
 				if (res.statusCode == HTTPStatus.processing) {
 					assert(!got200, "Status 200 received first");
@@ -40,6 +40,7 @@ void main()
 				}
 			}
 		);
+		catch (Exception e) assert(false, e.msg);
 		assert(got102, "Status 102 wasn't received");
 		assert(got200, "Status 200 wasn't received");
 		logInfo("All web tests succeeded.");

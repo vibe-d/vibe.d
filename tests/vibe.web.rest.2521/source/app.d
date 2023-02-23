@@ -37,12 +37,14 @@ void handlePostData2 (scope HTTPServerRequest req, scope HTTPServerResponse res)
 }
 
 void doTest (immutable NetworkAddress address)
-{
+nothrow {
     scope (exit) exitEventLoop();
 
-    string result;
-    scope client = new RestInterfaceClient!SimpleAPI("http://" ~ address.toString());
-    client.postData("Hello");
-    client.postData2(result, "World");
-    assert(result == "text/html; charset=UTF-8");
+    try {
+    	string result;
+	    scope client = new RestInterfaceClient!SimpleAPI("http://" ~ address.toString());
+	    client.postData("Hello");
+	    client.postData2(result, "World");
+	    assert(result == "text/html; charset=UTF-8");
+	} catch (Exception e) assert(false, e.msg);
 }
