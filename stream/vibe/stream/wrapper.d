@@ -352,7 +352,7 @@ struct StreamOutputRange(OutputStream, size_t buffer_size = 256)
 
 	void put(const(dchar)[] elems) { foreach( ch; elems ) put(ch); }
 
-	private void writeToStream(in ubyte[] bytes)
+	private void writeToStream(scope const(ubyte)[] bytes)
 	{
 		// if the write fails, do not attempt another write in the destructor
 		// to avoid throwing an exception twice or nested
