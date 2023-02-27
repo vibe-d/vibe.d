@@ -4,7 +4,13 @@ set -e -x -o pipefail
 
 DUB_ARGS="--build-mode=${DUB_BUILD_MODE:-separate} ${DUB_ARGS:-}"
 # default to run all parts
-: ${PARTS:=lint,builds,unittests,examples,tests,meson}
+: ${PARTS:=lint,builds,unittests,examples,tests,mongo,meson}
+
+# force selecting vibe-core 2.x.x
+if [[ $PARTS =~ (^|,)vibe-core-2(,|$) ]]; then
+    RECIPES=`find | grep dub.sdl`
+    sed -i "s/\"vibe-core\" version=\">=1\.0\.0 <3\.0\.0-0\"/\"vibe-core\" version=\">=2.0.0-0 <3.0.0-0\"/g" $RECIPES
+fi
 
 if [[ $PARTS =~ (^|,)lint(,|$) ]]; then
     ./scripts/test_version.sh

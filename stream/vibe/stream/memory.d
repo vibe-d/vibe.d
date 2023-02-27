@@ -71,13 +71,19 @@ final class MemoryOutputStream : OutputStream {
 		m_destination.reserve(nbytes);
 	}
 
-	size_t write(in ubyte[] bytes, IOMode)
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		override size_t write(scope const(ubyte)[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	} else {
+		override size_t write(in ubyte[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	}
+
+	alias write = OutputStream.write;
+
+	private size_t doWrite(scope const(ubyte)[] bytes, IOMode)
 	{
 		() @trusted { m_destination.put(bytes); } ();
 		return bytes.length;
 	}
-
-	alias write = OutputStream.write;
 
 	void flush()
 	nothrow {
@@ -155,7 +161,15 @@ final class MemoryStream : RandomAccessStream {
 
 	alias read = RandomAccessStream.read;
 
-	size_t write(in ubyte[] bytes, IOMode)
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		override size_t write(scope const(ubyte)[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	} else {
+		override size_t write(in ubyte[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	}
+
+	alias write = RandomAccessStream.write;
+
+	private size_t doWrite(scope const(ubyte)[] bytes, IOMode)
 	{
 		assert(writable);
 		enforce(bytes.length <= m_data.length - m_ptr, "Size limit of memory stream reached.");
@@ -164,8 +178,6 @@ final class MemoryStream : RandomAccessStream {
 		m_size = max(m_size, m_ptr);
 		return bytes.length;
 	}
-
-	alias write = RandomAccessStream.write;
 
 	void flush() {}
 	void finalize() {}

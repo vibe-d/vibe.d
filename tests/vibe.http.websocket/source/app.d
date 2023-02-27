@@ -20,7 +20,7 @@ shared static this()
 	runTask({
 		scope(exit) exitEventLoop(true);
 
-		connectWebSocket(URL("http://" ~ serverAddr.toString), (scope ws) {
+		try connectWebSocket(URL("http://" ~ serverAddr.toString), (scope ws) {
 			assert(ws.connected);
 			ws.send("foo");
 			assert(ws.receiveText() == "hello");
@@ -29,5 +29,6 @@ shared static this()
 			ws.close();
 			logInfo("WebSocket test successful");
 		});
+		catch (Exception e) assert(false, e.msg);
     });
 }

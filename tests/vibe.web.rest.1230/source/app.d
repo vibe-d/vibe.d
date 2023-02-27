@@ -24,31 +24,33 @@ shared static this()
 
 	runTask({
 		scope (exit) exitEventLoop(true);
-		auto api = new RestInterfaceClient!ITestAPI(
-			"http://" ~ serverAddr.toString);
-		assert(api.postDefault(42, true) == "Value: 42, Check: true");
-		assert(api.postDefault(42, false) == "Value: 42, Check: false");
-		assert(api.postDefault(42) == "Value: 42, Check: true");
-		requestHTTP("http://" ~ serverAddr.toString ~ "/default",
-			(scope req) {
-				req.method = HTTPMethod.POST;
-				req.writeBody(cast(const(ubyte)[])`{"value":42}`, "application/json");
-			},
-			(scope res) {
-				assert(res.statusCode == HTTPStatus.ok);
-				assert(res.readJson.get!string == "Value: 42, Check: true");
-			}
-		);
-		requestHTTP("http://" ~ serverAddr.toString ~ "/default",
-			(scope req) {
-				req.method = HTTPMethod.POST;
-				req.writeBody(cast(const(ubyte)[])`{"value":42,"check":true}`, "application/json");
-			},
-			(scope res) {
-				assert(res.statusCode == HTTPStatus.ok);
-				assert(res.readJson.get!string == "Value: 42, Check: true");
-			}
-		);
+		try {
+			auto api = new RestInterfaceClient!ITestAPI(
+				"http://" ~ serverAddr.toString);
+			assert(api.postDefault(42, true) == "Value: 42, Check: true");
+			assert(api.postDefault(42, false) == "Value: 42, Check: false");
+			assert(api.postDefault(42) == "Value: 42, Check: true");
+			requestHTTP("http://" ~ serverAddr.toString ~ "/default",
+				(scope req) {
+					req.method = HTTPMethod.POST;
+					req.writeBody(cast(const(ubyte)[])`{"value":42}`, "application/json");
+				},
+				(scope res) {
+					assert(res.statusCode == HTTPStatus.ok);
+					assert(res.readJson.get!string == "Value: 42, Check: true");
+				}
+			);
+			requestHTTP("http://" ~ serverAddr.toString ~ "/default",
+				(scope req) {
+					req.method = HTTPMethod.POST;
+					req.writeBody(cast(const(ubyte)[])`{"value":42,"check":true}`, "application/json");
+				},
+				(scope res) {
+					assert(res.statusCode == HTTPStatus.ok);
+					assert(res.readJson.get!string == "Value: 42, Check: true");
+				}
+			);
+		} catch (Exception e) assert(false, e.msg);
 		logInfo("Tests passed.");
 	});
 }

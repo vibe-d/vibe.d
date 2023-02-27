@@ -215,6 +215,9 @@ void runTest()
 
 int main()
 {
-	runTask(toDelegate(&runTest));
+	runTask({
+		try runTest();
+		catch (Exception e) assert(false, e.msg);
+	});
 	return runEventLoop();
 }

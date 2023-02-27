@@ -53,7 +53,11 @@ final class TaskPipe : ConnectionStream {
 	const(ubyte)[] peek() { return m_pipe.peek; }
 	size_t read(scope ubyte[] dst, IOMode mode) { return m_pipe.read(dst, mode); }
 	alias read = ConnectionStream.read;
-	size_t write(in ubyte[] bytes, IOMode mode) { return m_pipe.write(bytes, mode); }
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		override size_t write(scope const(ubyte)[] bytes, IOMode mode) { return m_pipe.write(bytes, mode); }
+	} else {
+		override size_t write(in ubyte[] bytes, IOMode mode) { return m_pipe.write(bytes, mode); }
+	}
 	alias write = ConnectionStream.write;
 	void flush() {}
 	void finalize() { m_pipe.close(); }
@@ -129,7 +133,7 @@ private final class TaskPipeImpl {
 
 	/** Writes the given byte array to the pipe.
 	*/
-	size_t write(const(ubyte)[] data, IOMode mode)
+	size_t write(scope const(ubyte)[] data, IOMode mode)
 	{
 		size_t ret = 0;
 
@@ -217,16 +221,30 @@ unittest { // issue #1501 - deadlock in TaskPipe
 		p.bufferSize = 2048;
 
 		Task a, b;
-		a = runTask({ ubyte[2100] buf; if (i == 0) p.read(buf, IOMode.all); else p.write(buf, IOMode.all); });
-		b = runTask({ ubyte[2100] buf; if (i == 0) p.write(buf, IOMode.all); else p.read(buf, IOMode.all); });
+		a = runTask({
+			ubyte[2100] buf;
+			try {
+				if (i == 0) p.read(buf, IOMode.all);
+				else p.write(buf, IOMode.all);
+			} catch (Exception e) assert(false, e.msg);
+		});
+		b = runTask({
+			ubyte[2100] buf;
+			try {
+				if (i == 0) p.write(buf, IOMode.all);
+				else p.read(buf, IOMode.all);
+			} catch (Exception e) assert(false, e.msg);
+		});
 
 		auto joiner = runTask({
-			auto starttime = Clock.currTime(UTC());
-			while (a.running || b.running) {
-				if (Clock.currTime(UTC()) - starttime > 500.msecs)
-					assert(false, "TaskPipe is dead locked.");
-				yield();
-			}
+			try {
+				auto starttime = Clock.currTime(UTC());
+				while (a.running || b.running) {
+					if (Clock.currTime(UTC()) - starttime > 500.msecs)
+						assert(false, "TaskPipe is dead locked.");
+					yield();
+				}
+			} catch (Exception e) assert(false, e.msg);
 		});
 
 		joiner.join();
@@ -235,12 +253,14 @@ unittest { // issue #1501 - deadlock in TaskPipe
 
 unittest { // issue #
 	auto t = runTask({
-		auto tp = new TaskPipeImpl;
-		tp.waitForData(10.msecs);
-		exitEventLoop();
+		try {
+			auto tp = new TaskPipeImpl;
+			tp.waitForData(10.msecs);
+			exitEventLoop();
+		} catch (Exception e) assert(false, e.msg);
 	});
 	runTask({
-		sleep(500.msecs);
+		sleepUninterruptible(500.msecs);
 		assert(!t.running, "TaskPipeImpl.waitForData didn't timeout.");
 	});
 	runEventLoop();

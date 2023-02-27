@@ -47,16 +47,18 @@ void main()
 
 	runTask({
 		scope (exit) exitEventLoop(true);
-		auto settings = new RestInterfaceSettings();
-		settings.httpClientSettings = new HTTPClientSettings();
-		settings.httpClientSettings.readTimeout = 1.seconds;
-		settings.baseURL = URL("http://127.0.0.1:5000/");
-		auto service_client = new RestInterfaceClient!IService(settings);
-		try {service_client.getTest(2000);} catch (Exception e) {}
-		sleep(1200.msecs);
-		auto result = service_client.getTest2(500);
-		writeln("result:", result);
-		assert(result.i == 500);
+		try {
+			auto settings = new RestInterfaceSettings();
+			settings.httpClientSettings = new HTTPClientSettings();
+			settings.httpClientSettings.readTimeout = 1.seconds;
+			settings.baseURL = URL("http://127.0.0.1:5000/");
+			auto service_client = new RestInterfaceClient!IService(settings);
+			try {service_client.getTest(2000);} catch (Exception e) {}
+			sleep(1200.msecs);
+			auto result = service_client.getTest2(500);
+			writeln("result:", result);
+			assert(result.i == 500);
+		} catch (Exception e) assert(false, e.msg);
 	});
 
 	runApplication();

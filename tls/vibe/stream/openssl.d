@@ -476,7 +476,15 @@ final class OpenSSLStream : TLSStream {
 
 	alias read = Stream.read;
 
-	size_t write(in ubyte[] bytes_, IOMode mode)
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		override size_t write(scope const(ubyte)[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	} else {
+		override size_t write(in ubyte[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	}
+
+	alias write = Stream.write;
+
+	private size_t doWrite(scope const(ubyte)[] bytes_, IOMode mode)
 	{
 		const(ubyte)[] bytes = bytes_;
 
@@ -495,8 +503,6 @@ final class OpenSSLStream : TLSStream {
 
 		return nbytes;
 	}
-
-	alias write = Stream.write;
 
 	void flush()
 	{

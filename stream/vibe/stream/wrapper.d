@@ -98,7 +98,11 @@ class ProxyStream : Stream {
 
 	alias read = Stream.read;
 
-	size_t write(in ubyte[] bytes, IOMode mode) { return m_output.write(bytes, mode); }
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		override size_t write(scope const(ubyte)[] bytes, IOMode mode) { return m_output.write(bytes, mode); }
+	} else {
+		override size_t write(in ubyte[] bytes, IOMode mode) { return m_output.write(bytes, mode); }
+	}
 
 	alias write = Stream.write;
 
@@ -191,7 +195,11 @@ class ConnectionProxyStream : ConnectionStream {
 
 	alias read = ConnectionStream.read;
 
-	size_t write(in ubyte[] bytes, IOMode mode) { return m_output.write(bytes, mode); }
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		size_t write(scope const(ubyte)[] bytes, IOMode mode) { return m_output.write(bytes, mode); }
+	} else {
+		size_t write(in ubyte[] bytes, IOMode mode) { return m_output.write(bytes, mode); }
+	}
 
 	alias write = ConnectionStream.write;
 

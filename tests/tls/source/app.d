@@ -44,46 +44,50 @@ void testConn(
 
 	createPipePair(ctunnel, stunnel);
 	auto t1 = runTask({
-		auto sctx = createContext(TLSContextKind.server, srv_cert, srv_key, srv_trust, srv_mode);
-		TLSStream sconn;
 		try {
-			sconn = createTLSStream(stunnel, sctx, TLSStreamState.accepting, srv_peer);
-			logDiagnostic("Successfully initiated server tunnel.");
-			assert(srv_expect != Expected.fail, "Server expected to fail TLS connection.");
-		} catch (Exception e) {
-			if (srv_expect == Expected.dontCare) logDiagnostic("Server tunnel failed (dont-care): %s", e.msg);
-			else if (srv_expect == Expected.fail) logDiagnostic("Server tunnel failed as expected: %s", e.msg);
-			else {
-				logError("Server tunnel failed: %s", e.toString().sanitize);
-				assert(false, "Server not expected to fail TLS connection.");
+			auto sctx = createContext(TLSContextKind.server, srv_cert, srv_key, srv_trust, srv_mode);
+			TLSStream sconn;
+			try {
+				sconn = createTLSStream(stunnel, sctx, TLSStreamState.accepting, srv_peer);
+				logDiagnostic("Successfully initiated server tunnel.");
+				assert(srv_expect != Expected.fail, "Server expected to fail TLS connection.");
+			} catch (Exception e) {
+				if (srv_expect == Expected.dontCare) logDiagnostic("Server tunnel failed (dont-care): %s", e.msg);
+				else if (srv_expect == Expected.fail) logDiagnostic("Server tunnel failed as expected: %s", e.msg);
+				else {
+					logError("Server tunnel failed: %s", e.toString().sanitize);
+					assert(false, "Server not expected to fail TLS connection.");
+				}
+				return;
 			}
-			return;
-		}
-		if (cli_expect == Expected.fail) return;
-		assert(sconn.readLine() == "foo");
-		sconn.write("bar\r\n");
-		sconn.finalize();
+			if (cli_expect == Expected.fail) return;
+			assert(sconn.readLine() == "foo");
+			sconn.write("bar\r\n");
+			sconn.finalize();
+		} catch (Exception e) assert(false, e.msg);
 	});
 	auto t2 = runTask({
-		auto cctx = createContext(TLSContextKind.client, cli_cert, cli_key, cli_trust, cli_mode);
-		TLSStream cconn;
 		try {
-			cconn = createTLSStream(ctunnel, cctx, TLSStreamState.connecting, cli_peer);
-			logDiagnostic("Successfully initiated client tunnel.");
-			assert(cli_expect != Expected.fail, "Client expected to fail TLS connection.");
-		} catch (Exception e) {
-			if (cli_expect == Expected.dontCare) logDiagnostic("Client tunnel failed (dont-care): %s", e.msg);
-			else if (cli_expect == Expected.fail) logDiagnostic("Client tunnel failed as expected: %s", e.msg);
-			else {
-				logError("Client tunnel failed: %s", e.toString().sanitize);
-				assert(false, "Client not expected to fail TLS connection.");
+			auto cctx = createContext(TLSContextKind.client, cli_cert, cli_key, cli_trust, cli_mode);
+			TLSStream cconn;
+			try {
+				cconn = createTLSStream(ctunnel, cctx, TLSStreamState.connecting, cli_peer);
+				logDiagnostic("Successfully initiated client tunnel.");
+				assert(cli_expect != Expected.fail, "Client expected to fail TLS connection.");
+			} catch (Exception e) {
+				if (cli_expect == Expected.dontCare) logDiagnostic("Client tunnel failed (dont-care): %s", e.msg);
+				else if (cli_expect == Expected.fail) logDiagnostic("Client tunnel failed as expected: %s", e.msg);
+				else {
+					logError("Client tunnel failed: %s", e.toString().sanitize);
+					assert(false, "Client not expected to fail TLS connection.");
+				}
+				return;
 			}
-			return;
-		}
-		if (srv_expect == Expected.fail) return;
-		cconn.write("foo\r\n");
-		assert(cconn.readLine() == "bar");
-		cconn.finalize();
+			if (srv_expect == Expected.fail) return;
+			cconn.write("foo\r\n");
+			assert(cconn.readLine() == "bar");
+			cconn.finalize();
+		} catch (Exception e) assert(false, e.msg);
 	});
 
 	t1.join();
@@ -176,64 +180,68 @@ void testConn(TLSVersion cli_version, TLSVersion srv_version, bool expect_succes
 
 	createPipePair(ctunnel, stunnel);
 	auto t1 = runTask({
-		TLSContext sctx;
-		try sctx = createTLSContext(TLSContextKind.server, srv_version);
-		catch (Exception e) {
-			assert(!expect_success, "Failed to create TLS context: " ~ e.msg);
-			ctunnel.finalize();
-			stunnel.finalize();
-			return;
-		}
-		sctx.useCertificateChainFile("server.crt");
-		sctx.usePrivateKeyFile("server.key");
-		sctx.peerValidationMode = TLSPeerValidationMode.none;
-		TLSStream sconn;
 		try {
-			sconn = createTLSStream(stunnel, sctx, TLSStreamState.accepting, null);
-			logDiagnostic("Successfully initiated server tunnel.");
-			assert(expect_success, "Server expected to fail TLS connection.");
-		} catch (Exception e) {
-			if (expect_success) {
-				logError("Server tunnel failed: %s", e.toString().sanitize);
-				assert(false, "Server not expected to fail TLS connection.");
+			TLSContext sctx;
+			try sctx = createTLSContext(TLSContextKind.server, srv_version);
+			catch (Exception e) {
+				assert(!expect_success, "Failed to create TLS context: " ~ e.msg);
+				ctunnel.finalize();
+				stunnel.finalize();
+				return;
 			}
-			logDiagnostic("Server tunnel failed as expected: %s", e.msg);
-			return;
-		}
-		if (!expect_success) return;
-		assert(sconn.readLine() == "foo");
-		sconn.write("bar\r\n");
-		sconn.finalize();
+			sctx.useCertificateChainFile("server.crt");
+			sctx.usePrivateKeyFile("server.key");
+			sctx.peerValidationMode = TLSPeerValidationMode.none;
+			TLSStream sconn;
+			try {
+				sconn = createTLSStream(stunnel, sctx, TLSStreamState.accepting, null);
+				logDiagnostic("Successfully initiated server tunnel.");
+				assert(expect_success, "Server expected to fail TLS connection.");
+			} catch (Exception e) {
+				if (expect_success) {
+					logError("Server tunnel failed: %s", e.toString().sanitize);
+					assert(false, "Server not expected to fail TLS connection.");
+				}
+				logDiagnostic("Server tunnel failed as expected: %s", e.msg);
+				return;
+			}
+			if (!expect_success) return;
+			assert(sconn.readLine() == "foo");
+			sconn.write("bar\r\n");
+			sconn.finalize();
+		} catch (Exception e) assert(false, e.msg);
 	});
 	auto t2 = runTask({
-		TLSContext cctx;
-		try cctx = createTLSContext(TLSContextKind.client, cli_version);
-		catch (Exception e) {
-			assert(!expect_success, "Failed to create TLS context: " ~ e.msg);
-			ctunnel.finalize();
-			stunnel.finalize();
-			return;
-		}
-		cctx.peerValidationMode = TLSPeerValidationMode.none;
-		TLSStream cconn;
 		try {
-			cconn = createTLSStream(ctunnel, cctx, TLSStreamState.connecting, null);
-			logDiagnostic("Successfully initiated client tunnel.");
-			assert(expect_success, "Client expected to fail TLS connection.");
-		} catch (Exception e) {
-			if (expect_success) {
-				logError("Client tunnel failed: %s", e.toString().sanitize);
-				assert(false, "Client not expected to fail TLS connection.");
+			TLSContext cctx;
+			try cctx = createTLSContext(TLSContextKind.client, cli_version);
+			catch (Exception e) {
+				assert(!expect_success, "Failed to create TLS context: " ~ e.msg);
+				ctunnel.finalize();
+				stunnel.finalize();
+				return;
 			}
-			logDiagnostic("Client tunnel failed as expected: %s", e.msg);
-			ctunnel.finalize();
-			stunnel.finalize();
-			return;
-		}
-		if (!expect_success) return;
-		cconn.write("foo\r\n");
-		assert(cconn.readLine() == "bar");
-		cconn.finalize();
+			cctx.peerValidationMode = TLSPeerValidationMode.none;
+			TLSStream cconn;
+			try {
+				cconn = createTLSStream(ctunnel, cctx, TLSStreamState.connecting, null);
+				logDiagnostic("Successfully initiated client tunnel.");
+				assert(expect_success, "Client expected to fail TLS connection.");
+			} catch (Exception e) {
+				if (expect_success) {
+					logError("Client tunnel failed: %s", e.toString().sanitize);
+					assert(false, "Client not expected to fail TLS connection.");
+				}
+				logDiagnostic("Client tunnel failed as expected: %s", e.msg);
+				ctunnel.finalize();
+				stunnel.finalize();
+				return;
+			}
+			if (!expect_success) return;
+			cconn.write("foo\r\n");
+			assert(cconn.readLine() == "bar");
+			cconn.finalize();
+		} catch (Exception e) assert(false, e.msg);
 	});
 
 	t1.join();

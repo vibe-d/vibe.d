@@ -16,9 +16,11 @@ shared static this()
 	runTask({
 		scope (exit) exitEventLoop();
 
-		auto res = requestHTTP("http://" ~ serverAddr.toString);
-		assert(res.statusCode == HTTPStatus.ok);
-		assert(res.bodyReader.readAllUTF8 == "Hello world.");
+		try {
+			auto res = requestHTTP("http://" ~ serverAddr.toString);
+			assert(res.statusCode == HTTPStatus.ok);
+			assert(res.bodyReader.readAllUTF8 == "Hello world.");
+		} catch (Exception e) assert(false, e.msg);
 		logInfo("All web tests succeeded.");
 	});
 }

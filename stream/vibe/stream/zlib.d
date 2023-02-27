@@ -111,7 +111,15 @@ class ZlibOutputStream : OutputStream {
 			() @trusted { deflateEnd(&m_zstream); } ();
 	}
 
-	final size_t write(in ubyte[] data, IOMode mode)
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		final override size_t write(scope const(ubyte)[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	} else {
+		final override size_t write(in ubyte[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	}
+
+	alias write = OutputStream.write;
+
+	private size_t doWrite(scope const(ubyte)[] data, IOMode mode)
 	{
 		// TODO: support IOMode!
 		if (!data.length) return 0;
@@ -125,8 +133,6 @@ class ZlibOutputStream : OutputStream {
 		m_zstream.next_in = null;
 		return data.length;
 	}
-
-	alias write = OutputStream.write;
 
 	final void flush()
 	{

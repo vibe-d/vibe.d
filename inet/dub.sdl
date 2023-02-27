@@ -1,7 +1,7 @@
 name "inet"
 description "Internet standard functionality"
 targetType "library"
-dependency "vibe-core" version="~>1.0"
+dependency "vibe-core" version=">=1.0.0 <3.0.0-0"
 dependency "vibe-d:data" version="*"
 dependency "vibe-d:stream" version="*"
 dependency "vibe-d:textfilter" version="*"

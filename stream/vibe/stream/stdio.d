@@ -85,13 +85,19 @@ class StdFileStream : ConnectionStream {
 
 	alias read = ConnectionStream.read;
 
-	override size_t write(in ubyte[] bytes_, IOMode mode)
-	{
-		enforceWritable();
-		return m_writePipe.write(bytes_, mode);
+	static if (is(typeof(.OutputStream.outputStreamVersion)) && .OutputStream.outputStreamVersion > 1) {
+		override size_t write(scope const(ubyte)[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
+	} else {
+		override size_t write(in ubyte[] bytes_, IOMode mode) { return doWrite(bytes_, mode); }
 	}
 
 	alias write = ConnectionStream.write;
+
+	private size_t doWrite(scope const(ubyte)[] bytes_, IOMode mode)
+	@safe {
+		enforceWritable();
+		return m_writePipe.write(bytes_, mode);
+	}
 
 	override void flush()
 	{

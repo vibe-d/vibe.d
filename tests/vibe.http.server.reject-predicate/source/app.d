@@ -34,27 +34,29 @@ void main()
 		bool got403, got403_multiple, got200;
 		scope (exit) exitEventLoop();
 
-		requestHTTP("http://127.0.0.1:8099/",
-			(scope req) {
-				req.headers["X-Forwarded-For"] = xforward_addr;
-			},
-			(scope res) {
-				got403 = (res.statusCode == HTTPStatus.forbidden);
-			}
-		);
-		requestHTTP("http://127.0.0.1:8099/",
-			(scope req) {
-				req.headers["X-Forwarded-For"] = xforward_addrs;
-			},
-			(scope res) {
-				got403_multiple = (res.statusCode == HTTPStatus.forbidden);
-			}
-		);
-		requestHTTP("http://127.0.0.1:8099/", null,
-			(scope res) {
-				got200 = (res.statusCode == HTTPStatus.ok);
-			}
-		);
+		try {
+			requestHTTP("http://127.0.0.1:8099/",
+				(scope req) {
+					req.headers["X-Forwarded-For"] = xforward_addr;
+				},
+				(scope res) {
+					got403 = (res.statusCode == HTTPStatus.forbidden);
+				}
+			);
+			requestHTTP("http://127.0.0.1:8099/",
+				(scope req) {
+					req.headers["X-Forwarded-For"] = xforward_addrs;
+				},
+				(scope res) {
+					got403_multiple = (res.statusCode == HTTPStatus.forbidden);
+				}
+			);
+			requestHTTP("http://127.0.0.1:8099/", null,
+				(scope res) {
+					got200 = (res.statusCode == HTTPStatus.ok);
+				}
+			);
+		} catch (Exception e) assert(false, e.msg);
 		assert(got403, "Status 403 wasn't received");
 		assert(got403, "Status 403 wasn't received for multiple addresses");
 		assert(got200, "Status 200 wasn't received");

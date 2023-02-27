@@ -106,6 +106,9 @@ void runTest()
 int main()
 {
 	setLogLevel(LogLevel.debug_);
-	runTask(toDelegate(&runTest));
+	runTask({
+		try runTest();
+		catch (Exception e) assert(false, e.msg);
+	});
 	return runEventLoop();
 }
