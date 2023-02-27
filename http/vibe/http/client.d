@@ -245,13 +245,7 @@ class HTTPClientSettings {
 	URL proxyURL;
 	Duration defaultKeepAliveTimeout = 10.seconds;
 
-	/** Timeout for establishing a connection to the server
-
-		Note that this setting is only supported when using the vibe-core
-		module. If using one of the legacy drivers, any value other than
-		`Duration.max` will emit a runtime warning and connects without a
-		specific timeout.
-	*/
+	/// Timeout for establishing a connection to the server
 	Duration connectTimeout = Duration.max;
 
 	/// Timeout during read operations on the underyling transport
@@ -270,7 +264,7 @@ class HTTPClientSettings {
 	void delegate(TLSContext ctx) @safe nothrow tlsContextSetup;
 
 	/**
-		TLS Peer name override. 
+		TLS Peer name override.
 
 		Allows to customize the tls peer name sent to server during the TLS connection setup (SNI)
 	*/
