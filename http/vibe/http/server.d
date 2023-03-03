@@ -1155,7 +1155,8 @@ final class HTTPServerRequest : HTTPRequest {
 	@property string rootDir()
 	const @safe {
 		import std.algorithm.searching : count;
-		auto depth = requestPath.bySegment.count!(s => s.name.length > 0);
+		import std.range : empty;
+		auto depth = requestPath.bySegment.count!(s => !s.name.empty);
 		if (depth > 0 && !requestPath.endsWithSlash) depth--;
 		return depth == 0 ? "./" : replicate("../", depth);
 	}
