@@ -13,11 +13,12 @@ public import vibe.db.mongo.impl.crud;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
 
-import std.array : array;
-import std.algorithm : map, max, min;
-import std.exception;
-
 import core.time;
+import std.array : array;
+import std.algorithm : map, max, min, skipOver;
+import std.exception;
+import std.range : chain;
+
 
 /**
 	Represents a cursor for a MongoDB query.
@@ -515,6 +516,10 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 	final void handleReply(long id, string ns, size_t count)
 	{
 		m_cursor = id;
+		// The qualified collection name is reported here, but when requesting
+		// data, we need to send the database name and the collection name
+		// separately, so we have to remove the database prefix:
+		ns.skipOver(m_database.chain("."));
 		m_collection = ns;
 		m_documents.length = count;
 		m_readDoc = 0;
