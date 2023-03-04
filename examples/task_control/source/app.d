@@ -26,13 +26,14 @@ int main(string[] args)
 {
 	g_task = runTask({
 		logInfo("Starting task, waiting for max. 10 seconds.");
-		sleep(dur!"seconds"(10));
+		try sleep(dur!"seconds"(10));
+		catch (Exception e) logInfo("Task interrupted");
 		logInfo("Exiting task after 10 seconds.");
 	});
 
 	runTask({
 		logInfo("Monitor task started. Waiting for first task to end.");
-		g_task.join();
+		g_task.joinUninterruptible();
 		logInfo("Task has finished.");
 	});
 

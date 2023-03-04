@@ -9,7 +9,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest ]
+        os:
+          - ubuntu-latest
         dc:
           - dmd-latest
           - dmd-2.097.1
@@ -21,13 +22,15 @@ jobs:
           - ldc-1.26.0
           - ldc-1.23.0
           - ldc-1.21.0
+        parts:
+          - 'builds,unittests,examples,tests'
+        extra_dflags:
+          - ''
         include:
-          # Default
-          - { parts: 'builds,unittests,examples,tests', extra_dflags: '' }
           # Custom part for coverage
-          - { dc: dmd-latest, parts: 'unittests,tests', extra_dflags: "-cov -version=VibedSetCoverageMerge" }
-          # Custom part for vibe-core 2.x.x testing
-          - { dc: dmd-latest, parts: 'unittests,tests,vibe-core-2', extra_dflags: '' }
+          - { os: ubuntu-latest, dc: dmd-latest, parts: 'unittests,tests', extra_dflags: "-cov -version=VibedSetCoverageMerge" }
+          # Custom part for vibe-core 1.x.x testing
+          - { os: ubuntu-latest, dc: dmd-latest, parts: 'builds,unittests,tests,vibe-core-1', extra_dflags: '' }
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60

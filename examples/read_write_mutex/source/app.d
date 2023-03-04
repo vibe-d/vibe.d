@@ -66,15 +66,17 @@ int main(string[] args)
 
 	runWorkerTaskDist({
 		import core.thread : Thread; logInfo("Listen on thread %s", Thread.getThis().name);
-		auto routes = new URLRouter;
-		registerRestInterface(routes, new RestInterfaceImplementation());
+		try {
+			auto routes = new URLRouter;
+			registerRestInterface(routes, new RestInterfaceImplementation());
 
-		auto settings = new HTTPServerSettings();
-		settings.port = 8080;
-		settings.options = HTTPServerOption.reusePort;
-		settings.bindAddresses = ["::1", "127.0.0.1"];
+			auto settings = new HTTPServerSettings();
+			settings.port = 8080;
+			settings.options = HTTPServerOption.reusePort;
+			settings.bindAddresses = ["::1", "127.0.0.1"];
 
-		listenHTTP(settings, routes);
+			listenHTTP(settings, routes);
+		} catch (Exception e) assert(false, e.msg);
 	});
 
 	//Wait for a couple of seconds for the server to be initialized properly and then start

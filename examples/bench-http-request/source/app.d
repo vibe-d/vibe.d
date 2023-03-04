@@ -20,7 +20,7 @@ shared long g_requestDelay = 0;
 shared long g_maxKeepAliveRequests = 1000;
 
 void request(bool disconnect)
-{
+nothrow {
 	atomicOp!"+="(nconn, 1);
 	try {
 		requestHTTP("http://127.0.0.1:8080/empty",
@@ -43,7 +43,7 @@ void request(bool disconnect)
 }
 
 void distTask()
-{
+nothrow {
 	static shared int s_threadCount = 0;
 	static shared int s_token = 0;
 	int id = atomicOp!"+="(s_threadCount, 1) - 1;
@@ -65,11 +65,11 @@ void distTask()
 }
 
 void benchmark()
-{
+nothrow {
 	atomicOp!"+="(g_concurrency, -1);
 	if (g_concurrency > 0) {
 		runWorkerTaskDist(&distTask);
-		while (atomicLoad(nreq) == 0) { sleep(1.msecs); }
+		while (atomicLoad(nreq) == 0) { sleepUninterruptible(1.msecs); }
 	}
 
 	StopWatch sw;
@@ -81,7 +81,8 @@ void benchmark()
 		auto tm = sw.peek().total!"msecs";
 
 		if (nreq >= nreqc && tm >= next_ts) {
-			writefln("%s iterations: %s req/s, %s err/s (%s active conn, %s disconnects/s)", nreq, (nreq*1_000)/tm, (nerr*1_000)/tm, nconn, (ndisconns*1_000)/tm);
+			try writefln("%s iterations: %s req/s, %s err/s (%s active conn, %s disconnects/s)", nreq, (nreq*1_000)/tm, (nerr*1_000)/tm, nconn, (ndisconns*1_000)/tm);
+			catch (Exception e) assert(false, e.msg);
 			nreqc.atomicOp!"+="(1000);
 			next_ts += 100;
 		}
@@ -99,6 +100,6 @@ void main()
 	readOption("d", cast(long*) &g_requestDelay, "Artificial request delay in milliseconds");
 	readOption("k", cast(long*) &g_maxKeepAliveRequests, "Maximum number of keep-alive requests for each connection");
 	if (!finalizeCommandLineOptions()) return;
-	runTask(toDelegate(&benchmark));
+	runTask(&benchmark);
 	runEventLoop();
 }
