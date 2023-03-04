@@ -14,7 +14,7 @@ void main()
 	t1 = spawn({
 		// ensure that asynchronous operations run in parallel to receive()
 		int wc = 0;
-		runTask({ while (true) { sleep(250.msecs); wc++; logInfo("Watchdog receiver %s", wc); } });
+		runTask({ while (true) { sleepUninterruptible(250.msecs); wc++; logInfo("Watchdog receiver %s", wc); } });
 
 		bool finished = false;
 		try while (!finished) {
