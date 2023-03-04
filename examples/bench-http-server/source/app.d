@@ -69,30 +69,32 @@ int main(string[] args)
 	//setLogLevel(LogLevel.Trace);
 	data = generateData();
 
-	runWorkerTaskDist({
-		auto settings = new HTTPServerSettings;
-		settings.port = 8080;
-		settings.bindAddresses = ["127.0.0.1"];
-		settings.options = HTTPServerOption.reusePort;
-		//settings.accessLogToConsole = true;
+	runWorkerTaskDist(() nothrow {
+		try {
+			auto settings = new HTTPServerSettings;
+			settings.port = 8080;
+			settings.bindAddresses = ["127.0.0.1"];
+			settings.options = HTTPServerOption.reusePort;
+			//settings.accessLogToConsole = true;
 
-		auto fsettings = new HTTPFileServerSettings;
-		fsettings.serverPathPrefix = "/file";
+			auto fsettings = new HTTPFileServerSettings;
+			fsettings.serverPathPrefix = "/file";
 
-		auto routes = new URLRouter;
-		routes.get("/", staticTemplate!"home.dt");
-		routes.get("/empty", &empty);
-		routes.get("/static/10", &static_10);
-		routes.get("/static/1k", &static_1k);
-		routes.get("/static/10k", &static_10k);
-		routes.get("/static/100k", &static_100k);
-		routes.get("/quit", &quit);
-		routes.get("/file/*", serveStaticFiles("./public", fsettings));
-		routes.rebuild();
+			auto routes = new URLRouter;
+			routes.get("/", staticTemplate!"home.dt");
+			routes.get("/empty", &empty);
+			routes.get("/static/10", &static_10);
+			routes.get("/static/1k", &static_1k);
+			routes.get("/static/10k", &static_10k);
+			routes.get("/static/100k", &static_100k);
+			routes.get("/quit", &quit);
+			routes.get("/file/*", serveStaticFiles("./public", fsettings));
+			routes.rebuild();
 
-		auto httpListener = listenHTTP(settings, routes);
-		auto tcpListener  = listenTCP(8081, toDelegate(&staticAnswer),
-			"127.0.0.1", TCPListenOptions.reusePort);
+			auto httpListener = listenHTTP(settings, routes);
+			auto tcpListener  = listenTCP(8081, toDelegate(&staticAnswer),
+				"127.0.0.1", TCPListenOptions.reusePort);
+		} catch (Exception e) assert(false, e.msg);
 	});
 
 	return runApplication(&args);

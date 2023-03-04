@@ -94,20 +94,22 @@ int main(string[] args)
 	auto listener = listenHTTP(settings, router);
 
 	auto taskHandler = runTask({
-		auto api = new RestInterfaceClient!ForumAPI("http://127.0.0.1:8080/");
-		logInfo("Current number of threads: %s", api.threads.get().length);
-		logInfo("Posting a topic...");
-		api.threads.post("RESTful services", "Hi, just wanted to post something!");
-		logInfo("Posting a reply...");
-		api.threads["RESTful services"].posts.post("Okay, but what do you actually want to say?");
-		logInfo("New list of threads:");
-		foreach (th; api.threads.get) {
-			import std.array : replicate;
-			logInfo("\n%s\n%s", th, "=".replicate(th.length));
-			foreach (m; api.threads[th].posts.get)
-				logInfo("%s\n---", m);
-		}
-		logInfo("Leaving REST server running. Hit Ctrl+C to exit.");
+		try {
+			auto api = new RestInterfaceClient!ForumAPI("http://127.0.0.1:8080/");
+			logInfo("Current number of threads: %s", api.threads.get().length);
+			logInfo("Posting a topic...");
+			api.threads.post("RESTful services", "Hi, just wanted to post something!");
+			logInfo("Posting a reply...");
+			api.threads["RESTful services"].posts.post("Okay, but what do you actually want to say?");
+			logInfo("New list of threads:");
+			foreach (th; api.threads.get) {
+				import std.array : replicate;
+				logInfo("\n%s\n%s", th, "=".replicate(th.length));
+				foreach (m; api.threads[th].posts.get)
+					logInfo("%s\n---", m);
+			}
+			logInfo("Leaving REST server running. Hit Ctrl+C to exit.");
+		} catch (Exception e) assert(false, e.msg);
 	});
 
 	return runApplication(&args);

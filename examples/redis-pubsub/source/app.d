@@ -26,9 +26,11 @@ int main(string[] args)
 	publisher.getDatabase(0).publish("test2", "Hello from Channel 2");
 
 	auto taskHandler = runTask({
-		subscriber.subscribe("test-fiber");
-		publisher.getDatabase(0).publish("test-fiber", "Hello from the Fiber!");
-		subscriber.unsubscribe();
+		try {
+			subscriber.subscribe("test-fiber");
+			publisher.getDatabase(0).publish("test-fiber", "Hello from the Fiber!");
+			subscriber.unsubscribe();
+		} catch (Exception e) assert(false, e.msg);
 	});
 
 	return runApplication(&args);
