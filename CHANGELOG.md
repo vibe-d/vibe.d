@@ -1,6 +1,47 @@
 Changelog
 =========
 
+v0.9.6 - 2023-03-
+-------------------
+
+### Features and improvements ###
+
+- Supports D frontend versions 2.090.1 to 2.102.2
+- Compatible with vibe-core 2.0.0+ - [pull #2711][issue2711], [pull #2714][issue2714], [pull #2715][issue2715]
+- Revamped the MongoDB implementation, adding support for MongoDB 5.1+/6.0 (by Jan Jurzitza aka WebFreak001) - [pull #2691][issue2691], [pull #2694][issue2694], [pull #2696][issue2696], [pull #2697][issue2697], [pull #2716][issue2716]
+- Removed deprecated symbols and marked symbols scheduled for deprecation as deprecated - [pull #2684][issue2684]
+  - Removed the `vibe-d:core` dummy module
+  - `runTask` and related functions only accept `nothrow` callbacks now
+  - Removed a number of deprecated enum members with uppercase first letters
+  - Removed deprecated public stream constructors
+- Implemented a simple form of default schema addition in `parseUserURL` - [pull #2700][issue2700]
+- Added an `openssl-static` configuration to `vibe-d:tls` to force using static libs of OpenSSL 3.x - [pull #2707][issue2707], [pull #2709][issue2709]
+
+### Bug fixes ###
+
+- Fixed parsing of Markdown tables with spaces around table header separators - [pull #2687][issue2687]
+- Fixed `Bson` deserialization of `immutable(ubyte)[]` - [pull #2698][issue2698]
+- Fixed handling of `InputStream` return values in the REST interface generator - [pull #2699][issue2699]
+- Fixed a crash at shutdown caused by failed MongoDB connections - [pull #2708][issue2708]
+
+[issue2684]: https://github.com/vibe-d/vibe.d/issues/2684
+[issue2687]: https://github.com/vibe-d/vibe.d/issues/2687
+[issue2691]: https://github.com/vibe-d/vibe.d/issues/2691
+[issue2694]: https://github.com/vibe-d/vibe.d/issues/2694
+[issue2696]: https://github.com/vibe-d/vibe.d/issues/2696
+[issue2697]: https://github.com/vibe-d/vibe.d/issues/2697
+[issue2698]: https://github.com/vibe-d/vibe.d/issues/2698
+[issue2699]: https://github.com/vibe-d/vibe.d/issues/2699
+[issue2700]: https://github.com/vibe-d/vibe.d/issues/2700
+[issue2707]: https://github.com/vibe-d/vibe.d/issues/2707
+[issue2708]: https://github.com/vibe-d/vibe.d/issues/2708
+[issue2709]: https://github.com/vibe-d/vibe.d/issues/2709
+[issue2711]: https://github.com/vibe-d/vibe.d/issues/2711
+[issue2714]: https://github.com/vibe-d/vibe.d/issues/2714
+[issue2715]: https://github.com/vibe-d/vibe.d/issues/2715
+[issue2716]: https://github.com/vibe-d/vibe.d/issues/2716
+
+
 v0.9.5 - 2022-07-13
 -------------------
 
@@ -16,14 +57,13 @@ v0.9.5 - 2022-07-13
 - Added an overload of `connectHTTP` that takes a `URL` argument (by Mathias Lang aka Geod24) - [pull #2637][issue2637]
 - Added `HTTPClientSettings.tlsPeerName` to explicitly request a specific TLS host name (by Vitali Karabitski aka vitalka200) - [pull #2644][issue2644]
 
-## Bug fixes ##
+### Bug fixes ###
 
 - Fixed schema comparisons to be case-insensitive (by Muhammed Kadir Yücel aka mkykadir) - [pull #2620][issue2620]
 - Fixed `URL.toString` to omit the separating ":" for empty passwords (by Muhammed Kadir Yücel aka mkykadir) - [pull #2622][issue2622]
 - Fixed `LimitedInputStream` to properly handle `IOMode.all` (by Yazan Dabain aka yazd) - [issue #2575][issue2575], [pull #2633][issue2633]
 - Fixed `URL.opEquals` to take the port into account (by Muhammed Kadir Yücel aka mkykadir) - [pull #2640][issue2640]
 - Fixed TLS connection issues related to Ubuntu specific OpenSSL libraries - [pull #2646][issue2646]
-
 
 [issue2575]: https://github.com/vibe-d/vibe.d/issues/2575
 [issue2620]: https://github.com/vibe-d/vibe.d/issues/2620
@@ -71,7 +111,6 @@ REST systems, as well as making some smaller API additions.
 - Optimized HTTP time string generation in high-load situations (by Hiroki Noda aka kubo39) - [pull #2012][issue2012]
 - Fixed HTTP digest auth secret handling and timeout behavior (by Hiroki Noda aka kubo39) - [pull #2609][issue2609], [pull #2613][issue2613]
 - `BufferedStream` now forwards `ClosableRandomAccessStream` specific properties - [pull #2608][issue2608]
-
 
 ### Bug fixes ###
 
