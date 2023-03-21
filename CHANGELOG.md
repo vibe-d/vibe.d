@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.9.6 - 2023-03-
+v0.9.6 - 2023-03-21
 -------------------
 
 ### Features and improvements ###
@@ -23,6 +23,7 @@ v0.9.6 - 2023-03-
 - Fixed `Bson` deserialization of `immutable(ubyte)[]` - [pull #2698][issue2698]
 - Fixed handling of `InputStream` return values in the REST interface generator - [pull #2699][issue2699]
 - Fixed a crash at shutdown caused by failed MongoDB connections - [pull #2708][issue2708]
+- Fixed Markdown paragraph list detection for muiti-paragraph items - [pull #2718][issue2718]
 
 [issue2684]: https://github.com/vibe-d/vibe.d/issues/2684
 [issue2687]: https://github.com/vibe-d/vibe.d/issues/2687
@@ -40,6 +41,7 @@ v0.9.6 - 2023-03-
 [issue2714]: https://github.com/vibe-d/vibe.d/issues/2714
 [issue2715]: https://github.com/vibe-d/vibe.d/issues/2715
 [issue2716]: https://github.com/vibe-d/vibe.d/issues/2716
+[issue2718]: https://github.com/vibe-d/vibe.d/issues/2718
 
 
 v0.9.5 - 2022-07-13
