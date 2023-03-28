@@ -54,4 +54,5 @@ configuration "openssl-static" {
 }
 
 configuration "notls" {
+	versions "VibeNoSSL"
 }

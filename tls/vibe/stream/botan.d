@@ -6,7 +6,8 @@
 */
 module vibe.stream.botan;
 
-version(Have_botan):
+version (VibeNoSSL) {}
+else version(Have_botan):
 
 version = X509;
 import botan.constants;
