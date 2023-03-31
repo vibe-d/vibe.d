@@ -46,6 +46,8 @@ struct BufferedStream(S) {
 		Buffer[] buffers;
 		ulong accessCount;
 		ubyte[] buffermemory;
+		// slice into the matching chunk buffer, beginning at the current ptr
+		ubyte[] peekBuffer;
 
 		this(size_t buffer_size, size_t buffer_count, S stream)
 		{
@@ -92,6 +94,9 @@ struct BufferedStream(S) {
 			auto newidx = this.buffers.minIndex!((ref a, ref b) => a.lastAccess < b.lastAccess);
 			flushBuffer(newidx);
 
+			// clear peek buffer in case it points to the reused buffer
+			if (this.buffers[newidx].chunk == this.ptr / this.bufferSize)
+				this.peekBuffer = null;
 			this.buffers[newidx].fill = 0;
 			this.buffers[newidx].chunk = chunk_index;
 			fillBuffer(newidx, min(this.size - chunk_index*this.bufferSize, this.bufferSize));
@@ -129,6 +134,18 @@ struct BufferedStream(S) {
 
 		private void iterateChunks(B)(ulong offset, scope B[] bytes,
 			scope bool delegate(ulong offset, scope B[] bytes, sizediff_t buffer, size_t buffer_begin, size_t buffer_end) @safe del)
+		@safe {
+			doIterateChunks!B(offset, bytes, del);
+		}
+
+		private void iterateChunks(B)(ulong offset, scope B[] bytes,
+			scope bool delegate(ulong offset, scope B[] bytes, sizediff_t buffer, size_t buffer_begin, size_t buffer_end) @safe nothrow del)
+		@safe nothrow {
+			doIterateChunks!B(offset, bytes, del);
+		}
+
+		private void doIterateChunks(B, DEL)(ulong offset, scope B[] bytes,
+			scope DEL del)
 		@safe {
 			auto begin = offset;
 			auto end = offset + bytes.length;
@@ -208,31 +225,29 @@ struct BufferedStream(S) {
 			sync();
 			state.stream.truncate(size);
 			state.size = size;
+			state.peekBuffer = null;
 		}
 
 	const(ubyte)[] peek()
 	{
-		auto limit = (state.ptr / state.bufferSize + 1) * state.bufferSize;
-		auto dummy = () @trusted { return (cast(const(ubyte)*)null)[0 .. cast(size_t)(limit - state.ptr)]; } ();
-
-		const(ubyte)[] ret;
-		state.iterateChunks!(const(ubyte))(state.ptr, dummy, (offset, scope _, buf, buf_begin, buf_end) {
-			if (buf >= 0) {
-				auto b = &state.buffers[buf];
-				ret = b.memory[buf_begin .. min(buf_end, b.fill)];
-				state.touchBuffer(buf);
-			}
-			return false;
-		});
-		return ret;
+		return state.peekBuffer;
 	}
 
 	size_t read(scope ubyte[] dst, IOMode mode)
 	@blocking {
+		if (dst.length <= state.peekBuffer.length) {
+			dst[] = state.peekBuffer[0 .. dst.length];
+			state.peekBuffer = state.peekBuffer[dst.length .. $];
+			state.ptr += dst.length;
+			return dst.length;
+		}
+
 		size_t nread = 0;
 
 		// update size if a read past EOF is expected
 		if (state.ptr + dst.length > state.size) state.size = state.stream.size;
+
+		ubyte[] newpeek;
 
 		state.iterateChunks!ubyte(state.ptr, dst, (offset, scope dst_chunk, buf, buf_begin, buf_end) {
 			if (buf < 0) {
@@ -253,6 +268,10 @@ struct BufferedStream(S) {
 			dst_chunk[] = state.buffers[buf].memory[buf_begin .. buf_begin + dst_chunk.length];
 			nread += dst_chunk.length;
 
+			// any remaining buffer space of the last chunk will be used for
+			// quick access on the next read
+			newpeek = state.buffers[buf].memory[buf_begin + dst_chunk.length .. state.buffers[buf].fill];
+
 			return true;
 		});
 
@@ -260,6 +279,7 @@ struct BufferedStream(S) {
 			throw new Exception("Reading past end of stream.");
 
 		state.ptr += nread;
+		state.peekBuffer = newpeek;
 
 		return nread;
 	}
@@ -268,7 +288,16 @@ struct BufferedStream(S) {
 
 	size_t write(in ubyte[] bytes, IOMode mode)
 	@blocking {
+		if (bytes.length <= state.peekBuffer.length) {
+			state.peekBuffer[0 .. bytes.length] = bytes;
+			state.peekBuffer = state.peekBuffer[bytes.length .. $];
+			state.ptr += bytes.length;
+			return bytes.length;
+		}
+
 		size_t nwritten = 0;
+
+		ubyte[] newpeek;
 
 		state.iterateChunks!(const(ubyte))(state.ptr, bytes, (offset, scope src_chunk, buf, buf_begin, buf_end) {
 			if (buf < 0) { // write through if not buffered
@@ -288,12 +317,18 @@ struct BufferedStream(S) {
 			if (offset + src_chunk.length > state.size)
 				state.size = offset + src_chunk.length;
 
+			// any remaining buffer space of the last chunk will be used for
+			// quick access on the next read
+			if (buf >= 0)
+				newpeek = state.buffers[buf].memory[buf_begin + src_chunk.length .. $];
+
 			return true;
 		});
 
 		assert(mode != IOMode.all || nwritten == bytes.length);
 
 		state.ptr += nwritten;
+		state.peekBuffer = newpeek;
 
 		return nwritten;
 	}
@@ -316,11 +351,29 @@ struct BufferedStream(S) {
 			b.fill = 0;
 		}
 		state.size = state.stream.size;
+		state.peekBuffer = null;
 	}
 
 	void finalize() @blocking { flush(); }
 
-	void seek(ulong offset) { state.ptr = offset; }
+	void seek(ulong offset)
+	nothrow {
+		state.ptr = offset;
+
+		if (offset > state.ptr && offset < state.ptr + state.peekBuffer.length) {
+			state.peekBuffer = state.peekBuffer[cast(size_t)(offset - state.ptr) .. $];
+		} else {
+			ubyte[1] dummy;
+			state.peekBuffer = null;
+			state.iterateChunks!ubyte(offset, dummy[], (offset, scope bytes, buffer, buffer_begin, buffer_end) @safe {
+				if (buffer >= 0) {
+					state.peekBuffer = state.buffers[buffer].memory[buffer_begin .. state.buffers[buffer].fill];
+					state.touchBuffer(buffer);
+				}
+				return true;
+			});
+		}
+	}
 	ulong tell() nothrow { return state.ptr; }
 
 	private ref inout(State) state() @trusted nothrow return inout { return *m_state; }
