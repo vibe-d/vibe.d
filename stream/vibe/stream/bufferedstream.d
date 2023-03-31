@@ -295,13 +295,6 @@ struct BufferedStream(S) {
 
 	size_t write(in ubyte[] bytes, IOMode mode)
 	@blocking {
-		if (bytes.length <= state.peekBuffer.length) {
-			state.peekBuffer[0 .. bytes.length] = bytes;
-			state.peekBuffer = state.peekBuffer[bytes.length .. $];
-			state.ptr += bytes.length;
-			return bytes.length;
-		}
-
 		size_t nwritten = 0;
 
 		ubyte[] newpeek;
@@ -550,6 +543,30 @@ mixin validateRandomAccessStream!(BufferedStream!RandomAccessStream);
 	assert(bb[0] == 129);
 	bstr.read(bb);
 	assert(bb[0] == 130);
+}
+
+@safe unittest { // regression: write after read causes write to be missed during flush
+	import std.exception : assertThrown;
+	import vibe.stream.memory : createMemoryStream;
+	import vibe.stream.operations : readAll;
+
+	auto buf = new ubyte[](256);
+	foreach (i, ref b; buf) b = cast(ubyte)i;
+	auto str = createMemoryStream(buf, true, 128);
+	auto bstr = bufferedStream(str, 16, 4);
+
+	ubyte[1] ob;
+	bstr.read(ob[]);
+	assert(ob[0] == 0);
+	bstr.seek(0);
+	bstr.write([cast(ubyte)1]);
+	bstr.seek(0);
+	bstr.read(ob[]);
+	assert(ob[0] == 1);
+	bstr.finalize();
+	str.seek(0);
+	str.read(ob[]);
+	assert(ob[0] == 1);
 }
 
 unittest {
