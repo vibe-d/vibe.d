@@ -43,6 +43,7 @@ struct BufferedStream(S) {
 		ulong ptr;
 		ulong size;
 		size_t bufferSize;
+		int bufferSizeBits;
 		Buffer[] buffers;
 		ulong accessCount;
 		ubyte[] buffermemory;
@@ -51,7 +52,10 @@ struct BufferedStream(S) {
 
 		this(size_t buffer_size, size_t buffer_count, S stream)
 		{
-			this.bufferSize = buffer_size;
+			import core.bitop : bsr;
+
+			this.bufferSizeBits = max(bsr(buffer_size), 1);
+			this.bufferSize = 1 << this.bufferSizeBits;
 			this.buffers = Mallocator.instance.makeArray!Buffer(buffer_count);
 			this.buffermemory = Mallocator.instance.makeArray!ubyte(buffer_count * buffer_size);
 			foreach (i, ref b; this.buffers)
@@ -87,7 +91,7 @@ struct BufferedStream(S) {
 			auto idx = this.buffers.countUntil!((ref b) => b.chunk == chunk_index);
 			if (idx >= 0) return idx;
 
-			auto offset = chunk_index * this.bufferSize;
+			auto offset = chunk_index << this.bufferSizeBits;
 			if (offset >= this.size) this.size = this.stream.size;
 			if (offset >= this.size) throw new Exception("Reading past end of stream.");
 
@@ -95,11 +99,11 @@ struct BufferedStream(S) {
 			flushBuffer(newidx);
 
 			// clear peek buffer in case it points to the reused buffer
-			if (this.buffers[newidx].chunk == this.ptr / this.bufferSize)
+			if (this.buffers[newidx].chunk == this.ptr >> this.bufferSizeBits)
 				this.peekBuffer = null;
 			this.buffers[newidx].fill = 0;
 			this.buffers[newidx].chunk = chunk_index;
-			fillBuffer(newidx, min(this.size - chunk_index*this.bufferSize, this.bufferSize));
+			fillBuffer(newidx, min(this.size - (chunk_index << this.bufferSizeBits), this.bufferSize));
 			return newidx;
 		}
 
@@ -109,7 +113,7 @@ struct BufferedStream(S) {
 			if (size <= b.fill) return;
 			assert(size <= this.bufferSize);
 
-			this.stream.seek(b.chunk*this.bufferSize + b.fill);
+			this.stream.seek((b.chunk << this.bufferSizeBits) + b.fill);
 			this.stream.read(b.memory[b.fill .. size]);
 			b.fill = size;
 			touchBuffer(buffer);
@@ -119,10 +123,10 @@ struct BufferedStream(S) {
 		{
 			auto b = &this.buffers[buffer];
 			if (!b.fill || !b.dirty) return;
-			this.stream.seek(b.chunk * this.bufferSize);
+			this.stream.seek(b.chunk << this.bufferSizeBits);
 			this.stream.write(b.memory[0 .. b.fill]);
-			if (b.chunk * this.bufferSize + b.fill > this.size)
-				this.size = b.chunk * this.bufferSize + b.fill;
+			if ((b.chunk << this.bufferSizeBits) + b.fill > this.size)
+				this.size = (b.chunk << this.bufferSizeBits) + b.fill;
 			b.dirty = false;
 			touchBuffer(buffer);
 		}
@@ -133,13 +137,13 @@ struct BufferedStream(S) {
 		}
 
 		private void iterateChunks(B)(ulong offset, scope B[] bytes,
-			scope bool delegate(ulong offset, scope B[] bytes, sizediff_t buffer, size_t buffer_begin, size_t buffer_end) @safe del)
+			scope bool delegate(ulong offset, ulong chunk, scope B[] bytes, sizediff_t buffer, size_t buffer_begin, size_t buffer_end) @safe del)
 		@safe {
 			doIterateChunks!B(offset, bytes, del);
 		}
 
 		private void iterateChunks(B)(ulong offset, scope B[] bytes,
-			scope bool delegate(ulong offset, scope B[] bytes, sizediff_t buffer, size_t buffer_begin, size_t buffer_end) @safe nothrow del)
+			scope bool delegate(ulong offset, ulong chunk, scope B[] bytes, sizediff_t buffer, size_t buffer_begin, size_t buffer_end) @safe nothrow del)
 		@safe nothrow {
 			doIterateChunks!B(offset, bytes, del);
 		}
@@ -152,11 +156,12 @@ struct BufferedStream(S) {
 
 			if (bytes.length == 0) return;
 
-			auto chunk_begin = begin / this.bufferSize;
-			auto chunk_end = (end + this.bufferSize - 1) / this.bufferSize;
+			ulong chunk_begin, chunk_end, chunk_off;
+			chunk_begin = begin >> this.bufferSizeBits;
+			chunk_end = (end + this.bufferSize - 1) >> this.bufferSizeBits;
+			chunk_off = chunk_begin << this.bufferSizeBits;
 
 			foreach (i; chunk_begin .. chunk_end) {
-				auto chunk_off = i * this.bufferSize;
 				auto cstart = max(chunk_off, begin);
 				auto cend = min(chunk_off + this.bufferSize, end);
 				assert(cend > cstart);
@@ -167,8 +172,10 @@ struct BufferedStream(S) {
 
 				auto bytes_chunk = bytes[cast(size_t)(cstart - begin) .. cast(size_t)(cend - begin)];
 
-				if (!del(cstart, bytes_chunk, buf, buf_begin, buf_end))
+				if (!del(cstart, i, bytes_chunk, buf, buf_begin, buf_end))
 					break;
+
+				chunk_off += this.bufferSize;
 			}
 		}
 	}
@@ -249,11 +256,11 @@ struct BufferedStream(S) {
 
 		ubyte[] newpeek;
 
-		state.iterateChunks!ubyte(state.ptr, dst, (offset, scope dst_chunk, buf, buf_begin, buf_end) {
+		state.iterateChunks!ubyte(state.ptr, dst, (offset, chunk, scope dst_chunk, buf, buf_begin, buf_end) {
 			if (buf < 0) {
 				if (mode == IOMode.immediate) return false;
 				if (mode == IOMode.once && nread) return false;
-				buf = state.bufferChunk(offset / state.bufferSize);
+				buf = state.bufferChunk(chunk);
 			} else state.touchBuffer(buf);
 
 			if (state.buffers[buf].fill < buf_end) {
@@ -263,7 +270,7 @@ struct BufferedStream(S) {
 			}
 
 			// the whole of dst_chunk is now in the buffer
-			assert(buf_begin % state.bufferSize == offset % state.bufferSize);
+			assert((buf_begin & ((1<<state.bufferSizeBits)-1)) == (offset & ((1<<state.bufferSizeBits)-1)));
 			assert(dst_chunk.length <= buf_end - buf_begin);
 			dst_chunk[] = state.buffers[buf].memory[buf_begin .. buf_begin + dst_chunk.length];
 			nread += dst_chunk.length;
@@ -299,7 +306,7 @@ struct BufferedStream(S) {
 
 		ubyte[] newpeek;
 
-		state.iterateChunks!(const(ubyte))(state.ptr, bytes, (offset, scope src_chunk, buf, buf_begin, buf_end) {
+		state.iterateChunks!(const(ubyte))(state.ptr, bytes, (offset, chunk, scope src_chunk, buf, buf_begin, buf_end) {
 			if (buf < 0) { // write through if not buffered
 				if (mode == IOMode.immediate) return false;
 				if (mode == IOMode.once && nwritten) return false;
@@ -365,7 +372,7 @@ struct BufferedStream(S) {
 		} else {
 			ubyte[1] dummy;
 			state.peekBuffer = null;
-			state.iterateChunks!ubyte(offset, dummy[], (offset, scope bytes, buffer, buffer_begin, buffer_end) @safe {
+			state.iterateChunks!ubyte(offset, dummy[], (offset, chunk, scope bytes, buffer, buffer_begin, buffer_end) @safe nothrow {
 				if (buffer >= 0) {
 					state.peekBuffer = state.buffers[buffer].memory[buffer_begin .. state.buffers[buffer].fill];
 					state.touchBuffer(buffer);
