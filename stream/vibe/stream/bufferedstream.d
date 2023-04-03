@@ -366,7 +366,7 @@ struct BufferedStream(S) {
 			ubyte[1] dummy;
 			state.peekBuffer = null;
 			state.iterateChunks!ubyte(offset, dummy[], (offset, chunk, scope bytes, buffer, buffer_begin, buffer_end) @safe nothrow {
-				if (buffer >= 0) {
+				if (buffer >= 0 && buffer_begin < state.buffers[buffer].fill) {
 					state.peekBuffer = state.buffers[buffer].memory[buffer_begin .. state.buffers[buffer].fill];
 					state.touchBuffer(buffer);
 				}
@@ -566,6 +566,26 @@ mixin validateRandomAccessStream!(BufferedStream!RandomAccessStream);
 	bstr.finalize();
 	str.seek(0);
 	str.read(ob[]);
+	assert(ob[0] == 1);
+}
+
+@safe unittest { // regression seeking past end of file within the last chunk
+	import std.exception : assertThrown;
+	import vibe.stream.memory : createMemoryStream;
+	import vibe.stream.operations : readAll;
+
+	auto buf = new ubyte[](256);
+	foreach (i, ref b; buf) b = cast(ubyte)i;
+	auto str = createMemoryStream(buf, true, 1);
+	auto bstr = bufferedStream(str, 16, 4);
+
+	ubyte[1] ob;
+	bstr.read(ob[]);
+	assert(ob[0] == 0);
+	bstr.seek(10);
+	bstr.write([cast(ubyte)1]);
+	bstr.seek(10);
+	bstr.read(ob[]);
 	assert(ob[0] == 1);
 }
 
