@@ -2,11 +2,11 @@ project('Vibe.d', 'd',
     meson_version: '>=0.40',
     subproject_dir: 'lib/subprojects',
     license: 'MIT',
-    version: '0.9.6'
+    version: '0.9.7'
 )
 
 project_soversion      = '0'
-project_version_suffix = ''
+project_version_suffix = '~alpha1'
 project_version        = meson.project_version()
 project_version_full   = project_version + project_version_suffix
 
