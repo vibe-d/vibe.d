@@ -204,7 +204,7 @@ struct Bson {
 	*/
 	this(double value) { opAssign(value); }
 	/// ditto
-	this(string value, Type type = Type.string)
+	this(scope const(char)[] value, Type type = Type.string)
 	{
 		assert(type == Type.string || type == Type.code || type == Type.symbol);
 		opAssign(value);
@@ -252,13 +252,14 @@ struct Bson {
 		m_type = Type.double_;
 	}
 	/// ditto
-	void opAssign(string value)
+	void opAssign(scope const(char)[] value)
 	{
 		import std.utf;
+		import std.string : representation;
 		debug std.utf.validate(value);
 		auto app = appender!bdata_t();
 		app.put(toBsonData(cast(int)value.length+1));
-		app.put(cast(bdata_t)value);
+		app.put(value.representation);
 		app.put(cast(ubyte)0);
 		m_data = app.data;
 		m_type = Type.string;
@@ -479,7 +480,7 @@ struct Bson {
 		In addition to working like `get!T`, the following conversions are done:
 		- `to!double` - casts int and long to double
 		- `to!long` - casts int to long
-		- `to!string` - returns the same as toString 
+		- `to!string` - returns the same as toString
 
 		See_Also: `deserializeBson`, `opt`, `get`
 	*/
