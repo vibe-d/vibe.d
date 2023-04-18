@@ -58,7 +58,7 @@ void main()
 			);
 		} catch (Exception e) assert(false, e.msg);
 		assert(got403, "Status 403 wasn't received");
-		assert(got403, "Status 403 wasn't received for multiple addresses");
+		assert(got403_multiple, "Status 403 wasn't received for multiple addresses");
 		assert(got200, "Status 200 wasn't received");
 		logInfo("All web tests succeeded.");
 	});
