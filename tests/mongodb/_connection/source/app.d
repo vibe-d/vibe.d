@@ -157,6 +157,21 @@ int main(string[] args)
 		.map!(c => c["name"].get!string)
 		.equal(["collection"]));
 
+    auto options = UpdateOptions();
+    options.upsert = true;
+
+    //test updateOne
+    auto newID = BsonObjectID.generate;
+    foreach(const str; ["a", "b", "c"])
+    {
+        coll.updateOne(["_id": newID], ["$push" : ["array" : str ]], options);
+    }
+
+    auto arrResult = coll.findOne(["_id" : newID])["array"];
+    assert(arrResult[0].get!string =="a");
+    assert(arrResult[1].get!string =="b");
+    assert(arrResult[2].get!string =="c");
+
 	coll.drop();
 
 	assert(db.runListCommand(["listCollections": Bson(1.0)])

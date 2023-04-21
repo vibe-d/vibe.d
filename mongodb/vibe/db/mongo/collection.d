@@ -342,12 +342,13 @@ struct MongoCollection {
 					// however in debug mode we check the full document, as we can give better error messages to the dev
 				}
 			}
+			auto ubson = serializeToBson(documents[i]);
 			if (mustBeModification)
 			{
-				if (qbson.type == Bson.Type.object)
+				if (ubson.type == Bson.Type.object)
 				{
 					bool anyDollar = false;
-					foreach (string k, v; qbson.byKeyValue)
+					foreach (string k, v; ubson.byKeyValue)
 					{
 						if (k.startsWith("$"))
 							anyDollar = true;
@@ -362,7 +363,7 @@ struct MongoCollection {
 							~ "(this update call would otherwise replace the entire matched object with the passed in update object)");
 				}
 			}
-			updateBson["u"] = serializeToBson(documents[i]);
+			updateBson["u"] = ubson;
 			foreach (string k, v; optionsBson.byKeyValue)
 				if (k.among!FieldsMovedIntoChildren)
 					updateBson[k] = v;
@@ -381,8 +382,10 @@ struct MongoCollection {
 		if (upserted.length)
 		{
 			ret.upsertedIds.length = upserted.length;
-			foreach (i, id; upserted)
-				ret.upsertedIds[i] = id.get!BsonObjectID;
+			foreach (i, upsert; upserted)
+            {
+				ret.upsertedIds[i] = upsert["_id"].get!BsonObjectID;
+            }
 		}
 		return ret;
 	}
