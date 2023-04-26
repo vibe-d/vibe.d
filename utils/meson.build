@@ -2,7 +2,7 @@
 
 vibe_utils_src_dir = include_directories('.')
 
-vibe_utils_src = [
+vibe_utils_src = files(
     'vibe/internal/memory_legacy.d',
     'vibe/internal/meta/all.d',
     'vibe/internal/meta/codegen.d',
@@ -15,10 +15,9 @@ vibe_utils_src = [
     'vibe/utils/array.d',
     'vibe/utils/dictionarylist.d',
     'vibe/utils/hashmap.d',
-    'vibe/utils/memory.d',
     'vibe/utils/string.d',
     'vibe/utils/validation.d',
-]
+)
 
 #
 # Install Includes
@@ -64,7 +63,7 @@ vibe_utils_dep = declare_dependency(
 vibe_test_utils_exe = executable('vibe-test_utils',
     [vibe_utils_src],
     dependencies: [vibe_utils_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_utils', vibe_test_utils_exe)

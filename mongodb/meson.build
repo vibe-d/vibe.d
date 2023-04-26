@@ -61,7 +61,7 @@ vibe_test_mongodb_exe = executable('vibe-test_mongodb',
                    vibe_inet_dep,
                    vibe_tls_dep,
                    vibe_crypto_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_mongodb', vibe_test_mongodb_exe)

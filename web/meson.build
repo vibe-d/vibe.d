@@ -50,7 +50,7 @@ vibe_web_dep = declare_dependency(
 vibe_test_web_exe = executable('vibe-test_web',
     [vibe_web_src],
     dependencies: [vibe_http_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_web', vibe_test_web_exe)

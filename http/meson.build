@@ -69,7 +69,7 @@ vibe_test_http_exe = executable('vibe-test_http',
                    vibe_tls_dep,
                    vibe_crypto_dep,
                    diet_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_http', vibe_test_http_exe)

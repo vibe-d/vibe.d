@@ -46,7 +46,7 @@ vibe_test_mail_exe = executable('vibe-test_mail',
     [vibe_mail_src],
     dependencies: [vibe_inet_dep,
                    vibe_tls_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_mail', vibe_test_mail_exe)

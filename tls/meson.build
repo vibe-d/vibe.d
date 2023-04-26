@@ -45,7 +45,7 @@ vibe_tls_dep = declare_dependency(
 vibe_test_tls_exe = executable('vibe-test_tls',
     [vibe_tls_src],
     dependencies: [vibe_stream_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_tls', vibe_test_tls_exe)

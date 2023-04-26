@@ -50,7 +50,7 @@ vibe_stream_dep = declare_dependency(
 vibe_test_stream_exe = executable('vibe-test_stream',
     [vibe_stream_src],
     dependencies: [vibe_core_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_stream', vibe_test_stream_exe)

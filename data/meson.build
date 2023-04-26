@@ -47,7 +47,7 @@ vibe_test_data_exe = executable('vibe-test_data',
     [vibe_data_src],
     include_directories: [vibe_utils_src_dir],
     dependencies: [vibe_utils_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_data', vibe_test_data_exe)
