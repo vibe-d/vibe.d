@@ -8,6 +8,7 @@ vibe_http_src = [
     'vibe/http/client.d',
     'vibe/http/common.d',
     'vibe/http/dist.d',
+    'vibe/http/internal/basic_auth_client.d',
     'vibe/http/fileserver.d',
     'vibe/http/form.d',
     'vibe/http/log.d',

@@ -9,6 +9,8 @@ vibe_mongodb_src = [
     'vibe/db/mongo/cursor.d',
     'vibe/db/mongo/database.d',
     'vibe/db/mongo/flags.d',
+    'vibe/db/mongo/impl/crud.d',
+    'vibe/db/mongo/impl/index.d',
     'vibe/db/mongo/mongo.d',
     'vibe/db/mongo/sasl.d',
     'vibe/db/mongo/sessionstore.d',
@@ -24,13 +26,17 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Build Targets
 #
 
+vibe_mongodb_deps = [
+    vibe_http_dep,
+    vibe_inet_dep,
+    vibe_tls_dep,
+    vibe_crypto_dep,
+]
+
 # MongoDB database client implementation
 vibe_mongodb_lib = library('vibe-mongodb',
         [vibe_mongodb_src],
-        dependencies: [vibe_http_dep,
-                       vibe_inet_dep,
-                       vibe_tls_dep,
-                       vibe_crypto_dep],
+        dependencies: vibe_mongodb_deps,
         install: true,
         version: project_version,
         soversion: project_soversion
@@ -46,10 +52,7 @@ pkgc.generate(name: 'vibe-mongodb',
 vibe_mongodb_dep = declare_dependency(
     link_with: [vibe_mongodb_lib],
     include_directories: [vibe_mongodb_src_dir],
-    dependencies: [vibe_http_dep,
-                   vibe_inet_dep,
-                   vibe_tls_dep,
-                   vibe_crypto_dep],
+    dependencies: vibe_mongodb_deps,
 )
 
 #
@@ -57,10 +60,7 @@ vibe_mongodb_dep = declare_dependency(
 #
 vibe_test_mongodb_exe = executable('vibe-test_mongodb',
     [vibe_mongodb_src],
-    dependencies: [vibe_http_dep,
-                   vibe_inet_dep,
-                   vibe_tls_dep,
-                   vibe_crypto_dep],
+    dependencies: vibe_mongodb_deps,
     d_unittest: true,
     link_args: '-main'
 )
