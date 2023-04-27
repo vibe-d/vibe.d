@@ -1,5 +1,4 @@
 project('Vibe.d', 'd',
-    meson_version: '>=0.40',
     subproject_dir: 'lib/subprojects',
     license: 'MIT',
     version: '0.9.7'
