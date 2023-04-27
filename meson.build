@@ -76,6 +76,8 @@ else
 endif
 openssl_inc = include_directories(openssl_src_dir)
 
+vibe_core_dep = dependency('vibe-core')
+
 #
 # Modules
 #

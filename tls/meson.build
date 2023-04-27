@@ -17,10 +17,13 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Build Targets
 #
 
+d_versions = ['VibeNoSSL']
+
 # TLS stream implementations
 vibe_tls_lib = library('vibe-tls',
         [vibe_tls_src],
         dependencies: [vibe_stream_dep],
+        d_module_versions: d_versions,
         install: true,
         version: project_version,
         soversion: project_soversion
@@ -35,6 +38,7 @@ pkgc.generate(name: 'vibe-tls',
 
 vibe_tls_dep = declare_dependency(
     link_with: [vibe_tls_lib],
+    d_module_versions: d_versions,
     include_directories: [vibe_tls_src_dir],
     dependencies: [vibe_stream_dep]
 )
@@ -45,6 +49,7 @@ vibe_tls_dep = declare_dependency(
 vibe_test_tls_exe = executable('vibe-test_tls',
     [vibe_tls_src],
     dependencies: [vibe_stream_dep],
+    d_module_versions: d_versions,
     d_unittest: true,
     link_args: '-main'
 )

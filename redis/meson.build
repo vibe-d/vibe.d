@@ -18,10 +18,12 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Build Targets
 #
 
+redis_deps = [vibe_http_dep, vibe_core_dep]
+
 # Redis database client implementation
 vibe_redis_lib = library('vibe-redis',
         [vibe_redis_src],
-        dependencies: [vibe_http_dep],
+        dependencies: redis_deps,
         install: true,
         version: project_version,
         soversion: project_soversion
@@ -37,7 +39,6 @@ pkgc.generate(name: 'vibe-redis',
 vibe_redis_dep = declare_dependency(
     link_with: [vibe_redis_lib],
     include_directories: [vibe_redis_src_dir],
-    dependencies: [vibe_http_dep],
 )
 
 #
@@ -45,7 +46,7 @@ vibe_redis_dep = declare_dependency(
 #
 vibe_test_redis_exe = executable('vibe-test_redis',
     [vibe_redis_src],
-    dependencies: [vibe_http_dep],
+    dependencies: redis_deps,
     d_unittest: true,
     link_args: '-main'
 )

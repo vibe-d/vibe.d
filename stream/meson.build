@@ -26,7 +26,7 @@ install_subdir('vibe/', install_dir: 'include/d/vibe/')
 # Cryptographic helper routines
 vibe_stream_lib = library('vibe-stream',
         [vibe_stream_src],
-        dependencies: [vibe_core_dep],
+        dependencies: [vibe_core_dep, vibe_utils_dep],
         install: true,
         version: project_version,
         soversion: project_soversion
@@ -42,14 +42,14 @@ pkgc.generate(name: 'vibe-stream',
 vibe_stream_dep = declare_dependency(
     link_with: [vibe_stream_lib],
     include_directories: [vibe_stream_src_dir],
-    dependencies: [vibe_core_dep]
+    dependencies: [vibe_core_dep, vibe_utils_dep]
 )
 #
 # Tests
 #
 vibe_test_stream_exe = executable('vibe-test_stream',
     [vibe_stream_src],
-    dependencies: [vibe_core_dep],
+    dependencies: [vibe_core_dep, vibe_utils_dep],
     d_unittest: true,
     link_args: '-main'
 )

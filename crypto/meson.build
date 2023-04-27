@@ -2,10 +2,9 @@
 
 vibe_crypto_src_dir = include_directories('.')
 
-vibe_crypto_src = [
+vibe_crypto_src = files(
     'vibe/crypto/cryptorand.d',
-    'vibe/crypto/passwordhash.d'
-]
+)
 
 #
 # Install Includes
@@ -44,7 +43,7 @@ vibe_crypto_dep = declare_dependency(
 vibe_test_crypto_exe = executable('vibe-test_crypto',
     [vibe_crypto_src],
     dependencies: [vibe_core_dep],
-    d_args: meson.get_compiler('d').unittest_args(),
+    d_unittest: true,
     link_args: '-main'
 )
 test('vibe-test_crypto', vibe_test_crypto_exe)
