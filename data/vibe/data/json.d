@@ -1256,7 +1256,7 @@ struct Json {
 
 @safe unittest { // issue #1234 - @safe toString
 	auto j = Json(true);
-	j.toString((str) @safe {}, FormatSpec!char("s"));
+	j.toString((scope str) @safe {}, FormatSpec!char("s"));
 	assert(j.toString() == "true");
 }
 
@@ -2004,7 +2004,11 @@ struct JsonStringSerializer(R, bool pretty = false)
 			static if (is(T == typeof(null))) m_range.put("null");
 			else static if (is(UT == bool)) m_range.put(value ? "true" : "false");
 			else static if (is(UT : long)) m_range.formattedWriteFixed!32("%s", value);
-			else static if (is(UT == BigInt)) () @trusted { value.toString(m_range, "%d"); } ();
+			else static if (is(UT == BigInt)) () @trusted {
+				static if (__VERSION__ < 2093)
+					value.toString((scope s) { m_range.put(s); }, "%d");
+				else value.toString(m_range, "%d");
+			} ();
 			else static if (is(UT : real)) value == value ? m_range.formattedWriteFixed!32("%.16g", value) : m_range.put("null");
 			else static if (is(UT : const(char)[])) {
 				m_range.put('"');
@@ -2336,7 +2340,13 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.null_: dst.put("null"); break;
 		case Json.Type.bool_: dst.put(json.get!bool ? "true" : "false"); break;
 		case Json.Type.int_: formattedWriteFixed!32(dst, "%d", json.get!long); break;
-		case Json.Type.bigInt: () @trusted { json.get!BigInt.toString(dst, "%d"); } (); break;
+		case Json.Type.bigInt:
+			() @trusted {
+				static if (__VERSION__ < 2093)
+					json.get!BigInt.toString((scope s) { dst.put(s); }, "%d");
+				else json.get!BigInt.toString(dst, "%d");
+			} ();
+			break;
 		case Json.Type.float_:
 			auto d = json.get!double;
 			if (d != d)
