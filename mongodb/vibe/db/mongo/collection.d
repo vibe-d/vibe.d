@@ -727,7 +727,7 @@ struct MongoCollection {
 		foreach (i, field; options.tupleof)
 		{
 			enum name = CountOptions.tupleof[i].stringof;
-			if (name != "filter" && name != "skip" && name != "limit")
+			static if (name != "filter" && name != "skip" && name != "limit")
 				__traits(getMember, aggOptions, name) = field;
 		}
 		auto reply = aggregate(pipeline, aggOptions).front;
