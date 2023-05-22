@@ -326,33 +326,34 @@ struct MongoCollection {
 			auto updateBson = Bson.emptyObject;
 			auto qbson = serializeToBson(q);
 			updateBson["q"] = qbson;
+			auto ubson = serializeToBson(documents[i]);
 			if (mustBeDocument)
 			{
-				if (qbson.type != Bson.Type.object)
+				if (ubson.type != Bson.Type.object)
 					assert(false, "Passed in non-document into a place where only replacements are expected. "
 						~ "Maybe you want to call updateOne or updateMany instead?");
 
-				foreach (string k, v; qbson.byKeyValue)
+				foreach (string k, v; ubson.byKeyValue)
 				{
 					if (k.startsWith("$"))
 						assert(false, "Passed in atomic modifiers (" ~ k
 							~ ") into a place where only replacements are expected. "
 							~ "Maybe you want to call updateOne or updateMany instead?");
-					debug break; // server checks that the rest is consistent (only $ or only non-$ allowed)
-					// however in debug mode we check the full document, as we can give better error messages to the dev
+					debug {} // server checks that the rest is consistent (only $ or only non-$ allowed)
+					else break; // however in debug mode we check the full document, as we can give better error messages to the dev
 				}
 			}
 			if (mustBeModification)
 			{
-				if (qbson.type == Bson.Type.object)
+				if (ubson.type == Bson.Type.object)
 				{
 					bool anyDollar = false;
-					foreach (string k, v; qbson.byKeyValue)
+					foreach (string k, v; ubson.byKeyValue)
 					{
 						if (k.startsWith("$"))
 							anyDollar = true;
-						debug break; // server checks that the rest is consistent (only $ or only non-$ allowed)
-						// however in debug mode we check the full document, as we can give better error messages to the dev
+						debug {} // server checks that the rest is consistent (only $ or only non-$ allowed)
+                        else break; // however in debug mode we check the full document, as we can give better error messages to the dev
 						// also nice side effect: if this is an empty document, this also matches the assert(false) branch.
 					}
 
@@ -362,7 +363,7 @@ struct MongoCollection {
 							~ "(this update call would otherwise replace the entire matched object with the passed in update object)");
 				}
 			}
-			updateBson["u"] = serializeToBson(documents[i]);
+			updateBson["u"] = ubson;
 			foreach (string k, v; optionsBson.byKeyValue)
 				if (k.among!FieldsMovedIntoChildren)
 					updateBson[k] = v;
@@ -381,8 +382,10 @@ struct MongoCollection {
 		if (upserted.length)
 		{
 			ret.upsertedIds.length = upserted.length;
-			foreach (i, id; upserted)
-				ret.upsertedIds[i] = id.get!BsonObjectID;
+			foreach (i, upsert; upserted)
+            {
+				ret.upsertedIds[i] = upsert["_id"].get!BsonObjectID;
+            }
 		}
 		return ret;
 	}

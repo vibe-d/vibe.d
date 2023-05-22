@@ -5,6 +5,7 @@ import vibe.core.log;
 import core.time;
 import std.algorithm;
 import std.conv;
+import core.exception : AssertError;
 import std.exception;
 
 int main(string[] args)
@@ -156,6 +157,25 @@ int main(string[] args)
 	assert(db.runListCommand(["listCollections": Bson(1.0)])
 		.map!(c => c["name"].get!string)
 		.equal(["collection"]));
+
+	auto options = UpdateOptions();
+	options.upsert = true;
+
+	//test updateOne
+	auto newID = BsonObjectID.generate;
+	foreach(const str; ["a", "b", "c"])
+	{
+		coll.updateOne(["_id": newID], ["$push" : ["array" : str ]], options);
+	}
+
+	auto arrResult = coll.findOne(["_id" : newID])["array"];
+	assert(arrResult[0].get!string =="a");
+	assert(arrResult[1].get!string =="b");
+	assert(arrResult[2].get!string =="c");
+
+	assertThrown!AssertError(coll.updateOne(["_id": newID], ["this is a replacement": "which is not allowed here"]));
+	assertThrown!AssertError(coll.replaceOne(["_id": newID], ["$updateOp": "is not allowed here"]));
+	assertThrown!AssertError(coll.replaceOne(["_id": newID], null));
 
 	coll.drop();
 
