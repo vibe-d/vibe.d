@@ -16,5 +16,17 @@ string enumToString(E)(E value)
 	}
 }
 
+// wraps formattedWrite in a way that allows using a `scope` range without
+// deprecation warnings
+void formattedWriteFixed(size_t MAX_BYTES, R, ARGS...)(ref R sink, string format, ARGS args)
+@safe {
+	import std.format : formattedWrite;
+	import vibe.utils.array : FixedAppender;
+
+	FixedAppender!(char[], MAX_BYTES) app;
+	app.formattedWrite(format, args);
+	sink.put(app.data);
+}
+
 private enum isDeprecated(alias parent, string symbol)
 	= __traits(isDeprecated, __traits(getMember, parent, symbol));

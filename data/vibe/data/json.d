@@ -69,7 +69,7 @@ module vibe.data.json;
 public import vibe.data.serialization;
 public import std.json : JSONException;
 
-import vibe.internal.conv : enumToString;
+import vibe.internal.conv : enumToString, formattedWriteFixed;
 
 import std.algorithm;
 import std.array;
@@ -77,7 +77,7 @@ import std.bigint;
 import std.conv;
 import std.datetime;
 import std.exception;
-import std.format;
+import std.format : FormatSpec, format;
 import std.json : JSONValue, JSONType;
 import std.range;
 import std.string;
@@ -1141,6 +1141,34 @@ struct Json {
 		return ret.data;
 	}
 	/// ditto
+	void toString(scope void delegate(scope const(char)[]) @safe sink, FormatSpec!char fmt)
+	@trusted {
+		// DMD BUG: this should actually be all @safe, but for some reason
+		// @safe inference for writeJsonString doesn't work.
+		static struct DummyRangeS {
+			void delegate(scope const(char)[]) @safe sink;
+			void put(scope const(char)[] str) @safe { sink(str); }
+			void put(char ch) @trusted { sink((&ch)[0 .. 1]); }
+		}
+		auto r = DummyRangeS(sink);
+		writeJsonString(r, this);
+	}
+	/// ditto
+	void toString(scope void delegate(scope const(char)[]) @system sink, FormatSpec!char fmt)
+	@system {
+		// DMD BUG: this should actually be all @safe, but for some reason
+		// @safe inference for writeJsonString doesn't work.
+		static struct DummyRange {
+			void delegate(scope const(char)[]) sink;
+			@trusted:
+			void put(scope const(char)[] str) { sink(str); }
+			void put(char ch) { sink((&ch)[0 .. 1]); }
+		}
+		auto r = DummyRange(sink);
+		writeJsonString(r, this);
+	}
+	/// ditto
+	deprecated("Use a `scope` argument for the `sink` delegate")
 	void toString(scope void delegate(const(char)[]) @safe sink, FormatSpec!char fmt)
 	@trusted {
 		// DMD BUG: this should actually be all @safe, but for some reason
@@ -1256,7 +1284,7 @@ struct Json {
 
 @safe unittest { // issue #1234 - @safe toString
 	auto j = Json(true);
-	j.toString((str) @safe {}, FormatSpec!char("s"));
+	j.toString((scope str) @safe {}, FormatSpec!char("s"));
 	assert(j.toString() == "true");
 }
 
@@ -1273,7 +1301,7 @@ struct Json {
 
 	Throws a JSONException if any parsing error occured.
 */
-Json parseJson(R)(ref R range, int* line = null, string filename = null)
+Json parseJson(R)(ref R range, scope int* line = null, string filename = null)
 	if (isForwardRange!R)
 {
 	Json ret;
@@ -2003,9 +2031,13 @@ struct JsonStringSerializer(R, bool pretty = false)
 			alias UT = Unqual!T;
 			static if (is(T == typeof(null))) m_range.put("null");
 			else static if (is(UT == bool)) m_range.put(value ? "true" : "false");
-			else static if (is(UT : long)) m_range.formattedWrite("%s", value);
-			else static if (is(UT == BigInt)) () @trusted { m_range.formattedWrite("%d", value); } ();
-			else static if (is(UT : real)) value == value ? m_range.formattedWrite("%.16g", value) : m_range.put("null");
+			else static if (is(UT : long)) m_range.formattedWriteFixed!32("%s", value);
+			else static if (is(UT == BigInt)) () @trusted {
+				static if (__VERSION__ < 2093)
+					value.toString((scope s) { m_range.put(s); }, "%d");
+				else value.toString(m_range, "%d");
+			} ();
+			else static if (is(UT : real)) value == value ? m_range.formattedWriteFixed!32("%.16g", value) : m_range.put("null");
 			else static if (is(UT : const(char)[])) {
 				m_range.put('"');
 				m_range.jsonEscape(value);
@@ -2335,14 +2367,20 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.undefined: dst.put("null"); break;
 		case Json.Type.null_: dst.put("null"); break;
 		case Json.Type.bool_: dst.put(json.get!bool ? "true" : "false"); break;
-		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
-		case Json.Type.bigInt: () @trusted { formattedWrite(dst, "%d", json.get!BigInt); } (); break;
+		case Json.Type.int_: formattedWriteFixed!32(dst, "%d", json.get!long); break;
+		case Json.Type.bigInt:
+			() @trusted {
+				static if (__VERSION__ < 2093)
+					json.get!BigInt.toString((scope s) { dst.put(s); }, "%d");
+				else json.get!BigInt.toString(dst, "%d");
+			} ();
+			break;
 		case Json.Type.float_:
 			auto d = json.get!double;
 			if (d != d)
 				dst.put("null"); // JSON has no NaN value so set null
 			else
-				formattedWrite(dst, "%.16g", json.get!double);
+				formattedWriteFixed!32(dst, "%.16g", json.get!double);
 			break;
 		case Json.Type.string:
 			dst.put('\"');
@@ -2523,7 +2561,7 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, const(char)[]
 						/* codepoint is in BMP */
 						if(codepoint < 0x10000)
 						{
-							dst.formattedWrite("\\u%04X", codepoint);
+							dst.formattedWriteFixed!32("\\u%04X", codepoint);
 						}
 						/* not in BMP -> construct a UTF-16 surrogate pair */
 						else
@@ -2534,7 +2572,7 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, const(char)[]
 							first = 0xD800 | ((codepoint & 0xffc00) >> 10);
 							last = 0xDC00 | (codepoint & 0x003ff);
 
-							dst.formattedWrite("\\u%04X\\u%04X", first, last);
+							dst.formattedWriteFixed!32("\\u%04X\\u%04X", first, last);
 						}
 						startPos = pos;
 						pos -= 1;
@@ -2545,7 +2583,7 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, const(char)[]
 					if (ch < 0x20)
 					{
 						putInterval(pos);
-						dst.formattedWrite("\\u%04X", ch);
+						dst.formattedWriteFixed!32("\\u%04X", ch);
 					}
 				}
 				break;
