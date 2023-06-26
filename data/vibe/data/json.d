@@ -1167,6 +1167,34 @@ struct Json {
 		auto r = DummyRange(sink);
 		writeJsonString(r, this);
 	}
+	/// ditto
+	deprecated("Use a `scope` argument for the `sink` delegate")
+	void toString(scope void delegate(const(char)[]) @safe sink, FormatSpec!char fmt)
+	@trusted {
+		// DMD BUG: this should actually be all @safe, but for some reason
+		// @safe inference for writeJsonString doesn't work.
+		static struct DummyRangeS {
+			void delegate(const(char)[]) @safe sink;
+			void put(const(char)[] str) @safe { sink(str); }
+			void put(char ch) @trusted { sink((&ch)[0 .. 1]); }
+		}
+		auto r = DummyRangeS(sink);
+		writeJsonString(r, this);
+	}
+	/// ditto
+	void toString(scope void delegate(const(char)[]) @system sink, FormatSpec!char fmt)
+	@system {
+		// DMD BUG: this should actually be all @safe, but for some reason
+		// @safe inference for writeJsonString doesn't work.
+		static struct DummyRange {
+			void delegate(const(char)[]) sink;
+			@trusted:
+			void put(const(char)[] str) { sink(str); }
+			void put(char ch) { sink((&ch)[0 .. 1]); }
+		}
+		auto r = DummyRange(sink);
+		writeJsonString(r, this);
+	}
 
 	/**
 		Returns the JSON object as a "pretty" string.
