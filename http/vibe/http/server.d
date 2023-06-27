@@ -854,207 +854,205 @@ final class HTTPServerRequest : HTTPRequest {
 		string m_peer;
 	}
 
-	public {
-		/// The IP address of the client
-		@property string peer()
-		@safe nothrow {
-			if (!m_peer) {
-				version (Have_vibe_core) {} else scope (failure) assert(false);
-				// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
-				auto peer_address_string = this.clientAddress.toString();
-				if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(':') < 0)
-					m_peer = peer_address_string[7 .. $];
-				else m_peer = peer_address_string;
-			}
-			return m_peer;
+	/// The IP address of the client
+	@property string peer()
+	@safe nothrow {
+		if (!m_peer) {
+			version (Have_vibe_core) {} else scope (failure) assert(false);
+			// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
+			auto peer_address_string = this.clientAddress.toString();
+			if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(':') < 0)
+				m_peer = peer_address_string[7 .. $];
+			else m_peer = peer_address_string;
 		}
-		/// ditto
-		NetworkAddress clientAddress;
-
-		/// Determines if the request should be logged to the access log file.
-		bool noLog;
-
-		/// Determines if the request was issued over an TLS encrypted channel.
-		bool tls;
-
-		/** Information about the TLS certificate provided by the client.
-
-			Remarks: This field is only set if `tls` is true, and the peer
-			presented a client certificate.
-		*/
-		TLSCertificateInformation clientCertificate;
-
-		/** The _path part of the URL.
-
-			Note that this function contains the decoded version of the
-			requested path, which can yield incorrect results if the path
-			contains URL encoded path separators. Use `requestPath` instead to
-			get an encoding-aware representation.
-		*/
-		deprecated("Use .requestPath instead")
-		string path() @safe scope {
-			if (_path.isNull) {
-				_path = urlDecode(requestPath.toString);
-			}
-			return _path.get;
-		}
-
-		private Nullable!string _path;
-
-		/** The path part of the requested URI.
-		*/
-		InetPath requestPath;
-
-		/** The user name part of the URL, if present.
-		*/
-		string username;
-
-		/** The _password part of the URL, if present.
-		*/
-		string password;
-
-		/** The _query string part of the URL.
-		*/
-		string queryString;
-
-		/** Contains the list of _cookies that are stored on the client.
-
-			Note that the a single cookie name may occur multiple times if multiple
-			cookies have that name but different paths or domains that all match
-			the request URI. By default, the first cookie will be returned, which is
-			the or one of the cookies with the closest path match.
-		*/
-		@property ref CookieValueMap cookies() @safe {
-			if (_cookies.isNull) {
-				_cookies = CookieValueMap.init;
-				if (auto pv = "cookie" in headers)
-					parseCookies(*pv, _cookies.get);
-			}
-			return _cookies.get;
-		}
-		private Nullable!CookieValueMap _cookies;
-
-		/** Contains all _form fields supplied using the _query string.
-
-			The fields are stored in the same order as they are received.
-		*/
-		@property ref FormFields query() @safe {
-			if (_query.isNull) {
-				_query = FormFields.init;
-				parseURLEncodedForm(queryString, _query.get);
-			}
-
-			return _query.get;
-		}
-		Nullable!FormFields _query;
-
-		import vibe.utils.dictionarylist;
-		/** A map of general parameters for the request.
-
-			This map is supposed to be used by middleware functionality to store
-			information for later stages. For example vibe.http.router.URLRouter uses this map
-			to store the value of any named placeholders.
-		*/
-		DictionaryList!(string, true, 8) params;
-
-		import std.variant : Variant;
-		/** A map of context items for the request.
-
-			This is especially useful for passing application specific data down
-			the chain of processors along with the request itself.
-
-			For example, a generic route may be defined to check user login status,
-			if the user is logged in, add a reference to user specific data to the
-			context.
-
-			This is implemented with `std.variant.Variant` to allow any type of data.
-		*/
-		DictionaryList!(Variant, true, 2) context;
-
-		/** Supplies the request body as a stream.
-
-			Note that when certain server options are set (such as
-			HTTPServerOption.parseJsonBody) and a matching request was sent,
-			the returned stream will be empty. If needed, remove those
-			options and do your own processing of the body when launching
-			the server. HTTPServerOption has a list of all options that affect
-			the request body.
-		*/
-		InputStream bodyReader;
-
-		/** Contains the parsed Json for a JSON request.
-
-			A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
-		*/
-		@property ref Json json() @safe {
-			if (_json.isNull) {
-				auto splitter = contentType.splitter(';');
-				auto ctype = splitter.empty ? "" : splitter.front;
-
-				if (icmp2(ctype, "application/json") == 0 || icmp2(ctype, "application/vnd.api+json") == 0) {
-					auto bodyStr = bodyReader.readAllUTF8();
-					if (!bodyStr.empty) _json = parseJson(bodyStr);
-					else _json = Json.undefined;
-				} else {
-					_json = Json.undefined;
-				}
-			}
-			return _json.get;
-		}
-
-		/// Get the json body when there is no content-type header
-		unittest {
-			assert(createTestHTTPServerRequest(URL("http://localhost/")).json.type == Json.Type.undefined);
-		}
-
-		private Nullable!Json _json;
-
-		/** Contains the parsed parameters of a HTML POST _form request.
-
-			The fields are stored in the same order as they are received.
-
-			Remarks:
-				A form request must either have the Content-Type
-				"application/x-www-form-urlencoded" or "multipart/form-data".
-		*/
-		@property ref FormFields form() @safe {
-			if (_form.isNull)
-				parseFormAndFiles();
-
-			return _form.get;
-		}
-
-		private Nullable!FormFields _form;
-
-		private void parseFormAndFiles() @safe {
-			_form = FormFields.init;
-			parseFormData(_form.get, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
-		}
-
-		/** Contains information about any uploaded file for a HTML _form request.
-		*/
-		@property ref FilePartFormFields files() @safe {
-			// _form and _files are parsed in one step
-			if (_form.isNull) {
-				parseFormAndFiles();
-				assert(!_form.isNull);
-			}
-
-            return _files;
-		}
-
-		private FilePartFormFields _files;
-
-		/** The current Session object.
-
-			This field is set if HTTPServerResponse.startSession() has been called
-			on a previous response and if the client has sent back the matching
-			cookie.
-
-			Remarks: Requires the HTTPServerOption.parseCookies option.
-		*/
-		Session session;
+		return m_peer;
 	}
+	/// ditto
+	NetworkAddress clientAddress;
+
+	/// Determines if the request should be logged to the access log file.
+	bool noLog;
+
+	/// Determines if the request was issued over an TLS encrypted channel.
+	bool tls;
+
+	/** Information about the TLS certificate provided by the client.
+
+		Remarks: This field is only set if `tls` is true, and the peer
+		presented a client certificate.
+	*/
+	TLSCertificateInformation clientCertificate;
+
+	/** The _path part of the URL.
+
+		Note that this function contains the decoded version of the
+		requested path, which can yield incorrect results if the path
+		contains URL encoded path separators. Use `requestPath` instead to
+		get an encoding-aware representation.
+	*/
+	deprecated("Use .requestPath instead")
+	string path() @safe scope {
+		if (_path.isNull) {
+			_path = urlDecode(requestPath.toString);
+		}
+		return _path.get;
+	}
+
+	private Nullable!string _path;
+
+	/** The path part of the requested URI.
+	*/
+	InetPath requestPath;
+
+	/** The user name part of the URL, if present.
+	*/
+	string username;
+
+	/** The _password part of the URL, if present.
+	*/
+	string password;
+
+	/** The _query string part of the URL.
+	*/
+	string queryString;
+
+	/** Contains the list of _cookies that are stored on the client.
+
+		Note that the a single cookie name may occur multiple times if multiple
+		cookies have that name but different paths or domains that all match
+		the request URI. By default, the first cookie will be returned, which is
+		the or one of the cookies with the closest path match.
+	*/
+	@property ref CookieValueMap cookies() @safe {
+		if (_cookies.isNull) {
+			_cookies = CookieValueMap.init;
+			if (auto pv = "cookie" in headers)
+				parseCookies(*pv, _cookies.get);
+		}
+		return _cookies.get;
+	}
+	private Nullable!CookieValueMap _cookies;
+
+	/** Contains all _form fields supplied using the _query string.
+
+		The fields are stored in the same order as they are received.
+	*/
+	@property ref FormFields query() @safe {
+		if (_query.isNull) {
+			_query = FormFields.init;
+			parseURLEncodedForm(queryString, _query.get);
+		}
+
+		return _query.get;
+	}
+	Nullable!FormFields _query;
+
+	import vibe.utils.dictionarylist;
+	/** A map of general parameters for the request.
+
+		This map is supposed to be used by middleware functionality to store
+		information for later stages. For example vibe.http.router.URLRouter uses this map
+		to store the value of any named placeholders.
+	*/
+	DictionaryList!(string, true, 8) params;
+
+	import std.variant : Variant;
+	/** A map of context items for the request.
+
+		This is especially useful for passing application specific data down
+		the chain of processors along with the request itself.
+
+		For example, a generic route may be defined to check user login status,
+		if the user is logged in, add a reference to user specific data to the
+		context.
+
+		This is implemented with `std.variant.Variant` to allow any type of data.
+	*/
+	DictionaryList!(Variant, true, 2) context;
+
+	/** Supplies the request body as a stream.
+
+		Note that when certain server options are set (such as
+		HTTPServerOption.parseJsonBody) and a matching request was sent,
+		the returned stream will be empty. If needed, remove those
+		options and do your own processing of the body when launching
+		the server. HTTPServerOption has a list of all options that affect
+		the request body.
+	*/
+	InputStream bodyReader;
+
+	/** Contains the parsed Json for a JSON request.
+
+		A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
+	*/
+	@property ref Json json() @safe {
+		if (_json.isNull) {
+			auto splitter = contentType.splitter(';');
+			auto ctype = splitter.empty ? "" : splitter.front;
+
+			if (icmp2(ctype, "application/json") == 0 || icmp2(ctype, "application/vnd.api+json") == 0) {
+				auto bodyStr = bodyReader.readAllUTF8();
+				if (!bodyStr.empty) _json = parseJson(bodyStr);
+				else _json = Json.undefined;
+			} else {
+				_json = Json.undefined;
+			}
+		}
+		return _json.get;
+	}
+
+	/// Get the json body when there is no content-type header
+	unittest {
+		assert(createTestHTTPServerRequest(URL("http://localhost/")).json.type == Json.Type.undefined);
+	}
+
+	private Nullable!Json _json;
+
+	/** Contains the parsed parameters of a HTML POST _form request.
+
+		The fields are stored in the same order as they are received.
+
+		Remarks:
+			A form request must either have the Content-Type
+			"application/x-www-form-urlencoded" or "multipart/form-data".
+	*/
+	@property ref FormFields form() @safe {
+		if (_form.isNull)
+			parseFormAndFiles();
+
+		return _form.get;
+	}
+
+	private Nullable!FormFields _form;
+
+	private void parseFormAndFiles() @safe {
+		_form = FormFields.init;
+		parseFormData(_form.get, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
+	}
+
+	/** Contains information about any uploaded file for a HTML _form request.
+	*/
+	@property ref FilePartFormFields files() @safe {
+		// _form and _files are parsed in one step
+		if (_form.isNull) {
+			parseFormAndFiles();
+			assert(!_form.isNull);
+		}
+
+        return _files;
+	}
+
+	private FilePartFormFields _files;
+
+	/** The current Session object.
+
+		This field is set if HTTPServerResponse.startSession() has been called
+		on a previous response and if the client has sent back the matching
+		cookie.
+
+		Remarks: Requires the HTTPServerOption.parseCookies option.
+	*/
+	Session session;
 
 	package {
 		/** The settings of the server serving this request.
