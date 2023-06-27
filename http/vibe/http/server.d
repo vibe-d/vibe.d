@@ -884,14 +884,15 @@ final class HTTPServerRequest : HTTPRequest {
 		*/
 		TLSCertificateInformation clientCertificate;
 
-		/** Deprecated: The _path part of the URL.
+		/** The _path part of the URL.
 
 			Note that this function contains the decoded version of the
 			requested path, which can yield incorrect results if the path
 			contains URL encoded path separators. Use `requestPath` instead to
 			get an encoding-aware representation.
 		*/
-		string path() @safe {
+		deprecated("Use .requestPath instead")
+		string path() @safe scope {
 			if (_path.isNull) {
 				_path = urlDecode(requestPath.toString);
 			}
