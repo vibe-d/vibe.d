@@ -866,19 +866,6 @@ final class HTTPServerRequest : HTTPRequest {
 	}
 
 	/// The IP address of the client
-	@property string peer()
-	@safe nothrow {
-		if (!m_peer) {
-			version (Have_vibe_core) {} else scope (failure) assert(false);
-			// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
-			auto peer_address_string = this.clientAddress.toString();
-			if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(':') < 0)
-				m_peer = peer_address_string[7 .. $];
-			else m_peer = peer_address_string;
-		}
-		return m_peer;
-	}
-	/// ditto
 	NetworkAddress clientAddress;
 
 	/// Determines if the request should be logged to the access log file.
@@ -893,21 +880,6 @@ final class HTTPServerRequest : HTTPRequest {
 		presented a client certificate.
 	*/
 	TLSCertificateInformation clientCertificate;
-
-	/** The _path part of the URL.
-
-		Note that this function contains the decoded version of the
-		requested path, which can yield incorrect results if the path
-		contains URL encoded path separators. Use `requestPath` instead to
-		get an encoding-aware representation.
-	*/
-	deprecated("Use .requestPath instead")
-	string path()
-	@safe scope {
-		if (m_path.isNull)
-			m_path = urlDecode(requestPath.toString);
-		return m_path.get;
-	}
 
 	/** The path part of the requested URI.
 	*/
@@ -924,37 +896,6 @@ final class HTTPServerRequest : HTTPRequest {
 	/** The _query string part of the URL.
 	*/
 	string queryString;
-
-	/** Contains the list of _cookies that are stored on the client.
-
-		Note that the a single cookie name may occur multiple times if multiple
-		cookies have that name but different paths or domains that all match
-		the request URI. By default, the first cookie will be returned, which is
-		the or one of the cookies with the closest path match.
-	*/
-	@property ref CookieValueMap cookies()
-	@safe {
-		if (m_cookies.isNull) {
-			m_cookies = CookieValueMap.init;
-			if (auto pv = "cookie" in headers)
-				parseCookies(*pv, m_cookies.get);
-		}
-		return m_cookies.get;
-	}
-
-	/** Contains all _form fields supplied using the _query string.
-
-		The fields are stored in the same order as they are received.
-	*/
-	@property ref FormFields query()
-	@safe {
-		if (m_query.isNull) {
-			m_query = FormFields.init;
-			parseURLEncodedForm(queryString, m_query.get);
-		}
-
-		return m_query.get;
-	}
 
 	/** A map of general parameters for the request.
 
@@ -987,6 +928,82 @@ final class HTTPServerRequest : HTTPRequest {
 		the request body.
 	*/
 	InputStream bodyReader;
+
+	/** The current Session object.
+
+		This field is set if HTTPServerResponse.startSession() has been called
+		on a previous response and if the client has sent back the matching
+		cookie.
+
+		Remarks: Requires the HTTPServerOption.parseCookies option.
+	*/
+	Session session;
+
+	this(SysTime time, ushort port)
+	@safe {
+		m_timeCreated = time.toUTC();
+		m_port = port;
+	}
+
+	/// The IP address of the client in string form
+	@property string peer()
+	@safe nothrow {
+		if (!m_peer) {
+			version (Have_vibe_core) {} else scope (failure) assert(false);
+			// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
+			auto peer_address_string = this.clientAddress.toString();
+			if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(':') < 0)
+				m_peer = peer_address_string[7 .. $];
+			else m_peer = peer_address_string;
+		}
+		return m_peer;
+	}
+
+	/** The _path part of the URL.
+
+		Note that this function contains the decoded version of the
+		requested path, which can yield incorrect results if the path
+		contains URL encoded path separators. Use `requestPath` instead to
+		get an encoding-aware representation.
+	*/
+	deprecated("Use .requestPath instead")
+	string path()
+	@safe scope {
+		if (m_path.isNull)
+			m_path = urlDecode(requestPath.toString);
+		return m_path.get;
+	}
+
+	/** Contains the list of cookies that are stored on the client.
+
+		Note that the a single cookie name may occur multiple times if multiple
+		cookies have that name but different paths or domains that all match
+		the request URI. By default, the first cookie will be returned, which is
+		the or one of the cookies with the closest path match.
+	*/
+	@property ref CookieValueMap cookies()
+	@safe {
+		if (m_cookies.isNull) {
+			m_cookies = CookieValueMap.init;
+			if (auto pv = "cookie" in headers)
+				parseCookies(*pv, m_cookies.get);
+		}
+		return m_cookies.get;
+	}
+
+	/** Contains all _form fields supplied using the _query string.
+
+		The fields are stored in the same order as they are received.
+	*/
+	@property ref FormFields query()
+	@safe {
+		if (m_query.isNull) {
+			m_query = FormFields.init;
+			parseURLEncodedForm(queryString, m_query.get);
+		}
+
+		return m_query.get;
+	}
 
 	/** Contains the parsed Json for a JSON request.
 
@@ -1030,12 +1047,6 @@ final class HTTPServerRequest : HTTPRequest {
 		return m_form.get;
 	}
 
-	private void parseFormAndFiles()
-	@safe {
-		m_form = FormFields.init;
-		parseFormData(m_form.get, m_files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
-	}
-
 	/** Contains information about any uploaded file for a HTML _form request.
 	*/
 	@property ref FilePartFormFields files()
@@ -1047,31 +1058,6 @@ final class HTTPServerRequest : HTTPRequest {
 		}
 
         return m_files;
-	}
-
-	/** The current Session object.
-
-		This field is set if HTTPServerResponse.startSession() has been called
-		on a previous response and if the client has sent back the matching
-		cookie.
-
-		Remarks: Requires the HTTPServerOption.parseCookies option.
-	*/
-	Session session;
-
-	package {
-		/** The settings of the server serving this request.
-		 */
-		@property const(HTTPServerSettings) serverSettings() const @safe
-		{
-			return m_settings;
-		}
-	}
-
-	this(SysTime time, ushort port)
-	@safe {
-		m_timeCreated = time.toUTC();
-		m_port = port;
 	}
 
 	/** Time when this request started processing.
@@ -1171,6 +1157,19 @@ final class HTTPServerRequest : HTTPRequest {
 		assert(createTestHTTPServerRequest(URL("http://localhost/foo/")).rootDir == "../");
 		assert(createTestHTTPServerRequest(URL("http://localhost/foo/bar")).rootDir == "../");
 		assert(createTestHTTPServerRequest(URL("http://localhost")).rootDir == "./");
+	}
+
+	/** The settings of the server serving this request.
+	 */
+	package @property const(HTTPServerSettings) serverSettings() const @safe
+	{
+		return m_settings;
+	}
+
+	private void parseFormAndFiles()
+	@safe {
+		m_form = FormFields.init;
+		parseFormData(m_form.get, m_files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
 	}
 }
 
