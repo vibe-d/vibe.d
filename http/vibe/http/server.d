@@ -847,11 +847,22 @@ enum SessionOption {
 	Represents a HTTP request as received by the server side.
 */
 final class HTTPServerRequest : HTTPRequest {
+	import std.variant : Variant;
+	import vibe.utils.dictionarylist : DictionaryList;
+
 	private {
 		SysTime m_timeCreated;
 		HTTPServerSettings m_settings;
 		ushort m_port;
 		string m_peer;
+
+		// lazily parsed request components
+		Nullable!string m_path;
+		Nullable!CookieValueMap m_cookies;
+		Nullable!FormFields m_query;
+		Nullable!Json m_json;
+		Nullable!FormFields m_form;
+		FilePartFormFields m_files;
 	}
 
 	/// The IP address of the client
@@ -891,14 +902,12 @@ final class HTTPServerRequest : HTTPRequest {
 		get an encoding-aware representation.
 	*/
 	deprecated("Use .requestPath instead")
-	string path() @safe scope {
-		if (_path.isNull) {
-			_path = urlDecode(requestPath.toString);
-		}
-		return _path.get;
+	string path()
+	@safe scope {
+		if (m_path.isNull)
+			m_path = urlDecode(requestPath.toString);
+		return m_path.get;
 	}
-
-	private Nullable!string _path;
 
 	/** The path part of the requested URI.
 	*/
@@ -923,31 +932,30 @@ final class HTTPServerRequest : HTTPRequest {
 		the request URI. By default, the first cookie will be returned, which is
 		the or one of the cookies with the closest path match.
 	*/
-	@property ref CookieValueMap cookies() @safe {
-		if (_cookies.isNull) {
-			_cookies = CookieValueMap.init;
+	@property ref CookieValueMap cookies()
+	@safe {
+		if (m_cookies.isNull) {
+			m_cookies = CookieValueMap.init;
 			if (auto pv = "cookie" in headers)
-				parseCookies(*pv, _cookies.get);
+				parseCookies(*pv, m_cookies.get);
 		}
-		return _cookies.get;
+		return m_cookies.get;
 	}
-	private Nullable!CookieValueMap _cookies;
 
 	/** Contains all _form fields supplied using the _query string.
 
 		The fields are stored in the same order as they are received.
 	*/
-	@property ref FormFields query() @safe {
-		if (_query.isNull) {
-			_query = FormFields.init;
-			parseURLEncodedForm(queryString, _query.get);
+	@property ref FormFields query()
+	@safe {
+		if (m_query.isNull) {
+			m_query = FormFields.init;
+			parseURLEncodedForm(queryString, m_query.get);
 		}
 
-		return _query.get;
+		return m_query.get;
 	}
-	Nullable!FormFields _query;
 
-	import vibe.utils.dictionarylist;
 	/** A map of general parameters for the request.
 
 		This map is supposed to be used by middleware functionality to store
@@ -956,7 +964,6 @@ final class HTTPServerRequest : HTTPRequest {
 	*/
 	DictionaryList!(string, true, 8) params;
 
-	import std.variant : Variant;
 	/** A map of context items for the request.
 
 		This is especially useful for passing application specific data down
@@ -985,28 +992,27 @@ final class HTTPServerRequest : HTTPRequest {
 
 		A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
 	*/
-	@property ref Json json() @safe {
-		if (_json.isNull) {
+	@property ref Json json()
+	@safe {
+		if (m_json.isNull) {
 			auto splitter = contentType.splitter(';');
 			auto ctype = splitter.empty ? "" : splitter.front;
 
 			if (icmp2(ctype, "application/json") == 0 || icmp2(ctype, "application/vnd.api+json") == 0) {
 				auto bodyStr = bodyReader.readAllUTF8();
-				if (!bodyStr.empty) _json = parseJson(bodyStr);
-				else _json = Json.undefined;
+				if (!bodyStr.empty) m_json = parseJson(bodyStr);
+				else m_json = Json.undefined;
 			} else {
-				_json = Json.undefined;
+				m_json = Json.undefined;
 			}
 		}
-		return _json.get;
+		return m_json.get;
 	}
 
 	/// Get the json body when there is no content-type header
 	unittest {
 		assert(createTestHTTPServerRequest(URL("http://localhost/")).json.type == Json.Type.undefined);
 	}
-
-	private Nullable!Json _json;
 
 	/** Contains the parsed parameters of a HTML POST _form request.
 
@@ -1016,33 +1022,32 @@ final class HTTPServerRequest : HTTPRequest {
 			A form request must either have the Content-Type
 			"application/x-www-form-urlencoded" or "multipart/form-data".
 	*/
-	@property ref FormFields form() @safe {
-		if (_form.isNull)
+	@property ref FormFields form()
+	@safe {
+		if (m_form.isNull)
 			parseFormAndFiles();
 
-		return _form.get;
+		return m_form.get;
 	}
 
-	private Nullable!FormFields _form;
-
-	private void parseFormAndFiles() @safe {
-		_form = FormFields.init;
-		parseFormData(_form.get, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
+	private void parseFormAndFiles()
+	@safe {
+		m_form = FormFields.init;
+		parseFormData(m_form.get, m_files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
 	}
 
 	/** Contains information about any uploaded file for a HTML _form request.
 	*/
-	@property ref FilePartFormFields files() @safe {
-		// _form and _files are parsed in one step
-		if (_form.isNull) {
+	@property ref FilePartFormFields files()
+	@safe {
+		// m_form and m_files are parsed in one step
+		if (m_form.isNull) {
 			parseFormAndFiles();
-			assert(!_form.isNull);
+			assert(!m_form.isNull);
 		}
 
-        return _files;
+        return m_files;
 	}
-
-	private FilePartFormFields _files;
 
 	/** The current Session object.
 
@@ -2343,7 +2348,10 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	if (res.m_requiresConnectionClose)
 		keep_alive = false;
 
-	foreach (k, v ; req._files.byKeyValue) {
+	// NOTE: req.m_files may or may not be parsed/filled with actual data, as
+	//       it is lazily initialized when calling the .files or .form
+	//       properties
+	foreach (k, v ; req.m_files.byKeyValue) {
 		if (existsFile(v.tempPath)) {
 			removeFile(v.tempPath);
 			logDebug("Deleted upload tempfile %s", v.tempPath.toString());
