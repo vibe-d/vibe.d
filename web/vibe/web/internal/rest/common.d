@@ -219,34 +219,19 @@ import std.traits : hasUDA;
 		import std.algorithm : map, sort, filter, any;
 		import std.array : array;
 		import std.typecons : tuple;
-		// since /foo/:bar and /foo/:baz are the same route, we first normalize the patterns (by replacing each param with just ':')
-		// after that we sort and chunkBy/groupBy, in order to group the related route
-		auto sorted = routes[].map!((route){
-				return tuple(route,route.fullPathParts.map!((part){
-					return part.isParameter ? ":" : part.text;
-				}).array()); // can probably remove the array here if we rewrite the comparison functions (in sort and in the foreach) to work on ranges
-			})
+		// since /foo/:bar and /foo/:baz are the same route, we first normalize
+		// the patterns (by replacing each param with just ':'). after that, we
+		// sort and groupBy, in order to group related routes
+		return routes[]
+			.map!(route => tuple(route,
+					route.fullPathParts
+						.map!(part => part.isParameter ? ":" : part.text)
+						.array) // can probably remove the array here if we rewrite the comparison functions (in sort and in the foreach) to work on ranges
+				)
 			.array
-			.sort!((a,b) => a[1] < b[1]);
-
-		typeof(sorted)[] groups;
-		if (sorted.length > 0)
-		{
-			// NOTE: we want to support 2.066 but it doesn't have chunkBy, so we do the classic loop thingy
-			size_t start, idx = 1;
-			foreach(route, path; sorted[1..$])
-			{
-				if (sorted[idx-1][1] != path)
-				{
-					groups ~= sorted[start..idx];
-					start = idx;
-				}
-				++idx;
-			}
-			groups ~= sorted[start..$];
-		}
-
-		return groups.map!(group => group.map!(tuple => tuple[0]));
+			.sort!((a,b) => a[1] < b[1])
+			.groupBy
+			.map!(group => group.map!(tuple => tuple[0]));
 	}
 
 	private static StaticRoute[routeCount] computeStaticRoutes()
