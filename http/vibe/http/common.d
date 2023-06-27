@@ -213,6 +213,8 @@ class HTTPRequest {
 	{
 	}
 
+	scope:
+
 	public override string toString()
 	{
 		return httpMethodString(method) ~ " " ~ requestURL ~ " " ~ getHTTPVersionString(httpVersion);
@@ -300,6 +302,8 @@ class HTTPResponse {
 		/// All cookies that shall be set on the client for this request
 		@property ref DictionaryList!Cookie cookies() { return m_cookies; }
 	}
+
+	scope:
 
 	public override string toString()
 	{

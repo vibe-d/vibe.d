@@ -1417,7 +1417,7 @@ final class HTTPServerResponse : HTTPResponse {
 		is not allowed to change any header or the status code of the response.
 	*/
 	@property InterfaceProxy!OutputStream bodyWriter()
-	@safe {
+	@safe scope {
 		assert(!!m_conn);
 		if (m_bodyWriter) {
 			// for test responses, the body writer is pre-set, without headers
