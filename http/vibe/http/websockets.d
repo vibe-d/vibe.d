@@ -220,7 +220,9 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	res.headers["Connection"] = "Upgrade";
 	ConnectionStream conn = res.switchProtocol("websocket");
 
-	WebSocket socket = new WebSocket(conn, req, res);
+	// NOTE: silencing scope warning here - WebSocket references the scoped
+	//       req/res objects throughout its lifetime, which has a narrower scope
+	scope socket = () @trusted { return new WebSocket(conn, req, res); } ();
 	try {
 		on_handshake(socket);
 	} catch (Exception e) {
@@ -531,6 +533,8 @@ final class WebSocket {
 		RandomNumberStream m_rng;
 	}
 
+scope:
+
 	/**
 	 * Private constructor, called from `connectWebSocket`.
 	 *
@@ -553,10 +557,14 @@ final class WebSocket {
 		m_readMutex = new InterruptibleTaskMutex;
 		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
 		m_readMutex.performLocked!({
-			m_reader = runTask(&startReader);
+			// NOTE: Silencing scope warning here - m_reader MUST be stopped
+			//       before the end of the lifetime of the WebSocket object,
+			//       which is done in the mandatory call to close().
+			//       The same goes for m_pingTimer below.
+			m_reader = () @trusted { return runTask(&startReader); } ();
 			if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
 				m_pongReceived = true;
-				m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
+				m_pingTimer = () @trusted { return setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true); } ();
 			}
 		});
 	}
@@ -1263,7 +1271,7 @@ unittest {
 /**
  * Generate a challenge key for the protocol upgrade phase.
  */
-private string generateChallengeKey(scope RandomNumberStream rng)
+private string generateChallengeKey(RandomNumberStream rng)
 {
 	ubyte[16] buffer;
 	rng.read(buffer);
