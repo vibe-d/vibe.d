@@ -71,9 +71,19 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		return ret;
 	}
 	/// ditto
-	FieldTuple[] toRepresentation() const {
-		FieldTuple[] ret;
-		foreach (k, ref v; this.byKeyValue) ret ~= FieldTuple(k, v);
+	FieldTuple[] toRepresentation()
+	const {
+		auto ret = new FieldTuple[](this.length);
+		size_t i = 0;
+		foreach (k, ref v; this.byKeyValue) {
+			// avoid bogus warning:
+			// scope variable `k` assigned to non-scope `ret[i++]`
+			// note that k is of type string and the bytes referred to by the
+			// string should not be annotated scope anywhere
+			() @trusted {
+				ret[i++] = FieldTuple(k, v);
+			} ();
+		}
 		return ret;
 	}
 
