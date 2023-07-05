@@ -193,6 +193,8 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
+		import vibe.core.path : PosixPath;
+
 		auto method = req.method;
 
 		string calcBasePath()
@@ -200,10 +202,18 @@ final class URLRouter : HTTPServerRequestHandler {
 			import vibe.core.path : InetPath, relativeToWeb;
 			auto p = InetPath(prefix.length ? prefix : "/");
 			p.endsWithSlash = true;
-			return p.relativeToWeb(InetPath(req.path)).toString();
+			return p.relativeToWeb(req.requestPath).toString();
 		}
 
-		auto path = req.path;
+		string path;
+
+		// NOTE: Instead of failing, we just ignore requests with invalid path
+		//       segments (i.e. containing path separators) here. Any request
+		//       handlers later in the queue may still choose to process them
+		//       appropriately.
+		try path = (cast(PosixPath)req.requestPath).toString();
+		catch (Exception e) return;
+
 		if (path.length < m_prefix.length || path[0 .. m_prefix.length] != m_prefix) return;
 		path = path[m_prefix.length .. $];
 
@@ -212,7 +222,7 @@ final class URLRouter : HTTPServerRequestHandler {
 				auto r = () @trusted { return &m_routes.getTerminalData(ridx); } ();
 				if (r.method != method) return false;
 
-				logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
+				logDebugV("route match: %s -> %s %s %s", req.requestPath, r.method, r.pattern, values);
 				foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
 				if (m_computeBasePath) req.params["routerRootDir"] = calcBasePath();
 				r.cb(req, res);

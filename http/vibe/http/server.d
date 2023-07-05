@@ -847,232 +847,223 @@ enum SessionOption {
 	Represents a HTTP request as received by the server side.
 */
 final class HTTPServerRequest : HTTPRequest {
+	import std.variant : Variant;
+	import vibe.utils.dictionarylist : DictionaryList;
+
 	private {
 		SysTime m_timeCreated;
 		HTTPServerSettings m_settings;
 		ushort m_port;
 		string m_peer;
+
+		// lazily parsed request components
+		Nullable!string m_path;
+		Nullable!CookieValueMap m_cookies;
+		Nullable!FormFields m_query;
+		Nullable!Json m_json;
+		Nullable!FormFields m_form;
+		FilePartFormFields m_files;
 	}
 
-	public {
-		/// The IP address of the client
-		@property string peer()
-		@safe nothrow {
-			if (!m_peer) {
-				version (Have_vibe_core) {} else scope (failure) assert(false);
-				// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
-				auto peer_address_string = this.clientAddress.toString();
-				if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(':') < 0)
-					m_peer = peer_address_string[7 .. $];
-				else m_peer = peer_address_string;
-			}
-			return m_peer;
-		}
-		/// ditto
-		NetworkAddress clientAddress;
+	/// The IP address of the client
+	NetworkAddress clientAddress;
 
-		/// Determines if the request should be logged to the access log file.
-		bool noLog;
+	/// Determines if the request should be logged to the access log file.
+	bool noLog;
 
-		/// Determines if the request was issued over an TLS encrypted channel.
-		bool tls;
+	/// Determines if the request was issued over an TLS encrypted channel.
+	bool tls;
 
-		/** Information about the TLS certificate provided by the client.
+	/** Information about the TLS certificate provided by the client.
 
-			Remarks: This field is only set if `tls` is true, and the peer
-			presented a client certificate.
-		*/
-		TLSCertificateInformation clientCertificate;
+		Remarks: This field is only set if `tls` is true, and the peer
+		presented a client certificate.
+	*/
+	TLSCertificateInformation clientCertificate;
 
-		/** Deprecated: The _path part of the URL.
+	/** The path part of the requested URI.
+	*/
+	InetPath requestPath;
 
-			Note that this function contains the decoded version of the
-			requested path, which can yield incorrect results if the path
-			contains URL encoded path separators. Use `requestPath` instead to
-			get an encoding-aware representation.
-		*/
-		string path() @safe {
-			if (_path.isNull) {
-				_path = urlDecode(requestPath.toString);
-			}
-			return _path.get;
-		}
+	/** The user name part of the URL, if present.
+	*/
+	string username;
 
-		private Nullable!string _path;
+	/** The _password part of the URL, if present.
+	*/
+	string password;
 
-		/** The path part of the requested URI.
-		*/
-		InetPath requestPath;
+	/** The _query string part of the URL.
+	*/
+	string queryString;
 
-		/** The user name part of the URL, if present.
-		*/
-		string username;
+	/** A map of general parameters for the request.
 
-		/** The _password part of the URL, if present.
-		*/
-		string password;
+		This map is supposed to be used by middleware functionality to store
+		information for later stages. For example vibe.http.router.URLRouter uses this map
+		to store the value of any named placeholders.
+	*/
+	DictionaryList!(string, true, 8) params;
 
-		/** The _query string part of the URL.
-		*/
-		string queryString;
+	/** A map of context items for the request.
 
-		/** Contains the list of _cookies that are stored on the client.
+		This is especially useful for passing application specific data down
+		the chain of processors along with the request itself.
 
-			Note that the a single cookie name may occur multiple times if multiple
-			cookies have that name but different paths or domains that all match
-			the request URI. By default, the first cookie will be returned, which is
-			the or one of the cookies with the closest path match.
-		*/
-		@property ref CookieValueMap cookies() @safe {
-			if (_cookies.isNull) {
-				_cookies = CookieValueMap.init;
-				if (auto pv = "cookie" in headers)
-					parseCookies(*pv, _cookies.get);
-			}
-			return _cookies.get;
-		}
-		private Nullable!CookieValueMap _cookies;
+		For example, a generic route may be defined to check user login status,
+		if the user is logged in, add a reference to user specific data to the
+		context.
 
-		/** Contains all _form fields supplied using the _query string.
+		This is implemented with `std.variant.Variant` to allow any type of data.
+	*/
+	DictionaryList!(Variant, true, 2) context;
 
-			The fields are stored in the same order as they are received.
-		*/
-		@property ref FormFields query() @safe {
-			if (_query.isNull) {
-				_query = FormFields.init;
-				parseURLEncodedForm(queryString, _query.get);
-			}
+	/** Supplies the request body as a stream.
 
-			return _query.get;
-		}
-		Nullable!FormFields _query;
+		Note that when certain server options are set (such as
+		HTTPServerOption.parseJsonBody) and a matching request was sent,
+		the returned stream will be empty. If needed, remove those
+		options and do your own processing of the body when launching
+		the server. HTTPServerOption has a list of all options that affect
+		the request body.
+	*/
+	InputStream bodyReader;
 
-		import vibe.utils.dictionarylist;
-		/** A map of general parameters for the request.
+	/** The current Session object.
 
-			This map is supposed to be used by middleware functionality to store
-			information for later stages. For example vibe.http.router.URLRouter uses this map
-			to store the value of any named placeholders.
-		*/
-		DictionaryList!(string, true, 8) params;
+		This field is set if HTTPServerResponse.startSession() has been called
+		on a previous response and if the client has sent back the matching
+		cookie.
 
-		import std.variant : Variant;
-		/** A map of context items for the request.
+		Remarks: Requires the HTTPServerOption.parseCookies option.
+	*/
+	Session session;
 
-			This is especially useful for passing application specific data down
-			the chain of processors along with the request itself.
-
-			For example, a generic route may be defined to check user login status,
-			if the user is logged in, add a reference to user specific data to the
-			context.
-
-			This is implemented with `std.variant.Variant` to allow any type of data.
-		*/
-		DictionaryList!(Variant, true, 2) context;
-
-		/** Supplies the request body as a stream.
-
-			Note that when certain server options are set (such as
-			HTTPServerOption.parseJsonBody) and a matching request was sent,
-			the returned stream will be empty. If needed, remove those
-			options and do your own processing of the body when launching
-			the server. HTTPServerOption has a list of all options that affect
-			the request body.
-		*/
-		InputStream bodyReader;
-
-		/** Contains the parsed Json for a JSON request.
-
-			A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
-		*/
-		@property ref Json json() @safe {
-			if (_json.isNull) {
-				auto splitter = contentType.splitter(';');
-				auto ctype = splitter.empty ? "" : splitter.front;
-
-				if (icmp2(ctype, "application/json") == 0 || icmp2(ctype, "application/vnd.api+json") == 0) {
-					auto bodyStr = bodyReader.readAllUTF8();
-					if (!bodyStr.empty) _json = parseJson(bodyStr);
-					else _json = Json.undefined;
-				} else {
-					_json = Json.undefined;
-				}
-			}
-			return _json.get;
-		}
-
-		/// Get the json body when there is no content-type header
-		unittest {
-			assert(createTestHTTPServerRequest(URL("http://localhost/")).json.type == Json.Type.undefined);
-		}
-
-		private Nullable!Json _json;
-
-		/** Contains the parsed parameters of a HTML POST _form request.
-
-			The fields are stored in the same order as they are received.
-
-			Remarks:
-				A form request must either have the Content-Type
-				"application/x-www-form-urlencoded" or "multipart/form-data".
-		*/
-		@property ref FormFields form() @safe {
-			if (_form.isNull)
-				parseFormAndFiles();
-
-			return _form.get;
-		}
-
-		private Nullable!FormFields _form;
-
-		private void parseFormAndFiles() @safe {
-			_form = FormFields.init;
-			parseFormData(_form.get, _files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
-		}
-
-		/** Contains information about any uploaded file for a HTML _form request.
-		*/
-		@property ref FilePartFormFields files() @safe {
-			// _form and _files are parsed in one step
-			if (_form.isNull) {
-				parseFormAndFiles();
-				assert(!_form.isNull);
-			}
-
-            return _files;
-		}
-
-		private FilePartFormFields _files;
-
-		/** The current Session object.
-
-			This field is set if HTTPServerResponse.startSession() has been called
-			on a previous response and if the client has sent back the matching
-			cookie.
-
-			Remarks: Requires the HTTPServerOption.parseCookies option.
-		*/
-		Session session;
-	}
-
-	package {
-		/** The settings of the server serving this request.
-		 */
-		@property const(HTTPServerSettings) serverSettings() const @safe
-		{
-			return m_settings;
-		}
-	}
 
 	this(SysTime time, ushort port)
-	@safe {
+	@safe scope {
 		m_timeCreated = time.toUTC();
 		m_port = port;
 	}
 
+	/// The IP address of the client in string form
+	@property string peer()
+	@safe nothrow scope {
+		if (!m_peer) {
+			version (Have_vibe_core) {} else scope (failure) assert(false);
+			// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
+			auto peer_address_string = this.clientAddress.toString();
+			if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(':') < 0)
+				m_peer = peer_address_string[7 .. $];
+			else m_peer = peer_address_string;
+		}
+		return m_peer;
+	}
+
+	/** The _path part of the URL.
+
+		Note that this function contains the decoded version of the
+		requested path, which can yield incorrect results if the path
+		contains URL encoded path separators. Use `requestPath` instead to
+		get an encoding-aware representation.
+	*/
+	deprecated("Use .requestPath instead")
+	string path()
+	@safe scope {
+		if (m_path.isNull)
+			m_path = urlDecode(requestPath.toString);
+		return m_path.get;
+	}
+
+	/** Contains the list of cookies that are stored on the client.
+
+		Note that the a single cookie name may occur multiple times if multiple
+		cookies have that name but different paths or domains that all match
+		the request URI. By default, the first cookie will be returned, which is
+		the or one of the cookies with the closest path match.
+	*/
+	@property ref CookieValueMap cookies()
+	@safe return {
+		if (m_cookies.isNull) {
+			m_cookies = CookieValueMap.init;
+			if (auto pv = "cookie" in headers)
+				parseCookies(*pv, m_cookies.get);
+		}
+		return m_cookies.get;
+	}
+
+	/** Contains all _form fields supplied using the _query string.
+
+		The fields are stored in the same order as they are received.
+	*/
+	@property ref FormFields query()
+	@safe return {
+		if (m_query.isNull) {
+			m_query = FormFields.init;
+			parseURLEncodedForm(queryString, m_query.get);
+		}
+
+		return m_query.get;
+	}
+
+	/** Contains the parsed Json for a JSON request.
+
+		A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
+	*/
+	@property ref Json json()
+	@safe return {
+		if (m_json.isNull) {
+			auto splitter = contentType.splitter(';');
+			auto ctype = splitter.empty ? "" : splitter.front;
+
+			if (icmp2(ctype, "application/json") == 0 || icmp2(ctype, "application/vnd.api+json") == 0) {
+				auto bodyStr = bodyReader.readAllUTF8();
+				if (!bodyStr.empty) m_json = parseJson(bodyStr);
+				else m_json = Json.undefined;
+			} else {
+				m_json = Json.undefined;
+			}
+		}
+		return m_json.get;
+	}
+
+	/// Get the json body when there is no content-type header
+	unittest {
+		assert(createTestHTTPServerRequest(URL("http://localhost/")).json.type == Json.Type.undefined);
+	}
+
+	/** Contains the parsed parameters of a HTML POST _form request.
+
+		The fields are stored in the same order as they are received.
+
+		Remarks:
+			A form request must either have the Content-Type
+			"application/x-www-form-urlencoded" or "multipart/form-data".
+	*/
+	@property ref FormFields form()
+	@safe return {
+		if (m_form.isNull)
+			parseFormAndFiles();
+
+		return m_form.get;
+	}
+
+	/** Contains information about any uploaded file for a HTML _form request.
+	*/
+	@property ref FilePartFormFields files()
+	@safe return {
+		// m_form and m_files are parsed in one step
+		if (m_form.isNull) {
+			parseFormAndFiles();
+			assert(!m_form.isNull);
+		}
+
+        return m_files;
+	}
+
 	/** Time when this request started processing.
 	*/
-	@property SysTime timeCreated() const @safe { return m_timeCreated; }
+	@property SysTime timeCreated() const @safe scope { return m_timeCreated; }
 
 
 	/** The full URL that corresponds to this request.
@@ -1085,7 +1076,7 @@ final class HTTPServerRequest : HTTPRequest {
 		the standard port is used.
 	*/
 	@property URL fullURL()
-	const @safe {
+	const @safe scope {
 		URL url;
 
 		auto xfh = this.headers.get("X-Forwarded-Host");
@@ -1153,7 +1144,7 @@ final class HTTPServerRequest : HTTPRequest {
 		The returned string always ends with a slash.
 	*/
 	@property string rootDir()
-	const @safe {
+	const @safe scope {
 		import std.algorithm.searching : count;
 		import std.range : empty;
 		auto depth = requestPath.bySegment.count!(s => !s.name.empty);
@@ -1167,6 +1158,19 @@ final class HTTPServerRequest : HTTPRequest {
 		assert(createTestHTTPServerRequest(URL("http://localhost/foo/")).rootDir == "../");
 		assert(createTestHTTPServerRequest(URL("http://localhost/foo/bar")).rootDir == "../");
 		assert(createTestHTTPServerRequest(URL("http://localhost")).rootDir == "./");
+	}
+
+	/** The settings of the server serving this request.
+	 */
+	package @property const(HTTPServerSettings) serverSettings()
+	const @safe scope {
+		return m_settings;
+	}
+
+	private void parseFormAndFiles()
+	@safe scope {
+		m_form = FormFields.init;
+		parseFormData(m_form.get, m_files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
 	}
 }
 
@@ -1194,19 +1198,61 @@ final class HTTPServerResponse : HTTPResponse {
 
 	static if (!is(Stream == InterfaceProxy!Stream)) {
 		this(Stream conn, ConnectionStream raw_connection, HTTPServerSettings settings, IAllocator req_alloc)
-		@safe {
+		@safe scope {
 			this(InterfaceProxy!Stream(conn), InterfaceProxy!ConnectionStream(raw_connection), settings, req_alloc);
 		}
 	}
 
 	this(InterfaceProxy!Stream conn, InterfaceProxy!ConnectionStream raw_connection, HTTPServerSettings settings, IAllocator req_alloc)
-	@safe {
+	@safe scope {
 		m_conn = conn;
 		m_rawConnection = raw_connection;
 		m_countingWriter = createCountingOutputStreamFL(conn);
 		m_settings = settings;
 		m_requestAlloc = req_alloc;
 	}
+
+	/** Sends a redirect request to the client.
+
+		Params:
+			url = The URL to redirect to
+			status = The HTTP redirect status (3xx) to send - by default this is $(D HTTPStatus.found)
+	*/
+	void redirect(string url, int status = HTTPStatus.found)
+	@safe scope {
+		// Disallow any characters that may influence the header parsing
+		enforce(!url.representation.canFind!(ch => ch < 0x20),
+			"Control character in redirection URL.");
+
+		statusCode = status;
+		headers["Location"] = url;
+		writeBody("redirecting...");
+	}
+	/// ditto
+	void redirect(URL url, int status = HTTPStatus.found)
+	@safe scope {
+		redirect(url.toString(), status);
+	}
+
+	///
+	@safe unittest {
+		import vibe.http.router;
+
+		void request_handler(HTTPServerRequest req, HTTPServerResponse res)
+		{
+			res.redirect("http://example.org/some_other_url");
+		}
+
+		void test()
+		{
+			auto router = new URLRouter;
+			router.get("/old_url", &request_handler);
+
+			listenHTTP(new HTTPServerSettings, router);
+		}
+	}
+
+scope:
 
 	/** Returns the time at which the request was finalized.
 
@@ -1417,7 +1463,7 @@ final class HTTPServerResponse : HTTPResponse {
 		is not allowed to change any header or the status code of the response.
 	*/
 	@property InterfaceProxy!OutputStream bodyWriter()
-	@safe {
+	@safe scope {
 		assert(!!m_conn);
 		if (m_bodyWriter) {
 			// for test responses, the body writer is pre-set, without headers
@@ -1478,45 +1524,6 @@ final class HTTPServerResponse : HTTPResponse {
 		return m_bodyWriter;
 	}
 
-	/** Sends a redirect request to the client.
-
-		Params:
-			url = The URL to redirect to
-			status = The HTTP redirect status (3xx) to send - by default this is $(D HTTPStatus.found)
-	*/
-	void redirect(string url, int status = HTTPStatus.found)
-	@safe {
-		// Disallow any characters that may influence the header parsing
-		enforce(!url.representation.canFind!(ch => ch < 0x20),
-			"Control character in redirection URL.");
-
-		statusCode = status;
-		headers["Location"] = url;
-		writeBody("redirecting...");
-	}
-	/// ditto
-	void redirect(URL url, int status = HTTPStatus.found)
-	@safe {
-		redirect(url.toString(), status);
-	}
-
-	///
-	@safe unittest {
-		import vibe.http.router;
-
-		void request_handler(HTTPServerRequest req, HTTPServerResponse res)
-		{
-			res.redirect("http://example.org/some_other_url");
-		}
-
-		void test()
-		{
-			auto router = new URLRouter;
-			router.get("/old_url", &request_handler);
-
-			listenHTTP(new HTTPServerSettings, router);
-		}
-	}
 
 
 	/** Special method sending a SWITCHING_PROTOCOLS response to the client.
@@ -2344,7 +2351,10 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	if (res.m_requiresConnectionClose)
 		keep_alive = false;
 
-	foreach (k, v ; req._files.byKeyValue) {
+	// NOTE: req.m_files may or may not be parsed/filled with actual data, as
+	//       it is lazily initialized when calling the .files or .form
+	//       properties
+	foreach (k, v ; req.m_files.byKeyValue) {
 		if (existsFile(v.tempPath)) {
 			removeFile(v.tempPath);
 			logDebug("Deleted upload tempfile %s", v.tempPath.toString());

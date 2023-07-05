@@ -55,7 +55,7 @@ HTTPServerRequestDelegateS serveStaticFiles(NativePath local_path, HTTPFileServe
 	@safe {
 		string srv_path;
 		if (auto pp = "pathMatch" in req.params) srv_path = *pp;
-		else if (req.path.length > 0) srv_path = req.path;
+		else if (req.requestPath != InetPath.init) srv_path = (cast(PosixPath)req.requestPath).toString();
 		else srv_path = req.requestURL;
 
 		if (!srv_path.startsWith(settings.serverPathPrefix)) {

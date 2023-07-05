@@ -1175,7 +1175,7 @@ struct Json {
 		// @safe inference for writeJsonString doesn't work.
 		static struct DummyRangeS {
 			void delegate(const(char)[]) @safe sink;
-			void put(const(char)[] str) @safe { sink(str); }
+			void put(scope const(char)[] str) @safe { sink(str); }
 			void put(char ch) @trusted { sink((&ch)[0 .. 1]); }
 		}
 		auto r = DummyRangeS(sink);
@@ -1189,7 +1189,7 @@ struct Json {
 		static struct DummyRange {
 			void delegate(const(char)[]) sink;
 			@trusted:
-			void put(const(char)[] str) { sink(str); }
+			void put(scope const(char)[] str) { sink(str); }
 			void put(char ch) { sink((&ch)[0 .. 1]); }
 		}
 		auto r = DummyRange(sink);

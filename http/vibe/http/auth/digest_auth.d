@@ -38,7 +38,7 @@ class DigestAuthInfo
 		timeout = 300.seconds;
 	}
 
-	string createNonce(in HTTPServerRequest req)
+	string createNonce(scope const HTTPServerRequest req)
 	{
 		auto now = Clock.currTime(UTC()).stdTime();
 		auto time = () @trusted { return *cast(ubyte[now.sizeof]*)&now; } ();
@@ -49,7 +49,7 @@ class DigestAuthInfo
 		return Base64.encode(time ~ data);
 	}
 
-	NonceState checkNonce(in string nonce, in HTTPServerRequest req)
+	NonceState checkNonce(string nonce, scope const HTTPServerRequest req)
 	{
 		auto now = Clock.currTime(UTC()).stdTime();
 		ubyte[] decoded = Base64.decode(nonce);
