@@ -935,7 +935,7 @@ final class MongoConnection {
 		recv(dst[4 .. $]);
 		return Bson(Bson.Type.object, cast(immutable)dst);
 	}
-	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
+	private void recv(scope ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
 	private const(char)[] recvCString()
 	{
 		auto buf = new ubyte[32];
