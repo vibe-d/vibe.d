@@ -2,7 +2,7 @@ name "tls"
 description "TLS stream implementations"
 
 dependency "vibe-d:stream" version="*"
-dependency "openssl" version="~>3.1"
+dependency "openssl" repository="git+https://github.com/D-Programming-Deimos/openssl" version="1f884185338b4e5809ac095bd99555b6835da9be"
 dependency "openssl-static" version="~>1.0" optional=true
 subConfiguration "openssl-static" "none"
 
