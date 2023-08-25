@@ -55,6 +55,9 @@ fi
 
 if [[ $PARTS =~ (^|,)tests(,|$) ]]; then
     for ex in `\ls -1 tests/`; do
+        if ! [[ $PARTS =~ (^|,)redis(,|$) ]] && [ $ex == "redis" ]; then
+            continue
+        fi
         if [ -r tests/$ex/run.sh ]; then
             echo "[INFO] Running test $ex"
             (cd tests/$ex && ./run.sh)
