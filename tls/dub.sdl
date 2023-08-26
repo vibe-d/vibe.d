@@ -15,6 +15,7 @@ importPaths "."
 configuration "openssl-mscoff" {
 	platforms "windows-x86_mscoff" "windows-x86-ldc"
 	subConfiguration "openssl" "library-manual-version"
+	subConfiguration "openssl-static" "none"
 	versions "DeimosOpenSSL_1_1_0"
 	sourceFiles "../lib/win-i386-mscoff/libssl.lib" "../lib/win-i386-mscoff/libcrypto.lib" platform="windows-x86"
 	copyFiles "../lib/win-i386/libssl-1_1.dll" "../lib/win-i386/libcrypto-1_1.dll" platform="windows-x86"
@@ -27,6 +28,7 @@ configuration "openssl" {
 configuration "openssl-1.1" {
 	platforms "posix" "windows"
 	subConfiguration "openssl" "library-manual-version"
+	subConfiguration "openssl-static" "none"
 	versions "DeimosOpenSSL_1_1_0"
 	sourceFiles "../lib/win-i386-mscoff/libssl.lib" "../lib/win-i386-mscoff/libcrypto.lib" platform="windows-x86"
 	sourceFiles "../lib/win-amd64/libssl.lib" "../lib/win-amd64/libcrypto.lib" platform="windows-x86_64"
@@ -37,6 +39,7 @@ configuration "openssl-1.1" {
 configuration "openssl-1.1-optlink" {
 	platforms "windows-x86-dmd"
 	subConfiguration "openssl" "library-manual-version"
+	subConfiguration "openssl-static" "none"
 	versions "DeimosOpenSSL_1_1_0"
 	sourceFiles "../lib/win-i386/libssl.lib" "../lib/win-i386/libcrypto.lib" platform="windows-x86-dmd"
 	copyFiles "../lib/win-i386/libssl-1_1.dll" "../lib/win-i386/libcrypto-1_1.dll" platform="windows-x86"
@@ -45,14 +48,18 @@ configuration "openssl-1.1-optlink" {
 configuration "openssl-1.0" {
 	platforms "posix"
 	subConfiguration "openssl" "library-manual-version"
+	subConfiguration "openssl-static" "none"
 	versions "DeimosOpenSSL_1_0_0"
 }
 
 configuration "openssl-static" {
 	dependency "openssl-static" version="~>1.0"
+	subConfiguration "openssl" "library-manual-link"
 	subConfiguration "openssl-static" "library"
 }
 
 configuration "notls" {
 	versions "VibeNoSSL"
+	subConfiguration "openssl" "library-manual-link"
+	subConfiguration "openssl-static" "none"
 }
