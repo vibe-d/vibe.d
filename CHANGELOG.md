@@ -1,6 +1,38 @@
 Changelog
 =========
 
+v0.9.7 - 2023-08-
+-------------------
+
+### Features and improvements ###
+
+- Added `CachedFileStream` as a means to provide a file backed random access stream for pure input streams
+- Build configuration improvements for the `vibe-d:tls` package
+	- Added a "openssl-static" configuration using statically linked libraries, currently available for Linux/Windows/macOS/iOS
+	- Fixed the "notls" option to actually strip all TLS dependencies - [pull #2719][issue2719], [issue #2735][issue2735], [pull #2744][issue2744]
+- Improved performance of `BufferedStream` - [pull #2720][issue2720], [pull #2721][issue2721]
+- `Bson` values can now be constructed from `const(char)[]` instead of just `string` (by Per Nordlöw) - [pull #2726][issue2726]
+- Fixed a number of `scope` related deprecation warnings for the latest compiler versions - [pull #2732][issue2732], [pull #2736][issue2736]
+
+### Bug fixes ###
+
+- Fixed an index out of bounds error in `BufferedStream` - [pull #2722][issue2722]
+- Fixed a compile error in `MongoCollection.countDocuments` (by Szabo Bogdan aka gedaiu) - [pull #2731][issue2731]
+- Fixed update verification in `MongoCollection` (by Ben Jones) - [pull #2729][issue2729]
+
+[issue2719]: https://github.com/vibe-d/vibe.d/issues/2719
+[issue2720]: https://github.com/vibe-d/vibe.d/issues/2720
+[issue2721]: https://github.com/vibe-d/vibe.d/issues/2721
+[issue2722]: https://github.com/vibe-d/vibe.d/issues/2722
+[issue2726]: https://github.com/vibe-d/vibe.d/issues/2726
+[issue2729]: https://github.com/vibe-d/vibe.d/issues/2729
+[issue2731]: https://github.com/vibe-d/vibe.d/issues/2731
+[issue2732]: https://github.com/vibe-d/vibe.d/issues/2732
+[issue2735]: https://github.com/vibe-d/vibe.d/issues/2735
+[issue2736]: https://github.com/vibe-d/vibe.d/issues/2736
+[issue2744]: https://github.com/vibe-d/vibe.d/issues/2744
+
+
 v0.9.6 - 2023-03-21
 -------------------
 
