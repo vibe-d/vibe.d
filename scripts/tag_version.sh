@@ -24,4 +24,4 @@ set -x
 git --no-pager diff
 git add meson.build
 git commit --message "bump version to $VER"
-git tag --message "$VER" "$VER"
+git tag --sign --message "$VER" "$VER"
