@@ -57,37 +57,37 @@ struct CachedFileStream(InputStream)
 	enum outputStreamVersion = 2;
 
 	private static struct CTX {
+		InputStream source;
+		FileStream cachedFile;
 		ulong readPtr;
 		ulong size;
+		bool canWrite;
+		bool deleteOnClose;
 	}
 
 	private {
-		InputStream m_source;
-		FileStream m_cachedFile;
 		CTX* m_ctx;
-		bool m_canWrite;
-		bool m_deleteOnClose;
 	}
 
 	private this(InputStream source, bool writable, NativePath cached_file_path)
 	{
-		m_source = source;
-		m_canWrite = writable;
 		m_ctx = new CTX;
+		m_ctx.source = source;
+		m_ctx.canWrite = writable;
 		m_ctx.size = source.leastSize;
 
 		if (cached_file_path == NativePath.init) {
-			m_deleteOnClose = true;
-			m_cachedFile = createTempFile();
-		} else m_cachedFile = openFile(cached_file_path, FileMode.createTrunc);
+			m_ctx.deleteOnClose = true;
+			m_ctx.cachedFile = createTempFile();
+		} else m_ctx.cachedFile = openFile(cached_file_path, FileMode.createTrunc);
 	}
 
-	@property int fd() const nothrow { return m_cachedFile.fd; }
-	@property NativePath path() const nothrow { return m_cachedFile.path; }
-	@property bool isOpen() const nothrow { return m_cachedFile.isOpen; }
-	@property ulong size() const nothrow { return m_ctx ? max(m_cachedFile.size, m_ctx.size) : 0; }
+	@property int fd() const nothrow { return m_ctx.cachedFile.fd; }
+	@property NativePath path() const nothrow { return m_ctx.cachedFile.path; }
+	@property bool isOpen() const nothrow { return m_ctx && m_ctx.cachedFile.isOpen; }
+	@property ulong size() const nothrow { return m_ctx ? max(m_ctx.cachedFile.size, m_ctx.size) : 0; }
 	@property bool readable() const nothrow { return true; }
-	@property bool writable() const nothrow { return m_canWrite; }
+	@property bool writable() const nothrow { return m_ctx.canWrite; }
 	@property ulong leastSize()
 	@blocking {
 		auto pos = tell();
@@ -99,9 +99,9 @@ struct CachedFileStream(InputStream)
 	{
 		if (!m_ctx)
 			return false;
-		if (m_cachedFile.dataAvailableForRead)
+		if (m_ctx.cachedFile.dataAvailableForRead)
 			return true;
-		if (tell() == m_ctx.readPtr && m_source.dataAvailableForRead)
+		if (tell() == m_ctx.readPtr && m_ctx.source.dataAvailableForRead)
 			return true;
 		return false;
 	}
@@ -109,44 +109,51 @@ struct CachedFileStream(InputStream)
 
 	void close()
 	@blocking {
-		bool was_open = m_cachedFile.isOpen;
-		NativePath remove_path;
-		if (was_open) remove_path = m_cachedFile.path;
+		if (!m_ctx || !m_ctx.cachedFile.isOpen) return;
 
-		m_cachedFile.close();
-		if (was_open && m_deleteOnClose) {
+		bool was_open = m_ctx.cachedFile.isOpen;
+		NativePath remove_path;
+		if (was_open) remove_path = m_ctx.cachedFile.path;
+
+		m_ctx.cachedFile.close();
+		if (was_open && m_ctx.deleteOnClose) {
 			try removeFile(remove_path);
 			catch (Exception e) logException(e, "Failed to remove temporary cached stream file");
 		}
+
+		static if (is(InputStream == struct))
+			destroy(m_ctx.source);
+		destroy(m_ctx.cachedFile);
+		m_ctx = null;
 	}
 
-	void truncate(ulong size) @blocking { m_cachedFile.truncate(size); }
+	void truncate(ulong size) @blocking { m_ctx.cachedFile.truncate(size); }
 	void seek(ulong offset)
 	@blocking {
 		readUpTo(offset);
-		m_cachedFile.seek(offset);
+		m_ctx.cachedFile.seek(offset);
 	}
 
-	ulong tell() nothrow { return m_cachedFile.tell(); }
+	ulong tell() nothrow { return m_ctx.cachedFile.tell(); }
 
-	size_t write(scope const(ubyte)[] bytes, IOMode mode) @blocking { return m_cachedFile.write(bytes, mode); }
+	size_t write(scope const(ubyte)[] bytes, IOMode mode) @blocking { return m_ctx.cachedFile.write(bytes, mode); }
 	void write(scope const(ubyte)[] bytes) @blocking { auto n = write(bytes, IOMode.all); assert(n == bytes.length); }
 	void write(scope const(char)[] bytes) @blocking { write(cast(const(ubyte)[])bytes); }
 
-	void flush() @blocking { m_cachedFile.flush(); }
-	void finalize() @blocking { m_cachedFile.flush(); }
+	void flush() @blocking { m_ctx.cachedFile.flush(); }
+	void finalize() @blocking { m_ctx.cachedFile.flush(); }
 
 	const(ubyte)[] peek()
 	{
-		if (m_cachedFile.tell == m_ctx.readPtr)
-			return m_source.peek;
-		return m_cachedFile.peek;
+		if (m_ctx.cachedFile.tell == m_ctx.readPtr)
+			return m_ctx.source.peek;
+		return m_ctx.cachedFile.peek;
 	}
 
 	size_t read(scope ubyte[] dst, IOMode mode)
 	@blocking {
 		readUpTo(tell() + dst.length);
-		return m_cachedFile.read(dst, mode);
+		return m_ctx.cachedFile.read(dst, mode);
 	}
 	void read(scope ubyte[] dst) @blocking { auto n = read(dst, IOMode.all); assert(n == dst.length); }
 
@@ -154,17 +161,17 @@ struct CachedFileStream(InputStream)
 	{
 		if (offset <= m_ctx.readPtr) return;
 
-		auto ptr = m_cachedFile.tell;
-		scope (exit) m_cachedFile.seek(ptr);
+		auto ptr = m_ctx.cachedFile.tell;
+		scope (exit) m_ctx.cachedFile.seek(ptr);
 
-		m_cachedFile.seek(m_ctx.readPtr);
+		m_ctx.cachedFile.seek(m_ctx.readPtr);
 
 		while (offset > m_ctx.readPtr) {
-			auto chunk = min(offset - m_ctx.readPtr, m_source.leastSize);
+			auto chunk = min(offset - m_ctx.readPtr, m_ctx.source.leastSize);
 			if (chunk == 0) break;
-			pipe(m_source, m_cachedFile, chunk);
+			pipe(m_ctx.source, m_ctx.cachedFile, chunk);
 			m_ctx.readPtr += chunk;
-			m_ctx.size = m_ctx.readPtr + m_source.leastSize;
+			m_ctx.size = m_ctx.readPtr + m_ctx.source.leastSize;
 		}
 	}
 }
