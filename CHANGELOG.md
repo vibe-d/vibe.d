@@ -1,12 +1,12 @@
 Changelog
 =========
 
-v0.9.7 - 2023-08-
+v0.9.7 - 2023-08-29
 -------------------
 
 ### Features and improvements ###
 
-- Added `CachedFileStream` as a means to provide a file backed random access stream for pure input streams
+- Added `CachedFileStream` as a means to provide a file backed random access stream for pure input streams - [pull #2742][issue2742], [pull #2745][issue2745]
 - Build configuration improvements for the `vibe-d:tls` package
 	- Added a "openssl-static" configuration using statically linked libraries, currently available for Linux/Windows/macOS/iOS
 	- Fixed the "notls" option to actually strip all TLS dependencies - [pull #2719][issue2719], [issue #2735][issue2735], [pull #2744][issue2744]
@@ -30,7 +30,9 @@ v0.9.7 - 2023-08-
 [issue2732]: https://github.com/vibe-d/vibe.d/issues/2732
 [issue2735]: https://github.com/vibe-d/vibe.d/issues/2735
 [issue2736]: https://github.com/vibe-d/vibe.d/issues/2736
+[issue2742]: https://github.com/vibe-d/vibe.d/issues/2742
 [issue2744]: https://github.com/vibe-d/vibe.d/issues/2744
+[issue2745]: https://github.com/vibe-d/vibe.d/issues/2745
 
 
 v0.9.6 - 2023-03-21
