@@ -1832,7 +1832,7 @@ private string generateRestClientMethods(I)()
 
 
 private auto executeClientMethod(I, size_t ridx, ARGS...)
-	(const scope ref RestInterface!I intf, scope void delegate(HTTPClientRequest) @safe request_filter,
+	(const ref RestInterface!I intf, scope void delegate(HTTPClientRequest) @safe request_filter,
 		scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter)
 {
 	import vibe.internal.interfaceproxy : asInterface;
