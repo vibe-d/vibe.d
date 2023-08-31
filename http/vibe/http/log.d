@@ -243,7 +243,7 @@ void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, sc
 						ln.put(req.username.length ? req.username : "-");
 						break;
 					case 'U': //The URL path without query string
-						ln.put(req.path);
+						ln.put(req.requestPath.toString());
 						break;
 					case 'v': //Server name
 						ln.put(req.host.length ? req.host : "-");
