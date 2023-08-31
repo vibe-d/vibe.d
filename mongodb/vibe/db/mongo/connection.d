@@ -90,7 +90,6 @@ class MongoDBException : MongoException
 @safe:
 
 	MongoErrorDescription description;
-	alias description this;
 
 	this(MongoErrorDescription description, string file = __FILE__,
 			size_t line = __LINE__, Throwable next = null)
@@ -98,6 +97,13 @@ class MongoDBException : MongoException
 		super(description.message, file, line, next);
 		this.description = description;
 	}
+
+	// NOTE: .message is a @future member of Throwable
+	deprecated("Use .msg instead.") alias message = msg;
+	@property int code() const nothrow { return description.code; };
+	@property int connectionId() const nothrow { return description.connectionId; };
+	@property int n() const nothrow { return description.n; };
+	@property double ok() const nothrow { return description.ok; };
 }
 
 /**
@@ -425,9 +431,11 @@ final class MongoConnection {
 			recvMsg!true(id, (flags, root) @safe {
 				ret = root;
 			}, (scope ident, size) @safe {
-				docs[ident] = appender!(Bson[]);
+				docs[ident.idup] = appender!(Bson[]);
 			}, (scope ident, push) @safe {
-				docs[ident].put(push);
+				auto pd = ident in docs;
+				assert(!!pd, "Received data for unexpected identifier");
+				pd.put(push);
 			});
 
 			foreach (ident, app; docs)
@@ -640,7 +648,7 @@ final class MongoConnection {
 			Bson command = Bson.emptyObject;
 			auto parts = collection.findSplit(".");
 			command["killCursors"] = Bson(parts[2]);
-			command["cursors"] = cursors.serializeToBson;
+			command["cursors"] = () @trusted { return cursors; } ().serializeToBson; // NOTE: "escaping" scope here
 			runCommand!Bson(parts[0], command);
 		}
 		else
@@ -746,11 +754,10 @@ final class MongoConnection {
 			switch (payloadType) {
 				case 0:
 					gotSec0 = true;
-					scope Bson data;
 					static if (dupBson)
-						data = recvBsonDup();
+						auto data = recvBsonDup();
 					else
-						data = (() @trusted => recvBson(bufsl))();
+						scope data = (() @trusted => recvBson(bufsl))();
 
 					debug (VibeVerboseMongo)
 						logDiagnostic("recvData: sec0[flags=%x]: %s", flagBits, data);
@@ -765,11 +772,10 @@ final class MongoConnection {
 					auto identifier = recvCString();
 					on_sec1_start(identifier, size);
 					while (m_bytesRead - section_bytes_read < size) {
-						scope Bson data;
 						static if (dupBson)
-							data = recvBsonDup();
+							auto data = recvBsonDup();
 						else
-							data = (() @trusted => recvBson(bufsl))();
+							scope data = (() @trusted => recvBson(bufsl))();
 
 						debug (VibeVerboseMongo)
 							logDiagnostic("recvData: sec1[%s]: %s", identifier, data);
@@ -896,7 +902,7 @@ final class MongoConnection {
 		static if (is(T == ubyte)) m_outRange.put(value);
 		else static if (is(T == int) || is(T == uint)) sendBytes(toBsonData(value));
 		else static if (is(T == long)) sendBytes(toBsonData(value));
-		else static if (is(T == Bson)) sendBytes(value.data);
+		else static if (is(T == Bson)) sendBytes(() @trusted { return value.data; } ());
 		else static if (is(T == string)) {
 			sendBytes(cast(const(ubyte)[])value);
 			sendBytes(cast(const(ubyte)[])"\0");
@@ -906,7 +912,7 @@ final class MongoConnection {
 		} else static assert(false, "Unexpected type: "~T.stringof);
 	}
 
-	private void sendBytes(in ubyte[] data){ m_outRange.put(data); }
+	private void sendBytes(scope const(ubyte)[] data){ m_outRange.put(data); }
 
 	private T recvInteger(T)() { ubyte[T.sizeof] ret; recv(ret); return fromBsonData!T(ret); }
 	private alias recvUByte = recvInteger!ubyte;
@@ -1071,7 +1077,7 @@ struct MongoDBInfo
 	bool empty;
 }
 
-private int sendLength(ARGS...)(ARGS args)
+private int sendLength(ARGS...)(scope ARGS args)
 {
 	import std.traits;
 	static if (ARGS.length == 1) {
@@ -1079,7 +1085,7 @@ private int sendLength(ARGS...)(ARGS args)
 		static if (is(T == string)) return cast(int)args[0].length + 1;
 		else static if (is(T == int)) return 4;
 		else static if (is(T == long)) return 8;
-		else static if (is(T == Bson)) return cast(int)args[0].data.length;
+		else static if (is(T == Bson)) return cast(int)() @trusted { return args[0].data.length; } ();
 		else static if (isArray!T) {
 			int ret = 0;
 			foreach (el; args[0]) ret += sendLength(el);
