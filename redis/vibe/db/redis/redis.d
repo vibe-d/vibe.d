@@ -774,7 +774,7 @@ final class RedisSubscriberImpl {
 
 	// Task will block until the listener is finished
 	private void waitForStop()
-	{
+	scope {
 		logTrace("waitForStop");
 		if (!m_listening) return;
 
@@ -1011,7 +1011,8 @@ final class RedisSubscriberImpl {
 		inTask(&impl);
 	}
 
-	private void inTask(scope void delegate() @safe impl) {
+	private static void inTask(scope void delegate() @safe impl)
+	@trusted {
 		logTrace("inTask");
 		if (Task.getThis() == Task())
 		{
