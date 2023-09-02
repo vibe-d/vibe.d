@@ -1041,11 +1041,8 @@ struct BsonObjectID {
 	*/
 	static BsonObjectID fromString(string str)
 	{
-		import std.conv : ConvException;
-		static const lengthex = new ConvException("BSON Object ID string must be 24 characters.");
-		static const charex = new ConvException("Not a valid hex string.");
+		if (str.length != 24) throwStaticConvEx!"BSON Object ID string must be 24 characters.";
 
-		if (str.length != 24) throw lengthex;
 		BsonObjectID ret = void;
 		uint b = 0;
 		foreach( i, ch; str ){
@@ -1053,7 +1050,7 @@ struct BsonObjectID {
 			if( ch >= '0' && ch <= '9' ) n = cast(ubyte)(ch - '0');
 			else if( ch >= 'a' && ch <= 'f' ) n = cast(ubyte)(ch - 'a' + 10);
 			else if( ch >= 'A' && ch <= 'F' ) n = cast(ubyte)(ch - 'F' + 10);
-			else throw charex;
+			else throwStaticConvEx!"Not a valid hex string.";
 			b <<= 4;
 			b += n;
 			if( i % 8 == 7 ){
@@ -1066,6 +1063,13 @@ struct BsonObjectID {
 	}
 	/// ditto
 	alias fromHexString = fromString;
+
+	private static void throwStaticConvEx(string msg)()
+	@trusted {
+		import std.conv : ConvException;
+		static __gshared ex = new ConvException(msg);
+		throw ex;
+	}
 
 	/** Generates a unique object ID.
 	 *
