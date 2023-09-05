@@ -4,6 +4,7 @@ import vibe.vibe;
 
 interface ITestAPI
 {
+	@safe:
 	@property ISub sub();
 
 	@method(HTTPMethod.POST) @path("other/path")
@@ -22,6 +23,7 @@ interface ITestAPI
 }
 
 interface ISub {
+	@safe:
 	int get(int id);
 }
 
@@ -49,6 +51,7 @@ class SubAPI : ISub {
 
 interface ITestAPICors
 {
+	@safe:
 	string getFoo();
 	string setFoo();
 	string addFoo();
