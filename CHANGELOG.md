@@ -4,6 +4,8 @@ Changelog
 v0.9.7 - 2023-08-29
 -------------------
 
+This release focuses on getting rid of most scope related deprecation warnings on modern compiler versions. There are still some left, some of which may need to be fixed in the compiler, but the overall compilation output is now pretty clean.
+
 ### Features and improvements ###
 
 - Added `CachedFileStream` as a means to provide a file backed random access stream for pure input streams - [pull #2742][issue2742], [pull #2745][issue2745]
