@@ -1160,3 +1160,9 @@ unittest {
 	url ~= InetPath.Segment("bar");
 	assert(url.toString() == "http://example.com/foo/bar");
 }
+
+unittest {
+	assert(URL.parse("foo:/foo/bar").toString() == "foo:/foo/bar");
+	assert(URL.parse("foo:/foo/bar").path.toString() == "/foo/bar");
+	assert(URL.parse("foo:foo/bar").toString() == "foo:foo/bar");
+}
