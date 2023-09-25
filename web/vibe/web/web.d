@@ -187,45 +187,47 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 		// Ignore special members, such as ctor, dtors, postblit, and opAssign,
 		// and object default methods and fields.
 		// See https://github.com/vibe-d/vibe.d/issues/2438
-		static if (M != "__ctor" && M != "__dtor" && M != "__xdtor" &&
-				   M != "__postblit" && M != "__xpostblit" && M != "opAssign" &&
-				   !is(typeof(__traits(getMember, Object, M))))
+		static if (M != "__ctor" && M != "__dtor" && M != "__xdtor" && M != "this"
+				   && M != "__postblit" && M != "__xpostblit" && M != "opAssign"
+				   && !is(typeof(__traits(getMember, Object, M))))
 		{
-			foreach (overload; MemberFunctionsTuple!(C, M)) {
-				alias RT = ReturnType!overload;
-				enum minfo = extractHTTPMethodAndName!(overload, true)();
-				enum url = minfo.hadPathUDA ? minfo.url : adjustMethodStyle(minfo.url, method_style);
+			foreach (overload; __traits(getOverloads, C, M)) {
+				static if (isPublic!overload) {
+					alias RT = ReturnType!overload;
+					enum minfo = extractHTTPMethodAndName!(overload, true)();
+					enum url = minfo.hadPathUDA ? minfo.url : adjustMethodStyle(minfo.url, method_style);
 
-				static if (findFirstUDA!(NoRouteAttribute, overload).found) {
-					import vibe.core.log : logDebug;
-					logDebug("Method %s.%s annotated with @noRoute - not generating a route entry.", C.stringof, M);
-				} else static if (is(RT == class) || is(RT == interface)) {
-					// nested API
-					static assert(
-						ParameterTypeTuple!overload.length == 0,
-						"Instances may only be returned from parameter-less functions ("~M~")!"
-					);
-					auto subsettings = settings.dup;
-					subsettings.urlPrefix = concatURL(url_prefix, url, true);
-					registerWebInterface!RT(router, __traits(getMember, instance, M)(), subsettings);
-				} else {
-					auto fullurl = concatURL(url_prefix, url);
-					router.match(minfo.method, fullurl, (HTTPServerRequest req, HTTPServerResponse res) @trusted {
-						handleRequest!(M, overload)(req, res, instance, settings);
-					});
-					if (settings.ignoreTrailingSlash && !fullurl.endsWith("*") && fullurl != "/") {
-						auto m = fullurl.endsWith("/") ? fullurl[0 .. $-1] : fullurl ~ "/";
-						router.match(minfo.method, m, delegate void (HTTPServerRequest req, HTTPServerResponse res) @safe {
-							static if (minfo.method == HTTPMethod.GET) {
-								URL redurl = req.fullURL;
-								auto redpath = redurl.path;
-								redpath.endsWithSlash = !redpath.endsWithSlash;
-								redurl.path = redpath;
-								res.redirect(redurl);
-							} else {
-								() @trusted { handleRequest!(M, overload)(req, res, instance, settings); } ();
-							}
+					static if (findFirstUDA!(NoRouteAttribute, overload).found) {
+						import vibe.core.log : logDebug;
+						logDebug("Method %s.%s annotated with @noRoute - not generating a route entry.", C.stringof, M);
+					} else static if (is(RT == class) || is(RT == interface)) {
+						// nested API
+						static assert(
+							ParameterTypeTuple!overload.length == 0,
+							"Instances may only be returned from parameter-less functions ("~M~")!"
+						);
+						auto subsettings = settings.dup;
+						subsettings.urlPrefix = concatURL(url_prefix, url, true);
+						registerWebInterface!RT(router, __traits(getMember, instance, M)(), subsettings);
+					} else {
+						auto fullurl = concatURL(url_prefix, url);
+						router.match(minfo.method, fullurl, (HTTPServerRequest req, HTTPServerResponse res) @trusted {
+							handleRequest!(M, overload)(req, res, instance, settings);
 						});
+						if (settings.ignoreTrailingSlash && !fullurl.endsWith("*") && fullurl != "/") {
+							auto m = fullurl.endsWith("/") ? fullurl[0 .. $-1] : fullurl ~ "/";
+							router.match(minfo.method, m, delegate void (HTTPServerRequest req, HTTPServerResponse res) @safe {
+								static if (minfo.method == HTTPMethod.GET) {
+									URL redurl = req.fullURL;
+									auto redpath = redurl.path;
+									redpath.endsWithSlash = !redpath.endsWithSlash;
+									redurl.path = redpath;
+									res.redirect(redurl);
+								} else {
+									() @trusted { handleRequest!(M, overload)(req, res, instance, settings); } ();
+								}
+							});
+						}
 					}
 				}
 			}
@@ -1108,4 +1110,10 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 	}
 
 	return ret;
+}
+
+static if (__VERSION__ >= 2096) {
+	enum isPublic(alias symbol) = __traits(getVisibility, symbol) == "public";
+} else {
+	enum isPublic(alias symbol) = __traits(getProtection, symbol) == "public";
 }
