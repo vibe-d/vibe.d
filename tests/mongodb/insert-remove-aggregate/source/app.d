@@ -89,6 +89,8 @@ void runTest(ushort port)
 			.map!(a => a["key2"].get!string)
 			.equal(["1", "2"]));
 
+	assert(coll.countDocuments(["key1": "value2"]) == 2);
+
 	// test distinct()
 	coll.drop();
 	coll.insertOne(["a": "first", "b": "foo"]);
