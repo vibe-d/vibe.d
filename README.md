@@ -1,4 +1,4 @@
-[![vibe.d](http://vibed.org/images/logo-and-title.png)](http://vibed.org)
+[![vibe.d](https://vibed.org/images/title-new.png)](http://vibed.org)
 
 vibe.d is a high-performance asynchronous I/O, concurrency and web application
 toolkit written in D. It already contains many supplemental features such as
