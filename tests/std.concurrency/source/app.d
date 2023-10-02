@@ -78,4 +78,6 @@ void main()
 		logInfo("Exiting.");
 		exitEventLoop(true);
 	});
+
+	runApplication();
 }
