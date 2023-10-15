@@ -502,7 +502,8 @@ final class MongoConnection {
 			command["getMore"] = Bson(cursor_id);
 			command["$db"] = Bson(database);
 			command["collection"] = Bson(collection_name);
-			command["batchSize"] = Bson(nret);
+			if (nret > 0)
+				command["batchSize"] = Bson(nret);
 			if (timeout != Duration.max && timeout.total!"msecs" < int.max)
 				command["maxTimeMS"] = Bson(cast(int)timeout.total!"msecs");
 
