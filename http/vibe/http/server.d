@@ -457,6 +457,7 @@ HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHe
 @safe {
 	auto tls = url.schema == "https";
 	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : tls ? 443 : 80);
+        ret.m_settings = new HTTPServerSettings;
 	ret.requestPath = url.path;
 	ret.queryString = url.queryString;
 	ret.username = url.username;
