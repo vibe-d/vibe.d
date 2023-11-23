@@ -19,10 +19,13 @@ import core.time;
 			`wait`/`notify` interface to limit the amount of concurrent I/O
 			operations. `vibe.core.sync` provides a suitable semaphore
 			implementation.
+		lock_args = Optional arguments to pass to the semaphore's `lock`/`wait`
+			method.
 
 	See_also: `SemaphoreStream`
 */
-auto createSemaphoreStream(Stream, Semaphore)(Stream stream, Semaphore semaphore)
+SemaphoreStream!(Stream, Semaphore, LockArgs) createSemaphoreStream
+	(Stream, Semaphore, LockArgs...)(Stream stream, Semaphore semaphore, LockArgs lock_args)
 	if (isInputStream!Stream || isOutputStream!Stream)
 {
 	static assert(
@@ -30,7 +33,7 @@ auto createSemaphoreStream(Stream, Semaphore)(Stream stream, Semaphore semaphore
 			|| is(typeof(semaphore.wait())) && is(typeof(semaphore.notify())),
 		"Semaphore type must have lock/unlock or wait/notify methods.");
 
-	return SemaphoreStream!(Stream, Semaphore)(stream, semaphore);
+	return SemaphoreStream!(Stream, Semaphore, LockArgs)(stream, semaphore, lock_args);
 }
 
 
@@ -43,16 +46,18 @@ auto createSemaphoreStream(Stream, Semaphore)(Stream stream, Semaphore semaphore
 
 	See_also: `createSemaphoreStream`
 */
-struct SemaphoreStream(Stream, Semaphore) {
+struct SemaphoreStream(Stream, Semaphore, LockArgs...) {
 	private {
 		Stream m_stream;
 		Semaphore m_semaphore;
+		LockArgs m_lockArgs;
 	}
 
-	private this(Stream stream, Semaphore semaphore)
+	private this(Stream stream, Semaphore semaphore, LockArgs lock_args)
 	{
 		m_stream = stream;
 		m_semaphore = semaphore;
+		m_lockArgs = lock_args;
 	}
 
 	static if (isInputStream!Stream) {
@@ -111,9 +116,9 @@ struct SemaphoreStream(Stream, Semaphore) {
 			}
 		}
 
-		static if (is(typeof(m_semaphore.lock())))
-			m_semaphore.lock();
-		else m_semaphore.wait();
+		static if (is(typeof(m_semaphore.lock(m_lockArgs))))
+			m_semaphore.lock(m_lockArgs);
+		else m_semaphore.wait(m_lockArgs);
 		return L(() @trusted { return &m_semaphore; } ());
 	}
 }
