@@ -457,7 +457,7 @@ HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHe
 @safe {
 	auto tls = url.schema == "https";
 	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : tls ? 443 : 80);
-        ret.m_settings = new HTTPServerSettings;
+	ret.m_settings = new HTTPServerSettings;
 	ret.requestPath = url.path;
 	ret.queryString = url.queryString;
 	ret.username = url.username;
@@ -658,8 +658,8 @@ final class HTTPServerSettings {
 	/// the url and all headers.
 	ulong maxRequestHeaderSize = 8192;
 
-        /// Maximum number of bytes in a single line in the request header.
-        ulong maxRequestHeaderLineSize = 4096;
+	/// Maximum number of bytes in a single line in the request header.
+	size_t maxRequestHeaderLineSize = 4096;
 
 	/// Sets a custom handler for displaying error pages for HTTP errors
 	@property HTTPServerErrorPageHandler errorPageHandler() @safe { return errorPageHandler_; }
@@ -2375,7 +2375,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 }
 
 
-private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size, ulong max_header_line_size)
+private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size, size_t max_header_line_size)
 	if (isInputStream!InputStream)
 {
 	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
