@@ -68,8 +68,19 @@ struct BufferedStream(S) {
 		{
 			if (this.buffers is null) return;
 
-			if (this.stream.writable)
-				flush();
+			if (this.stream.writable) {
+				try flush();
+				catch (Exception e) {
+					() @trusted {
+						Mallocator.instance.dispose(this.buffermemory);
+						Mallocator.instance.dispose(this.buffers);
+						this.buffermemory = null;
+						this.buffers = null;
+						destroy(stream);
+					} ();
+					throw e;
+				}
+			}
 
 			() @trusted {
 				Mallocator.instance.dispose(this.buffermemory);
@@ -199,8 +210,11 @@ struct BufferedStream(S) {
 	~this()
 	@safe {
 		if (m_state) {
-			if (!--m_state.refCount)
-				destroy(*m_state);
+			if (!--m_state.refCount) {
+				auto st = m_state;
+				m_state = null;
+				destroy(*st);
+			}
 		}
 	}
 
