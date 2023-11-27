@@ -1,6 +1,33 @@
 Changelog
 =========
 
+v0.9.8 - 2023-12-
+-------------------
+
+### Features and improvements ###
+
+- More work on DIP1000/`scope` deprecation warnings - [pull #2746][issue2746], [pull #2747][issue2747]
+- Moved the `HashMap` implementation to a new `vibe-container` package - [pull #2750][issue2750]
+- Added `SemaphoreStream` for implementing concurrency limited I/O - [pull #2754][issue2754]
+- Added `HTTPServerSettings.maxRequestHeaderLineSize` (by Charles Reiss) - [pull #2755][issue2755]
+
+### Bug fixes ###
+
+- Work around Phobos regression in `MemberFuntionsTuple` () - [pull #2750][issue2750]
+- Fixed a possible GC leak of the end callback stream in `HTTPClientResponse` - [pull #2751][issue2751]
+- Fixed a regression in `getMore` for MongoDB version 4.4 - [pull #2752][issue2752]
+- Fixed the behavior of `BufferedStream.~this()` in the event of I/O exceptions - [pull #2757][issue2757]
+
+[issue2746]: https://github.com/vibe-d/vibe.d/issues/2746
+[issue2747]: https://github.com/vibe-d/vibe.d/issues/2747
+[issue2750]: https://github.com/vibe-d/vibe.d/issues/2750
+[issue2751]: https://github.com/vibe-d/vibe.d/issues/2751
+[issue2752]: https://github.com/vibe-d/vibe.d/issues/2752
+[issue2754]: https://github.com/vibe-d/vibe.d/issues/2754
+[issue2755]: https://github.com/vibe-d/vibe.d/issues/2755
+[issue2757]: https://github.com/vibe-d/vibe.d/issues/2757
+
+
 v0.9.7 - 2023-08-29
 -------------------
 
