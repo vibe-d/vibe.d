@@ -457,6 +457,7 @@ HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHe
 @safe {
 	auto tls = url.schema == "https";
 	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : tls ? 443 : 80);
+	ret.m_settings = new HTTPServerSettings;
 	ret.requestPath = url.path;
 	ret.queryString = url.queryString;
 	ret.username = url.username;
@@ -656,6 +657,9 @@ final class HTTPServerSettings {
 	///	Maximum number of transferred bytes for the request header. This includes the request line
 	/// the url and all headers.
 	ulong maxRequestHeaderSize = 8192;
+
+	/// Maximum number of bytes in a single line in the request header.
+	size_t maxRequestHeaderLineSize = 4096;
 
 	/// Sets a custom handler for displaying error pages for HTTP errors
 	@property HTTPServerErrorPageHandler errorPageHandler() @safe { return errorPageHandler_; }
@@ -1170,7 +1174,7 @@ final class HTTPServerRequest : HTTPRequest {
 	private void parseFormAndFiles()
 	@safe scope {
 		m_form = FormFields.init;
-		parseFormData(m_form.get, m_files, headers.get("Content-Type", ""), bodyReader, MaxHTTPHeaderLineLength);
+		parseFormData(m_form.get, m_files, headers.get("Content-Type", ""), bodyReader, m_settings.maxRequestHeaderLineSize);
 	}
 }
 
@@ -1958,8 +1962,6 @@ final class HTTPServerContext {
 /* Private types                                                                                  */
 /**************************************************************************************************/
 
-private enum MaxHTTPHeaderLineLength = 4096;
-
 private final class LimitedHTTPInputStream : LimitedInputStream {
 @safe:
 
@@ -2182,7 +2184,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		}
 
 		// basic request parsing
-		parseRequestHeader(req, reqReader, request_allocator, settings.maxRequestHeaderSize);
+		parseRequestHeader(req, reqReader, request_allocator, settings.maxRequestHeaderSize, settings.maxRequestHeaderLineSize);
 		logTrace("Got request header.");
 
 		// find the matching virtual host
@@ -2373,13 +2375,13 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 }
 
 
-private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size)
+private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size, size_t max_header_line_size)
 	if (isInputStream!InputStream)
 {
 	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
 
 	logTrace("HTTP server reading status line");
-	auto reqln = () @trusted { return cast(string)stream.readLine(MaxHTTPHeaderLineLength, "\r\n", alloc); }();
+	auto reqln = () @trusted { return cast(string)stream.readLine(max_header_line_size, "\r\n", alloc); }();
 
 	logTrace("--------------------");
 	logTrace("HTTP server request:");
@@ -2402,7 +2404,7 @@ private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream 
 	req.httpVersion = parseHTTPVersion(reqln);
 
 	//headers
-	parseRFC5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc, false);
+	parseRFC5322Header(stream, req.headers, max_header_line_size, alloc, false);
 
 	foreach (k, v; req.headers.byKeyValue)
 		logTrace("%s: %s", k, v);
