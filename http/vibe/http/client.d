@@ -509,9 +509,11 @@ final class HTTPClient {
 		m_responding = true;
 
 		static if (is(T == HTTPClientResponse))
-			res = new HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
+			res = new HTTPClientResponse(this, close_conn);
 		else
-			res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
+			res = scoped!HTTPClientResponse(this, close_conn);
+
+		res.initialize(has_body, request_allocator, connected_time);
 
 		if (res.headers.get("Proxy-Authenticate", null) !is null){
 			res.dropBody();
@@ -556,7 +558,8 @@ final class HTTPClient {
 		bool has_body = doRequestWithRetry(requester, false, close_conn, connected_time);
 
 		m_responding = true;
-		auto res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
+		auto res = scoped!HTTPClientResponse(this, close_conn);
+		res.initialize(has_body, request_allocator, connected_time);
 
 		// proxy implementation
 		if (res.headers.get("Proxy-Authenticate", null) !is null) {
@@ -575,7 +578,8 @@ final class HTTPClient {
 				// just an informational status -> read and handle next response
 				if (m_responding) res.dropBody();
 				if (m_conn) {
-					res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
+					res = scoped!HTTPClientResponse(this, close_conn);
+					res.initialize(has_body, request_allocator, connected_time);
 					continue;
 				}
 			}
@@ -603,7 +607,8 @@ final class HTTPClient {
 		}
 		bool has_body = doRequestWithRetry(requester, false, close_conn, connected_time);
 		m_responding = true;
-		auto res = new HTTPClientResponse(this, has_body, close_conn, () @trusted { return vibeThreadAllocator(); } (), connected_time);
+		auto res = new HTTPClientResponse(this, close_conn);
+		res.initialize(has_body, () @trusted { return vibeThreadAllocator(); } (), connected_time);
 
 		// proxy implementation
 		if (res.headers.get("Proxy-Authenticate", null) !is null) {
@@ -1017,16 +1022,19 @@ final class HTTPClientResponse : HTTPResponse {
 	}
 
 	/// private
-	this(HTTPClient client, bool has_body, bool close_conn, IAllocator alloc, SysTime connected_time = Clock.currTime(UTC()))
-	{
+	this(HTTPClient client, bool close_conn)
+	nothrow {
 		m_client = client;
 		m_closeConn = close_conn;
+	}
 
+	private void initialize(bool has_body, IAllocator alloc, SysTime connected_time = Clock.currTime(UTC()))
+	{
 		scope(failure) finalize(true);
 
 		// read and parse status line ("HTTP/#.# #[ $]\r\n")
 		logTrace("HTTP client reading status line");
-		string stln = () @trusted { return cast(string)client.m_stream.readLine(HTTPClient.maxHeaderLineLength, "\r\n", alloc); } ();
+		string stln = () @trusted { return cast(string)m_client.m_stream.readLine(HTTPClient.maxHeaderLineLength, "\r\n", alloc); } ();
 		logTrace("stln: %s", stln);
 		this.httpVersion = parseHTTPVersion(stln);
 
@@ -1040,7 +1048,7 @@ final class HTTPClientResponse : HTTPResponse {
 		}
 
 		// read headers until an empty line is hit
-		parseRFC5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc, false);
+		parseRFC5322Header(m_client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc, false);
 
 		logTrace("---------------------");
 		logTrace("HTTP client response:");
