@@ -2481,7 +2481,7 @@ private string formatRFC822DateAlloc(SysTime time)
 	static LAST = CacheTime(SysTime.min());
 
 	if (time > LAST.nextUpdate) {
-		auto app = new FixedAppender!(string, 29);
+		auto app = new FixedAppender!(string, 32);
 		writeRFC822DateTimeString(app, time);
 		LAST.update(time);
 		LAST.cachedDate = () @trusted { return app.data; } ();
