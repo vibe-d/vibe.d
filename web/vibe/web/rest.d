@@ -1868,8 +1868,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 			query.filterURLEncode(ARGS[i].toString());
 		else
 		// Note: CTFE triggers compiler bug here (think we are returning Json, not string).
-				query.filterURLEncode(toRestString(
-				serializeWithPolicy!(JsonSerializer, SerPolicyType)(ARGS[i])));
+				query.filterURLEncode(toRestString!SerPolicyType(ARGS[i]));
 	}
 
 	foreach (i, PT; PTT) {
@@ -1914,7 +1913,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 				foreach (j, PT; PTT) {
 					static if (sroute.parameters[j].name[0] == '_' || sroute.parameters[j].name == "id") {
 						case sroute.parameters[j].name:
-							url ~= urlEncode(toRestString(serializeToJson(ARGS[j])));
+							url ~= urlEncode(toRestString(ARGS[j]));
 							goto sbrk;
 					}
 				}
@@ -2103,14 +2102,22 @@ private {
 	import vibe.data.json;
 	import std.conv : to;
 
-	string toRestString(Json value)
+	string toRestString(alias SerPolicyType = DefaultPolicy, T)(T value)
 	@safe {
-		switch (value.type) {
-			default: return value.toString();
-			case Json.Type.bool_: return value.get!bool ? "true" : "false";
-			case Json.Type.int_: return to!string(value.get!long);
-			case Json.Type.float_: return to!string(value.get!double);
-			case Json.Type.string: return value.get!string;
+		import std.array : Appender, appender;
+		import std.uuid : UUID;
+		static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
+		else static if (is(T == bool)) return value ? "true" : "false";
+		else static if (is(T : int)) return to!string(value);
+		else static if (is(T : double)) return to!string(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
+		else static if (is(string : T)) return value;
+		else static if (__traits(compiles, value.toISOExtString)) return value.toISOExtString;
+		else static if (__traits(compiles, value.toString)) return value.toString;
+		else static if (is(T == UUID)) return value.toString();
+		else {
+			auto ret = appender!string;
+			serializeWithPolicy!(JsonStringSerializer!(Appender!string), SerPolicyType, T)(value, ret);
+			return ret.data;
 		}
 	}
 
