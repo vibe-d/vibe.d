@@ -483,6 +483,8 @@ interface Example8API
 		double d;
 	}
 
+	enum E { foo, bar }
+
 	FooType constFoo (const FooType param);
 	FooType constRefFoo (const ref FooType param);
 	FooType inFoo (in FooType param);
@@ -491,6 +493,7 @@ interface Example8API
 	int[] constRefArr (const ref int[] param);
 	int[] inArr (in int[] param);
 	int[] immutableArr (immutable int[] param);
+	E getEnum(E value);
 }
 
 class Example8 : Example8API
@@ -536,6 +539,14 @@ class Example8 : Example8API
 	{
 		return param;
 	}
+
+	E getEnum(E value)
+	{
+		final switch (value) {
+			case E.foo: return E.bar;
+			case E.bar: return E.foo;
+		}
+	}
 }
 
 unittest
@@ -552,6 +563,7 @@ unittest
 	assert (routes[5].method == HTTPMethod.POST && routes[5].pattern == "/example8_api/const_ref_arr");
 	assert (routes[6].method == HTTPMethod.POST && routes[6].pattern == "/example8_api/in_arr");
 	assert (routes[7].method == HTTPMethod.POST && routes[7].pattern == "/example8_api/immutable_arr");
+	assert (routes[8].method == HTTPMethod.GET && routes[7].pattern == "/example8_api/enum");
 }
 
 void runTests(string url)
@@ -714,6 +726,8 @@ void runTests(string url)
 		assert(arr.equal(api.constRefArr(arr)));
 		assert(arr.equal(api.immutableArr(cast(immutable(int[])) arr)));
 		assert(arr.equal(api.inArr(arr)));
+		assert(api.getEnum(Example8API.E.foo) == Example8API.E.bar);
+		assert(api.getEnum(Example8API.E.bar) == Example8API.E.foo);
 	}
 }
 
