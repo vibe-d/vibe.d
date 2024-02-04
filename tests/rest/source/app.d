@@ -483,7 +483,11 @@ interface Example8API
 		double d;
 	}
 
-	enum E { foo, bar }
+	enum E {
+		foo = 0,
+		bar = 1,
+		baz = 0
+	}
 
 	FooType constFoo (const FooType param);
 	FooType constRefFoo (const ref FooType param);
@@ -728,6 +732,7 @@ void runTests(string url)
 		assert(arr.equal(api.inArr(arr)));
 		assert(api.getEnum(Example8API.E.foo) == Example8API.E.bar);
 		assert(api.getEnum(Example8API.E.bar) == Example8API.E.foo);
+		assert(api.getEnum(Example8API.E.baz) == Example8API.E.bar);
 	}
 }
 
