@@ -733,8 +733,8 @@ struct MongoCollection {
 			static if (name != "filter" && name != "skip" && name != "limit")
 				__traits(getMember, aggOptions, name) = field;
 		}
-		auto reply = aggregate(pipeline, aggOptions).front;
-		return reply["n"].to!long;
+		auto reply = aggregate(pipeline, aggOptions);
+		return reply.empty ? 0 : reply.front["n"].to!long;
 	}
 
 	/**
