@@ -10,6 +10,8 @@ module vibe.db.mongo.cursor;
 public import vibe.data.bson;
 public import vibe.db.mongo.impl.crud;
 
+import vibe.core.log;
+
 import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
 
@@ -115,10 +117,15 @@ struct MongoCursor(DocType = Bson) {
 		if( m_data ) m_data.refCount++;
 	}
 
-	~this()
+	~this() @safe
 	{
 		if( m_data && --m_data.refCount == 0 ){
-			m_data.killCursors();
+			try {
+				m_data.killCursors();
+			} catch (MongoException e) {
+				logWarn("MongoDB failed to kill cursors: %s", e.msg);
+				logDiagnostic("%s", (() @trusted => e.toString)());
+			}
 		}
 	}
 
@@ -383,8 +390,8 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 
 	final void killCursors()
 	@safe {
-		if (m_cursor == 0) return;
 		auto conn = m_client.lockConnection();
+		if (m_cursor == 0) return;
 		conn.killCursors(m_collection, () @trusted { return (&m_cursor)[0 .. 1]; } ());
 		m_cursor = 0;
 	}
@@ -419,6 +426,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		MongoClient m_client;
 		Bson m_findQuery;
 		string m_database;
+		string m_ns;
 		string m_collection;
 		long m_cursor;
 		int m_batchSize;
@@ -507,15 +515,16 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 
 	final void killCursors()
 	@safe {
-		if (m_cursor == 0) return;
 		auto conn = m_client.lockConnection();
-		conn.killCursors(m_collection, () @trusted { return (&m_cursor)[0 .. 1]; } ());
+		if (m_cursor == 0) return;
+		conn.killCursors(m_ns, () @trusted { return (&m_cursor)[0 .. 1]; } ());
 		m_cursor = 0;
 	}
 
 	final void handleReply(long id, string ns, size_t count)
 	{
 		m_cursor = id;
+		m_ns = ns;
 		// The qualified collection name is reported here, but when requesting
 		// data, we need to send the database name and the collection name
 		// separately, so we have to remove the database prefix:
