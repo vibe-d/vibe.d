@@ -24,6 +24,7 @@ import std.conv;
 import std.exception;
 import std.meta : AliasSeq;
 import std.string;
+import std.traits : FieldNameTuple;
 import std.typecons : Nullable, tuple, Tuple;
 
 
@@ -253,17 +254,57 @@ struct MongoCollection {
 	}
 
 	/**
-		Replaces at most single document within the collection based on the filter.
+		Replaces at most single document within the collection based on the
+		filter.
+
+		It's recommended to use the ReplaceOptions overload, but UpdateOptions
+		can be used as well. Note that the extra options inside UpdateOptions
+		may have no effect, possible warnings for this may only be handled by
+		MongoDB.
 
 		See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/db.collection.replaceOne/#mongodb-method-db.collection.replaceOne)
 
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
 	*/
+	UpdateResult replaceOne(T, U)(T filter, U replacement, ReplaceOptions options)
+	@safe {
+		UpdateOptions uoptions;
+		static foreach (f; FieldNameTuple!ReplaceOptions)
+			__traits(getMember, uoptions, f) = __traits(getMember, options, f);
+		Bson opts = Bson.emptyObject;
+		opts["multi"] = Bson(false);
+		return updateImpl([filter], [replacement], [opts], uoptions, true, false);
+	}
+
+	/// ditto
 	UpdateResult replaceOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
 	@safe {
 		Bson opts = Bson.emptyObject;
 		opts["multi"] = Bson(false);
 		return updateImpl([filter], [replacement], [opts], options, true, false);
+	}
+
+	///
+	@safe unittest {
+		import vibe.db.mongo.mongo;
+
+		void test(BsonObjectID id)
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+
+			// replaces the existing document with _id == id to `{_id: id, name: "Bob"}`
+			// or if it didn't exist before this will just insert, since we enabled `upsert`
+			ReplaceOptions options;
+			options.upsert = true;
+			coll.replaceOne(
+				["_id": id],
+				[
+					"_id": Bson(id),
+					"name": Bson("Bob")
+				],
+				options
+			);
+		}
 	}
 
 	/**
