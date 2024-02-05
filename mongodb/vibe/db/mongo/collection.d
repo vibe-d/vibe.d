@@ -139,13 +139,13 @@ struct MongoCollection {
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
-		
-		database.runCommandChecked(cmd);
+
+		database.runCommandChecked(cmd).handleWriteResult(res);
 		return res;
 	}
 
 	/// ditto
-	InsertOneResult insertMany(T)(T[] documents, InsertManyOptions options = InsertManyOptions.init)
+	InsertManyResult insertMany(T)(T[] documents, InsertManyOptions options = InsertManyOptions.init)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
@@ -168,9 +168,10 @@ struct MongoCollection {
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
-		
-		database.runCommandChecked(cmd);
-		return InsertManyResult(insertedIds);
+
+		auto res = InsertManyResult(insertedIds);
+		database.runCommandChecked(cmd).handleWriteResult!"insertedCount"(res);
+		return res;
 	}
 
 	/**
@@ -249,8 +250,9 @@ struct MongoCollection {
 		}
 		cmd["deletes"] = Bson(deletesBson);
 
-		auto n = database.runCommandChecked(cmd)["n"].to!long;
-		return DeleteResult(n);
+		DeleteResult res;
+		database.runCommandChecked(cmd).handleWriteResult!"deletedCount"(res);
+		return res;
 	}
 
 	/**
@@ -394,7 +396,7 @@ struct MongoCollection {
 						if (k.startsWith("$"))
 							anyDollar = true;
 						debug {} // server checks that the rest is consistent (only $ or only non-$ allowed)
-                        else break; // however in debug mode we check the full document, as we can give better error messages to the dev
+						else break; // however in debug mode we check the full document, as we can give better error messages to the dev
 						// also nice side effect: if this is an empty document, this also matches the assert(false) branch.
 					}
 
@@ -419,14 +421,15 @@ struct MongoCollection {
 			res["n"].to!long,
 			res["nModified"].to!long,
 		);
+		res.handleWriteResult(ret);
 		auto upserted = res["upserted"].opt!(Bson[]);
 		if (upserted.length)
 		{
 			ret.upsertedIds.length = upserted.length;
 			foreach (i, upsert; upserted)
-            {
+			{
 				ret.upsertedIds[i] = upsert["_id"].get!BsonObjectID;
-            }
+			}
 		}
 		return ret;
 	}
@@ -747,7 +750,7 @@ struct MongoCollection {
 	/**
 		Returns the count of documents that match the query for a collection or
 		view.
-		
+
 		The method wraps the `$group` aggregation stage with a `$sum` expression
 		to perform the count.
 
@@ -1188,9 +1191,9 @@ struct MongoCollection {
 	}
 
 	/**
-		Returns an array that holds a list of documents that identify and describe the existing indexes on the collection. 
+		Returns an array that holds a list of documents that identify and describe the existing indexes on the collection.
 	*/
-	MongoCursor!R listIndexes(R = Bson)() 
+	MongoCursor!R listIndexes(R = Bson)()
 	@safe {
 		MongoConnection conn = m_client.lockConnection();
 		if (conn.description.satisfiesVersion(WireVersion.v30)) {

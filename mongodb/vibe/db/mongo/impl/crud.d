@@ -9,6 +9,7 @@ module vibe.db.mongo.impl.crud;
 
 import core.time;
 
+import vibe.db.mongo.connection : MongoException;
 import vibe.db.mongo.collection;
 import vibe.data.bson;
 
@@ -151,7 +152,7 @@ struct FindOptions
 		satisfy a tailable cursor query. This only applies to a TAILABLE_AWAIT
 		cursor. When the cursor is not a TAILABLE_AWAIT cursor, this option is
 		ignored.
-		
+
 		Note: This option is specified as "maxTimeMS" in the getMore command and
 		not provided as part of the initial find command.
 	*/
@@ -475,7 +476,7 @@ struct AggregateOptions
 		satisfy a tailable cursor query. This only applies to a TAILABLE_AWAIT
 		cursor. When the cursor is not a TAILABLE_AWAIT cursor, this option is
 		ignored.
-		
+
 		Note: This option is specified as "maxTimeMS" in the getMore command and
 		not provided as part of the initial find command.
 	*/
@@ -818,43 +819,6 @@ struct DeleteOptions {
 	Nullable!Bson let;
 }
 
-struct BulkWriteResult {
-	/**
-		Number of documents inserted.
-	*/
-	long insertedCount;
-
-	/**
-		The identifiers that were automatically generated, if not set.
-	*/
-	BsonObjectID[size_t] insertedIds;
-
-	/**
-		Number of documents matched for update.
-	*/
-	long matchedCount;
-
-	/**
-		Number of documents modified.
-	*/
-	long modifiedCount;
-
-	/**
-		Number of documents deleted.
-	*/
-	long deletedCount;
-
-	/**
-		Number of documents upserted.
-	*/
-	long upsertedCount;
-
-	/**
-		Map of the index of the operation to the id of the upserted document.
-	*/
-	BsonObjectID[size_t] upsertedIds;
-}
-
 struct InsertOneResult {
 	/**
 		The identifier that was automatically generated, if not set.
@@ -867,6 +831,10 @@ struct InsertManyResult {
 		The identifiers that were automatically generated, if not set.
 	*/
 	BsonObjectID[size_t] insertedIds;
+	/**
+		The number of documents that were inserted.
+	*/
+	long insertedCount;
 }
 
 struct DeleteResult {
@@ -893,4 +861,81 @@ struct UpdateResult {
 		helper.
 	*/
 	BsonObjectID[] upsertedIds;
+}
+
+/**
+	Describes a failed write command result for a single document.
+
+	See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/method/WriteResult/)
+
+	Standards: $(LINK https://github.com/mongodb/specifications/blob/0b6b96b758259edc91c2fc475bcf08eea54e08e2/source/crud/crud.rst#L1745)
+*/
+struct BulkWriteError
+{
+	/**
+	 * An integer value identifying the write error.
+	 */
+	int code;
+	/**
+	 * A document providing more information about the write error (e.g. details
+	 * pertaining to document validation).
+	 */
+	@optional @name("errInfo") Bson details;
+	/**
+	 * A description of the error.
+	 */
+	@optional @name("errmsg") string message;
+	/**
+	 * The index of the request that errored.
+	 */
+	@optional int index;
+}
+
+/**
+ * Exception for partially or fully failed writes from `insert`, `update` or
+ * `delete`.
+ */
+class MongoBulkWriteException : MongoException
+{
+@safe:
+	BulkWriteError[] errors;
+
+	this(BulkWriteError[] errors, string file = __FILE__,
+			size_t line = __LINE__, Throwable next = null)
+	{
+		import std.algorithm : map;
+		import std.string : join;
+
+		super("Failed to write all documents:\n"
+			~ errors.map!(e => "- " ~ e.message).join("\n"), file, line, next);
+
+		this.errors = errors;
+	}
+}
+
+/**
+ * Handles the raw DB response from `insert`, `update` or `delete` operations.
+ *
+ * If the `countField` template argument is set, that field is set on `result`
+ * to `dbResult["n"]`, if it exists.
+ */
+package(vibe.db.mongo) void handleWriteResult(string countField = null, T)(
+	Bson dbResult, ref T result, string file = __FILE__, size_t line = __LINE__)
+{
+	auto dbObject = dbResult.get!(Bson[string]);
+	static if (countField != null)
+	{
+		if (auto n = "n" in dbObject)
+			__traits(getMember, result, countField) = n.to!long;
+	}
+
+	if (auto writeErrors = "writeErrors" in dbObject)
+	{
+		if (writeErrors.type == Bson.Type.array)
+		{
+			auto errors = deserializeBson!(BulkWriteError[])(*writeErrors);
+			if (errors.length > 0)
+				throw new MongoBulkWriteException(errors, file, line);
+		}
+	}
 }
