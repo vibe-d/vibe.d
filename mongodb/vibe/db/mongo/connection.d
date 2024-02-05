@@ -959,7 +959,7 @@ final class MongoConnection {
 
 	private int nextMessageId() { return m_msgid++; }
 
-	private void checkForError(string collection_name)
+	deprecated private void checkForError(string collection_name)
 	{
 		auto coll = collection_name.split(".")[0];
 		auto err = getLastError(coll);
