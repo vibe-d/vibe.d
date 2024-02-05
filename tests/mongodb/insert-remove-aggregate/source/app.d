@@ -11,6 +11,7 @@ import vibe.db.mongo.mongo;
 import std.algorithm : all, canFind, equal, map, sort;
 import std.conv : to;
 import std.encoding : sanitize;
+import std.exception : assertThrown;
 
 struct DBTestEntry
 {
@@ -101,6 +102,48 @@ void runTest(ushort port)
 	auto d = coll.distinct!string("b", ["a": "first"]).array;
 	d.sort!"a<b";
 	assert(d == ["bar", "foo"]);
+
+	testIndexInsert(client);
+}
+
+void testIndexInsert(MongoClient client)
+{
+	MongoCollection coll = client.getCollection("test.indexedinsert");
+	coll.deleteAll();
+	auto n = coll.insertMany([
+		Bson([
+			"_id": Bson(1),
+			"username": Bson("Bob")
+		]),
+		Bson([
+			"_id": Bson(2),
+			"username": Bson("Alice")
+		]),
+	]);
+	assert(n.insertedCount == 2);
+
+	assertThrown(coll.insertOne(Bson([
+		"_id": Bson(2), // duplicate _id
+		"username": Bson("Tom")
+	])));
+
+	IndexOptions indexOptions;
+	indexOptions.unique = true;
+	coll.createIndex(IndexModel.init
+		.withOptions(indexOptions)
+		.add("username", 1));
+
+	coll.insertOne(Bson([
+		"_id": Bson(3),
+		"username": Bson("Charlie")
+	]));
+
+	assertThrown(coll.insertOne(Bson([
+		"_id": Bson(4),
+		"username": Bson("Bob") // duplicate username
+	])));
+
+	assert(coll.estimatedDocumentCount == 3);
 }
 
 int main(string[] args)
