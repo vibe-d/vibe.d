@@ -85,6 +85,7 @@ class MongoDriverException : MongoException
  * It does not indicate problem with vibe.d driver itself. Most frequently this
  * one is thrown when MongoConnection is in checked mode and getLastError() has something interesting.
  */
+deprecated("Check for MongoException instead - the modern write commands now throw MongoBulkWriteException on error")
 class MongoDBException : MongoException
 {
 @safe:
@@ -992,7 +993,7 @@ final class MongoConnection {
 	private void authenticate()
 	{
 		scope (failure) disconnect();
-	
+
 		string cn = m_settings.getAuthDatabase;
 
 		auto cmd = Bson(["getnonce": Bson(1)]);
