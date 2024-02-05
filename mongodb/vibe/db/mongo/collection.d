@@ -285,7 +285,7 @@ struct MongoCollection {
 	}
 
 	///
-	@safe deprecated unittest {
+	@safe unittest {
 		import vibe.db.mongo.mongo;
 
 		void test(BsonObjectID id)
