@@ -52,7 +52,6 @@ final class MongoSessionStore : SessionStore {
 
 		Params:
 			url = URL of the MongoDB database (e.g. `"mongodb://localhost/mydb"`)
-			database = Name of the database to use
 			collection = Optional collection name to store the sessions in
 	*/
 	this(string url, string collection = "sessions")
@@ -64,6 +63,27 @@ final class MongoSessionStore : SessionStore {
 			"Failed to parse MongoDB URL.");
 		auto db = connectMongoDB(settings).getDatabase(settings.database);
 		m_sessions = db[collection];
+	}
+
+	/** Constructs a new MongoDB session store using an existing DB.
+
+		Params:
+			db = the connected MongoDB database.
+			collection = the collection name for the sessions collection.
+	*/
+	this(MongoDatabase db, string collection = "sessions")
+	{
+		m_sessions = db[collection];
+	}
+
+	/** Constructs a new MongoDB session store using a collection object.
+
+		Params:
+			collection = the collection to store sessions in.
+	*/
+	this(MongoCollection collection)
+	{
+		m_sessions = collection;
 	}
 
 	/** The duration without access after which a session expires.
