@@ -6,6 +6,7 @@ import vibe.http.common : HTTPMethod;
 
 // Defines a simple RESTful API
 interface ITest {
+@safe:
 	// GET /compute_sum?a=...&b=...
 	@method(HTTPMethod.GET)
 	float computeSum(float a, float b);

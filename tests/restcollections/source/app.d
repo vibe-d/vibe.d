@@ -3,10 +3,12 @@ module app;
 import vibe.vibe;
 
 interface API {
+@safe:
 	Collection!ItemAPI items();
 }
 
 interface ItemAPI {
+@safe:
 	struct CollectionIndices {
 		string _item;
 	}
@@ -17,6 +19,7 @@ interface ItemAPI {
 }
 
 interface SubItemAPI {
+@safe:
 	struct CollectionIndices {
 		string _item;
 		int _index;
@@ -29,6 +32,7 @@ interface SubItemAPI {
 }
 
 interface ItemManagerAPI {
+@safe:
 	@property string databaseURL();
 }
 
