@@ -135,7 +135,7 @@ import vibe.internal.meta.traits;
 import vibe.internal.meta.uda;
 
 import std.array : Appender, appender;
-import std.conv : to;
+import std.conv : ConvException, to;
 import std.exception : enforce;
 import std.range.primitives : ElementType, isInputRange;
 import std.traits;
@@ -718,7 +718,13 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			static if (hasPolicyAttributeL!(ByNameAttribute, Policy, ATTRIBUTES)) {
 				return ser.deserializeValue!(string, ATTRIBUTES).to!T();
 			} else {
-				return cast(T)ser.deserializeValue!(OriginalType!T);
+				auto value = ser.deserializeValue!(OriginalType!T);
+				switch (value) {
+					default:
+						throw new ConvException("Unexpected enum value " ~ value.to!string);
+					static foreach (enumvalue; NoDuplicates!(EnumMembers!T))
+						case enumvalue: return enumvalue;
+				}
 			}
 		} else static if (Serializer.isSupportedValueType!T) {
 			return ser.readValue!(Traits, T)();
@@ -2211,4 +2217,47 @@ unittest { // issue #2110 - single-element tuples
 	expected = "D("~Sn~"){}D("~Sn~")";
 	assert(serialize!TestSerializer(s) == expected);
 	assert(deserialize!(TestSerializer, S)(expected) == s);
+}
+
+unittest {
+	import std.conv : ConvException;
+	import std.exception : assertThrown, assertNotThrown;
+
+	enum Testable : string {
+		foo = "foo",
+		bar = "bar",
+		baz = "bar"
+	}
+
+	Testable deserializeString(string value) {
+		return deserialize!(TestSerializer, Testable)("V(Aya)(" ~ value ~ ")");
+	}
+
+	foreach (string val; ["foo", "bar"])
+		assert(deserializeString(val) == val.to!Testable);
+
+	assertThrown!ConvException(deserializeString("foobar"));
+}
+
+unittest {
+	import std.conv : ConvException;
+	import std.exception : assertThrown, assertNotThrown;
+
+	enum Foo {
+		foobar
+	};
+
+	struct Testable {
+		@byName
+		Foo bar;
+	}
+
+	void deserializeString(string value) {
+		auto d = "D(" ~ Testable.mangleof ~ ")";
+		auto de = "DE(" ~ Foo.mangleof ~ ",bar)";
+		deserialize!(TestSerializer, Testable)(d ~ "{" ~ de ~ "(V(Aya)(" ~ value ~ "))" ~ de ~ "}" ~ d);
+	}
+
+	assertNotThrown(deserializeString("foobar"));
+	assertThrown!ConvException(deserializeString("baz"));
 }
