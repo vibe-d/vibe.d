@@ -2171,6 +2171,10 @@ private {
 
 		struct Foo { int bar; }
 		assertHTTPStatus(fromRestString!(Foo)("foo"), HTTPStatus.badRequest);
+
+		enum Bar { foo, bar }
+		assert(fromRestString!(Bar)("bar") == Bar.bar);
+		assertHTTPStatus(fromRestString!(Bar)("foobarbaz"), HTTPStatus.badRequest);
 	}
 }
 
