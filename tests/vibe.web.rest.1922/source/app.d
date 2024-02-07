@@ -44,6 +44,7 @@ struct AuthInfo {
 
 @requiresAuth
 interface IItemAPI {
+@safe:
 	struct CollectionIndices {
 		string item;
 	}
@@ -66,6 +67,7 @@ class ItemAPI : IItemAPI {
 
 @requiresAuth
 interface IAuthAPI {
+@safe:
 	@noAuth int getNonAuthNumber(int num);
 	@anyAuth int getAuthNumber(AuthInfo info, int num);
 	@anyAuth Collection!IItemAPI items();

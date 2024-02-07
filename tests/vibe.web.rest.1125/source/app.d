@@ -21,6 +21,7 @@ shared static this()
 }
 
 interface ILlama {
+@safe:
     @bodyParam("llama", "llama")
     string updateLlama(string llama = null);
 }

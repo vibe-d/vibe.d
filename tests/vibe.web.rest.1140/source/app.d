@@ -3,11 +3,13 @@ import vibe.d;
 
 interface IOrientDBRoot
 {
+@safe:
 	@property IOrientDBQuery query();
 }
 
 interface IOrientDBQuery
 {
+@safe:
 	@method(HTTPMethod.GET)
 	@path(":db_name/sql/:query/:result_set_size")
 	Json sql(string _db_name, string _query, int _result_set_size);
