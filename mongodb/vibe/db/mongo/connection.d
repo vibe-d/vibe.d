@@ -1120,7 +1120,7 @@ struct ServerDescription
 	Nullable!BsonDate lastWriteDate;
 	Nullable!BsonObjectID opTime;
 	ServerType type = ServerType.unknown;
-	WireVersion minWireVersion, maxWireVersion;
+	int minWireVersion, maxWireVersion;
 	string me;
 	string[] hosts, passives, arbiters;
 	string[string] tags;
@@ -1153,7 +1153,8 @@ enum WireVersion : int
 	v50 = 13,
 	v51 = 14,
 	v52 = 15,
-	v53 = 16
+	v53 = 16,
+	v60 = 17
 }
 
 private string getHostArchitecture()

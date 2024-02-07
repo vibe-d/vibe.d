@@ -1477,7 +1477,7 @@ struct MaxWireVersion
 MaxWireVersion until(WireVersion v) @safe { return MaxWireVersion(v); }
 
 /// Unsets nullable fields not matching the server version as defined per UDAs.
-void enforceWireVersionConstraints(T)(ref T field, WireVersion serverVersion,
+void enforceWireVersionConstraints(T)(ref T field, int serverVersion,
 	string file = __FILE__, size_t line = __LINE__)
 @safe {
 	import std.traits : getUDAs;
