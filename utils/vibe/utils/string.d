@@ -26,6 +26,7 @@ import core.exception;
 	Takes a string with possibly invalid UTF8 sequences and outputs a valid UTF8 string as near to
 	the original as possible.
 */
+deprecated("Use `std.encoding.sanitize` instead")
 string sanitizeUTF8(in ubyte[] str)
 @safe pure {
 	import std.utf;
