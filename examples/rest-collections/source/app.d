@@ -48,7 +48,10 @@ class LocalThreadAPI : ThreadAPI {
 
 	string[] get()
 	{
-		return m_data.threads.keys;
+		static if (__VERSION__ < 2099) {
+			// NOTE: .keys is not @safe on older compiler versions
+			return () @trusted { return m_data.threads.keys; } ();
+		} else return m_data.threads.keys;
 	}
 }
 
