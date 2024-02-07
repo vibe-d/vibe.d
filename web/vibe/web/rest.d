@@ -1445,10 +1445,10 @@ alias after = vibe.internal.meta.funcattr.after;
  */
 private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(T inst, ref RestInterface!T intf)
 {
+	import std.encoding : sanitize;
 	import std.string : format;
 	import std.traits : Unqual;
 	import vibe.http.common : enforceBadRequest;
-	import vibe.utils.string : sanitizeUTF8;
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.internal.meta.funcattr : IsAttributedParameter, computeAttributedParameterCtx;
 	import vibe.internal.meta.traits : derivedMethod;
@@ -1496,7 +1496,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 					res.statusCode = se.status;
 				else debug {
 					res.statusCode = HTTPStatus.internalServerError;
-					debugMsg = () @trusted { return sanitizeUTF8(cast(ubyte[])e.toString()); }();
+					debugMsg = e.toString().sanitize();
 				}
 				else
 					res.statusCode = default_status;

@@ -256,7 +256,7 @@ void decodeEncodedWords(R)(ref R dst, string encoded)
 			auto cs = code[0 .. idx];
 			auto enc = code[idx+1];
 			auto data = code[idx+3 .. $];
-			ubyte[] textenc;
+			const(ubyte)[] textenc;
 			switch(enc){
 				default: textenc = cast(ubyte[])data; break;
 				case 'B': textenc = Base64.decode(data); break;
@@ -264,7 +264,7 @@ void decodeEncodedWords(R)(ref R dst, string encoded)
 			}
 
 			switch(cs){
-				default: dst.put(sanitizeUTF8(textenc)); break;
+				default: dst.put(sanitize(cast(string)textenc)); break;
 				case "UTF-8": dst.put(cast(string)textenc); break;
 				case "ISO-8859-15": // hack...
 				case "ISO-8859-1":
@@ -321,15 +321,21 @@ string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
 @safe {
 	import std.algorithm;
 	import std.base64;
+	import std.encoding : sanitize;
 
 	const(ubyte)[] msg = message_body;
+	immutable(ubyte)[] msgdec;
 	switch (content_transfer_encoding) {
-		default: break;
-		case "quoted-printable": msg = QuotedPrintable.decode(cast(const(char)[])msg); break;
+		default:
+			msgdec = msg.idup;
+			break;
+		case "quoted-printable":
+			msgdec = QuotedPrintable.decode(cast(const(char)[])msg);
+			break;
 		case "base64":
-			try msg = Base64.decode(msg);
+			try msgdec = Base64.decode(msg);
 			catch(Exception e){
-				auto dst = appender!(ubyte[])();
+				auto dst = appender!(immutable(ubyte)[])();
 				try {
 					auto dec = Base64.decoder(filter!(ch => ch != '\r' && ch != '\n')(msg));
 					while( !dec.empty ){
@@ -340,12 +346,12 @@ string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
 					dst.put(cast(const(ubyte)[])"\r\n-------\r\nDECODING ERROR: ");
 					dst.put(cast(const(ubyte)[])() @trusted { return e.toString(); } ());
 				}
-				msg = dst.data();
+				msgdec = dst.data();
 			}
 			break;
 	}
 	// TODO: do character encoding etc.
-	return sanitizeUTF8(msg);
+	return () @trusted { return sanitize(cast(string)msgdec); } ();
 }
 
 
@@ -368,9 +374,9 @@ alias InetHeaderMap = DictionaryList!(string, false, 12);
 	Performs quoted-printable decoding.
 */
 struct QuotedPrintable {
-	static ubyte[] decode(in char[] input, bool in_header = false)
+	static immutable(ubyte)[] decode(in char[] input, bool in_header = false)
 	@safe {
-		auto ret = appender!(ubyte[])();
+		auto ret = appender!(immutable(ubyte)[])();
 		for( size_t i = 0; i < input.length; i++ ){
 			if( input[i] == '=' ){
 				import std.utf : UTFException;

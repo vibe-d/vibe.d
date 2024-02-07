@@ -261,15 +261,13 @@ ubyte[] readAll(InputStream)(InputStream stream, size_t max_bytes = size_t.max, 
 string readAllUTF8(InputStream)(InputStream stream, bool sanitize = false, size_t max_bytes = size_t.max)
 	if (isInputStream!InputStream)
 {
-	import std.utf;
-	import vibe.utils.string;
-	auto data = readAll(stream, max_bytes);
-	if( sanitize ) return stripUTF8Bom(sanitizeUTF8(data));
-	else {
-		auto ret = () @trusted { return cast(string)data; } ();
-		validate(ret);
-		return stripUTF8Bom(ret);
-	}
+	static import std.encoding;
+	import std.utf : validate;
+	import vibe.utils.string : stripUTF8Bom;
+	auto ret = () @trusted { return cast(string)readAll(stream, max_bytes); } ();
+	if (sanitize) ret = () @trusted { return std.encoding.sanitize(ret); } ();
+	else validate(ret);
+	return stripUTF8Bom(ret);
 }
 
 /**
