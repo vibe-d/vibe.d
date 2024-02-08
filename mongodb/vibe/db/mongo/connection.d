@@ -517,29 +517,7 @@ final class MongoConnection {
 
 			if (m_supportsOpMsg)
 			{
-				enum needsDup = hasIndirections!T || is(T == Bson);
-
-				debug (VibeVerboseMongo)
-					logDiagnostic("getMore: [db=%s] %s", database, command);
-
-				auto id = sendMsg(-1, 0, command);
-				recvMsg!needsDup(id, (flags, scope root) @safe {
-					if (root["ok"].get!double != 1.0)
-						throw new MongoDriverException(formatErrorInfo("getMore failed: "
-							~ root["errmsg"].opt!string("(no message)")));
-
-					auto cursor = root["cursor"];
-					auto batch = cursor["nextBatch"].get!(Bson[]);
-					on_header(cursor["id"].get!long, cursor["ns"].get!string, batch.length);
-
-					foreach (ref push; batch)
-					{
-						T doc = deserializeBson!T(push);
-						on_doc(doc);
-					}
-				}, (scope ident, size) @safe {}, (scope ident, scope push) @safe {
-					throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in getMore response"));
-				});
+				startFind!T(command, on_header, on_doc, "nextBatch", errorInfo ~ " (getMore)", errorFile, errorLine);
 			}
 			else
 			{
@@ -591,6 +569,7 @@ final class MongoConnection {
 	package void startFind(T)(Bson command,
 		scope GetMoreHeaderDelegate on_header,
 		scope GetMoreDocumentDelegate!T on_doc,
+		string batchKey = "firstBatch",
 		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 	{
 		string formatErrorInfo(string msg) @safe
@@ -605,7 +584,7 @@ final class MongoConnection {
 		enum needsDup = hasIndirections!T || is(T == Bson);
 
 		debug (VibeVerboseMongo)
-			logDiagnostic("startFind: %s", command);
+			logDiagnostic("%s: %s", errorInfo, command);
 
 		auto id = sendMsg(-1, 0, command);
 		recvMsg!needsDup(id, (flags, scope root) @safe {
@@ -614,7 +593,10 @@ final class MongoConnection {
 					~ root["errmsg"].opt!string("(no message)")));
 
 			auto cursor = root["cursor"];
-			auto batch = cursor["firstBatch"].get!(Bson[]);
+			if (cursor.type == Bson.Type.null_)
+				throw new MongoDriverException(formatErrorInfo("no cursor in response: "
+					~ root["errmsg"].opt!string("(no error message)")));
+			auto batch = cursor[batchKey].get!(Bson[]);
 			on_header(cursor["id"].get!long, cursor["ns"].get!string, batch.length);
 
 			foreach (ref push; batch)
