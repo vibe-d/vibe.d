@@ -589,7 +589,7 @@ final class MongoConnection {
 		auto id = sendMsg(-1, 0, command);
 		recvMsg!needsDup(id, (flags, scope root) @safe {
 			if (root["ok"].get!double != 1.0)
-				throw new MongoDriverException(formatErrorInfo("find failed: "
+				throw new MongoDriverException(formatErrorInfo("error response: "
 					~ root["errmsg"].opt!string("(no message)")));
 
 			auto cursor = root["cursor"];
@@ -605,7 +605,7 @@ final class MongoConnection {
 				on_doc(doc);
 			}
 		}, (scope ident, size) @safe {}, (scope ident, scope push) @safe {
-			throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in find response"));
+			throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in response"));
 		});
 	}
 
