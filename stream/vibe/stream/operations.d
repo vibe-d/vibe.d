@@ -11,7 +11,7 @@ public import vibe.core.stream;
 
 import vibe.core.log;
 import vibe.utils.array : AllocAppender;
-import vibe.internal.allocator;
+import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
 import vibe.stream.wrapper : ProxyStream;
 

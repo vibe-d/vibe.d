@@ -9,7 +9,7 @@ module vibe.stream.memory;
 
 import vibe.core.stream;
 import vibe.utils.array;
-import vibe.internal.allocator;
+import vibe.container.internal.utilallocator;
 
 import std.algorithm;
 import std.array;

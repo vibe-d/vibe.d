@@ -623,7 +623,7 @@ final class OpenSSLStream : TLSStream {
 	private void setClientALPN(string[] alpn_list)
 	{
 		logDebug("SetClientALPN: ", alpn_list);
-		import vibe.internal.allocator : dispose, makeArray, vibeThreadAllocator;
+		import vibe.container.internal.utilallocator : dispose, makeArray, vibeThreadAllocator;
 		ubyte[] alpn;
 		size_t len;
 		foreach (string alpn_val; alpn_list)

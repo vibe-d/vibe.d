@@ -16,7 +16,7 @@ import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
 import vibe.utils.array;
 import vibe.utils.dictionarylist;
-import vibe.internal.allocator;
+import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
 import vibe.utils.string;
