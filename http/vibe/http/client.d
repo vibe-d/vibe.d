@@ -24,7 +24,7 @@ import vibe.stream.wrapper : createConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.utils.array;
 import vibe.utils.dictionarylist;
-import vibe.internal.allocator;
+import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
 
@@ -468,7 +468,7 @@ final class HTTPClient {
 	private void doProxyRequest(T, U)(ref T res, U requester, ref bool close_conn, ref bool has_body)
 	@trusted { // scope new
 		import std.conv : to;
-		import vibe.internal.utilallocator: RegionListAllocator;
+		import vibe.container.internal.utilallocator: RegionListAllocator;
 		version (VibeManualMemoryManagement)
 			scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
 		else
@@ -542,7 +542,7 @@ final class HTTPClient {
 	*/
 	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	@trusted { // scope new
-		import vibe.internal.utilallocator: RegionListAllocator;
+		import vibe.container.internal.utilallocator: RegionListAllocator;
 		version (VibeManualMemoryManagement)
 			scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
 		else

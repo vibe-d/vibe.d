@@ -10,7 +10,7 @@ module vibe.utils.string;
 public import std.string;
 
 import vibe.utils.array;
-import vibe.internal.utilallocator;
+import vibe.container.internal.utilallocator;
 
 import std.algorithm;
 import std.array;

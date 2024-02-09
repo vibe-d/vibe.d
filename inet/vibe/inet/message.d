@@ -11,7 +11,7 @@ import vibe.core.log;
 import vibe.core.stream;
 import vibe.stream.operations;
 import vibe.utils.array;
-import vibe.internal.allocator;
+import vibe.container.internal.utilallocator;
 import vibe.utils.string;
 import vibe.utils.dictionarylist;
 

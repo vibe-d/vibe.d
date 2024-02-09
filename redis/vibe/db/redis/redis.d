@@ -13,7 +13,7 @@ import vibe.core.connectionpool;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.inet.url;
-import vibe.internal.allocator;
+import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
 import vibe.stream.operations;
 import std.conv;

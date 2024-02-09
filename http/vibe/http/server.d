@@ -27,7 +27,7 @@ import vibe.stream.wrapper : ConnectionProxyStream, createConnectionProxyStream,
 import vibe.stream.zlib;
 import vibe.textfilter.urlencode;
 import vibe.utils.array;
-import vibe.internal.allocator;
+import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
 import vibe.utils.string;
 
@@ -243,7 +243,7 @@ void handleHTTPConnection(TCPConnection connection, HTTPServerContext context)
 		}
 
 		() @trusted {
-			import vibe.internal.utilallocator: RegionListAllocator;
+			import vibe.container.internal.utilallocator: RegionListAllocator;
 
 			version (VibeManualMemoryManagement)
 				scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
