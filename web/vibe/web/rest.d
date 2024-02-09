@@ -1562,8 +1562,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 							v = fromRestString!(PT, SerPolicyType)(*pv);
 					} else static if (sparam.kind == ParameterKind.attributed) {
 						static if (!__traits(compiles, () @safe { computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ()))
-							pragma(msg, "Non-@safe @before evaluators are deprecated - annotate evaluator function for parameter "~pname~" of "~T.stringof~"."~Method~" as @safe.");
-						v = () @trusted { return computeAttributedParameterCtx!(CFunc, pname)(inst, req, res); } ();
+							static assert(false, "`@before` evaluator for REST interface method `" ~ fullyQualifiedName!T ~ "." ~ Method ~ "` must be marked `@safe`.");
+						v = computeAttributedParameterCtx!(CFunc, pname)(inst, req, res);
 					} else static if (sparam.kind == ParameterKind.internal) {
 						if (auto pv = fieldname in req.params)
 							v = fromRestString!(PT, DefaultPolicy)(urlDecode(*pv));
@@ -1628,30 +1628,26 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			import vibe.internal.meta.funcattr;
 
 			static if (!__traits(compiles, () @safe { __traits(getMember, inst, Method)(params); }))
-				pragma(msg, "Non-@safe methods are deprecated in REST interfaces - Mark " ~
-					T.stringof ~ "." ~ Method ~ " as @safe.");
+				static assert(false, "REST interface method `" ~ fullyQualifiedName!T ~ "." ~ Method ~ "` must be marked `@safe`.");
 
 			static if (is(RT == void)) {
 				// TODO: remove after deprecation period
-				() @trusted { __traits(getMember, inst, Method)(params); } ();
+				__traits(getMember, inst, Method)(params);
 				returnHeaders();
 				res.writeBody(cast(ubyte[])null);
 			} else static if (isInputStream!RT) {
 				returnHeaders();
-				auto ret = () @trusted {
-					return evaluateOutputModifiers!CFunc(
-						__traits(getMember, inst, Method)(params), req, res); } ();
+				auto ret = evaluateOutputModifiers!CFunc(
+						__traits(getMember, inst, Method)(params), req, res);
 				res.headers["Content-Type"] = "application/octet-stream";
 				ret.pipe(res.bodyWriter);
 			} else {
 				// TODO: remove after deprecation period
 				static if (!__traits(compiles, () @safe { evaluateOutputModifiers!Func(RT.init, req, res); } ()))
-					pragma(msg, "Non-@safe @after evaluators are deprecated - annotate @after evaluator function for " ~
-						T.stringof ~ "." ~ Method ~ " as @safe.");
+					static assert(false, "`@after` evaluator for REST interface method `" ~ fullyQualifiedName!T ~ "." ~ Method ~ "` must be marked `@safe`.");
 
-				auto ret = () @trusted {
-					return evaluateOutputModifiers!CFunc(
-						__traits(getMember, inst, Method)(params), req, res); } ();
+				auto ret = evaluateOutputModifiers!CFunc(
+						__traits(getMember, inst, Method)(params), req, res);
 				returnHeaders();
 
 				string accept_str;
@@ -1670,12 +1666,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 								serializer.serialize!(SerPolicyT!(RestInterface!T.I).PolicyTemplate)(serialized_output, ret);
 							}))
 						{
-							pragma(msg, "Non-@safe serialization of REST return types deprecated - ensure that " ~
-								RT.stringof~" is safely serializable.");
+							static assert(false, "Serialization of return type `"~RT.stringof~"` of REST interface method `" ~ fullyQualifiedName!T ~ "." ~ Method ~ "` must be `@safe`.");
 						}
-						() @trusted {
-							serializer.serialize!(SerPolicyT!(RestInterface!T.I).PolicyTemplate)(serialized_output, ret);
-						}();
+						serializer.serialize!(SerPolicyT!(RestInterface!T.I).PolicyTemplate)(serialized_output, ret);
 						res.writeBody(serialized_output.data, serializer.contentType);
 					}
 				res.statusCode = HTTPStatus.notAcceptable; // will trigger RestException on the client side

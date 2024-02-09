@@ -2,6 +2,7 @@ import std.datetime;
 import vibe.d;
 
 interface ITestAPI {
+@safe:
     string postDefault(int value, bool check = true);
 }
 

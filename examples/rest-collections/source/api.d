@@ -4,11 +4,13 @@ module api;
 import vibe.web.rest;
 
 interface ForumAPI {
+@safe:
 	// base path /threads/
 	Collection!ThreadAPI threads();
 }
 
 interface ThreadAPI {
+@safe:
 	// define the index parameters used to identify the collection items
 	struct CollectionIndices {
 		string _thread_name;
@@ -27,6 +29,7 @@ interface ThreadAPI {
 }
 
 interface PostAPI {
+@safe:
 	// define the index parameters used to identify the collection items
 	struct CollectionIndices {
 		string _thread_name;

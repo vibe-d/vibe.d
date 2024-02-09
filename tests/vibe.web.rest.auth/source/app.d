@@ -72,6 +72,7 @@ struct Auth {
 
 @requiresAuth
 interface IService {
+@safe:
     @noAuth int getPublic();
     @anyAuth int getAny();
     @anyAuth int getAnyA(Auth auth);

@@ -11,6 +11,7 @@ struct TestStruct {int i;}
 
 interface IService
 {
+@safe:
 	@safe TestStruct getTest(int sleepsecs);
 	@safe TestStruct getTest2(int sleepsecs);
 }
