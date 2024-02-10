@@ -75,10 +75,10 @@ struct MulticastStream(OutputStreams...) {
 		if (m_tasks.length > 0) {
 			Exception ex;
 			foreach (i, T; OutputStreams[1 .. $])
-				m_tasks[i] = runTask({
-					try m_outputs[i+1].flush();
+				m_tasks[i] = runTask((scope MulticastStream _this) {
+					try _this.m_outputs[i+1].flush();
 					catch (Exception e) ex = e;
-				});
+				}, () @trusted { return this; } ());
 			m_outputs[0].flush();
 			foreach (t; m_tasks) t.join();
 			if (ex) throw ex;
@@ -95,10 +95,10 @@ struct MulticastStream(OutputStreams...) {
 		if (m_tasks.length > 0) {
 			Exception ex;
 			foreach (i, T; OutputStreams[1 .. $])
-				m_tasks[i] = runTask({
-					try m_outputs[i+1].write(bytes, mode);
+				m_tasks[i] = runTask((scope MulticastStream _this) {
+					try _this.m_outputs[i+1].write(bytes, mode);
 					catch (Exception e) ex = e;
-				});
+				}, () @trusted { return this; } ());
 			auto ret = m_outputs[0].write(bytes, mode);
 			foreach (t; m_tasks) t.join();
 			if (ex) throw ex;

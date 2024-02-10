@@ -1762,7 +1762,7 @@ scope:
 		logTrace("---------------------");
 
 		// write cookies
-		foreach (n, cookie; this.cookies.byKeyValue) {
+		foreach (n, cookie; () @trusted { return this.cookies.byKeyValue; } ()) {
 			dst.put("Set-Cookie: ");
 			cookie.writeString(() @trusted { return &dst; } (), n);
 			dst.put("\r\n");
