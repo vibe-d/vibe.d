@@ -559,10 +559,12 @@ package void defaultSerialize (alias P, T, RT) (ref RT output_range, const scope
 	static struct R {
 		typeof(output_range) underlying;
 		void put(char ch) { underlying.put(ch); }
-		void put(const(char)[] ch) { underlying.put(cast(const(ubyte)[])ch); }
+		void put(scope const(char)[] ch) { underlying.put(cast(const(ubyte)[])ch); }
 	}
 	auto dst = R(output_range);
-	value.serializeWithPolicy!(JsonStringSerializer!R, P) (dst);
+	// NOTE: serializeWithPolicy does not take value as scope due to issues
+	//       deeply buried in the standard library
+	() @trusted { return value; } ().serializeWithPolicy!(JsonStringSerializer!R, P) (dst);
 }
 
 package T defaultDeserialize (alias P, T, R) (R input_range)

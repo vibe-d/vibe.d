@@ -300,7 +300,7 @@ class HTTPResponse {
 		InetHeaderMap headers;
 
 		/// All cookies that shall be set on the client for this request
-		@property ref DictionaryList!Cookie cookies() { return m_cookies; }
+		@property ref DictionaryList!Cookie cookies() return scope { return m_cookies; }
 	}
 
 	scope:
