@@ -1,15 +1,19 @@
 Changelog
 =========
 
-v0.9.8 - 2023-12-
+v0.9.8 - 2024-02-
 -------------------
 
 ### Features and improvements ###
 
 - More work on DIP1000/`scope` deprecation warnings - [pull #2746][issue2746], [pull #2747][issue2747]
+- Removed deprecated support for `@system` methods and attributes in REST interfaces - [pull #2748][issue2748], [pull #2771][issue2771]
 - Moved the `HashMap` implementation to a new `vibe-container` package - [pull #2750][issue2750]
 - Added `SemaphoreStream` for implementing concurrency limited I/O - [pull #2754][issue2754]
 - Added `HTTPServerSettings.maxRequestHeaderLineSize` (by Charles Reiss) - [pull #2755][issue2755]
+- Added a `MongoCollection.replaceOne` overload taking a `ReplaceOptions` argument (by Jan Jurzitza aka WebFreak001) - [pull #2764][issue2764]
+- Added `MongoSessionStore` constructors taking explicit `MongoDB`/`MongoCollection` arguments (by Jan Jurzitza aka WebFreak001) - [pull #2766][issue2766]
+- Deprecated `vibe.utils.string.sanitizeUTF8` - [pull #2773][issue2773]
 
 ### Bug fixes ###
 
@@ -17,15 +21,34 @@ v0.9.8 - 2023-12-
 - Fixed a possible GC leak of the end callback stream in `HTTPClientResponse` - [pull #2751][issue2751]
 - Fixed a regression in `getMore` for MongoDB version 4.4 - [pull #2752][issue2752]
 - Fixed the behavior of `BufferedStream.~this()` in the event of I/O exceptions - [pull #2757][issue2757]
+- Fixed a possible crash caused by errors happening when processing an HTTP client response - [pull #2760][issue2760]
+- Fixed a possible array bounds violation in the HTTP server happening for time offset based time zones - [pull #2761][issue2761]
+- Fixed handling of `enum` typed parameters in the REST interface generator - [pull #2763][issue2763]
+- Fixed `MongoCollection.countDocuments` for empty collections (by Jan Jurzitza aka WebFreak001) - [pull #2767][issue2767]
+- Fixed MongoDB CRUD operations not throwing on errors (by Jan Jurzitza aka WebFreak001) - [pull #2765][issue2765]
+- Fixed deserialization of `string` based `enum` values - [issue #2209][issue2209], [pull #2345][issue2345], [pull #2774][issue2774]
 
+[issue2209]: https://github.com/vibe-d/vibe.d/issues/2209
+[issue2345]: https://github.com/vibe-d/vibe.d/issues/2345
 [issue2746]: https://github.com/vibe-d/vibe.d/issues/2746
 [issue2747]: https://github.com/vibe-d/vibe.d/issues/2747
+[issue2748]: https://github.com/vibe-d/vibe.d/issues/2748
 [issue2750]: https://github.com/vibe-d/vibe.d/issues/2750
 [issue2751]: https://github.com/vibe-d/vibe.d/issues/2751
 [issue2752]: https://github.com/vibe-d/vibe.d/issues/2752
 [issue2754]: https://github.com/vibe-d/vibe.d/issues/2754
 [issue2755]: https://github.com/vibe-d/vibe.d/issues/2755
 [issue2757]: https://github.com/vibe-d/vibe.d/issues/2757
+[issue2760]: https://github.com/vibe-d/vibe.d/issues/2760
+[issue2761]: https://github.com/vibe-d/vibe.d/issues/2761
+[issue2763]: https://github.com/vibe-d/vibe.d/issues/2763
+[issue2764]: https://github.com/vibe-d/vibe.d/issues/2764
+[issue2765]: https://github.com/vibe-d/vibe.d/issues/2765
+[issue2766]: https://github.com/vibe-d/vibe.d/issues/2766
+[issue2767]: https://github.com/vibe-d/vibe.d/issues/2767
+[issue2771]: https://github.com/vibe-d/vibe.d/issues/2771
+[issue2773]: https://github.com/vibe-d/vibe.d/issues/2773
+[issue2774]: https://github.com/vibe-d/vibe.d/issues/2774
 
 
 v0.9.7 - 2023-08-29
