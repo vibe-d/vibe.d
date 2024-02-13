@@ -31,7 +31,7 @@ sourcePaths "lib"
 sourceFiles "source/vibe/d.d" "source/vibe/vibe.d"
 
 x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
-	"--ex" "vibe.core.drivers." "--ex" "vibe.internal." "--ex" "vibe.web.internal."\
+	"--ex" "vibe.container.internal." "--ex" "vibe.internal." "--ex" "vibe.web.internal."\
 	"--ex" "diet.internal" "--ex" "stdx." "--ex" "eventcore.internal." "--ex" "eventcore.drivers."\
 	"--ex" "mir." "--ex" "openssl_version"
 
