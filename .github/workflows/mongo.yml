@@ -17,6 +17,7 @@ jobs:
         - '4.4'
         - '5.0'
         - '6.0'
+        - '7.0'
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -37,10 +38,11 @@ jobs:
           {
             "^3\\.6$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/3.6/multiverse/binary-amd64/mongodb-org-server_3.6.23_amd64.deb"},
             "^4\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/4.0/multiverse/binary-amd64/mongodb-org-server_4.0.28_amd64.deb"},
-            "^4\\.2$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/4.2/multiverse/binary-amd64/mongodb-org-server_4.2.22_amd64.deb"},
-            "^4\\.4$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/4.4/multiverse/binary-amd64/mongodb-org-server_4.4.16_amd64.deb"},
-            "^5\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/5.0/multiverse/binary-amd64/mongodb-org-server_5.0.12_amd64.deb"},
-            "^6\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/6.0/multiverse/binary-amd64/mongodb-org-server_6.0.1_amd64.deb"}
+            "^4\\.2$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/4.2/multiverse/binary-amd64/mongodb-org-server_4.2.25_amd64.deb"},
+            "^4\\.4$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/4.4/multiverse/binary-amd64/mongodb-org-server_4.4.28_amd64.deb"},
+            "^5\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/5.0/multiverse/binary-amd64/mongodb-org-server_5.0.24_amd64.deb"},
+            "^6\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/6.0/multiverse/binary-amd64/mongodb-org-server_6.0.13_amd64.deb"},
+            "^7\\.0$": {"MONGO_URL":"https://repo.mongodb.org/apt/ubuntu/dists/focal/mongodb-org/7.0/multiverse/binary-amd64/mongodb-org-server_7.0.5_amd64.deb"}
           }
 
     - name: 'Install MongoDB'
