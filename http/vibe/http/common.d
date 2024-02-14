@@ -11,6 +11,7 @@ public import vibe.http.status;
 
 import vibe.core.log;
 import vibe.core.net;
+import vibe.core.path;
 import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
@@ -344,13 +345,35 @@ class HTTPStatusException : Exception {
 	string debugMessage;
 }
 
+/**
+ * Creates a random multipart boundary string starting with hyphens containing
+ * random text data for separation of data in data uploads.
+ *
+ * Uses a cryptographically secure random to generate the boundary string. Use
+ * this if you plan to manually write a multipart/form-data document somewhere.
+ *
+ * You should use $(LREF MultiPart) for an easy to use and compatible API
+ * instead.
+ */
+string randomMultipartBoundary()
+@safe {
+	import vibe.crypto.cryptorand : secureRNG;
+	import std.ascii : digits, letters;
 
-final class MultiPart {
-	string contentType;
+	// simple characters which should be supported everywhere without conflict.
+	// this is 64 characters which makes the random modulo have a very
+	// convenient uniform distribution.
+	static immutable string boundaryChars = digits ~ letters ~ "_-"; // ~ "'()+_,-./:=?";
 
-	InputStream stream;
-	//JsonValue json;
-	string[string] form;
+	auto rng = secureRNG();
+	char[64] ret; // can be up to 70 according to spec, 64 should be enough
+	ubyte[64] randomBuffer;
+	rng.read(randomBuffer[]);
+
+	ret[0 .. 16] = '-'; // some padding before random
+	for (int i = 16; i < ret.length; i++)
+		ret[i] = boundaryChars[randomBuffer[i] % $];
+	return ret[].idup;
 }
 
 /**

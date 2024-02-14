@@ -17,6 +17,7 @@ import vibe.core.log;
 import vibe.data.json;
 import vibe.inet.message;
 import vibe.inet.url;
+import vibe.inet.webform : MultiPart, MultiPartBody;
 import vibe.stream.counting;
 import vibe.stream.tls;
 import vibe.stream.operations;
@@ -794,6 +795,7 @@ final class HTTPClientRequest : HTTPRequest {
 		FixedAppender!(string, 22) m_contentLengthBuffer;
 		TCPConnection m_rawConn;
 		TLSCertificateInformation m_peerCertificate;
+		string m_multipartBoundary;
 	}
 
 
@@ -899,9 +901,138 @@ final class HTTPClientRequest : HTTPRequest {
 		}
 	}
 
-	void writePart(MultiPart part)
+	/**
+		Writes the body as multipart request that can upload files.
+
+		Also sets the `Content-Length` if it can be calculated.
+	 */
+	void writeMultiPartBody(MultiPartBody part)
 	{
-		assert(false, "TODO");
+		string boundary = randomMultipartBoundary();
+		auto length = part.length(boundary);
+		if (length != 0)
+			headers["Content-Length"] = length.to!string;
+		headers["Content-Type"] = part.contentType ~ "; boundary=\"" ~ boundary ~ "\"";
+
+		// call part.write directly instead of begin/write/finalize because it
+		// also calculates the length for us and expects it to write itself.
+		part.write(boundary, bodyWriter);
+		finalize();
+	}
+
+	/**
+		Starts manually writing a multipart request with `writePart` calls
+		following this call and finalizing using `finalizeMultiPart`.
+
+		This API is for manually writing out the parts, use `writeMultiPartBody`
+		to do it all in one step instead.
+
+		Sets the content type to the given content type with the boundary.
+
+		Params:
+			preamble = Text to write in the preamble. It is ignored by HTTP
+				servers but can be used for example to include additional
+				information when writing a mail to a non multipart conforming
+				reader for the user to see at the start.
+			boundary = The multipart boundary to use to separate the different
+				parts. If this is null or empty, this function will
+				automatically generate a cryptographically secure random
+				boundary to separate the parts. May be at most 70 characters,
+				otherwise it will be trimmed.
+	*/
+	void beginMultiPart(string content_type = "multipart/form-data", string preamble = null, string boundary = null)
+	{
+		if (!boundary.length)
+			boundary = randomMultipartBoundary;
+
+		if (boundary.length > 70) {
+			logTrace("Boundary '%s' is longer than 70 characters, truncating", boundary);
+			boundary = boundary[0 .. 70];
+		}
+
+		if ("Content-Type" !in headers)
+			headers["Content-Type"] = content_type ~ "; boundary=\"" ~ boundary ~ "\"";
+
+		m_multipartBoundary = boundary;
+
+		if (preamble.length) {
+			bodyWriter.write(preamble);
+			bodyWriter.write("\r\n");
+		}
+	}
+
+	/**
+		Writes a single multipart part, which is essentially one input in a form
+		request which can contain headers to specify what it is. You need to
+		start with `beginMultiPart` and end with `finalizeMultiPart` with this
+		API.
+
+		Alternatively you can use `writeMultiPartBody` to do everything in one
+		step.
+	 */
+	void writePart(InputStream)(string field_name, InputStream data,
+		string content_type = "text/plain; charset=\"utf-8\"", bool binary = false)
+		if (isInputStream!InputStream)
+	{
+		scope InetHeaderMap headers;
+		headers["Content-Disposition"] = "form-data; name=\"" ~ field_name ~ "\"";
+		if (content_type.length)
+			ret.headers["Content-Type"] = content_type;
+		if (binary)
+			ret.headers["Content-Transfer-Encoding"] = "binary";
+		writePart(data, headers);
+	}
+
+	/// ditto
+	void writePart(InputStream)(InputStream data, scope const ref InetHeaderMap headers)
+		if (isInputStream!InputStream)
+	{
+		assert(m_multipartBoundary.length, "need to call beginMultiPart and finalizeMultiPart with writePart");
+
+		bodyWriter.write("--");
+		bodyWriter.write(m_multipartBoundary);
+		bodyWriter.write("\r\n");
+		foreach (k, v; headers.byKeyValue) {
+			bodyWriter.write(k);
+			bodyWriter.write(": ");
+			bodyWriter.write(v);
+			bodyWriter.write("\r\n");
+		}
+		bodyWriter.write("\r\n");
+		pipe(data, bodyWriter);
+		bodyWriter.write("\r\n");
+	}
+
+	/**
+		Finishes writing a multipart response by sending the ending boundary and
+		finalizing the request.
+	 */
+	void finalizeMultiPart(string epilogue = null)
+	{
+		bodyWriter.write("--");
+		bodyWriter.write(m_multipartBoundary);
+		bodyWriter.write("--\r\n");
+		if (epilogue.length)
+		{
+			bodyWriter.write(epilogue);
+			bodyWriter.write("\r\n");
+		}
+		m_multipartBoundary = null;
+		finalize();
+	}
+
+	///
+	unittest {
+		import vibe.core.file : openFile;
+		import vibe.inet.webform : MultiPart, MultiPartBody;
+
+		void test(HTTPClientRequest req) {
+			MultiPartBody part = new MultiPartBody;
+			part.parts ~= MultiPart.formData("name", "bob");
+			part.parts ~= MultiPart.singleFile("picture", "picture.png", "image/png", openFile("res/profilepicture.png"));
+			part.parts ~= MultiPart.singleFile("upload", NativePath("file.zip")); // auto read & mime detection from filename
+			req.writeMultiPartBody(part);
+		}
 	}
 
 	/**
@@ -961,6 +1092,9 @@ final class HTTPClientRequest : HTTPRequest {
 		// test if already finalized
 		if (m_headerWritten && !m_bodyWriter)
 			return;
+
+		assert(!m_multipartBoundary.length,
+			"Closed HTTPClientRequest without calling finalizeMultiPart but called beginMultiPart");
 
 		// force the request to be sent
 		if (!m_headerWritten) writeHeader();
