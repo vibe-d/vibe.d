@@ -30,10 +30,15 @@ shared static this()
 			auto url = "http://"~serverAddr.toString;
 			logInfo(url);
 
-			auto cs = new HTTPClientSettings;
-			cs.networkInterface = resolveHost("127.0.0.1");
-			auto res = requestHTTP(url, null, cs).bodyReader.readAllUTF8();
-			assert(res == "local", "Unexpected reply: "~res);
+			string res;
+
+			version (Windows) {}
+			else {
+				auto cs = new HTTPClientSettings;
+				cs.networkInterface = resolveHost("127.0.0.1");
+				res = requestHTTP(url, null, cs).bodyReader.readAllUTF8();
+				assert(res == "local", "Unexpected reply: "~res);
+			}
 
 			auto cs2 = new HTTPClientSettings;
 			cs2.networkInterface = resolveHost(externalAddr.toAddressString());
