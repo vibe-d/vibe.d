@@ -164,7 +164,7 @@ unittest
 	void test()
 	{
 		static void testSafeFunction(HTTPServerRequest req, HTTPServerResponse res) @safe {}
-		listenHTTP("0.0.0.0:8080", &testSafeFunction);
+		listenHTTP("127.0.0.1:8080", &testSafeFunction);
 		listenHTTP(":8080", new class HTTPServerRequestHandler {
 			void handleRequest(HTTPServerRequest req, HTTPServerResponse res) @safe {}
 		});
@@ -608,9 +608,9 @@ final class HTTPServerSettings {
 
 	/** The interfaces on which the HTTP server is listening.
 
-		By default, the server will listen on all IPv4 and IPv6 interfaces.
+		By default, the server will listen on `127.0.0.1`.
 	*/
-	string[] bindAddresses = ["::", "0.0.0.0"];
+	string[] bindAddresses = ["127.0.0.1"];
 
 	/** Determines the server host name.
 
@@ -780,7 +780,7 @@ final class HTTPServerSettings {
 	///
 	unittest {
 		auto s = new HTTPServerSettings(":8080");
-		assert(s.bindAddresses == ["::", "0.0.0.0"]); // default bind addresses
+		assert(s.bindAddresses == ["127.0.0.1"]); // default bind addresses
 		assert(s.port == 8080);
 
 		s = new HTTPServerSettings("123.123.123.123");
