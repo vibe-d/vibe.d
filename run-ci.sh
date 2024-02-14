@@ -24,7 +24,7 @@ if [[ $PARTS =~ (^|,)builds(,|$) ]]; then
     dub clean --all-packages
 
     # test for successful 32-bit build
-    if [ "$DC" == "dmd" ]; then
+    if [ "$DC" == "dmd" && "$OS" != "windows-latest" ]; then
         dub build --combined --arch=x86
         dub clean --all-packages
     fi
