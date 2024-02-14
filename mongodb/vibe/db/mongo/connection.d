@@ -631,6 +631,10 @@ final class MongoConnection {
 		{
 			Bson command = Bson.emptyObject;
 			auto parts = collection.findSplit(".");
+			if (!parts[2].length)
+				throw new MongoDriverException(
+					"Attempted to call killCursors with non-fully-qualified collection name: '"
+					~ collection ~ "'");
 			command["killCursors"] = Bson(parts[2]);
 			command["cursors"] = () @trusted { return cursors; } ().serializeToBson; // NOTE: "escaping" scope here
 			runCommand!Bson(parts[0], command);
