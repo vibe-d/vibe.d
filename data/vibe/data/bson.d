@@ -165,7 +165,7 @@ struct Bson {
 		A slice of the first bytes of `data` is stored, containg the data related to the value. An
 		exception is thrown if `data` is too short.
 	*/
-	this(Type type, bdata_t data)
+	this(Type type, bdata_t data) scope
 	{
 		m_type = type;
 		m_data = data;
@@ -202,70 +202,71 @@ struct Bson {
 	/**
 		Initializes a new BSON value from the given D type.
 	*/
-	this(double value) { opAssign(value); }
+	this(double value) scope { opAssign(value); }
 	/// ditto
-	this(scope const(char)[] value, Type type = Type.string)
+	this(scope const(char)[] value, Type type = Type.string) scope
 	{
 		assert(type == Type.string || type == Type.code || type == Type.symbol);
 		opAssign(value);
 		m_type = type;
 	}
 	/// ditto
-	this(in Bson[string] value) { opAssign(value); }
+	this(in Bson[string] value) scope { opAssign(value); }
 	/// ditto
-	this(in Bson[] value) { opAssign(value); }
+	this(in Bson[] value) scope { opAssign(value); }
 	/// ditto
-	this(in BsonBinData value) { opAssign(value); }
+	this(in BsonBinData value) scope { opAssign(value); }
 	/// ditto
-	this(in BsonObjectID value) { opAssign(value); }
+	this(in BsonObjectID value) scope { opAssign(value); }
 	/// ditto
-	this(bool value) { opAssign(value); }
+	this(bool value) scope { opAssign(value); }
 	/// ditto
-	this(in BsonDate value) { opAssign(value); }
+	this(in BsonDate value) scope { opAssign(value); }
 	/// ditto
-	this(typeof(null)) { opAssign(null); }
+	this(typeof(null)) scope { opAssign(null); }
 	/// ditto
-	this(in BsonRegex value) { opAssign(value); }
+	this(in BsonRegex value) scope { opAssign(value); }
 	/// ditto
-	this(int value) { opAssign(value); }
+	this(int value) scope { opAssign(value); }
 	/// ditto
-	this(in BsonTimestamp value) { opAssign(value); }
+	this(in BsonTimestamp value) scope { opAssign(value); }
 	/// ditto
-	this(long value) { opAssign(value); }
+	this(long value) scope { opAssign(value); }
 	/// ditto
-	this(in Json value) { opAssign(value); }
+	this(in Json value) scope { opAssign(value); }
 	/// ditto
-	this(in UUID value) { opAssign(value); }
+	this(in UUID value) scope { opAssign(value); }
 
 	/**
 		Assigns a D type to a BSON value.
 	*/
-	void opAssign(const Bson other)
+	void opAssign(const Bson other) scope
 	{
 		m_data = other.m_data;
 		m_type = other.m_type;
 	}
 	/// ditto
-	void opAssign(double value)
+	void opAssign(double value) scope
 	{
 		m_data = toBsonData(value).idup;
 		m_type = Type.double_;
 	}
 	/// ditto
-	void opAssign(scope const(char)[] value)
+	void opAssign(scope const(char)[] value) scope
 	{
 		import std.utf;
 		import std.string : representation;
 		debug std.utf.validate(value);
-		auto app = appender!bdata_t();
+		auto app = appender!(bdata_t)();
 		app.put(toBsonData(cast(int)value.length+1));
 		app.put(value.representation);
 		app.put(cast(ubyte)0);
-		m_data = app.data;
+		import std.exception : assumeUnique;
+		() @trusted { m_data = app.data.assumeUnique; }();
 		m_type = Type.string;
 	}
 	/// ditto
-	void opAssign(in Bson[string] value)
+	void opAssign(in Bson[string] value) scope
 	{
 		auto app = appender!bdata_t();
 		foreach( k, ref v; value ){
@@ -282,7 +283,7 @@ struct Bson {
 		m_type = Type.object;
 	}
 	/// ditto
-	void opAssign(in Bson[] value)
+	void opAssign(in Bson[] value) scope
 	{
 		auto app = appender!bdata_t();
 		foreach( i, ref v; value ){
@@ -299,7 +300,7 @@ struct Bson {
 		m_type = Type.array;
 	}
 	/// ditto
-	void opAssign(in BsonBinData value)
+	void opAssign(in BsonBinData value) scope
 	{
 		auto app = appender!bdata_t();
 		app.put(toBsonData(cast(int)value.rawData.length));
@@ -310,31 +311,31 @@ struct Bson {
 		m_type = Type.binData;
 	}
 	/// ditto
-	void opAssign(in BsonObjectID value)
+	void opAssign(in BsonObjectID value) scope
 	{
 		m_data = value.m_bytes.idup;
 		m_type = Type.objectID;
 	}
 	/// ditto
-	void opAssign(bool value)
+	void opAssign(bool value) scope
 	{
 		m_data = [value ? 0x01 : 0x00];
 		m_type = Type.bool_;
 	}
 	/// ditto
-	void opAssign(in BsonDate value)
+	void opAssign(in BsonDate value) scope
 	{
 		m_data = toBsonData(value.m_time).idup;
 		m_type = Type.date;
 	}
 	/// ditto
-	void opAssign(typeof(null))
+	void opAssign(typeof(null)) scope
 	{
 		m_data = null;
 		m_type = Type.null_;
 	}
 	/// ditto
-	void opAssign(in BsonRegex value)
+	void opAssign(in BsonRegex value) scope
 	{
 		auto app = appender!bdata_t();
 		putCString(app, value.expression);
@@ -343,32 +344,32 @@ struct Bson {
 		m_type = type.regex;
 	}
 	/// ditto
-	void opAssign(int value)
+	void opAssign(int value) scope
 	{
 		m_data = toBsonData(value).idup;
 		m_type = Type.int_;
 	}
 	/// ditto
-	void opAssign(in BsonTimestamp value)
+	void opAssign(in BsonTimestamp value) scope
 	{
 		m_data = toBsonData(value.m_time).idup;
 		m_type = Type.timestamp;
 	}
 	/// ditto
-	void opAssign(long value)
+	void opAssign(long value) scope
 	{
 		m_data = toBsonData(value).idup;
 		m_type = Type.long_;
 	}
 	/// ditto
-	void opAssign(in Json value)
-	@trusted {
+	void opAssign(in Json value) scope @trusted
+	{
 		auto app = appender!bdata_t();
 		m_type = writeBson(app, value);
 		m_data = app.data;
 	}
 	/// ditto
-	void opAssign(in UUID value)
+	void opAssign(in UUID value) scope
 	{
 		opAssign(BsonBinData(BsonBinData.Type.uuid, value.data.idup));
 	}
@@ -376,14 +377,14 @@ struct Bson {
 	/**
 		Returns the BSON type of this value.
 	*/
-	@property Type type() const { return m_type; }
+	@property Type type() const scope { return m_type; }
 
 	bool isNull() const { return m_type == Type.null_; }
 
 	/**
 		Returns the raw data representing this BSON value (not including the field name and type).
 	*/
-	@property bdata_t data() const { return m_data; }
+	@property bdata_t data() const return scope { return m_data; }
 
 	/**
 		Converts the BSON value to a D value.
@@ -614,8 +615,8 @@ struct Bson {
 
 	/** Converts a given JSON value to the corresponding BSON value.
 	*/
-	static Bson fromJson(in Json value)
-	@trusted {
+	static Bson fromJson(in Json value) @trusted
+	{
 		auto app = appender!bdata_t();
 		auto tp = writeBson(app, value);
 		return Bson(tp, app.data);
@@ -626,8 +627,7 @@ struct Bson {
 		All BSON types that cannot be exactly represented as JSON, will
 		be converted to a string.
 	*/
-	Json toJson()
-	const {
+	Json toJson() const scope {
 		switch( this.type ){
 			default: assert(false);
 			case Bson.Type.double_: return Json(get!double());
@@ -661,15 +661,13 @@ struct Bson {
 
 	/** Returns a string representation of this BSON value in JSON format.
 	*/
-	string toString()
-	const {
+	string toString() const scope {
 		auto ret = appender!string;
 		toString(ret);
 		return ret.data;
 	}
 
-	void toString(R)(ref R range)
-	const {
+	void toString(R)(ref R range) const {
 		switch (type)
 		{
 		case Bson.Type.objectID:
@@ -723,14 +721,14 @@ struct Bson {
 
 		Returns a null value if the specified field does not exist.
 	*/
-	inout(Bson) opIndex(string idx) inout {
+	inout(Bson) opIndex(string idx) inout scope {
 		foreach (string key, v; this.byKeyValue)
 			if( key == idx )
 				return v;
 		return Bson(null);
 	}
 	/// ditto
-	void opIndexAssign(T)(in T value, string idx){
+	void opIndexAssign(T)(in T value, string idx) {
 		// WARNING: it is ABSOLUTELY ESSENTIAL that ordering is not changed!!!
 		// MongoDB depends on ordering of the Bson maps.
 
@@ -796,7 +794,7 @@ struct Bson {
 
 		Returns a null value if the index is out of bounds.
 	*/
-	inout(Bson) opIndex(size_t idx) inout {
+	inout(Bson) opIndex(size_t idx) inout scope {
 		foreach (size_t i, v; this.byIndexValue)
 			if (i == idx)
 				return v;
@@ -928,7 +926,7 @@ struct Bson {
 	}
 
 	///
-	bool opEquals(ref const Bson other) const {
+	bool opEquals(ref const scope Bson other) const scope {
 		if( m_type != other.m_type ) return false;
 		if (m_type != Type.object)
 			return m_data == other.m_data;
@@ -948,14 +946,13 @@ struct Bson {
 		return true;
 	}
 	/// ditto
-	bool opEquals(const Bson other) const {
+	bool opEquals(const scope Bson other) const scope {
 		if( m_type != other.m_type ) return false;
 
 		return opEquals(other);
 	}
 
-	private void checkType(in Type[] valid_types...)
-	const {
+	private void checkType(in Type[] valid_types...) const scope {
 		foreach( t; valid_types )
 			if( m_type == t )
 				return;
@@ -1249,7 +1246,7 @@ struct BsonDate {
 
 	/** Allows relational and equality comparisons.
 	*/
-	bool opEquals(ref const BsonDate other) const { return m_time == other.m_time; }
+	bool opEquals(ref const scope BsonDate other) const scope { return m_time == other.m_time; }
 	/// ditto
 	int opCmp(ref const BsonDate other) const {
 		if( m_time == other.m_time ) return 0;
@@ -1918,7 +1915,7 @@ unittest
 	assert(t == s);
 }
 
-private string skipCString(ref bdata_t data)
+private string skipCString(return scope ref bdata_t data)
 @safe {
 	auto idx = data.countUntil(0);
 	enforce(idx >= 0, "Unterminated BSON C-string.");
