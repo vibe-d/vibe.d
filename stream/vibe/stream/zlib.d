@@ -7,8 +7,8 @@
 */
 module vibe.stream.zlib;
 
+import vibe.container.ringbuffer : RingBuffer;
 import vibe.core.stream;
-import vibe.utils.array;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
 
@@ -220,7 +220,7 @@ class ZlibInputStream : InputStream {
 	private {
 		InterfaceProxy!InputStream m_in;
 		z_stream m_zstream;
-		FixedRingBuffer!(ubyte, 4096) m_outbuffer;
+		RingBuffer!(ubyte, 4096) m_outbuffer;
 		ubyte[1024] m_inbuffer;
 		bool m_finished = false;
 		ulong m_ninflated, n_read;

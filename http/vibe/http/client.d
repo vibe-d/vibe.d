@@ -11,6 +11,7 @@ public import vibe.core.net;
 public import vibe.http.common;
 public import vibe.inet.url;
 
+import vibe.container.ringbuffer : RingBuffer;
 import vibe.core.connectionpool;
 import vibe.core.core;
 import vibe.core.log;
@@ -22,7 +23,6 @@ import vibe.stream.tls;
 import vibe.stream.operations;
 import vibe.stream.wrapper : createConnectionProxyStream;
 import vibe.stream.zlib;
-import vibe.utils.array;
 import vibe.utils.dictionarylist;
 import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
@@ -207,7 +207,7 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPC
 				ret.connect(host, port, use_tls, sttngs);
 				return ret;
 			});
-		if (s_connections.full) s_connections.popFront();
+		if (s_connections.full) s_connections.removeFront();
 		s_connections.put(tuple(ckey, pool));
 	}
 
@@ -231,7 +231,7 @@ static ~this()
 }
 
 private struct ConnInfo { string host; string tlsPeerName; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
-private static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
+private static RingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 
 
 /**************************************************************************************************/
@@ -787,6 +787,8 @@ private auto connectTCPWithTimeout(NetworkAddress addr, NetworkAddress bind_addr
 	Represents a HTTP client request (as sent to the server).
 */
 final class HTTPClientRequest : HTTPRequest {
+	import vibe.internal.array : FixedAppender;
+
 	private {
 		InterfaceProxy!OutputStream m_bodyWriter;
 		FreeListRef!ChunkedOutputStream m_chunkedStream;
