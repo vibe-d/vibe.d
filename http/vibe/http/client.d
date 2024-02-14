@@ -646,7 +646,8 @@ final class HTTPClient {
 	{
 		assert(!m_requesting, "Interleaved HTTP client requests detected!");
 		assert(!m_responding, "Interleaved HTTP client request/response detected!");
-
+		scope(failure) disconnect;
+		
 		m_requesting = true;
 		scope(exit) m_requesting = false;
 
