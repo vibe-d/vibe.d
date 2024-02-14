@@ -76,6 +76,15 @@ fi
 if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
     mongod --version
 
+    if command -v mongo &>/dev/null; then
+        export MONGO=mongo
+    elif command -v mongosh &>/dev/null; then
+        export MONGO=mongosh
+    else
+        echo "Neither mongo nor mongosh is installed to send client commands"
+        exit 1
+    fi
+
     for ex in $(\ls -1 tests/mongodb); do
         if [ -r tests/mongodb/$ex/run.sh ]; then
             # advanced mongodb test where we simply run a test script and it will do the rest (useful for the connection test with different server startup authentication options)
@@ -101,7 +110,7 @@ if [[ $PARTS =~ (^|,)mongo(,|$) ]]; then
 
             kill $MONGOPID
 
-            while kill -0 $MONGOPID; do
+            while kill -0 $MONGOPID &>/dev/null; do
                 sleep 1
             done
         fi

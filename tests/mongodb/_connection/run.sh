@@ -32,10 +32,10 @@ fi
 # Authenticated Test
 
 MONGOPID=$(mongod --logpath log.txt --bind_ip 127.0.0.1 --port $MONGOPORT --noauth --dbpath db/auth --fork | grep -Po 'forked process: \K\d+')
-echo "db.createUser({user:'admin',pwd:'123456',roles:[{role:'readWrite',db:'unittest'},'dbAdmin'],passwordDigestor:'server'})" | mongo "mongodb://127.0.0.1:$MONGOPORT/admin"
+echo "db.createUser({user:'admin',pwd:'123456',roles:[{role:'readWrite',db:'unittest'},'dbAdmin'],passwordDigestor:'server'})" | $MONGO "mongodb://127.0.0.1:$MONGOPORT/admin"
 kill $MONGOPID
 
-while kill -0 $MONGOPID; do 
+while kill -0 $MONGOPID &>/dev/null; do
 	sleep 1
 done
 
