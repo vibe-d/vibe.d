@@ -317,6 +317,13 @@ class ZlibInputStream : InputStream {
 				m_in.read(m_inbuffer[0 .. clen]);
 				m_zstream.next_in = &m_inbuffer[0];
 				m_zstream.avail_in = cast(uint)clen;
+			} else {
+				import core.stdc.string : memmove;
+				memmove(m_inbuffer.ptr, m_zstream.next_in, m_zstream.avail_in);
+				auto clen = min(m_inbuffer.length - m_zstream.avail_in, m_in.leastSize);
+				m_in.read(m_inbuffer.ptr[m_zstream.avail_in .. m_zstream.avail_in+clen]);
+				m_zstream.next_in = &m_inbuffer[0];
+				m_zstream.avail_in += cast(uint)clen;
 			}
 			auto avins = m_zstream.avail_in;
 			//logInfo("inflate %s -> %s (@%s in @%s)", m_zstream.avail_in, m_zstream.avail_out, m_ninflated, n_read);
