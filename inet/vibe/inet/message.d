@@ -10,10 +10,10 @@ module vibe.inet.message;
 import vibe.core.log;
 import vibe.core.stream;
 import vibe.stream.operations;
-import vibe.utils.array;
+import vibe.container.internal.appender;
 import vibe.container.internal.utilallocator;
-import vibe.utils.string;
-import vibe.utils.dictionarylist;
+import vibe.container.dictionarylist;
+import vibe.internal.string;
 
 import std.conv;
 import std.datetime;

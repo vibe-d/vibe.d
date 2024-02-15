@@ -7,14 +7,14 @@
 */
 module vibe.inet.webform;
 
+import vibe.container.dictionarylist;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.core.path;
 import vibe.inet.message;
+import vibe.internal.string;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode;
-import vibe.utils.string;
-import vibe.utils.dictionarylist;
 import std.range : isOutputRange;
 import std.traits : ValueType, KeyType;
 
@@ -71,7 +71,7 @@ void parseURLEncodedForm(string str, ref FormFields params)
 		// name part
 		auto idx = str.indexOf("=");
 		if (idx == -1) {
-			idx = vibe.utils.string.indexOfAny(str, "&;");
+			idx = vibe.internal.string.indexOfAny(str, "&;");
 			if (idx == -1) {
 				params.addField(formDecode(str[0 .. $]), "");
 				return;
@@ -81,7 +81,7 @@ void parseURLEncodedForm(string str, ref FormFields params)
 				continue;
 			}
 		} else {
-			auto idx_amp = vibe.utils.string.indexOfAny(str, "&;");
+			auto idx_amp = vibe.internal.string.indexOfAny(str, "&;");
 			if (idx_amp > -1 && idx_amp < idx) {
 				params.addField(formDecode(str[0 .. idx_amp]), "");
 				str = str[idx_amp+1 .. $];
@@ -551,7 +551,6 @@ private void formEncodeImpl(R, T)(auto ref R dst, T map, char sep, bool form_enc
 
 unittest
 {
-	import vibe.utils.dictionarylist : DictionaryList;
 	import vibe.data.json : Json;
 	import vibe.data.bson : Bson;
 	import std.algorithm.sorting : sort;
