@@ -1583,7 +1583,7 @@ unittest
 	See_Also: `vibe.data.serialization.serialize`, `vibe.data.serialization.deserialize`, `serializeToBson`, `deserializeBson`
 */
 struct BsonSerializer {
-	import vibe.utils.array : AllocAppender;
+	import vibe.container.internal.appender : AllocAppender;
 
 	private {
 		AllocAppender!(ubyte[]) m_dst;

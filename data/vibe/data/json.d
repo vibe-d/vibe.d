@@ -2838,7 +2838,7 @@ private auto trustedRange(R)(R range)
 
 // test for vibe.utils.DictionaryList
 @safe unittest {
-	import vibe.utils.dictionarylist;
+	import vibe.container.dictionarylist;
 
 	static assert(isCustomSerializable!(DictionaryList!int));
 

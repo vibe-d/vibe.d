@@ -1,6 +1,6 @@
 name "data"
 description "Data format and serialization support"
-dependency "vibe-d:utils" path=".."
+dependency "vibe-container" version=">=1.2.2 <2.0.0-0"
 targetType "library"
 sourcePaths "."
 importPaths "."

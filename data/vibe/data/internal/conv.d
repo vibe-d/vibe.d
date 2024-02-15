@@ -21,7 +21,7 @@ string enumToString(E)(E value)
 void formattedWriteFixed(size_t MAX_BYTES, R, ARGS...)(ref R sink, string format, ARGS args)
 @safe {
 	import std.format : formattedWrite;
-	import vibe.utils.array : FixedAppender;
+	import vibe.container.internal.appender : FixedAppender;
 
 	FixedAppender!(char[], MAX_BYTES) app;
 	app.formattedWrite(format, args);
