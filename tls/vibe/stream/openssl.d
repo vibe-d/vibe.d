@@ -831,13 +831,13 @@ final class OpenSSLContext : TLSContext {
 	{
 		static if (!haveALPN) assert(false, "OpenSSL support not compiled with ALPN enabled. Use VibeForceALPN.");
 		else {
-			import vibe.internal.memory_legacy : allocArray, freeArray, manualAllocator;
+			import vibe.container.internal.utilallocator : makeArray, dispose, Mallocator;
 			ubyte[] alpn;
 			size_t len;
 			foreach (string alpn_value; alpn_list)
 				len += alpn_value.length + 1;
             () @trusted {
-			    alpn = allocArray!ubyte(manualAllocator(), len);
+			    alpn = Mallocator.instance.makeArray!ubyte(len);
             } ();
 
 			size_t i;
@@ -854,7 +854,7 @@ final class OpenSSLContext : TLSContext {
 
             () @trusted {
 			    SSL_CTX_set_alpn_protos(m_ctx, cast(const char*) alpn.ptr, cast(uint) len);
-			    freeArray(manualAllocator(), alpn);
+			    Mallocator.instance.dispose(alpn);
             } ();
 
 		}
