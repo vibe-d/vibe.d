@@ -7,14 +7,13 @@
 */
 module vibe.textfilter.markdown;
 
-import vibe.core.log;
 import vibe.textfilter.html;
-import vibe.utils.string;
 
-import std.algorithm : canFind, countUntil, min;
+import std.algorithm : any, all, canFind, countUntil, min;
 import std.array;
 import std.format;
 import std.range;
+import std.utf : byCodeUnit;
 import std.string;
 
 /*
@@ -22,20 +21,6 @@ import std.string;
 		detect inline HTML tags
 */
 
-version(MarkdownTest)
-{
-	int main()
-	{
-		import std.file;
-		setLogLevel(LogLevel.Trace);
-		auto text = readText("test.txt");
-		auto result = appender!string();
-		filterMarkdown(result, text);
-		foreach( ln; splitLines(result.data) )
-			logInfo(ln);
-		return 0;
-	}
-}
 
 /** Returns a Markdown filtered HTML string.
 */
@@ -918,11 +903,11 @@ pure @safe {
 	if (ln.length < 1) return false;
 	if (ln[0] == '=') {
 		while (!ln.empty && ln.front == '=') ln.popFront();
-		return allOf(ln, " \t");
+		return isLineBlank(ln);
 	}
 	if (ln[0] == '-') {
 		while (!ln.empty && ln.front == '-') ln.popFront();
-		return allOf(ln, " \t");
+		return isLineBlank(ln);
 	}
 	return false;
 }
@@ -987,6 +972,11 @@ pure @safe {
 	if (allOf(ln, " *") && count(ln, '*') >= 3) return true;
 	if (allOf(ln, " _") && count(ln, '_') >= 3) return true;
 	return false;
+}
+
+private bool allOf(string str, const(char)[] ascii_chars)
+pure @safe nothrow {
+	return str.byCodeUnit.all!(ch => ascii_chars.byCodeUnit.canFind(ch));
 }
 
 private bool isQuoteLine(string ln)
@@ -1218,7 +1208,6 @@ pure @safe {
 	if (refid.length > 0) {
 		auto pr = toLower(refid) in linkrefs;
 		if (!pr) {
-			debug if (!__ctfe) logDebug("[LINK REF NOT FOUND: '%s'", refid);
 			return false;
 		}
 		dst.url = pr.url;
@@ -1308,7 +1297,7 @@ pure @safe {
 	if (cidx < 0) return false;
 
 	url = pstr[0 .. cidx];
-	if (url.anyOf(" \t")) return false;
+	if (url.any!(ch => ch == ' ' || ch == '\t')) return false;
 	auto atidx = url.indexOf('@');
 	auto colonidx = url.indexOf(':');
 	if (atidx < 0 && colonidx < 0) return false;
@@ -1478,8 +1467,6 @@ pure @safe {
 		parseAttributeString(attstr, lref.attributes);
 		ret[toLower(refid)] = lref;
 		reflines[lnidx] = true;
-
-		debug if (!__ctfe) logTrace("[detected ref on line %d]", lnidx+1);
 	}
 
 	// remove all lines containing references
@@ -1568,6 +1555,54 @@ unittest {
 	assert ("aBc123".asSlug.equal("abc123"));
 	assert ("....aBc...123...".asSlug.equal("abc-123"));
 }
+
+
+/**
+	Finds the closing bracket (works with any of '[', '$(LPAREN)', '<', '{').
+
+	Params:
+		str = input string
+		nested = whether to skip nested brackets
+	Returns:
+		The index of the closing bracket or -1 for unbalanced strings
+		and strings that don't start with a bracket.
+*/
+private sizediff_t matchBracket(const(char)[] str, bool nested = true)
+@safe pure nothrow {
+	if (str.length < 2) return -1;
+
+	char open = str[0], close = void;
+	switch (str[0]) {
+		case '[': close = ']'; break;
+		case '(': close = ')'; break;
+		case '<': close = '>'; break;
+		case '{': close = '}'; break;
+		default: return -1;
+	}
+
+	size_t level = 1;
+	foreach (i, char c; str[1 .. $]) {
+		if (nested && c == open) ++level;
+		else if (c == close) --level;
+		if (level == 0) return i + 1;
+	}
+	return -1;
+}
+
+@safe unittest
+{
+	static struct Test { string str; sizediff_t res; }
+	enum tests = [
+		Test("[foo]", 4), Test("<bar>", 4), Test("{baz}", 4),
+		Test("[", -1), Test("[foo", -1), Test("ab[f]", -1),
+		Test("[foo[bar]]", 9), Test("[foo{bar]]", 8),
+	];
+	foreach (test; tests)
+		assert(matchBracket(test.str) == test.res);
+	assert(matchBracket("[foo[bar]]", false) == 8);
+	static assert(matchBracket("[foo]") == 4);
+}
+
 
 private struct LinkRef {
 	string id;
@@ -1714,3 +1749,4 @@ private struct Link {
 	assert(filterMarkdown("*&nbsp;*") == "<p><em>&nbsp;</em>\n</p>\n");
 	assert(filterMarkdown("`&nbsp;`") == "<p><code class=\"prettyprint\">&amp;nbsp;</code>\n</p>\n");
 }
+
