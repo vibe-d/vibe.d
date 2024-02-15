@@ -161,7 +161,7 @@ sizediff_t matchBracket(const(char)[] str, bool nested = true)
 }
 
 /// Same as std.string.format, just using an allocator.
-string formatAlloc(ARGS...)(scope IAllocator alloc, string fmt, ARGS args)
+string formatAlloc(Allocator, ARGS...)(scope Allocator alloc, string fmt, ARGS args)
 {
 	auto app = AllocAppender!string(alloc);
 	formattedWrite(() @trusted { return &app; } (), fmt, args);

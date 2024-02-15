@@ -30,14 +30,25 @@ struct AllocAppender(ArrayType : E[], E) {
 		ElemType[] m_data;
 		ElemType[] m_remaining;
 		IAllocator m_alloc;
+		static if (is(RCIAllocator))
+			RCIAllocator m_rcAlloc;
 		bool m_allocatedBuffer = false;
 	}
 
 	this(IAllocator alloc, ElemType[] initial_buffer = null)
-	{
+	@safe {
 		m_alloc = alloc;
 		m_data = initial_buffer;
 		m_remaining = initial_buffer;
+	}
+
+	static if (is(RCIAllocator)) {
+		this(RCIAllocator alloc, ElemType[] initial_buffer = null)
+		@safe {
+			m_rcAlloc = alloc;
+			m_data = initial_buffer;
+			m_remaining = initial_buffer;
+		}
 	}
 
 	@disable this(this);
@@ -47,7 +58,7 @@ struct AllocAppender(ArrayType : E[], E) {
 	void reset(AppenderResetMode reset_mode = AppenderResetMode.keepData)
 	{
 		if (reset_mode == AppenderResetMode.keepData) m_data = null;
-		else if (reset_mode == AppenderResetMode.freeData) { if (m_allocatedBuffer) m_alloc.deallocate(m_data); m_data = null; }
+		else if (reset_mode == AppenderResetMode.freeData) { if (m_allocatedBuffer) withAlloc!"deallocate"(m_data); m_data = null; }
 		m_remaining = m_data;
 	}
 
@@ -59,24 +70,29 @@ struct AllocAppender(ArrayType : E[], E) {
 
 	*/
 	void reserve(size_t amount)
-	@trusted {
+	@safe {
 		size_t nelems = m_data.length - m_remaining.length;
 		if (!m_data.length) {
-			m_data = cast(ElemType[])m_alloc.allocate(amount*E.sizeof);
+			m_data = () @trusted { return cast(ElemType[])withAlloc!"allocate"(amount*E.sizeof); } ();
 			m_remaining = m_data;
 			m_allocatedBuffer = true;
 		}
 		if (m_remaining.length < amount) {
-			if (m_allocatedBuffer) {
-				void[] vdata = m_data;
-				m_alloc.reallocate(vdata, (nelems+amount)*E.sizeof);
-				m_data = () @trusted { return cast(ElemType[])vdata; } ();
-			} else {
-				auto newdata = cast(ElemType[])m_alloc.allocate((nelems+amount)*E.sizeof);
+			debug {
+				import std.digest.crc;
+				auto checksum = crc32Of(cast(const(ubyte)[])m_data[0 .. nelems]);
+			}
+			if (m_allocatedBuffer) () @trusted {
+				auto vdata = cast(void[])m_data;
+				withAlloc!"reallocate"(vdata, (nelems+amount)*E.sizeof);
+				m_data = cast(ElemType[])vdata;
+			} (); else {
+				auto newdata = () @trusted { return cast(ElemType[])withAlloc!"allocate"((nelems+amount)*E.sizeof); } ();
 				newdata[0 .. nelems] = m_data[0 .. nelems];
 				m_data = newdata;
 				m_allocatedBuffer = true;
 			}
+			debug assert(crc32Of(cast(const(ubyte)[])m_data[0 .. nelems]) == checksum);
 		}
 		m_remaining = m_data[nelems .. m_data.length];
 	}
@@ -88,7 +104,7 @@ struct AllocAppender(ArrayType : E[], E) {
 		m_remaining = m_remaining[1 .. $];
 	}
 
-	void put(ArrayType arr)
+	void put(scope ArrayType arr)
 	@safe {
 		if (m_remaining.length < arr.length) grow(arr.length);
 		m_remaining[0 .. arr.length] = arr[];
@@ -96,35 +112,31 @@ struct AllocAppender(ArrayType : E[], E) {
 	}
 
 	static if( !hasAliasing!E ){
-		void put(in ElemType[] arr)
-			@trusted
-		{
+		void put(scope const(ElemType)[] arr) @trusted {
 			put(cast(ArrayType)arr);
 		}
 	}
 
 	static if( is(ElemType == char) ){
 		void put(dchar el)
-			@safe
-		{
+		@trusted {
 			if( el < 128 ) put(cast(char)el);
 			else {
 				char[4] buf;
 				auto len = std.utf.encode(buf, el);
-				put(() @trusted { return cast(ArrayType)buf[0 .. len]; }());
+				put(cast(ArrayType)buf[0 .. len]);
 			}
 		}
 	}
 
 	static if( is(ElemType == wchar) ){
 		void put(dchar el)
-			@safe
-		{
+		@trusted {
 			if( el < 128 ) put(cast(wchar)el);
 			else {
 				wchar[3] buf;
 				auto len = std.utf.encode(buf, el);
-				put(() @trusted { return cast(ArrayType)buf[0 .. len]; } ());
+				put(cast(ArrayType)buf[0 .. len]);
 			}
 		}
 	}
@@ -144,10 +156,17 @@ struct AllocAppender(ArrayType : E[], E) {
 			assert(n <= m_remaining.length);
 			m_remaining = m_remaining[n .. $];
 		}
+		/// ditto
+		void append(scope size_t delegate(scope ElemType[] dst) del)
+		{
+			auto n = del(m_remaining);
+			assert(n <= m_remaining.length);
+			m_remaining = m_remaining[n .. $];
+		}
 	}
 
 	void grow(size_t min_free)
-	{
+	@safe {
 		if( !m_data.length && min_free < 16 ) min_free = 16;
 
 		auto min_size = m_data.length + min_free - m_remaining.length;
@@ -155,6 +174,15 @@ struct AllocAppender(ArrayType : E[], E) {
 		while( new_size < min_size )
 			new_size = (new_size * 3) / 2;
 		reserve(new_size - m_data.length + m_remaining.length);
+	}
+
+	private auto withAlloc(string method, ARGS...)(auto ref ARGS args)
+	{
+		static if (is(RCIAllocator)) {
+			if (!m_rcAlloc.isNull) return __traits(getMember, m_rcAlloc, method)(args);
+		}
+		if (m_alloc) return __traits(getMember, m_alloc, method)(args);
+		assert(false, "Using AllocAppender with no allocator set");
 	}
 }
 
@@ -213,6 +241,14 @@ unittest {
 		return size_t(3);
 	});
 	assert(app.data == "foo");
+}
+
+unittest {
+	auto app = AllocAppender!string(theAllocator);
+	app.reserve(3);
+	app.put("foo");
+	app.put("bar");
+	assert(app.data == "foobar");
 }
 
 
@@ -574,12 +610,10 @@ deprecated unittest {
 
 struct ArraySet(Key)
 {
-	import stdx.allocator : makeArray, expandArray, dispose;
-	import stdx.allocator.building_blocks.affix_allocator : AffixAllocator;
-
 	private {
-		IAllocator AW(IAllocator a) { return a; }
-		alias AllocatorType = AffixAllocator!(IAllocator, int);
+		alias GenAllocator = typeof(vibeThreadAllocator());
+		GenAllocator AW(GenAllocator a) { return a; }
+		alias AllocatorType = AffixAllocator!(GenAllocator, int);
 		Key[4] m_staticEntries;
 		Key[] m_entries;
 		AllocatorType m_allocator;
@@ -624,7 +658,7 @@ struct ArraySet(Key)
 		return ret;
 	}
 
-	void setAllocator(IAllocator allocator)
+	void setAllocator(GenAllocator allocator)
 	in { assert(m_entries.ptr is null, "Cannot set allocator after elements have been inserted."); }
 	do {
 		m_allocator = AllocatorType(AW(allocator));
@@ -698,19 +732,23 @@ struct ArraySet(Key)
 	nothrow @trusted {
 		try {
 			auto palloc = m_allocator._parent;
-			if (!palloc) {
-				assert(vibeThreadAllocator !is null, "No theAllocator set!?");
+			if (isNull(palloc)) {
+				assert(!isNull(vibeThreadAllocator), "No vibeThreadAllocator set!?");
 				m_allocator = AllocatorType(AW(vibeThreadAllocator));
 			}
 		} catch (Exception e) assert(false, e.msg); // should never throw
 		return m_allocator;
 	}
+
+	private static bool isNull(GenAllocator a)
+	{
+		static if (is(RCIAllocator) && is(GenAllocator == RCIAllocator))
+			return a.isNull;
+		else return !a;
+	}
 }
 
 @safe nothrow unittest {
-	import stdx.allocator : allocatorObject;
-	import stdx.allocator.mallocator : Mallocator;
-
 	ArraySet!int s;
 	s.setAllocator(() @trusted { return Mallocator.instance.allocatorObject; } ());
 
