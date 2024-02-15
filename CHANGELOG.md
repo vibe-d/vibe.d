@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.9.8 - 2024-02-
+v0.9.8 - 2024-02-16
 -------------------
 
 ### Features and improvements ###
@@ -9,6 +9,7 @@ v0.9.8 - 2024-02-
 - More work on DIP1000/`scope` deprecation warnings - [pull #2746][issue2746], [pull #2747][issue2747]
 - Removed deprecated support for `@system` methods and attributes in REST interfaces - [pull #2748][issue2748], [pull #2771][issue2771]
 - Moved the `HashMap` implementation to a new `vibe-container` package - [pull #2750][issue2750]
+- Deprecated `FixedRingBuffer` in favor of `vibe.container.ringbuffer.RingBuffer` - [pull #2780][issue2780]
 - Added `SemaphoreStream` for implementing concurrency limited I/O - [pull #2754][issue2754]
 - Added `HTTPServerSettings.maxRequestHeaderLineSize` (by Charles Reiss) - [pull #2755][issue2755]
 - Added a `MongoCollection.replaceOne` overload taking a `ReplaceOptions` argument (by Jan Jurzitza aka WebFreak001) - [pull #2764][issue2764]
@@ -27,6 +28,7 @@ v0.9.8 - 2024-02-
 - Fixed `MongoCollection.countDocuments` for empty collections (by Jan Jurzitza aka WebFreak001) - [pull #2767][issue2767]
 - Fixed MongoDB CRUD operations not throwing on errors (by Jan Jurzitza aka WebFreak001) - [pull #2765][issue2765]
 - Fixed deserialization of `string` based `enum` values - [issue #2209][issue2209], [pull #2345][issue2345], [pull #2774][issue2774]
+- Fixed an issue with MongoDB cursors not being cleaned up correctly (by Jan Jurzitza aka WebFreak001) - [pull #2769][issue2769]
 
 [issue2209]: https://github.com/vibe-d/vibe.d/issues/2209
 [issue2345]: https://github.com/vibe-d/vibe.d/issues/2345
@@ -46,9 +48,11 @@ v0.9.8 - 2024-02-
 [issue2765]: https://github.com/vibe-d/vibe.d/issues/2765
 [issue2766]: https://github.com/vibe-d/vibe.d/issues/2766
 [issue2767]: https://github.com/vibe-d/vibe.d/issues/2767
+[issue2769]: https://github.com/vibe-d/vibe.d/issues/2769
 [issue2771]: https://github.com/vibe-d/vibe.d/issues/2771
 [issue2773]: https://github.com/vibe-d/vibe.d/issues/2773
 [issue2774]: https://github.com/vibe-d/vibe.d/issues/2774
+[issue2780]: https://github.com/vibe-d/vibe.d/issues/2780
 
 
 v0.9.7 - 2023-08-29
