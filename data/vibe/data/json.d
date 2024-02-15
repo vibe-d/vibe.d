@@ -69,7 +69,7 @@ module vibe.data.json;
 public import vibe.data.serialization;
 public import std.json : JSONException;
 
-import vibe.internal.conv : enumToString, formattedWriteFixed;
+import vibe.data.internal.conv : enumToString, formattedWriteFixed;
 
 import std.algorithm;
 import std.array;

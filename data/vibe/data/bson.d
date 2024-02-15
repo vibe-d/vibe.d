@@ -61,7 +61,7 @@ unittest {
 
 public import vibe.data.json;
 
-import vibe.internal.conv : enumToString;
+import vibe.data.internal.conv : enumToString;
 
 import std.algorithm;
 import std.array;

@@ -1,4 +1,4 @@
-module vibe.internal.conv;
+module vibe.data.internal.conv;
 
 import std.traits : OriginalType;
 
