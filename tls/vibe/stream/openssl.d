@@ -1352,7 +1352,7 @@ private nothrow @safe extern(C)
 		const(char)[] input = () @trusted { return input_[0 .. inlen]; } ();
 
 		OpenSSLContext ctx = () @trusted { return cast(OpenSSLContext) arg; } ();
-		import vibe.utils.array : AllocAppender, AppenderResetMode;
+		import vibe.container.internal.appender : AllocAppender, AppenderResetMode;
 		size_t i;
 		size_t len;
 		Appender!(string[]) alpn_list;

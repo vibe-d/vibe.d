@@ -17,7 +17,7 @@ import vibe.core.path : NativePath;
 import vibe.core.stream;
 import vibe.core.sync;
 
-import vibe.utils.dictionarylist;
+import vibe.container.dictionarylist;
 import vibe.internal.interfaceproxy;
 
 import std.algorithm;
