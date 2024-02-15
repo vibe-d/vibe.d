@@ -9,9 +9,11 @@ import std.socket : AddressFamily;
 
 shared static this()
 {
-	immutable serverAddr = listenHTTP(":0", (scope req, scope res) {
+	immutable serverPort = listenHTTP(":0", (scope req, scope res) {
 		res.writeBody("Hello world.");
-	}).bindAddresses.find!(addr => addr.family == AddressFamily.INET).front;
+	}).bindAddresses.find!(addr => addr.family == AddressFamily.INET).front.port;
+	auto serverAddr = resolveHost("127.0.0.1");
+	serverAddr.port = serverPort;
 
 	runTask({
 		scope (exit) exitEventLoop();
