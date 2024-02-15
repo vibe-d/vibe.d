@@ -33,7 +33,13 @@ import core.time : Duration, seconds;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream.
 */
-ubyte[] readLine(InputStream)(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", IAllocator alloc = vibeThreadAllocator()) /*@ufcs*/
+ubyte[] readLine(InputStream)(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n") /*@ufcs*/
+	if (isInputStream!InputStream)
+{
+	return readLine(stream, max_bytes, linesep, vibeThreadAllocator());
+}
+/// ditto
+ubyte[] readLine(InputStream, Allocator)(InputStream stream, size_t max_bytes, string linesep, Allocator alloc) /*@ufcs*/
 	if (isInputStream!InputStream)
 {
 	auto output = AllocAppender!(ubyte[])(alloc);
@@ -116,7 +122,7 @@ void readLine(R, InputStream)(InputStream stream, ref R dst, size_t max_bytes = 
 		O(n+m) in typical cases, with n being the length of the scanned input
 		string and m the length of the marker.
 */
-ubyte[] readUntil(InputStream)(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, IAllocator alloc = vibeThreadAllocator()) /*@ufcs*/
+ubyte[] readUntil(InputStream, Allocator)(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = vibeThreadAllocator()) /*@ufcs*/
 	if (isInputStream!InputStream)
 {
 	auto output = AllocAppender!(ubyte[])(alloc);

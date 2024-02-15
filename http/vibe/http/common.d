@@ -489,7 +489,7 @@ final class ChunkedOutputStream : OutputStream {
 	}
 
 	/// private
-	this(InterfaceProxy!OutputStream stream, IAllocator alloc, bool dummy)
+	this(Allocator)(InterfaceProxy!OutputStream stream, Allocator alloc, bool dummy)
 	{
 		m_out = stream;
 		m_buffer = AllocAppender!(ubyte[])(alloc);
@@ -611,13 +611,23 @@ final class ChunkedOutputStream : OutputStream {
 }
 
 /// Creates a new `ChunkedInputStream` instance.
-ChunkedOutputStream createChunkedOutputStream(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
+ChunkedOutputStream createChunkedOutputStream(OS)(OS destination_stream) if (isOutputStream!OS)
+{
+	return createChunkedOutputStream(destination_stream, theAllocator());
+}
+/// ditto
+ChunkedOutputStream createChunkedOutputStream(OS, Allocator)(OS destination_stream, Allocator allocator) if (isOutputStream!OS)
 {
 	return new ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
 }
 
 /// Creates a new `ChunkedOutputStream` instance.
-FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
+FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_stream) if (isOutputStream!OS)
+{
+	return createChunkedOutputStreamFL(destination_stream, theAllocator());
+}
+/// ditto
+FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS, Allocator)(OS destination_stream, Allocator allocator) if (isOutputStream!OS)
 {
 	return FreeListRef!ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
 }
@@ -1068,4 +1078,27 @@ unittest {
 	} else assert(false);
 	*("foo" in m) = "baz";
 	assert(m["foo"] == "baz");
+}
+
+
+package auto createRequestAllocator()
+{
+	import vibe.container.internal.utilallocator: RegionListAllocator;
+
+	static if (is(RegionListAllocator!(shared(GCAllocator), true) == struct)) {
+		version (VibeManualMemoryManagement)
+			return allocatorObject(RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance));
+		else
+			return allocatorObject(RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance));
+	} else {
+		version (VibeManualMemoryManagement)
+			return new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
+		else
+			return new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
+	}
+}
+
+package void freeRequestAllocator(Allocator)(ref Allocator alloc)
+{
+	destroy(alloc);
 }

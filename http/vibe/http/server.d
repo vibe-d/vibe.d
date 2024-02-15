@@ -243,12 +243,8 @@ void handleHTTPConnection(TCPConnection connection, HTTPServerContext context)
 		}
 
 		() @trusted {
-			import vibe.container.internal.utilallocator: RegionListAllocator;
-
-			version (VibeManualMemoryManagement)
-				scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
-			else
-				scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
+			scope request_allocator = createRequestAllocator();
+			scope (exit) freeRequestAllocator(request_allocator);
 
 			handleRequest(http_stream, connection, context, settings, keep_alive, request_allocator);
 		} ();
@@ -1183,11 +1179,13 @@ final class HTTPServerRequest : HTTPRequest {
 	Represents a HTTP response as sent from the server side.
 */
 final class HTTPServerResponse : HTTPResponse {
+	alias Allocator = typeof(vibeThreadAllocator());
+
 	private {
 		InterfaceProxy!Stream m_conn;
 		InterfaceProxy!ConnectionStream m_rawConnection;
 		InterfaceProxy!OutputStream m_bodyWriter;
-		IAllocator m_requestAlloc;
+		Allocator m_requestAlloc;
 		FreeListRef!ChunkedOutputStream m_chunkedBodyWriter;
 		FreeListRef!CountingOutputStream m_countingWriter;
 		FreeListRef!ZlibOutputStream m_zlibOutputStream;
@@ -1201,13 +1199,13 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 
 	static if (!is(Stream == InterfaceProxy!Stream)) {
-		this(Stream conn, ConnectionStream raw_connection, HTTPServerSettings settings, IAllocator req_alloc)
+		this(Stream conn, ConnectionStream raw_connection, HTTPServerSettings settings, Allocator req_alloc)
 		@safe scope {
 			this(InterfaceProxy!Stream(conn), InterfaceProxy!ConnectionStream(raw_connection), settings, req_alloc);
 		}
 	}
 
-	this(InterfaceProxy!Stream conn, InterfaceProxy!ConnectionStream raw_connection, HTTPServerSettings settings, IAllocator req_alloc)
+	this(InterfaceProxy!Stream conn, InterfaceProxy!ConnectionStream raw_connection, HTTPServerSettings settings, Allocator req_alloc)
 	@safe scope {
 		m_conn = conn;
 		m_rawConnection = raw_connection;
@@ -2105,7 +2103,7 @@ private HTTPListener listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequ
 private alias TLSStreamType = ReturnType!(createTLSStreamFL!(InterfaceProxy!Stream));
 
 
-private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_connection, HTTPServerContext listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope IAllocator request_allocator)
+private bool handleRequest(Allocator)(InterfaceProxy!Stream http_stream, TCPConnection tcp_connection, HTTPServerContext listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope Allocator request_allocator)
 @safe {
 	import std.algorithm.searching : canFind;
 
@@ -2375,7 +2373,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 }
 
 
-private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size, size_t max_header_line_size)
+private void parseRequestHeader(InputStream, Allocator)(HTTPServerRequest req, InputStream http_stream, Allocator alloc, ulong max_header_size, size_t max_header_line_size)
 	if (isInputStream!InputStream)
 {
 	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);

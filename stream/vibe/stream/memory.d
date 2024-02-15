@@ -16,9 +16,9 @@ import std.array;
 import std.exception;
 import std.typecons;
 
-MemoryOutputStream createMemoryOutputStream(IAllocator alloc = vibeThreadAllocator())
+MemoryOutputStream createMemoryOutputStream(Allocator)(Allocator alloc = vibeThreadAllocator())
 @safe nothrow {
-	return new MemoryOutputStream(alloc, true);
+	return new MemoryOutputStream(alloc, MemoryOutputStream.Dummy.init);
 }
 
 /** Creates a new stream with the given data array as its contents.
@@ -39,21 +39,24 @@ MemoryStream createMemoryStream(ubyte[] data, bool writable = true, size_t initi
 */
 final class MemoryOutputStream : OutputStream {
 @safe:
+	private struct Dummy {}
 
 	private {
 		AllocAppender!(ubyte[]) m_destination;
 	}
 
-	deprecated("Use createMemoryOutputStream isntead.")
-	this(IAllocator alloc = vibeThreadAllocator())
-	{
-		this(alloc, true);
-	}
-
 	/// private
-	this(IAllocator alloc, bool dummy)
+	this(IAllocator alloc, Dummy)
 	nothrow {
 		m_destination = AllocAppender!(ubyte[])(alloc);
+	}
+
+	static if (is(RCIAllocator)) {
+		/// private
+		this(RCIAllocator alloc, Dummy)
+		nothrow {
+			m_destination = AllocAppender!(ubyte[])(alloc);
+		}
 	}
 
 	/// An array with all data written to the stream so far.

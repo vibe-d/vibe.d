@@ -468,11 +468,8 @@ final class HTTPClient {
 	private void doProxyRequest(T, U)(ref T res, U requester, ref bool close_conn, ref bool has_body)
 	@trusted { // scope new
 		import std.conv : to;
-		import vibe.container.internal.utilallocator: RegionListAllocator;
-		version (VibeManualMemoryManagement)
-			scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
-		else
-			scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
+		scope request_allocator = createRequestAllocator();
+		scope (exit) freeRequestAllocator(request_allocator);
 
 		res.dropBody();
 		scope(failure)
@@ -542,11 +539,8 @@ final class HTTPClient {
 	*/
 	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	@trusted { // scope new
-		import vibe.container.internal.utilallocator: RegionListAllocator;
-		version (VibeManualMemoryManagement)
-			scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
-		else
-			scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
+		scope request_allocator = createRequestAllocator();
+		scope (exit) freeRequestAllocator(request_allocator);
 
 		scope (failure) {
 			m_responding = false;
@@ -1030,7 +1024,7 @@ final class HTTPClientResponse : HTTPResponse {
 		m_closeConn = close_conn;
 	}
 
-	private void initialize(bool has_body, IAllocator alloc, SysTime connected_time = Clock.currTime(UTC()))
+	private void initialize(Allocator)(bool has_body, Allocator alloc, SysTime connected_time = Clock.currTime(UTC()))
 	{
 		scope(failure) finalize(true);
 
