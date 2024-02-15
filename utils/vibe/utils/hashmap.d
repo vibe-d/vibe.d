@@ -7,6 +7,7 @@
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
+deprecated("Import `vibe.container.hashmap` instead.")
 module vibe.utils.hashmap;
 
 public import vibe.container.hashmap;
