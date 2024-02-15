@@ -10,7 +10,7 @@ module vibe.stream.operations;
 public import vibe.core.stream;
 
 import vibe.core.log;
-import vibe.utils.array : AllocAppender;
+import vibe.container.internal.appender : AllocAppender;
 import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
 import vibe.stream.wrapper : ProxyStream;
@@ -269,12 +269,22 @@ string readAllUTF8(InputStream)(InputStream stream, bool sanitize = false, size_
 {
 	static import std.encoding;
 	import std.utf : validate;
-	import vibe.utils.string : stripUTF8Bom;
+	import vibe.internal.string : stripUTF8Bom;
 	auto ret = () @trusted { return cast(string)readAll(stream, max_bytes); } ();
 	if (sanitize) ret = () @trusted { return std.encoding.sanitize(ret); } ();
 	else validate(ret);
 	return stripUTF8Bom(ret);
 }
+
+unittest {
+	import vibe.stream.memory : createMemoryStream;
+
+	auto str = createMemoryStream(cast(ubyte[])"Hello, Wörld!".dup);
+	assert(readAllUTF8(str) == "Hello, Wörld!");
+	str.seek(0);
+	assertThrown(readAllUTF8(str, false, 4));
+}
+
 
 /**
 	Pipes a stream to another while keeping the latency within the specified threshold.

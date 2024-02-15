@@ -2,7 +2,7 @@ name "stream"
 description "Library of various pluggable stream implementations"
 
 dependency "vibe-core" version=">=1.0.0 <3.0.0-0"
-dependency "vibe-d:utils" version="*"
+dependency "vibe-container" version=">=1.2.2 <3.0.0-0"
 
 targetType "library"
 sourcePaths "."
