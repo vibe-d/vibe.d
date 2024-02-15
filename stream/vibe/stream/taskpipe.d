@@ -13,9 +13,9 @@ import core.sync.mutex;
 import core.time;
 import std.algorithm : min;
 import std.exception;
+import vibe.container.ringbuffer : RingBuffer;
 import vibe.core.core;
 import vibe.core.sync;
-import vibe.utils.array;
 
 
 /**
@@ -73,7 +73,7 @@ private final class TaskPipeImpl {
 	private {
 		Mutex m_mutex;
 		InterruptibleTaskCondition m_condition;
-		vibe.utils.array.FixedRingBuffer!ubyte m_buffer;
+		RingBuffer!ubyte m_buffer;
 		bool m_closed = false;
 		bool m_growWhenFull;
 	}

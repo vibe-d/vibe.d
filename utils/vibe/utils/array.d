@@ -274,6 +274,7 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 /**
 	TODO: clear ring buffer fields upon removal (to run struct destructors, if T is a struct)
 */
+deprecated("Use `vibe.container.ringbuffer.RingBuffer` instead.")
 struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 	private {
 		static if( N > 0 ) {
@@ -505,7 +506,7 @@ struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 	}
 }
 
-unittest {
+deprecated unittest {
 	import std.range : only;
 
 	static assert(isInputRange!(FixedRingBuffer!int) && isOutputRange!(FixedRingBuffer!int, int));
