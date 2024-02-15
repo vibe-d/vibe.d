@@ -7,14 +7,13 @@
 */
 module vibe.textfilter.urlencode;
 
-import vibe.utils.string;
-
 import std.algorithm;
 import std.array;
 import std.conv;
 import std.exception;
 import std.format;
 import std.range;
+import std.utf : byCodeUnit;
 
 
 /**
@@ -92,7 +91,7 @@ bool isURLEncoded(const(char)[] str, const(char)[] reserved_chars = null)
 */
 T[] urlDecode(T)(T[] str) if (is(T[] : const(char)[]))
 {
-	if (!str.anyOf("%")) return str;
+	if (!str.byCodeUnit.canFind('%')) return str;
 	auto dst = StringSliceAppender!(T[])(str);
 	filterURLDecode(dst, str);
 	return dst.data;
@@ -120,7 +119,7 @@ T[] formEncode(T)(T[] str, const(char)[] allowed_chars = null) if (is(T[] : cons
 */
 T[] formDecode(T)(T[] str) if (is(T[] : const(char)[]))
 {
-	if (!str.anyOf("%+")) return str;
+	if (!str.byCodeUnit.any!(ch => ch == '%' || ch == '+')) return str;
 	auto dst = StringSliceAppender!(T[])(str);
 	filterURLDecode(dst, str, true);
 	return dst.data;
