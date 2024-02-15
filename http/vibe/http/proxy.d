@@ -128,7 +128,7 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 
 
 		import std.algorithm : splitter, canFind;
-		import vibe.utils.string : icmp2;
+		import vibe.internal.string : icmp2;
 		bool isUpgrade = pConnection && (*pConnection).splitter(',').canFind!(a => a.icmp2("upgrade"));
 
 		void setupClientRequest(scope HTTPClientRequest creq)
@@ -152,8 +152,6 @@ HTTPServerRequestDelegateS proxyRequest(HTTPProxySettings settings)
 
 		void handleClientResponse(scope HTTPClientResponse cres)
 		{
-			import vibe.utils.string;
-
 			// copy the response to the original requester
 			res.statusCode = cres.statusCode;
 

@@ -9,17 +9,16 @@ module vibe.http.common;
 
 public import vibe.http.status;
 
+import vibe.container.dictionarylist;
+import vibe.container.internal.appender;
+import vibe.container.internal.utilallocator;
 import vibe.core.log;
 import vibe.core.net;
 import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
-import vibe.utils.array;
-import vibe.utils.dictionarylist;
-import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
-import vibe.utils.string;
 
 import std.algorithm;
 import std.array;
