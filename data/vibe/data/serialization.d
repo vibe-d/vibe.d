@@ -2245,7 +2245,7 @@ unittest {
 
 	enum Foo {
 		foobar
-	};
+	}
 
 	struct Testable {
 		@byName
