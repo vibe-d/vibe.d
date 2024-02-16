@@ -2,6 +2,6 @@
 	"name": "message-example",
 	"description": "Demonstrates cross-task message communication.",
 	"dependencies": {
-		"vibe-core": "~>1.0"
+		"vibe-core": "~>2.0"
 	}
 }
