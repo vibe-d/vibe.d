@@ -45,6 +45,25 @@ Download this file as `hello.d` and run it with [DUB](https://github.com/dlang/d
 
 Alternatively, you can quickstart with examples directly on [![Open on run.dlang.io](https://img.shields.io/badge/run.dlang.io-open-blue.svg)](https://run.dlang.io/is/qTsfv6).
 
+
+Project structure
+-----------------
+
+The vibe.d project is structured into multiple repositories:
+
+- `vibe-d` (this repository): The high level web and REST framework, HTTP, STMP and Redis/MongoDB functionality
+- [`vibe-core`](https://github.com/vibe-d/vibe-core): Fiber based I/O and concurrency implementation
+- [`vibe-serialization`](https://github.com/vibe-d/vibe-serialization): Serialization and structured data format support
+- [`vibe-container`](https://github.com/vibe-d/vibe-container): Container implementations used throughout the project
+- [`vibe-sdl`](https://github.com/vibe-d/vibe-sdl): [SDLang](https://sdlang.org) serialization support based on [`sdlite`](https://github.com/s-ludwig/sdlite)
+- [`vibe-compat`](https://github.com/vibe-d/vibe-compat): Legacy functionality
+- [`observable`](https://github.com/vibe-d/observable): Observable, signal/slot and reactive value implementations
+- [`diet`](https://github.com/rejectedsoftware/diet-ng): pug.js inspired compile-time HTML template system with `vibe.web` integration
+- [`eventcore`](https://github.com/vibe-d/eventcore): Low-level abstraction over the operating system's asynchronous I/O facilities
+
+You can find an API overview of the whole project in the [API documentation](https://vibed.org/api/).
+
+
 Support
 -------
 
