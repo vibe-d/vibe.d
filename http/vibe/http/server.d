@@ -11,6 +11,8 @@ public import vibe.core.net;
 public import vibe.http.common;
 public import vibe.http.session;
 
+import vibe.container.internal.appender : FixedAppender;
+import vibe.container.internal.utilallocator;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.data.json;
@@ -26,10 +28,8 @@ import vibe.stream.tls;
 import vibe.stream.wrapper : ConnectionProxyStream, createConnectionProxyStream, createConnectionProxyStreamFL;
 import vibe.stream.zlib;
 import vibe.textfilter.urlencode;
-import vibe.utils.array;
-import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
-import vibe.utils.string;
+import vibe.internal.string : formatAlloc, icmp2;
 
 import core.atomic;
 import core.vararg;
@@ -848,7 +848,7 @@ enum SessionOption {
 */
 final class HTTPServerRequest : HTTPRequest {
 	import std.variant : Variant;
-	import vibe.utils.dictionarylist : DictionaryList;
+	import vibe.container.dictionarylist : DictionaryList;
 
 	private {
 		SysTime m_timeCreated;

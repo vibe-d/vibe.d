@@ -3,6 +3,6 @@
 	"description": "Performs some simple operations using the Json type.",
 	"dependencies": {
 		"vibe-d:data": {"path": "../../"},
-		"vibe-core": "~>1.0"
+		"vibe-core": "~>2.0"
 	}
 }

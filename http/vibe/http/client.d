@@ -11,6 +11,8 @@ public import vibe.core.net;
 public import vibe.http.common;
 public import vibe.inet.url;
 
+import vibe.container.dictionarylist;
+import vibe.container.internal.utilallocator;
 import vibe.container.ringbuffer : RingBuffer;
 import vibe.core.connectionpool;
 import vibe.core.core;
@@ -23,8 +25,6 @@ import vibe.stream.tls;
 import vibe.stream.operations;
 import vibe.stream.wrapper : createConnectionProxyStream;
 import vibe.stream.zlib;
-import vibe.utils.dictionarylist;
-import vibe.container.internal.utilallocator;
 import vibe.internal.freelistref;
 import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
 

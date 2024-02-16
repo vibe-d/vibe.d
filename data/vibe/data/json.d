@@ -69,7 +69,7 @@ module vibe.data.json;
 public import vibe.data.serialization;
 public import std.json : JSONException;
 
-import vibe.internal.conv : enumToString, formattedWriteFixed;
+import vibe.data.internal.conv : enumToString, formattedWriteFixed;
 
 import std.algorithm;
 import std.array;
@@ -2838,7 +2838,7 @@ private auto trustedRange(R)(R range)
 
 // test for vibe.utils.DictionaryList
 @safe unittest {
-	import vibe.utils.dictionarylist;
+	import vibe.container.dictionarylist;
 
 	static assert(isCustomSerializable!(DictionaryList!int));
 

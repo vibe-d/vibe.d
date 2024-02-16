@@ -29,8 +29,6 @@ jobs:
         include:
           # Custom part for coverage
           - { os: ubuntu-latest, dc: dmd-latest, parts: 'unittests,tests', extra_dflags: "-cov -version=VibedSetCoverageMerge" }
-          # Custom part for vibe-core 1.x.x testing
-          - { os: ubuntu-latest, dc: dmd-latest, parts: 'builds,unittests,tests,vibe-core-1', extra_dflags: '' }
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60

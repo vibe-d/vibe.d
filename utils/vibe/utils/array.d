@@ -607,7 +607,7 @@ deprecated unittest {
 	assert(buf[].equal(only(4, 3)));
 }
 
-
+deprecated
 struct ArraySet(Key)
 {
 	private {

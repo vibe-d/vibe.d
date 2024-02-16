@@ -37,7 +37,6 @@ import vibe.stream.operations;
 import vibe.http.server;
 import vibe.http.client;
 import vibe.core.connectionpool;
-import vibe.utils.array;
 
 import core.time;
 import std.algorithm: equal, splitter;

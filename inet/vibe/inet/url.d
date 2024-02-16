@@ -10,7 +10,6 @@ module vibe.inet.url;
 public import vibe.core.path;
 
 import vibe.textfilter.urlencode;
-import vibe.utils.string;
 
 import std.array;
 import std.algorithm;

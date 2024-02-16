@@ -8,7 +8,7 @@
 module vibe.stream.memory;
 
 import vibe.core.stream;
-import vibe.utils.array;
+//import vibe.utils.array;
 import vibe.container.internal.utilallocator;
 
 import std.algorithm;
@@ -39,6 +39,8 @@ MemoryStream createMemoryStream(ubyte[] data, bool writable = true, size_t initi
 */
 final class MemoryOutputStream : OutputStream {
 @safe:
+	import vibe.container.internal.appender : AllocAppender, AppenderResetMode;
+
 	private struct Dummy {}
 
 	private {

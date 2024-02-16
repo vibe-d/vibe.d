@@ -3,6 +3,6 @@
 	"description": "Demonstrates async()/Future usage.",
 	"authors": ["Sönke Ludwig"],
 	"dependencies": {
-		"vibe-core": "~>1.0"
+		"vibe-core": "~>2.0"
 	}
 }

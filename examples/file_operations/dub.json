@@ -2,6 +2,6 @@
 	"name": "file-operations-example",
 	"description": "Read/write/append with task yielding.",
 	"dependencies": {
-		"vibe-core": "~>1.0"
+		"vibe-core": "~>2.0"
 	},
 }

@@ -3,7 +3,6 @@ description "HTTP server and client implementation and higher level HTTP functio
 dependency "vibe-d:crypto" path=".."
 dependency "vibe-d:inet" path=".."
 dependency "vibe-d:tls" path=".."
-dependency "vibe-d:textfilter" path=".."
 dependency "diet-ng" version="~>1.2"
 targetType "library"
 sourcePaths "."

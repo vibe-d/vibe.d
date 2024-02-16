@@ -8,7 +8,6 @@ import vibe.core.log;
 import vibe.http.fileserver;
 import vibe.http.router;
 import vibe.http.server;
-import vibe.utils.validation;
 import vibe.web.web;
 
 // Aggregates all information about the currently logged in user (if any).
