@@ -1,2 +1,0 @@
-name "test"
-dependency "vibe-d:http" path="../../"

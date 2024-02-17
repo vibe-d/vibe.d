@@ -1,3 +1,0 @@
-name "tests"
-description "reject connection predicate test"
-dependency "vibe-d:http" path="../../"

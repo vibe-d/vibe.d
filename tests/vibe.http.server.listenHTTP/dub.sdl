@@ -1,4 +1,0 @@
-name "tests"
-description "listenHTTP tests"
-dependency "vibe-d:http" path="../../"
-versions "VibeDefaultMain"

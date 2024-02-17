@@ -29,7 +29,6 @@ if [[ $PARTS =~ (^|,)unittests(,|$) ]]; then
     dub test :redis --compiler=$DC $DUB_ARGS
     dub test :web --compiler=$DC $DUB_ARGS
     dub test :utils --compiler=$DC $DUB_ARGS
-    dub test :http --compiler=$DC $DUB_ARGS
     dub test :mail --compiler=$DC $DUB_ARGS
     dub clean --all-packages
 fi

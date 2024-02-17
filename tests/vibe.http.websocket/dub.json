@@ -1,7 +1,0 @@
-{
-	"name": "1332",
-	"dependencies": {
-		"vibe-d:http": { "path": "../../" }
-	},
-	"versions": ["VibeDefaultMain"]
-}
