@@ -1,0 +1,3 @@
+name "bench-http-request"
+dependency "vibe-d:http" path="../../"
+versions "VibeManualMemoryManagement"

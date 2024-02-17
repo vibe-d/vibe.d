@@ -1,0 +1,4 @@
+name "future-example"
+description "Demonstrates async()/Future usage."
+authors "Sönke Ludwig"
+dependency "vibe-core" version="~>2"

@@ -1,7 +1,0 @@
-{
-	"name": "bench-mongodb",
-	"description": "Benchmark for the MongoDB client driver",
-	"dependencies": {
-		"vibe-d:mongodb": {"path": "../../"}
-	}
-}

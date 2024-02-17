@@ -1,7 +1,0 @@
-{
-	"name": "echoserver-example",
-	"description": "Implementation of a minimal echo server.",
-	"dependencies": {
-		"vibe-core": "~>2.0"
-	}
-}

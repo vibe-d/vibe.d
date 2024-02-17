@@ -1,0 +1,3 @@
+name "daytime-example"
+description "Requests the current time using the daytime protocol."
+dependency "vibe-d:stream" path="../../"

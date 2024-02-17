@@ -1,7 +1,0 @@
-﻿{
-	"name": "uploader-example",
-	"description": "Simple form based file upload example.",
-	"dependencies": {
-		"vibe-d:http": {"path": "../../"}
-	}
-}

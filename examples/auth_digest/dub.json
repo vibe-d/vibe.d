@@ -1,7 +1,0 @@
-﻿{
-	"name": "auth-digest-example",
-	"description": "Demonstrates digest authentication.",
-	"dependencies": {
-		"vibe-d:http": {"path": "../../"}
-	}
-}

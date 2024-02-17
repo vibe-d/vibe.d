@@ -1,7 +1,0 @@
-﻿{
-	"name": "redis-pubsub-example",
-	"description": "Basic Redis Pub/Sub usage example.",
-	"dependencies": {
-		"vibe-d:redis": {"path": "../../"}
-	}
-}

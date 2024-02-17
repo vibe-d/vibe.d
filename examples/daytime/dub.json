@@ -1,7 +1,0 @@
-﻿{
-	"name": "daytime-example",
-	"description": "Requests the current time using the daytime protocol.",
-	"dependencies": {
-		"vibe-d:stream": {"path": "../../"}
-	}
-}

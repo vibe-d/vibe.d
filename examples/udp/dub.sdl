@@ -1,0 +1,3 @@
+name "udp-example"
+description "Sends UDP packets from one socket to another."
+dependency "vibe-core" version="~>2"

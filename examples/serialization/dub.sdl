@@ -1,0 +1,4 @@
+name "serialization-example"
+description "Example of data (de-)serialization."
+dependency "vibe-d:data" path="../../"
+dependency "vibe-core" version="~>1"

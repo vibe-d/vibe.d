@@ -1,7 +1,0 @@
-﻿{
-	"name": "download-example",
-	"description": "Requests a page using the download() function.",
-	"dependencies": {
-		"vibe-d:http": {"path": "../../"}
-	}
-}

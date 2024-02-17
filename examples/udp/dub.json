@@ -1,7 +1,0 @@
-{
-	"name": "udp-example",
-	"description": "Sends UDP packets from one socket to another.",
-	"dependencies": {
-		"vibe-core": "~>2.0"
-	}
-}

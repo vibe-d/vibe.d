@@ -1,0 +1,3 @@
+name "bench-mongodb"
+description "Benchmark for the MongoDB client driver"
+dependency "vibe-d:mongodb" path="../../"

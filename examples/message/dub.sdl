@@ -1,0 +1,3 @@
+name "message-example"
+description "Demonstrates cross-task message communication."
+dependency "vibe-core" version="~>2"

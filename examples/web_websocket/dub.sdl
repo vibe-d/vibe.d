@@ -1,0 +1,4 @@
+name "web-websockets-example"
+description "Example for using the WebSocket feature with WebInterface"
+authors "Darius C."
+dependency "vibe-d" path="../../"

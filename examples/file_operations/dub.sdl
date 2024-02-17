@@ -1,0 +1,3 @@
+name "file-operations-example"
+description "Read/write/append with task yielding."
+dependency "vibe-core" version="~>2"

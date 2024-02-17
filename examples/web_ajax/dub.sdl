@@ -1,0 +1,3 @@
+name "web-ajax-example"
+description "Uses the registerWebInterface function for making functions available to JavaScript and to Diet templates."
+dependency "vibe-d:web" path="../../"

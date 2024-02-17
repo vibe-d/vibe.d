@@ -1,0 +1,3 @@
+name "rest-collections-example"
+description "Example project demonstrating the use of collections in REST interfaces."
+dependency "vibe-d" path="../../"

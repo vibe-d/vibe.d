@@ -1,0 +1,3 @@
+name "sendmail-example"
+description "Sends a mail (be sure to adjust addresses before running)."
+dependency "vibe-d:mail" path="../../"
