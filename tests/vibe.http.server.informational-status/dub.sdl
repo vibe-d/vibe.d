@@ -1,3 +1,0 @@
-name "tests"
-description "informational status response handling test"
-dependency "vibe-d:http" path="../../"

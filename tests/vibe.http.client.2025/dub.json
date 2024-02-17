@@ -1,6 +1,0 @@
-{
-	"name": "2025",
-	"dependencies": {
-		"vibe-d:http": { "path": "../../" }
-	}
-}
