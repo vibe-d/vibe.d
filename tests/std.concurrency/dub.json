@@ -1,7 +1,0 @@
-{
-	"name": "tests",
-	"description": "Tests vibe.d's std.concurrency integration",
-	"dependencies": {
-		"vibe-core": ">=2.0.0 <3.0.0-0"
-	}
-}

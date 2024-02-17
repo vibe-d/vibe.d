@@ -1,7 +1,0 @@
-{
-    "name": "tests",
-    "description": "Command-line argument test",
-    "dependencies": {
-        "vibe-d:data": {"path": "../../"}
-    }
-}
