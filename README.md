@@ -53,6 +53,7 @@ The vibe.d project is structured into multiple repositories:
 
 - `vibe-d` (this repository): The high level web and REST framework, HTTP, STMP and Redis/MongoDB functionality
 - [`vibe-stream`](https://github.com/vibe-d/vibe-stream): Advanced stream types and TLS stream support
+- [`vibe-inet`](https://github.com/vibe-d/vibe-inet): Internet standard functionality (URL, form encoding, HTML encoding, ...)
 - [`vibe-core`](https://github.com/vibe-d/vibe-core): Fiber based I/O and concurrency implementation
 - [`vibe-serialization`](https://github.com/vibe-d/vibe-serialization): Serialization and structured data format support
 - [`vibe-container`](https://github.com/vibe-d/vibe-container): Container implementations used throughout the project
