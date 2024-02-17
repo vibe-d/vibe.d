@@ -1,6 +1,23 @@
 Changelog
 =========
 
+v0.10.0 - 2024-02-
+--------------------
+
+This major development release brings a big change of the package structure of the low level parts of the toolkit. `vibe-d:http` and everything lower level have been moved to new standalone DUB packages. This will most notably allow to start integrating the HTTP/2 work in `vibe-http` with the rest of the code base, but also reduces friction when working on the lower level functionality, including more frequent releases.
+
+### Features and improvements ###
+
+- The vibe.d toolkit is now organized into these packages
+	- `vibe-d`: Contains the web and REST framework, as well as MongoDB/Redis drivers, and an SMTP client
+	- `vibe-http`: HTTP client/server, proxy, WebSockets, sessions, router, file server etc.
+	- `vibe-inet`: Internet standard related functionality, such as URL, web forms, HTML encoding and others, as well as a Markdown parser
+	- `vibe-stream`: Advanced stream types and TLS support
+	- `vibe-core`: The I/O and concurrency core functionality
+	- `vibe-container`: Important container types used throughout the library
+	- `eventcore`: Low-level abstraction over the operating system asynchronous I/O and messaging facilities
+
+
 v0.9.8 - 2024-02-16
 -------------------
 
