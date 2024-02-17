@@ -1,0 +1,3 @@
+name "redis-pubsub-example"
+description "Basic Redis Pub/Sub usage example."
+dependency "vibe-d:redis" path="../../"

@@ -1,0 +1,3 @@
+name "uploader-example"
+description "Simple form based file upload example."
+dependency "vibe-http" version="~>1.0"

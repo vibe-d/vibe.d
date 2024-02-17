@@ -1,0 +1,4 @@
+name "tcp-separate-example"
+description "Example using a single TCP connection from different tasks."
+dependency "vibe-stream" version="~>1.0"
+dependency "vibe-core" version="~>2"

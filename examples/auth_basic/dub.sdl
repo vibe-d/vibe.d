@@ -1,0 +1,3 @@
+name "auth-basic-example"
+description "Demonstrates basic authentication."
+dependency "vibe-http" version="~>1.0"

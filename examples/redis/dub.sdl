@@ -1,0 +1,3 @@
+name "redis-example"
+description "Basic Redis usage example."
+dependency "vibe-d:redis" path="../../"

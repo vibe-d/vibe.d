@@ -1,7 +1,0 @@
-﻿{
-	"name": "diet-example",
-	"description": "Displays a page using a Diet template.",
-	"dependencies": {
-		"vibe-d:http": {"path": "../../"}
-	}
-}

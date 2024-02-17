@@ -1,8 +1,0 @@
-{
-	"name": "serialization-example",
-	"description": "Example of data (de-)serialization.",
-	"dependencies": {
-		"vibe-core": "~>1.0",
-		"vibe-d:data": {"path": "../../"}
-	}
-}

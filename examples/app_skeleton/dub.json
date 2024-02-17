@@ -1,7 +1,0 @@
-﻿{
-	"name": "app-skeleton",
-	"description": "An example project skeleton",
-	"dependencies": {
-		"vibe-d": {"path": "../../"}
-	}
-}

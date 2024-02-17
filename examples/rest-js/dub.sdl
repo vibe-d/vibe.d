@@ -1,0 +1,3 @@
+name "rest-js-example"
+description "Simple dynamic web UI that accesses a REST interface"
+dependency "vibe-d" path="../../"

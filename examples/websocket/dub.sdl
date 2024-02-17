@@ -1,0 +1,3 @@
+name "websocket-example"
+description "Example for using the WebSocket feature"
+dependency "vibe-http" version="~>1.0"

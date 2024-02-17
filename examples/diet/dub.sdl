@@ -1,0 +1,3 @@
+name "diet-example"
+description "Displays a page using a Diet template."
+dependency "vibe-http" version="~>1.0"

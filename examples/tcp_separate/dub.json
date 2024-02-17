@@ -1,8 +1,0 @@
-{
-	"name": "tcp-separate-example",
-	"description": "Example using a single TCP connection from different tasks.",
-	"dependencies": {
-		"vibe-core": "~>2.0",
-		"vibe-d:stream": {"path": "../../"}
-	}
-}

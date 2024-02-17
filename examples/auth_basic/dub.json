@@ -1,7 +1,0 @@
-﻿{
-	"name": "auth-basic-example",
-	"description": "Demonstrates basic authentication.",
-	"dependencies": {
-		"vibe-d:http": {"path": "../../"}
-	}
-}

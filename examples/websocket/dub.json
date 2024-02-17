@@ -1,7 +1,0 @@
-{
-	"name": "websocket-example",
-	"description": "Example for using the WebSocket feature",
-	"dependencies": {
-		"vibe-d:http": {"path": "../../"}
-	}
-}

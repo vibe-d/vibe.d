@@ -180,8 +180,8 @@ using a sub configuration directive in the package recipe:
 
 SDL syntax:
 ```
-dependency "vibe-d:tls" version="~>0.8.2"
-subConfiguration "vibe-d:tls" "openssl-1.0"
+dependency "vibe-stream:tls" version="~>1.0"
+subConfiguration "vibe-stream:tls" "openssl-1.0"
 ```
 
 JSON syntax:
@@ -190,11 +190,11 @@ JSON syntax:
     ...
     "dependencies": {
         ...
-        "vibe-d:tls": "*"
+        "vibe-stream:tls": "~>1.0"
     },
     "subConfigurations": {
         ...
-        "vibe-d:tls": "openssl-1.0"
+        "vibe-stream:tls": "openssl-1.0"
     }
 }
 ```

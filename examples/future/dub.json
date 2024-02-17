@@ -1,8 +1,0 @@
-{
-	"name": "future-example",
-	"description": "Demonstrates async()/Future usage.",
-	"authors": ["Sönke Ludwig"],
-	"dependencies": {
-		"vibe-core": "~>2.0"
-	}
-}

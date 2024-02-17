@@ -1,0 +1,4 @@
+name "bench-urlrouter"
+description "Benchmark for the URLRouter class"
+dependency "vibe-http" version="~>1.0"
+versions "VibeRouterTreeMatch"

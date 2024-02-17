@@ -1,0 +1,3 @@
+name "download-example"
+description "Requests a page using the download() function."
+dependency "vibe-http" version="~>1.0"

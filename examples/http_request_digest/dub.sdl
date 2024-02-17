@@ -1,0 +1,4 @@
+name "http-request-digest-example"
+description "Performs a custom HTTP request with digest authentication."
+authors "Sönke Ludwig"
+dependency "vibe-http" version="~>1.0"

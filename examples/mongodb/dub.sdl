@@ -1,0 +1,3 @@
+name "mongodb-example"
+description "Basic MongoDB usage example."
+dependency "vibe-d:mongodb" path="../../"

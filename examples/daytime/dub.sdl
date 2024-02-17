@@ -1,0 +1,3 @@
+name "daytime-example"
+description "Requests the current time using the daytime protocol."
+dependency "vibe-stream" version="~>1.0"

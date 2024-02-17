@@ -1,0 +1,4 @@
+name "json-example"
+description "Performs some simple operations using the Json type."
+dependency "vibe-serialization" version="~>1.0"
+dependency "vibe-core" version="~>2"

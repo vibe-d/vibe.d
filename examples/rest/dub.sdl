@@ -1,0 +1,3 @@
+name "rest-example"
+description "Shows how the REST interface generator can be used for RPC communication."
+dependency "vibe-d:web" path="../../"

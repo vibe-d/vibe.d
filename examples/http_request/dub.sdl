@@ -1,0 +1,4 @@
+name "http-request-example"
+description "Performs a custom HTTP request."
+authors "Sönke Ludwig"
+dependency "vibe-http" version="~>1.0"

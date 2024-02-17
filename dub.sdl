@@ -9,17 +9,11 @@ authors "Sönke Ludwig" "Mathias 'Geod24' Lang" "Etienne Cimon" "Martin Nowak" \
 
 systemDependencies "Optionally OpenSSL 1.1.x"
 dependency ":redis" version="*"
-dependency ":data" version="*"
 dependency ":mongodb" version="*"
 dependency ":web" version="*"
 dependency ":utils" version="*"
 dependency ":http" version="*"
 dependency ":mail" version="*"
-dependency ":stream" version="*"
-dependency ":tls" version="*"
-dependency ":crypto" version="*"
-dependency ":textfilter" version="*"
-dependency ":inet" version="*"
 
 targetType "library"
 targetName "vibed"

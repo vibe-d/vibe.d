@@ -1,0 +1,4 @@
+name "web-framework-i18n-example"
+description "Internationalized web framework example."
+dependency "vibe-d:web" path="../../"
+stringImportPaths "views" "translations"
