@@ -2,3 +2,26 @@ name "tls"
 description "TLS stream implementations"
 
 dependency "vibe-stream:tls" version=">=1.0.0-rc.1 <2.0.0-0"
+targetType "none"
+
+configuration "openssl-mscoff" {
+	subConfiguration "vibe-stream:tls" "openssl-mscoff"
+}
+configuration "openssl" {
+	subConfiguration "vibe-stream:tls" "openssl"
+}
+configuration "openssl-1.1" {
+	subConfiguration "vibe-stream:tls" "openssl-1.1"
+}
+configuration "openssl-1.1-optlink" {
+	subConfiguration "vibe-stream:tls" "openssl-1.1-optlink"
+}
+configuration "openssl-1.0" {
+	subConfiguration "vibe-stream:tls" "openssl-1.0"
+}
+configuration "openssl-static" {
+	subConfiguration "vibe-stream:tls" "openssl-static"
+}
+configuration "notls" {
+	subConfiguration "vibe-stream:tls" "notls"
+}

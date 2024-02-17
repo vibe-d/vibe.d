@@ -2,3 +2,4 @@ name "stream"
 description "Library of various pluggable stream implementations"
 
 dependency "vibe-stream" version=">=1.0.0-rc.1 <2.0.0-0"
+targetType "none"

@@ -4,6 +4,8 @@ Changelog
 v0.9.8 - 2024-02-16
 -------------------
 
+The most visible change of this release is the absence of most deprecation warnings related to `scope` ("DIP1000"). Also, REST interface are now required to be `@safe` and the new `vibe-container` packages provides some commonly used containers without any extra dependencies.
+
 ### Features and improvements ###
 
 - More work on DIP1000/`scope` deprecation warnings - [pull #2746][issue2746], [pull #2747][issue2747]
