@@ -31,9 +31,6 @@ if [[ $PARTS =~ (^|,)unittests(,|$) ]]; then
     dub test :utils --compiler=$DC $DUB_ARGS
     dub test :http --compiler=$DC $DUB_ARGS
     dub test :mail --compiler=$DC $DUB_ARGS
-    dub test :crypto --compiler=$DC $DUB_ARGS
-    dub test :textfilter --compiler=$DC $DUB_ARGS
-    dub test :inet --compiler=$DC $DUB_ARGS
     dub clean --all-packages
 fi
 

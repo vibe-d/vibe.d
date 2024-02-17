@@ -1,6 +1,4 @@
 name "textfilter"
 description "Text filtering routines"
-targetType "library"
-dependency "vibe-core" version=">=2.0.0 <3.0.0-0"
-sourcePaths "."
-importPaths "."
+dependency "vibe-inet:textfilter" version=">=1.0.0-rc.1 <2.0.0-0"
+targetType "none"
