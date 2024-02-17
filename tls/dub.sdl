@@ -2,3 +2,4 @@ name "tls"
 description "TLS stream implementations"
 
 dependency "vibe-stream:tls" version=">=1.0.0-rc.1 <2.0.0-0"
+targetType "none"
