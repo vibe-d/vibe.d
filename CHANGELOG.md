@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.10.0 - 2024-02-
+v0.10.0 - 2024-02-19
 --------------------
 
 This major development release brings a big change of the package structure of the low level parts of the toolkit. `vibe-d:http` and everything lower level have been moved to new standalone DUB packages. This will most notably allow to start integrating the HTTP/2 work in `vibe-http` with the rest of the code base, but also reduces friction when working on the lower level functionality, including more frequent releases.
