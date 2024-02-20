@@ -891,7 +891,7 @@ private struct RequestContext {
 
 private RequestContext getRequestContext()
 @trusted nothrow {
-	assert(s_requestContext.req !is null, "Request context used outside of a web interface request!");
+	assert(s_requestContext.req !is HTTPServerRequest.init, "Request context used outside of a web interface request!");
 	return s_requestContext;
 }
 
