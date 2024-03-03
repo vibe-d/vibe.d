@@ -18,12 +18,6 @@ dependency ":mail" version="*"
 targetType "library"
 targetName "vibed"
 
-// NOTE: "lib" is a path with no D sources to work around an issue in DUB 1.0.0
-//       and below that results in the standard "source/" path to be added even
-//       if an explicit "sourcePaths" directive is given.
-sourcePaths "lib"
-sourceFiles "source/vibe/d.d" "source/vibe/vibe.d"
-
 x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
 	"--ex" "vibe.container.internal." "--ex" "vibe.data.internal."\
 	"--ex" "vibe.internal." "--ex" "vibe.web.internal." "--ex" "diet.internal"\
