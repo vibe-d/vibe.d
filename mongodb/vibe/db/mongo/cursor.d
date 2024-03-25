@@ -119,9 +119,22 @@ struct MongoCursor(DocType = Bson) {
 
 	~this() @safe
 	{
+		import core.memory : GC;
+
 		if( m_data && --m_data.refCount == 0 ){
 			try {
-				m_data.killCursors();
+				// avoid InvalidMemoryOperation errors in case the cursor was
+				// leaked to the GC
+				if (m_data.alive && GC.inFinalizer) {
+					logError("MongoCursor instance that has not been fully processed leaked to the GC!");
+					try throw new Exception("");
+					catch (Exception e) {
+						try () @trusted { logError("%s", e.info); } ();
+						catch (Exception e2) logError("  ... failed to generate stack trace");
+					}
+				} else {
+					m_data.killCursors();
+				}
 			} catch (MongoException e) {
 				logWarn("MongoDB failed to kill cursors: %s", e.msg);
 				logDiagnostic("%s", (() @trusted => e.toString)());
@@ -288,6 +301,7 @@ struct MongoCursor(DocType = Bson) {
 /// interface because we still have code for legacy (<3.6) MongoDB servers,
 /// which may still used with the old legacy overloads.
 private interface IMongoCursorData(DocType) {
+	@property bool alive() @safe nothrow;
 	bool empty() @safe; /// Range implementation
 	long index() @safe; /// Range implementation
 	DocType front() @safe; /// Range implementation
@@ -325,6 +339,8 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 		bool m_iterationStarted = false;
 		long m_limit = 0;
 	}
+
+	@property bool alive() @safe nothrow { return m_cursor != 0; }
 
 	final bool empty()
 	@safe {
@@ -390,8 +406,8 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 
 	final void killCursors()
 	@safe {
-		auto conn = m_client.lockConnection();
 		if (m_cursor == 0) return;
+		auto conn = m_client.lockConnection();
 		conn.killCursors(m_collection, () @trusted { return (&m_cursor)[0 .. 1]; } ());
 		m_cursor = 0;
 	}
@@ -447,6 +463,8 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		m_maxTime = getMoreMaxTime;
 		m_database = command["$db"].opt!string;
 	}
+
+	@property bool alive() @safe nothrow { return m_cursor != 0; }
 
 	bool empty()
 	@safe {
@@ -515,8 +533,8 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 
 	final void killCursors()
 	@safe {
-		auto conn = m_client.lockConnection();
 		if (m_cursor == 0) return;
+		auto conn = m_client.lockConnection();
 		conn.killCursors(m_ns, () @trusted { return (&m_cursor)[0 .. 1]; } ());
 		m_cursor = 0;
 	}
