@@ -127,11 +127,6 @@ struct MongoCursor(DocType = Bson) {
 				// leaked to the GC
 				if(GC.inFinalizer) {
 					logError("MongoCursor instance that has not been fully processed leaked to the GC!");
-					try throw new Exception("");
-					catch (Exception e) {
-						try () @trusted { logError("%s", e.info); } ();
-						catch (Exception e2) logError("  ... failed to generate stack trace");
-					}
 				} else {
 					try m_data.killCursors();
 					catch (MongoException e) {
