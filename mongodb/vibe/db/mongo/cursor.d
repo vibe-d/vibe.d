@@ -121,11 +121,11 @@ struct MongoCursor(DocType = Bson) {
 	{
 		import core.memory : GC;
 
-		if( m_data && --m_data.refCount == 0 ){
-			try {
+		if (m_data && --m_data.refCount == 0) {
+			if (m_data.alive) {
 				// avoid InvalidMemoryOperation errors in case the cursor was
 				// leaked to the GC
-				if (m_data.alive && GC.inFinalizer) {
+				if(GC.inFinalizer) {
 					logError("MongoCursor instance that has not been fully processed leaked to the GC!");
 					try throw new Exception("");
 					catch (Exception e) {
@@ -133,11 +133,12 @@ struct MongoCursor(DocType = Bson) {
 						catch (Exception e2) logError("  ... failed to generate stack trace");
 					}
 				} else {
-					m_data.killCursors();
+					try m_data.killCursors();
+					catch (MongoException e) {
+						logWarn("MongoDB failed to kill cursors: %s", e.msg);
+						logDiagnostic("%s", (() @trusted => e.toString)());
+					}
 				}
-			} catch (MongoException e) {
-				logWarn("MongoDB failed to kill cursors: %s", e.msg);
-				logDiagnostic("%s", (() @trusted => e.toString)());
 			}
 		}
 	}
