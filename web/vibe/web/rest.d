@@ -238,7 +238,7 @@
 		@path("/api/")
 		interface APIRoot {
 			// GET /api/header with 'Authorization' set
-			string getHeader(@viaBody("Authorization") string param);
+			string getHeader(@viaHeader("Authorization") string param);
 
 			// GET /api/foo?param=...
 			string getFoo(@viaQuery("param") int param);
