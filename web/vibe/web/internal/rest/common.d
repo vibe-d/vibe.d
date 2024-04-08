@@ -20,7 +20,7 @@ import std.traits : hasUDA;
 
 	The given `TImpl` must be an `interface` or a `class` deriving from one.
 */
-/*package(vibe.web.web)*/ struct RestInterface(TImpl)
+/*package(vibe.web.web)*/ struct RestInterface(TImpl, bool support_webparam_attributes = true)
 	if (is(TImpl == class) || is(TImpl == interface))
 {
 @safe:
@@ -56,7 +56,7 @@ import std.traits : hasUDA;
 		alias I = TImpl;
 	else
 		alias I = BaseInterfaces[0];
-	static assert(getInterfaceValidationError!I is null, getInterfaceValidationError!(I));
+	static assert(getInterfaceValidationError!(I, support_webparam_attributes) is null, getInterfaceValidationError!(I, support_webparam_attributes));
 
 	/// The name of each interface member
 	enum memberNames = [__traits(allMembers, I)];
