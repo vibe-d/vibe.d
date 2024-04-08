@@ -368,23 +368,30 @@ private void handleWebRPC(I)(I implementation, WebRPCPeerCallback!I peer_callbac
 	scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	void handleSocket(scope WebSocket ws)
-	{
-		auto info = const(WebRPCPeerInfo)(ws.request.clientAddress, ws.request.clientCertificate);
+	nothrow {
+		import std.exception : assumeWontThrow;
+
+		scope const(HTTPServerRequest) req;
+		auto info = const(WebRPCPeerInfo)(
+			ws.request.assumeWontThrow.clientAddress,
+			ws.request.assumeWontThrow.clientCertificate);
 		auto h = new WebSocketHandler!I(ws, implementation, info);
-		scope (exit) h.releaseRef();
-		NetworkAddress addr = ws.request.clientAddress;
 		h.addRef(); // WebRPCPeer expects to receive an already owned handler
 
 		// start reverse communication asynchronously
-		runTask((WebRPCPeerCallback!I cb, WebSocketHandler!I h) {
+		auto t = runTask((WebRPCPeerCallback!I cb, WebSocketHandler!I h) {
 			cb(WebRPCPeer!I(new WebRPCPeerImpl!(I, I, "")(h)));
 		}, peer_callback, h);
 
 		// handle incoming messages
 		h.runReadLoop();
-	}
+		h.releaseRef();
+		t.joinUninterruptible();
 
-	//scope (exit) res.finalize();
+		try ws.close();
+		catch (Exception e) logException(e, "Failed to close WebSocket after handling WebRPC connection");
+		h.m_socket = WebSocket.init;
+	}
 
 	handleWebSocket(&handleSocket, req, res);
 }
@@ -512,6 +519,7 @@ private final class WebSocketHandler(I) {
 			catch (Exception e) {
 				logException(e, "Failed to close WebSocket");
 			}
+			m_socket = null;
 			m_responseEvent.emit();
 		}
 	}
@@ -521,7 +529,7 @@ private final class WebSocketHandler(I) {
 		m_sendMutex.lock();
 		scope (exit) m_sendMutex.unlock();
 
-		if (!m_socket.connected)
+		if (!m_socket || !m_socket.connected)
 			throw new Exception("Connection closed before sending WebRPC call");
 
 		WebRPCCallPacket pack;
@@ -538,7 +546,7 @@ private final class WebSocketHandler(I) {
 		m_sendMutex.lock();
 		scope (exit) m_sendMutex.unlock();
 
-		if (!m_socket.connected)
+		if (!m_socket || !m_socket.connected)
 			throw new Exception("Connection closed before sending WebRPC response");
 
 		WebRPCResponsePacket res;
@@ -553,7 +561,7 @@ private final class WebSocketHandler(I) {
 		m_sendMutex.lock();
 		scope (exit) m_sendMutex.unlock();
 
-		if (!m_socket.connected)
+		if (!m_socket || !m_socket.connected)
 			throw new Exception("Connection closed before sending WebRPC error response");
 
 		WebRPCErrorResponsePacket res;
@@ -568,7 +576,7 @@ private final class WebSocketHandler(I) {
 	{
 		auto ec = m_responseEvent.emitCount;
 		while (true) {
-			if (!m_socket.connected)
+			if (!m_socket || !m_socket.connected)
 				throw new Exception("Connection closed while waiting for WebRPC response");
 			if (auto pr = sequence in m_availableResponses) {
 				if (pr.error !is null)
@@ -583,6 +591,7 @@ private final class WebSocketHandler(I) {
 
 	private void terminateConnection()
 	nothrow {
+		if (!m_socket) return;
 		try m_socket.close(WebSocketCloseReason.internalError);
 		catch (Exception e2) {
 			logException(e2, "Failed to close WebSocket after failure");
@@ -592,7 +601,8 @@ private final class WebSocketHandler(I) {
 	void runReadLoop()
 	nothrow {
 		try {
-			while (m_socket.waitForData) {
+			while (m_socket && m_socket.waitForData) {
+				if (!m_socket) break;
 				auto msg = m_socket.receiveBinary();
 				auto brep = Bson(Bson.Type.object, msg[1 .. $].idup);
 				switch (msg[0]) {
