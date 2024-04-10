@@ -145,7 +145,7 @@ struct Role {
 	static @property R!(Op.ident, name, void, void) opDispatch(string name)() { return R!(Op.ident, name, void, void).init; }
 }
 
-package auto handleAuthentication(alias fun, C)(C c, HTTPServerRequest req, HTTPServerResponse res)
+package auto handleAuthentication(alias fun, C, AUTH_ARGS...)(C c, AUTH_ARGS auth_args)
 {
 	import std.traits : MemberFunctionsTuple;
 
@@ -161,9 +161,9 @@ package auto handleAuthentication(alias fun, C)(C c, HTTPServerRequest req, HTTP
 		} else {
 			static assert(!is(AR == void), "Missing @auth(...)/@anyAuth attribute for method "~funname~".");
 
-			static if (!__traits(compiles, () @safe { c.authenticate(req, res); } ()))
+			static if (!__traits(compiles, () @safe { c.authenticate(auth_args); } ()))
 				pragma(msg, "Non-@safe .authenticate() methods are deprecated - annotate "~C.stringof~".authenticate() with @safe or @trusted.");
-			return () @trusted { return c.authenticate(req, res); } ();
+			return () @trusted { return c.authenticate(auth_args); } ();
 		}
 	} else {
 		// make sure that there are no @auth/@noAuth annotations for non-authorizing classes

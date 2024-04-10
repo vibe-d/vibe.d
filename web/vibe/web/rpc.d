@@ -11,6 +11,11 @@
 	`ref` and `out` parameters, exceptions, properties returning interfaces,
 	and properties returning `vibe.web.rest.Collection!I`.
 
+	Authorization and authentication is supported via the `vibe.web.auth`
+	framework. When using it, the `authenticate` method should be defined as
+	`@noRoute T authenticate(ref const WebRPCPerrInfo)`, where `T` is the type
+	passed to the `@requiresAuth` UDA.
+
 	Any remote function calls can execute concurrently, so that the connection
 	never gets blocked by an unfinished function call.
 
@@ -90,6 +95,7 @@ import vibe.http.server;
 import vibe.http.websockets;
 import vibe.stream.tls : TLSCertificateInformation;
 import vibe.web.internal.rest.common : RestInterface, SubInterfaceType;
+import vibe.web.auth;
 import vibe.web.common;
 import vibe.web.rest : Collection;
 
@@ -242,7 +248,7 @@ final class WebRPCPeerImpl(I, RootI, string method_prefix) : I
 
 		Bson args = Bson.emptyObject;
 		foreach (i, pname; ParameterIdentifierTuple!method)
-			static if (!(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
+			static if (!is(typeof(args[i]) == AuthInfo!I) && !(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
 				args[pname] = serializeToBson(params[i]);
 		auto seq = m_handler.sendCall(method_prefix ~ __traits(identifier, method), args);
 		auto ret = m_handler.waitForResponse(seq);
@@ -273,10 +279,26 @@ version (unittest) {
 		int get(int index);
 	}
 
+	@requiresAuth!TestAuthInfo
+	private interface TestAuthI {
+	@safe:
+		@noAuth void login();
+		@noAuth int testUnauthenticated();
+		@auth(Role.authenticatedPeer) int testAuthenticated();
+		@noRoute TestAuthInfo authenticate(ref const WebRPCPeerInfo peer);
+	}
+
+	struct TestAuthInfo {
+		bool authenticated;
+
+		bool isAuthenticatedPeer() @safe nothrow { return authenticated; }
+	}
+
 	private interface TestI {
 	@safe:
 		@property TestSubI sub();
 		@property Collection!TestCollI items();
+		@property TestAuthI auth();
 		int add(int a, int b);
 		void add2(int a, int b, out int c);
 		int addmul(ref int a, int b, int c);
@@ -292,15 +314,32 @@ version (unittest) {
 		int get(int index) { return index * 2; }
 	}
 
+	private class TestAuthC : TestAuthI {
+		private bool m_authenticated;
+
+		void login() { m_authenticated = true; }
+		@noAuth int testUnauthenticated() { return 1; }
+		@auth(Role.authenticatedPeer) int testAuthenticated() { return 2; }
+
+		@noRoute
+		TestAuthInfo authenticate(ref const WebRPCPeerInfo peer)
+		{
+			return TestAuthInfo(m_authenticated);
+		}
+	}
+
 	private class TestC : TestI {
 		TestSubC m_sub;
 		TestCollC m_items;
+		TestAuthC m_auth;
 		this() {
 			m_sub = new TestSubC;
 			m_items = new TestCollC;
+			m_auth = new TestAuthC;
 		}
 		@property TestSubC sub() { return m_sub; }
 		@property Collection!TestCollI items() { return Collection!TestCollI(m_items); }
+		@property TestAuthI auth() { return m_auth; }
 		int add(int a, int b) { return a + b; }
 		void add2(int a, int b, out int c) { c = a + b; }
 		int addmul(ref int a, int b, int c) { a += b; return a * c; }
@@ -310,6 +349,7 @@ version (unittest) {
 
 unittest {
 	import core.time : seconds;
+	import std.exception : assertThrown;
 	import vibe.core.core : setTimer;
 
 	auto tm = setTimer(1.seconds, { assert(false, "Test timeout"); });
@@ -358,6 +398,12 @@ unittest {
 	assert(cli.items.count == 4);
 	foreach (i; 0 .. 4)
 		assert(cli.items[i].get() == i * 2);
+
+	// "auth" framework tests
+	assert(cli.auth.testUnauthenticated() == 1);
+	assertThrown(cli.auth.testAuthenticated());
+	cli.auth.login();
+	assert(cli.auth.testAuthenticated() == 2);
 
 	// make sure the reverse direction got established and tested
 	while (!got_client) yield();
@@ -672,12 +718,24 @@ private final class WebSocketHandler(I) {
 		alias outparams = refOutParameterIndices!method;
 		alias paramnames = ParameterIdentifierTuple!method;
 
-		ParameterTypeTuple!method args;
-		foreach (i, name; paramnames)
-			static if (!(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
-				args[i] = deserializeBson!(typeof(args[i]))(arguments[name]);
-
 		SI impl = resolveImpl!qualified_name(m_impl);
+
+		static if (isAuthenticated!(SI, method)) {
+			typeof(handleAuthentication!method(impl, m_peerInfo)) auth_info;
+
+			auth_info = handleAuthentication!method(impl, m_peerInfo);
+		}
+
+		ParameterTypeTuple!method args;
+		foreach (i, name; paramnames) {
+			static if (is(typeof(args[i]) == AuthInfo!SI))
+				args[i] = auth_info;
+			else static if (!(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
+				args[i] = deserializeBson!(typeof(args[i]))(arguments[name]);
+		}
+
+		static if (isAuthenticated!(SI, method))
+			handleAuthorization!(SI, method, args)(auth_info);
 
 		alias RT = typeof(__traits(getMember, impl, __traits(identifier, method))(args));
 		static if (!is(RT == void)) {
