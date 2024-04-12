@@ -718,24 +718,10 @@ private final class WebSocketHandler(I) {
 		alias outparams = refOutParameterIndices!method;
 		alias paramnames = ParameterIdentifierTuple!method;
 
-		SI impl = resolveImpl!qualified_name(m_impl);
-
-		static if (isAuthenticated!(SI, method)) {
-			typeof(handleAuthentication!method(impl, m_peerInfo)) auth_info;
-
-			auth_info = handleAuthentication!method(impl, m_peerInfo);
-		}
+		SI impl = resolveImpl!qualified_name(m_impl, arguments);
 
 		ParameterTypeTuple!method args;
-		foreach (i, name; paramnames) {
-			static if (is(typeof(args[i]) == AuthInfo!SI))
-				args[i] = auth_info;
-			else static if (!(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
-				args[i] = deserializeBson!(typeof(args[i]))(arguments[name]);
-		}
-
-		static if (isAuthenticated!(SI, method))
-			handleAuthorization!(SI, method, args)(auth_info);
+		resolveArguments!method(impl, arguments, args);
 
 		alias RT = typeof(__traits(getMember, impl, __traits(identifier, method))(args));
 		static if (!is(RT == void)) {
@@ -756,7 +742,7 @@ private final class WebSocketHandler(I) {
 		return bret;
 	}
 
-	private auto resolveImpl(string qualified_name, RI)(RI base)
+	private auto resolveImpl(string qualified_name, RI)(RI base, Bson arguments)
 		if (is(RI == interface))
 	{
 		import std.string : indexOf;
@@ -764,11 +750,37 @@ private final class WebSocketHandler(I) {
 		static if (idx < 0) return base;
 		else {
 			enum mname = qualified_name[0 .. idx];
+			alias method = __traits(getMember, base, mname);
+
+			ParameterTypeTuple!method args;
+			resolveArguments!method(base, arguments, args);
+
 			static if (isInstanceOf!(Collection, ReturnType!(__traits(getMember, base, mname))))
-				return resolveImpl!(qualified_name[idx+1 .. $])(__traits(getMember, base, mname).m_interface);
+				return resolveImpl!(qualified_name[idx+1 .. $])(__traits(getMember, base, mname)(args).m_interface, arguments);
 			else
-				return resolveImpl!(qualified_name[idx+1 .. $])(__traits(getMember, base, mname));
+				return resolveImpl!(qualified_name[idx+1 .. $])(__traits(getMember, base, mname)(args), arguments);
 		}
+	}
+
+	private void resolveArguments(alias method, SI)(SI impl, Bson arguments, out typeof(ParameterTypeTuple!method.init) args)
+	{
+		alias paramnames = ParameterIdentifierTuple!method;
+
+		static if (isAuthenticated!(SI, method)) {
+			typeof(handleAuthentication!method(impl, m_peerInfo)) auth_info;
+
+			auth_info = handleAuthentication!method(impl, m_peerInfo);
+		}
+
+		foreach (i, name; paramnames) {
+			static if (is(typeof(args[i]) == AuthInfo!SI))
+				args[i] = auth_info;
+			else static if (!(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
+				args[i] = deserializeBson!(typeof(args[i]))(arguments[name]);
+		}
+
+		static if (isAuthenticated!(SI, method))
+			handleAuthorization!(SI, method, args)(auth_info);
 	}
 }
 
