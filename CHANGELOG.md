@@ -1,6 +1,30 @@
 Changelog
 =========
 
+v0.10.1 - 2024-04-
+--------------------
+
+With this release, a new remote procedure call mechanism gets added to the
+`vibe.web` package, called WebRPC. In its initial implementation, it uses a
+WebSocket connection to provide bi-directional communication using the HTTP
+protocol. This enables peer-to-peer communication with one peer behind a
+NAT/firewall. Defining WebRPC interfaces is mostly compatible with the REST
+interface framework, so that both can be employed at the same time.
+
+### Features and improvements ###
+
+- Added the `vibe.web.rpc` module for HTTP based bi-directional RPC communication - [pull #2797][issue2797], [pull #2798][issue2798]
+
+### Bug fixes ###
+
+- Fixed a possible `InvalidMemoryOperationError` when empty `MongoCursor` instances were being leaked to the GC - [issue #2793][issue2793], [pull #2794][issue2794]
+
+[issue2797]: https://github.com/vibe-d/vibe.d/issues/2797
+[issue2798]: https://github.com/vibe-d/vibe.d/issues/2798
+[issue2793]: https://github.com/vibe-d/vibe.d/issues/2793
+[issue2794]: https://github.com/vibe-d/vibe.d/issues/2794
+
+
 v0.10.0 - 2024-02-19
 --------------------
 
