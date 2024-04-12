@@ -1006,7 +1006,7 @@ struct Collection(I)
 	alias ParentIDs = AllIDs[0 .. $-1];
 	alias ParentIDNames = AllIDNames[0 .. $-1];
 
-	private {
+	package {
 		I m_interface;
 		ParentIDs m_parentIDs;
 	}
@@ -2359,7 +2359,7 @@ unittest
 // Check that the interface is valid. Every checks on the correctness of the
 // interface should be put in checkRestInterface, which allows to have consistent
 // errors in the server and client.
-package string getInterfaceValidationError(I)()
+package string getInterfaceValidationError(I, bool support_webparam_attributes = true)()
 out (result) { assert((result is null) == !result.length); }
 do {
 	import vibe.web.internal.rest.common : ParameterKind, WebParamUDATuple;
@@ -2416,21 +2416,23 @@ do {
 		}
 
 		// Check for misplaced out and non-const ref
-		alias PSC = ParameterStorageClass;
-		foreach (i, SC; ParameterStorageClassTuple!Func) {
-			static if (SC & PSC.out_ || (SC & PSC.ref_ && !is(ConstOf!(PT[i]) == PT[i])) ) {
-				mixin(GenCmp!("Loop", i, PN[i]).Decl);
-				alias Attr = AliasSeq!(
-					WebParamUDATuple!(Func, i),
-					Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT),
-				);
-				static if (Attr.length != 1) {
-					if (hack) return "%s: Parameter '%s' cannot be %s"
-						.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
-				} else static if (Attr[0].origin != ParameterKind.header) {
-					if (hack) return "%s: %s parameter '%s' cannot be %s"
-						.format(FuncId, Attr[0].origin, PN[i],
-							SC & PSC.out_ ? "out" : "ref");
+		static if (support_webparam_attributes) {
+			alias PSC = ParameterStorageClass;
+			foreach (i, SC; ParameterStorageClassTuple!Func) {
+				static if (SC & PSC.out_ || (SC & PSC.ref_ && !is(ConstOf!(PT[i]) == PT[i])) ) {
+					mixin(GenCmp!("Loop", i, PN[i]).Decl);
+					alias Attr = AliasSeq!(
+						WebParamUDATuple!(Func, i),
+						Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT),
+					);
+					static if (Attr.length != 1) {
+						if (hack) return "%s: Parameter '%s' cannot be %s"
+							.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
+					} else static if (Attr[0].origin != ParameterKind.header) {
+						if (hack) return "%s: %s parameter '%s' cannot be %s"
+							.format(FuncId, Attr[0].origin, PN[i],
+								SC & PSC.out_ ? "out" : "ref");
+					}
 				}
 			}
 		}
