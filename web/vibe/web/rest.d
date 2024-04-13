@@ -426,10 +426,20 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInt
 		alias R = ReturnType!ovrld;
 
 		static if (isInstanceOf!(Collection, R)) {
-			auto ret = __traits(getMember, instance, fname)(R.ParentIDs.init);
+			typeof(__traits(getMember, instance, fname)(R.ParentIDs.init)) ret;
+			try ret = __traits(getMember, instance, fname)(R.ParentIDs.init);
+			catch (Exception e) {
+				logDiagnostic("Collection interface accessor %s.%s has thrown, skipping route registration: %s", TImpl.stringof, fname, e.msg);
+				continue;
+			}
 			router.registerRestInterface!(R.Interface)(ret.m_interface, intf.subInterfaces[i].settings);
 		} else {
-			auto ret = __traits(getMember, instance, fname)();
+			typeof(__traits(getMember, instance, fname)()) ret;
+			try ret = __traits(getMember, instance, fname)();
+			catch (Exception e) {
+				logDiagnostic("Interface accessor %s.%s has thrown, skipping route registration: %s", TImpl.stringof, fname, e.msg);
+				continue;
+			}
 			router.registerRestInterface!R(ret, intf.subInterfaces[i].settings);
 		}
 	}
