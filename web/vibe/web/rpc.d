@@ -183,6 +183,8 @@ struct WebRPCPeer(I) {
 		WebRPCPeerImpl!(I, I, "") m_impl;
 	}
 
+@safe:
+
 	private this(WebRPCPeerImpl!(I, I, "") impl)
 	{
 		m_impl = impl;
