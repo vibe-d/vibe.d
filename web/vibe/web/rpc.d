@@ -88,6 +88,7 @@ module vibe.web.rpc;
 import vibe.core.log;
 import vibe.core.core : Task, runTask, yield;
 import vibe.core.path : InetPath;
+import vibe.core.stream : isInputStream;
 import vibe.data.bson;
 import vibe.inet.url : URL;
 import vibe.http.router;
@@ -243,14 +244,14 @@ final class WebRPCPeerImpl(I, RootI, string method_prefix) : I
 
 	mixin(generateWebRPCPeerMethods!I());
 
-	private auto performCall(alias method, PARAMS...)(auto ref PARAMS params)
+	private ReturnType!method performCall(alias method, PARAMS...)(auto ref PARAMS params)
 	{
 		alias outparams = refOutParameterIndices!method;
 		alias paramnames = ParameterIdentifierTuple!method;
 
 		Bson args = Bson.emptyObject;
 		foreach (i, pname; ParameterIdentifierTuple!method)
-			static if (!is(typeof(args[i]) == AuthInfo!I) && !(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
+			static if (!is(ParameterTypeTuple!method[i] == AuthInfo!I) && !(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
 				args[pname] = serializeToBson(params[i]);
 		auto seq = m_handler.sendCall(method_prefix ~ __traits(identifier, method), args);
 		auto ret = m_handler.waitForResponse(seq);
@@ -259,8 +260,11 @@ final class WebRPCPeerImpl(I, RootI, string method_prefix) : I
 				params[pi] = ret[paramnames[pi]].deserializeBson!(PARAMS[pi]);
 			static if (!is(ReturnType!method == void))
 				return ret["return"].deserializeBson!(ReturnType!method);
-		} else static if (!is(ReturnType!method == void))
+		} else static if (isInputStream!(ReturnType!method)) {
+			throw new Exception("Stream type results are not yet supported");
+		} else static if (!is(ReturnType!method == void)) {
 			return ret.deserializeBson!(ReturnType!method);
+		}
 	}
 }
 
@@ -736,9 +740,9 @@ private final class WebSocketHandler(I) {
 			bret = Bson.emptyObject;
 			foreach (pi; outparams)
 				bret[paramnames[pi]] = serializeToBson(args[pi]);
-			static if (is(typeof(ret)))
+			static if (is(typeof(ret)) && !isInputStream!(typeof(ret)))
 				bret["return"] = serializeToBson(ret);
-		} else static if (is(typeof(ret))) {
+		} else static if (is(typeof(ret)) && !isInputStream!(typeof(ret))) {
 			bret = serializeToBson(ret);
 		}
 		return bret;
