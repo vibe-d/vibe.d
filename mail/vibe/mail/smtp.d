@@ -71,7 +71,15 @@ enum SMTPAuthType {
 	none,
 	plain,
 	login,
-	cramMd5
+	cramMd5,
+	/// Authenticate using XOAUTH2 protocol
+	///
+	/// Works for GMail and Office 365
+	///
+	/// See_Also:
+	///	  - https://developers.google.com/gmail/imap/xoauth2-protocol#using_oauth_20
+	///	  - https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth
+	xoauth2,
 }
 
 
@@ -190,6 +198,19 @@ void sendMail(in SMTPClientSettings settings, Mail mail)
 			expectStatus(conn, SMTPStatus.serverAuthReady, "login user name");
 			conn.write(Base64.encode(cast(const(ubyte)[])settings.password) ~ "\r\n");
 			expectStatus(conn, 235, "login password");
+			break;
+		case SMTPAuthType.xoauth2:
+			// Ideally we should inspect the server's capabilities instead of
+			// making this decision, but since the RFC for OAuth requires TLS,
+			// be a bit conservative.
+			enforce(settings.connectionType != SMTPConnectionType.plain,
+					"Cannot use XOAUTH2 without TLS");
+			conn.write("AUTH XOAUTH2\r\n");
+			expectStatus(conn, SMTPStatus.serverAuthReady, "AUTH XOAUTH2");
+			const authStr = "user=%s\1auth=Bearer %s\1\1".format(
+				settings.username, settings.password);
+			conn.write(Base64.encode(authStr.representation) ~ "\r\n");
+			expectStatus(conn, 235, "XOAUTH2 authentication");
 			break;
 		case SMTPAuthType.cramMd5: assert(false, "TODO!");
 	}
