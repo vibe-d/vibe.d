@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.10.1 - 2024-08-
+v0.10.1 - 2024-09-07
 --------------------
 
 With this release, a new remote procedure call mechanism gets added to the
