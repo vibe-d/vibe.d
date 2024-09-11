@@ -37,8 +37,8 @@ void main()
 	}
 
 	logInfo("Running queries...");
+	static struct Q { int i; }
 	auto dur_query = runTimed({
-		struct Q { int i; }
 		foreach (i; 0 .. nqueries) {
 			auto res = coll.find!Item(Q(5));
 			res.front;
