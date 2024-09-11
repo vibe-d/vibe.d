@@ -519,6 +519,8 @@ struct MongoCollection {
 	  - $(LREF findOne)
 	 */
 	MongoCursor!R find(R = Bson)() { return find!R(Bson.emptyObject, FindOptions.init); }
+	/// ditto
+	MongoCursor!R find(R = Bson)(FindOptions options) { return find!R(Bson.emptyObject, options); }
 
 	///
 	@safe unittest {
