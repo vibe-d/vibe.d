@@ -145,8 +145,8 @@ html
 */
 mixin template translationModule(string FILENAME)
 {
-	import std.string : tr;
-	enum NAME = FILENAME.tr(`/.-\`, "____");
+	static import std.string;
+	enum NAME = std.string.tr(FILENAME, `/.\\-`, "____");
 	private static string file_mixins() {
 		string ret;
 		foreach (language; languages)
