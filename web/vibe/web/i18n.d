@@ -482,11 +482,15 @@ LangComponents extractDeclStrings(string text)
 		assert(text.length - i >= 6 && text[i .. i+6] == "msgstr", "Expected 'msgstr', got '"~text[i .. min(i+10, $)]~"'.");
 		i += 6;
 
-		i = skipWhitespace(i, text);
-		auto ivnext = skipString(i, text);
-		auto value = dstringUnescape(wrapText(text[i+1 .. ivnext-1]));
-		i = ivnext;
-		i = skipToDirective(i, text);
+		string value;
+		if (text[i] == '[') i -= 6;
+		else {
+			i = skipWhitespace(i, text);
+			auto ivnext = skipString(i, text);
+			value = dstringUnescape(wrapText(text[i+1 .. ivnext-1]));
+			i = ivnext;
+			i = skipToDirective(i, text);
+		}
 
 		// msgstr[n] is a required field when msgid_plural is not null, and ignored otherwise
 		string[] value_plural;
@@ -684,6 +688,11 @@ msgid_plural "Several files were created."
 msgstr "One file was created."
 msgstr[0] "1 file was created"
 msgstr[1] "%d files were created."
+
+msgid "One file was modified."
+msgid_plural "Several files were modified."
+msgstr[0] "One file was modified."
+msgstr[1] "%d files were modified."
 `;
 
 	import std.stdio;
