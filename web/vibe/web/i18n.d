@@ -35,8 +35,8 @@ unittest {
 	import vibe.web.web : registerWebInterface;
 
 	struct TranslationContext {
-		import std.typetuple;
-		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		import std.meta : AliasSeq;
+		alias languages = AliasSeq!("en_US", "de_DE", "fr_FR");
 		//mixin translationModule!"app";
 		//mixin translationModule!"somelib";
 	}
@@ -62,9 +62,9 @@ unittest {
 	import vibe.web.web : registerWebInterface;
 
 	struct TranslationContext {
-		import std.typetuple;
+		import std.meta : AliasSeq;
 		// A language can be in the form en_US, en-US or en. Put the languages you want to prioritize first.
-		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		alias languages = AliasSeq!("en_US", "de_DE", "fr_FR");
 		//mixin translationModule!"app";
 		//mixin translationModule!"somelib";
 
@@ -97,8 +97,8 @@ unittest {
 	import vibe.web.web : registerWebInterface;
 
 	struct TranslationContext {
-		import std.typetuple;
-		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		import std.meta : AliasSeq;
+		alias languages = AliasSeq!("en_US", "de_DE", "fr_FR");
 		static string determineLanguage(scope HTTPServerRequest req) { return "en_US"; }
 	}
 
@@ -650,9 +650,9 @@ msgstr "Third letter"
 	enum components = extractDeclStrings(str);
 
 	struct TranslationContext {
-		import std.typetuple;
+		import std.meta : AliasSeq;
 		enum enforceExistingKeys = true;
-		alias languages = TypeTuple!("en_US");
+		alias languages = AliasSeq!("en_US");
 
 		// Note that this is normally handled by mixing in an external file.
 		enum en_US_unittest = components;
@@ -690,9 +690,9 @@ msgstr[1] "%d files were created."
 	enum components = extractDeclStrings(str);
 
 	struct TranslationContext {
-		import std.typetuple;
+		import std.meta : AliasSeq;
 		enum enforceExistingKeys = true;
-		alias languages = TypeTuple!("en_US");
+		alias languages = AliasSeq!("en_US");
 
 		// Note that this is normally handled by mixing in an external file.
 		enum en_US_unittest2 = components;
