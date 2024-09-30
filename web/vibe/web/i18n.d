@@ -738,7 +738,7 @@ private size_t skipLine(size_t i, ref string text)
 private size_t skipString(size_t i, ref string text)
 {
 	import std.conv : to;
-	assert(text[i] == '"', "Expected to encounter the start of a string at position: "~to!string(i));
+	assert(text[i] == '"', "Expected to encounter the start of a string at position: "~locationString(i, text));
 	i++;
 	while (true) {
 		assert(i < text.length, "Missing closing '\"' for string: "~text[i .. min($, 10)]);
@@ -756,7 +756,7 @@ private size_t skipString(size_t i, ref string text)
 
 private size_t skipIndex(size_t i, ref string text) {
 	import std.conv : to;
-	assert(text[i] == '[', "Expected to encounter a plural form of msgstr at position: "~to!string(i));
+	assert(text[i] == '[', "Expected to encounter a plural form of msgstr at position: "~locationString(i, text));
 	for (; i<text.length; ++i) {
 		if (text[i] == ']') {
 			return i+1;
@@ -864,4 +864,16 @@ private string dstringUnescape(in string str)
 		else ret ~= str[start .. i];
 	}
 	return ret;
+}
+
+private string locationString(size_t i, string text)
+{
+	import std.algorithm.searching : count;
+	import std.format : format;
+	import std.string : lastIndexOf;
+
+	auto ln = text[0 .. i].count('\n');
+	auto sep = text[0 .. i].lastIndexOf('\n');
+	auto col = sep >= 0 ? i - sep - 1 : i;
+	return format("line %s, column %s", ln+1, col+1);
 }
