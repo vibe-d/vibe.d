@@ -143,14 +143,14 @@ html
 
 	See_Also: `translationContext`
 */
-mixin template translationModule(string FILENAME)
+mixin template translationModule(string FILENAME, string language_separator = ".")
 {
 	static import std.string;
 	enum NAME = std.string.tr(FILENAME, `/.\\-`, "____");
 	private static string file_mixins() {
 		string ret;
 		foreach (language; languages)
-			ret ~= "enum "~language~"_"~NAME~" = extractDeclStrings(import(`"~FILENAME~"."~language~".po`));\n";
+			ret ~= "enum "~language~"_"~NAME~" = extractDeclStrings(import(`"~FILENAME~language_separator~language~".po`));\n";
 		return ret;
 	}
 
