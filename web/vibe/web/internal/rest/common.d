@@ -199,6 +199,7 @@ import std.traits : hasUDA;
 					case ParameterKind.internal: route.internalParameters ~= pi; break;
 					case ParameterKind.attributed: route.attributedParameters ~= pi; break;
 					case ParameterKind.auth: route.authParameters ~= pi; break;
+					case ParameterKind.status: route.statusParameters ~= pi; break;
 				}
 			}
 
@@ -437,6 +438,7 @@ struct Route {
 	Parameter[] attributedParameters;
 	Parameter[] internalParameters;
 	Parameter[] authParameters;
+	Parameter[] statusParameters;
 }
 
 struct PathPart {
@@ -474,7 +476,8 @@ enum ParameterKind {
 	header,      // req.header[]
 	attributed,  // @before
 	internal,    // req.params[]
-	auth         // @authrorized!T
+	auth,        // @authrorized!T
+	status       // res.statusCode/res.statusPhrase
 }
 
 struct SubInterface {
