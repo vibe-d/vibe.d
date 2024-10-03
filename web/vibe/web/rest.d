@@ -1623,13 +1623,20 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			handleCors();
 			foreach (i, P; PTypes) {
 				static if (sroute.parameters[i].isOut) {
-					static assert (sroute.parameters[i].kind == ParameterKind.header);
-					static if (isInstanceOf!(Nullable, typeof(params[i]))) {
-						if (!params[i].isNull)
+					static if (sroute.parameters[i].kind == ParameterKind.header) {
+						static if (isInstanceOf!(Nullable, typeof(params[i]))) {
+							if (!params[i].isNull)
+								res.headers[route.parameters[i].fieldName] = to!string(params[i]);
+						} else {
 							res.headers[route.parameters[i].fieldName] = to!string(params[i]);
-					} else {
-						res.headers[route.parameters[i].fieldName] = to!string(params[i]);
-					}
+						}
+					} else static if (sroute.parameters[i].kind == ParameterKind.status) {
+						static if (is(typeof(params[i]) == HTTPStatus) || is(typeof(params[i]) == int))
+							res.statusCode = params[i];
+						else static if (is(typeof(params[i]) == string))
+							res.statusPhrase = params[i];
+						else static assert(false, "`@viaStatus` parameters must be of type `HTTPStatus`/`int` or `string`");
+					} else static assert (false, "`out` parameters must be annotated with either `@viaHeader` or `@viaStatus`");
 				}
 			}
 		}
@@ -1855,6 +1862,8 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	InetHeaderMap headers;
 	InetHeaderMap reqhdrs;
 	InetHeaderMap opthdrs;
+	HTTPStatus status_code;
+	string status_phrase;
 
 	string url_prefix;
 
@@ -1930,14 +1939,20 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		foreach (i, PT; PTT) {
 			enum sparam = sroute.parameters[i];
 			auto fieldname = route.parameters[i].fieldName;
-			static if (sparam.kind == ParameterKind.header) {
-				static if (sparam.isOut) {
+			static if (sparam.isOut) {
+				static if (sparam.kind == ParameterKind.header) {
 					static if (isInstanceOf!(Nullable, PT)) {
 						ARGS[i] = to!(TemplateArgsOf!PT)(
 							opthdrs.get(fieldname, null));
 					} else {
 						if (auto ptr = fieldname in reqhdrs)
 							ARGS[i] = to!PT(*ptr);
+					}
+				} else static if (sparam.kind == ParameterKind.status) {
+					static if (is(PT == HTTPStatus) || is(PT == int)) {
+						ARGS[i] = status_code;
+					} else static if (is(PT == string)) {
+						ARGS[i] = status_phrase;
 					}
 				}
 			}
@@ -1964,6 +1979,8 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	auto ret = request(URL(intf.baseURL), request_filter, request_body_filter,
 		sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs,
 		intf.settings.httpClientSettings);
+	status_code = cast(HTTPStatus)ret.statusCode;
+	status_phrase = ret.statusPhrase;
 
 	static if (is(RT == InputStream)) {
 		return ret.bodyReader.asInterface!InputStream;
@@ -2438,7 +2455,7 @@ do {
 					static if (Attr.length != 1) {
 						if (hack) return "%s: Parameter '%s' cannot be %s"
 							.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
-					} else static if (Attr[0].origin != ParameterKind.header) {
+					} else static if (Attr[0].origin != ParameterKind.header && Attr[0].origin != ParameterKind.status) {
 						if (hack) return "%s: %s parameter '%s' cannot be %s"
 							.format(FuncId, Attr[0].origin, PN[i],
 								SC & PSC.out_ ? "out" : "ref");

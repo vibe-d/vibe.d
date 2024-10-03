@@ -395,6 +395,8 @@ interface Example6API
 	// Without a parameter, it will represent the entire body
 	string postConcatBody(@viaBody() FooType obj);
 
+	int testStatus(@viaStatus out int status, @viaStatus out string status_phrase);
+
 	struct FooType {
 		int a;
 		string s;
@@ -439,6 +441,13 @@ override:
 	string postConcatBody(FooType obj)
 	{
 		return postConcat(obj);
+	}
+
+	int testStatus(out int status, out string status_phrase)
+	{
+		status = HTTPStatus.accepted;
+		status_phrase = "Request accepted!";
+		return 42;
 	}
 }
 
@@ -644,6 +653,12 @@ void runTests(string url)
 			assert(tester == "The cake is a lie", tester);
 			assert(www == `Basic realm="Aperture"`.nullable, www.to!string);
 		}
+
+		int status;
+		string status_phrase;
+		assert(api.testStatus(status, status_phrase) == 42);
+		assert(status == HTTPStatus.accepted);
+		assert(status_phrase == "Request accepted!");
 	}
 
 	// Example 6 -- Query

@@ -11,6 +11,7 @@ import vibe.http.common;
 import vibe.http.server : HTTPServerRequest;
 import vibe.data.json;
 import vibe.internal.meta.uda : onlyAsUda, UDATuple;
+import vibe.web.internal.rest.common : ParameterKind;
 
 import std.meta : AliasSeq;
 static import std.utf;
@@ -686,8 +687,6 @@ package struct NoRouteAttribute {}
  * and the parameter (identifier) name of the function.
  */
 public struct WebParamAttribute {
-	import vibe.web.internal.rest.common : ParameterKind;
-
 	/// The type of the WebParamAttribute
 	ParameterKind origin;
 	/// Parameter name (function parameter name).
@@ -722,7 +721,6 @@ public struct WebParamAttribute {
  */
 WebParamAttribute viaBody(string field = null)
 @safe {
-	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.body_, null, field);
@@ -735,7 +733,6 @@ in {
 }
 do
 {
-	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.body_, identifier, field);
@@ -744,7 +741,6 @@ do
 /// ditto
 WebParamAttribute bodyParam(string identifier)
 @safe {
-	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.body_, identifier, "");
@@ -774,7 +770,6 @@ WebParamAttribute bodyParam(string identifier)
  */
 WebParamAttribute viaHeader(string field)
 @safe {
-	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.header, null, field);
@@ -783,7 +778,6 @@ WebParamAttribute viaHeader(string field)
 /// Ditto
 WebParamAttribute headerParam(string identifier, string field)
 @safe {
-	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.header, identifier, field);
@@ -813,7 +807,6 @@ WebParamAttribute headerParam(string identifier, string field)
  */
 WebParamAttribute viaQuery(string field)
 @safe {
-	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.query, null, field);
@@ -822,11 +815,20 @@ WebParamAttribute viaQuery(string field)
 /// Ditto
 WebParamAttribute queryParam(string identifier, string field)
 @safe {
-	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.query, identifier, field);
 }
+
+
+/** Declares a parameter to be transmitted via the HTTP status code or phrase.
+
+	This attribute can be applied to one or two `out` parameters of type
+	`HTTPStatus`/`int` or `string`. The values of those parameters correspond
+	to the HTTP status code or phrase, depending on the type.
+*/
+enum viaStatus = WebParamAttribute(ParameterKind.status);
+
 
 /**
 	Determines the naming convention of an identifier.
