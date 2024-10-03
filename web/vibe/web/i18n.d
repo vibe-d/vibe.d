@@ -35,8 +35,8 @@ unittest {
 	import vibe.web.web : registerWebInterface;
 
 	struct TranslationContext {
-		import std.typetuple;
-		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		import std.meta : AliasSeq;
+		alias languages = AliasSeq!("en_US", "de_DE", "fr_FR");
 		//mixin translationModule!"app";
 		//mixin translationModule!"somelib";
 	}
@@ -62,9 +62,9 @@ unittest {
 	import vibe.web.web : registerWebInterface;
 
 	struct TranslationContext {
-		import std.typetuple;
+		import std.meta : AliasSeq;
 		// A language can be in the form en_US, en-US or en. Put the languages you want to prioritize first.
-		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		alias languages = AliasSeq!("en_US", "de_DE", "fr_FR");
 		//mixin translationModule!"app";
 		//mixin translationModule!"somelib";
 
@@ -97,8 +97,8 @@ unittest {
 	import vibe.web.web : registerWebInterface;
 
 	struct TranslationContext {
-		import std.typetuple;
-		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		import std.meta : AliasSeq;
+		alias languages = AliasSeq!("en_US", "de_DE", "fr_FR");
 		static string determineLanguage(scope HTTPServerRequest req) { return "en_US"; }
 	}
 
@@ -143,14 +143,14 @@ html
 
 	See_Also: `translationContext`
 */
-mixin template translationModule(string FILENAME)
+mixin template translationModule(string FILENAME, string language_separator = ".")
 {
-	import std.string : tr;
-	enum NAME = FILENAME.tr(`/.-\`, "____");
+	static import std.string;
+	enum NAME = std.string.tr(FILENAME, `/.\\-`, "____");
 	private static string file_mixins() {
 		string ret;
 		foreach (language; languages)
-			ret ~= "enum "~language~"_"~NAME~" = extractDeclStrings(import(`"~FILENAME~"."~language~".po`));\n";
+			ret ~= "enum "~language~"_"~NAME~" = extractDeclStrings(import(`"~FILENAME~language_separator~language~".po`));\n";
 		return ret;
 	}
 
@@ -482,11 +482,15 @@ LangComponents extractDeclStrings(string text)
 		assert(text.length - i >= 6 && text[i .. i+6] == "msgstr", "Expected 'msgstr', got '"~text[i .. min(i+10, $)]~"'.");
 		i += 6;
 
-		i = skipWhitespace(i, text);
-		auto ivnext = skipString(i, text);
-		auto value = dstringUnescape(wrapText(text[i+1 .. ivnext-1]));
-		i = ivnext;
-		i = skipToDirective(i, text);
+		string value;
+		if (text[i] == '[') i -= 6;
+		else {
+			i = skipWhitespace(i, text);
+			auto ivnext = skipString(i, text);
+			value = dstringUnescape(wrapText(text[i+1 .. ivnext-1]));
+			i = ivnext;
+			i = skipToDirective(i, text);
+		}
 
 		// msgstr[n] is a required field when msgid_plural is not null, and ignored otherwise
 		string[] value_plural;
@@ -650,9 +654,9 @@ msgstr "Third letter"
 	enum components = extractDeclStrings(str);
 
 	struct TranslationContext {
-		import std.typetuple;
+		import std.meta : AliasSeq;
 		enum enforceExistingKeys = true;
-		alias languages = TypeTuple!("en_US");
+		alias languages = AliasSeq!("en_US");
 
 		// Note that this is normally handled by mixing in an external file.
 		enum en_US_unittest = components;
@@ -684,15 +688,20 @@ msgid_plural "Several files were created."
 msgstr "One file was created."
 msgstr[0] "1 file was created"
 msgstr[1] "%d files were created."
+
+msgid "One file was modified."
+msgid_plural "Several files were modified."
+msgstr[0] "One file was modified."
+msgstr[1] "%d files were modified."
 `;
 
 	import std.stdio;
 	enum components = extractDeclStrings(str);
 
 	struct TranslationContext {
-		import std.typetuple;
+		import std.meta : AliasSeq;
 		enum enforceExistingKeys = true;
-		alias languages = TypeTuple!("en_US");
+		alias languages = AliasSeq!("en_US");
 
 		// Note that this is normally handled by mixing in an external file.
 		enum en_US_unittest2 = components;
@@ -738,7 +747,7 @@ private size_t skipLine(size_t i, ref string text)
 private size_t skipString(size_t i, ref string text)
 {
 	import std.conv : to;
-	assert(text[i] == '"', "Expected to encounter the start of a string at position: "~to!string(i));
+	assert(text[i] == '"', "Expected to encounter the start of a string at position: "~locationString(i, text));
 	i++;
 	while (true) {
 		assert(i < text.length, "Missing closing '\"' for string: "~text[i .. min($, 10)]);
@@ -756,7 +765,7 @@ private size_t skipString(size_t i, ref string text)
 
 private size_t skipIndex(size_t i, ref string text) {
 	import std.conv : to;
-	assert(text[i] == '[', "Expected to encounter a plural form of msgstr at position: "~to!string(i));
+	assert(text[i] == '[', "Expected to encounter a plural form of msgstr at position: "~locationString(i, text));
 	for (; i<text.length; ++i) {
 		if (text[i] == ']') {
 			return i+1;
@@ -864,4 +873,16 @@ private string dstringUnescape(in string str)
 		else ret ~= str[start .. i];
 	}
 	return ret;
+}
+
+private string locationString(size_t i, string text)
+{
+	import std.algorithm.searching : count;
+	import std.format : format;
+	import std.string : lastIndexOf;
+
+	auto ln = text[0 .. i].count('\n');
+	auto sep = text[0 .. i].lastIndexOf('\n');
+	auto col = sep >= 0 ? i - sep - 1 : i;
+	return format("line %s, column %s", ln+1, col+1);
 }
