@@ -1,6 +1,23 @@
 Changelog
 =========
 
+v0.10.2 - 2024-
+--------------------
+
+### Features and improvements ###
+
+- Adds a new `@viaStatus` REST parameter annotation for customizing the HTTP status - [pull #2806][issue2806]
+- Adds a `MongoCollection.find` overload taking only a `FindOptions` parameter - [pull #2804][issue2804]
+
+### Bug fixes ###
+
+- Fixes parsing plural-only translations in PO files and improves error messages - [pull #2805][issue2805]
+
+[issue2804]: https://github.com/vibe-d/vibe.d/issues/2804
+[issue2805]: https://github.com/vibe-d/vibe.d/issues/2805
+[issue2806]: https://github.com/vibe-d/vibe.d/issues/2806
+
+
 v0.10.1 - 2024-09-07
 --------------------
 
