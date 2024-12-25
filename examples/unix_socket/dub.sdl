@@ -1,4 +1,5 @@
 name "unit-socket-example"
 description "Example for sending http requests to unix sockets"
 dependency "vibe-d:web" path="../../"
-versions "VibeNoSSL"
+dependency "vibe-stream:tls" version="~>1.0"
+subConfiguration "vibe-stream:tls" "notls"
