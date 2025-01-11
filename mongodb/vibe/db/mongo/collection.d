@@ -1313,6 +1313,15 @@ struct MongoCollection {
 	}
 }
 
+/// Drop a collection
+@safe unittest {
+	import vibe.db.mongo.mongo;
+  auto client = connectMongoDB("127.0.0.1");
+  auto chunks = client.getCollection("test.fs.chunks");
+
+  chunks.drop;
+}
+
 /**
   Specifies a level of isolation for read operations. For example, you can use read concern to only read data that has propagated to a majority of nodes in a replica set.
 
