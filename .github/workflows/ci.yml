@@ -13,15 +13,15 @@ jobs:
           - ubuntu-latest
         dc:
           - dmd-latest
-          - dmd-2.097.1
-          - dmd-2.096.1
-          - dmd-2.093.1
-          - dmd-2.091.1
+          - dmd-2.108.1
+          - dmd-2.106.1
+          - dmd-2.104.2
+          - dmd-2.102.2
           - ldc-latest
-          - ldc-1.27.1
-          - ldc-1.26.0
-          - ldc-1.23.0
-          - ldc-1.21.0
+          - ldc-1.38.0
+          - ldc-1.36.0
+          - ldc-1.34.0
+          - ldc-1.32.0
         parts:
           - 'builds,unittests,examples,tests,redis'
         extra_dflags:
@@ -52,7 +52,6 @@ jobs:
       uses: dlang-community/setup-dlang@v1
       with:
           compiler: ${{ matrix.dc }}
-          dub: 1.29.0
 
     - name: '[POSIX] Run tests'
       env:
@@ -77,15 +76,15 @@ jobs:
           - windows-latest
         dc:
           - dmd-latest
-          - dmd-2.097.1
-          - dmd-2.096.1
-          - dmd-2.093.1
-          - dmd-2.091.1
+          - dmd-2.108.1
+          - dmd-2.106.1
+          - dmd-2.104.2
+          - dmd-2.102.2
           - ldc-latest
-          - ldc-1.27.1
-          - ldc-1.26.0
-          - ldc-1.23.0
-          - ldc-1.21.0
+          - ldc-1.38.0
+          - ldc-1.36.0
+          - ldc-1.34.0
+          - ldc-1.32.0
         parts:
           - 'builds,unittests,examples,tests'
         extra_dflags:
@@ -101,7 +100,6 @@ jobs:
       uses: dlang-community/setup-dlang@v1
       with:
           compiler: ${{ matrix.dc }}
-          dub: 1.29.0
 
     - name: '[WINDOWS] Run tests'
       env:
