@@ -23,17 +23,10 @@ void runTest(ushort port)
 	chunks.drop;
 }
 
-int main(string[] args)
+void main(string[] args)
 {
-	int ret = 0;
 	ushort port = args.length > 1
 		? args[1].to!ushort
 		: MongoClientSettings.defaultPort;
-	runTask(() nothrow {
-		try runTest(port);
-		catch (Exception e) assert(false, e.toString());
-		finally exitEventLoop(true);
-	});
-	runEventLoop();
-	return ret;
+    runTest(port);
 }
