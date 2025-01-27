@@ -46,3 +46,4 @@ examples/bench-mongodb/bench-mongodb
 examples/bench-urlrouter/bench-urlrouter
 *.exe
 
+tests/mongodb/collection/tests

@@ -1,0 +1,7 @@
+{
+    "name": "tests",
+    "description": "High level MongoDB collection tests for vibe.d",
+    "dependencies": {
+        "vibe-d:mongodb": {"path": "../../../"}
+    }
+}
