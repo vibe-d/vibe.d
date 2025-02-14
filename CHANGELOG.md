@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.10.2 - 2025-
+v0.10.2 - 2025-02-14
 --------------------
 
 ### Features and improvements ###
