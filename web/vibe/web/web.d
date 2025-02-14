@@ -998,9 +998,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		else alias ParamBaseType = PT;
 
 		static if (isInstanceOf!(Confirm, ParamBaseType)) {
-			enum pidx = param_names.countUntil(PT.confirmedParameter);
-			static assert(pidx >= 0, "Unknown confirmation parameter reference \""~PT.confirmedParameter~"\".");
-			static assert(pidx != i, "Confirmation parameter \""~PT.confirmedParameter~"\" may not reference itself.");
+			enum pidx = param_names.countUntil(ParamBaseType.confirmedParameter);
+			static assert(pidx >= 0, "Unknown confirmation parameter reference \""~ParamBaseType.confirmedParameter~"\".");
+			static assert(pidx != i, "Confirmation parameter \""~ParamBaseType.confirmedParameter~"\" may not reference itself.");
 
 			bool matched;
 			static if (isNullable!PT && isNullable!(PARAMS[pidx])) {
