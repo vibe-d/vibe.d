@@ -189,6 +189,7 @@ struct RedisValue {
 		string m_key;
 	}
 
+@safe:
 	this(RedisDatabase db, string key) { m_db = db; m_key = key; }
 
 	/** The database in which the key is stored.
@@ -394,7 +395,7 @@ struct RedisHash(T = string) {
 	void opIndexOpAssign(string op)(T value, string field) if (op == "+") { m_db.hincr(m_key, field, value); }
 	void opIndexOpAssign(string op)(T value, string field) if (op == "-") { m_db.hincr(m_key, field, -value); }
 
-	int opApply(scope int delegate(string key, T value) del)
+	int opApply(scope int delegate(string key, T value) @safe del)
 	{
 		auto reply = m_db.hgetAll(m_key);
 		while (reply.hasNext()) {
@@ -407,7 +408,7 @@ struct RedisHash(T = string) {
 	}
 
 
-	int opApply(scope int delegate(string key) del)
+	int opApply(scope int delegate(string key) @safe del)
 	{
 		auto reply = m_db.hkeys(m_key);
 		while (reply.hasNext()) {
@@ -525,7 +526,7 @@ struct RedisList(T = string) {
 		Dollar opSub(long off) { return Dollar(offset - off); }
 	}
 
-	int opApply(scope int delegate(T) del)
+	int opApply(scope int delegate(T) @safe del)
 	{
 		foreach (v; this[0 .. $])
 			if (auto ret = del(v))
@@ -563,7 +564,7 @@ struct RedisSet(T = string) {
 	//long sinterStore(string destination, string[] keys...) { return request!long("SINTERSTORE", destination, keys); }
 	bool contains(T value) { return m_db.sisMember(m_key, value.toRedis()); }
 
-	int opApply(scope int delegate(T value) del)
+	int opApply(scope int delegate(T value) @safe del)
 	{
 		foreach (m; m_db.smembers!string(m_key))
 			if (auto ret = del(m.fromRedis!T()))

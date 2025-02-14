@@ -86,7 +86,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 			// TODO: add range queries
 		}
 
-		int opApply(int delegate(long id) del)
+		int opApply(int delegate(long id) @safe del)
 		{
 			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
 				foreach (id; m_db.zrange!long(m_allSet, 0, -1))
@@ -100,7 +100,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 			return 0;
 		}
 
-		int opApply(int delegate(long id, T) del)
+		int opApply(int delegate(long id, T) @safe del)
 		{
 			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
 				foreach (id; m_db.zrange!long(m_allSet, 0, -1))
