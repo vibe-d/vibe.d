@@ -13,11 +13,13 @@ v0.10.2 - 2025-
 ### Bug fixes ###
 
 - Fixed parsing plural-only translations in PO files and improves error messages - [pull #2805][issue2805]
+- Fixed a compilation error when using `Confirm!T` parameters in a web interface - [pull #2816][issue2816]
 
 [issue2804]: https://github.com/vibe-d/vibe.d/issues/2804
 [issue2805]: https://github.com/vibe-d/vibe.d/issues/2805
 [issue2806]: https://github.com/vibe-d/vibe.d/issues/2806
 [issue2815]: https://github.com/vibe-d/vibe.d/issues/2815
+[issue2816]: https://github.com/vibe-d/vibe.d/issues/2816
 
 
 v0.10.1 - 2024-09-07
