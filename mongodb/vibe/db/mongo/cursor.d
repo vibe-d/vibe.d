@@ -403,6 +403,12 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 	final void killCursors()
 	@safe {
 		if (m_cursor == 0) return;
+		
+		debug {
+			import vibe.internal.allocator : ensureNotInGC;
+			ensureNotInGC!(typeof(this))();
+		}
+		
 		auto conn = m_client.lockConnection();
 		conn.killCursors(m_collection, () @trusted { return (&m_cursor)[0 .. 1]; } ());
 		m_cursor = 0;
