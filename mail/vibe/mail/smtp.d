@@ -20,6 +20,8 @@ import std.conv;
 import std.exception;
 import std.string;
 
+import core.time;
+
 @safe:
 
 
@@ -131,11 +133,11 @@ final class Mail {
 
 	Valid headers can be found at http://tools.ietf.org/html/rfc4021
 */
-void sendMail(in SMTPClientSettings settings, Mail mail)
+void sendMail(in SMTPClientSettings settings, Mail mail, in Duration timeout = Duration.max())
 {
 	TCPConnection raw_conn;
 	try {
-		raw_conn = connectTCP(settings.host, settings.port);
+		raw_conn = connectTCP(settings.host, settings.port, null, 0, timeout);
 	} catch(Exception e){
 		throw new Exception("Failed to connect to SMTP server at "~settings.host~" port "
 			~to!string(settings.port), e);
