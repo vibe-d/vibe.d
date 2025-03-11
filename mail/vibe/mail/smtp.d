@@ -132,6 +132,11 @@ final class Mail {
 	at least the headers "To", "From", Sender" and "Subject".
 
 	Valid headers can be found at http://tools.ietf.org/html/rfc4021
+
+	Params:
+	  settings = Settings to send this email (e.g. server, credentials, TLS context)
+	  mail = The email data to send
+	  timeout = A timeout that will be applied to connection & reading.
 */
 void sendMail(in SMTPClientSettings settings, Mail mail, in Duration timeout = Duration.max())
 {
@@ -143,6 +148,8 @@ void sendMail(in SMTPClientSettings settings, Mail mail, in Duration timeout = D
 			~to!string(settings.port), e);
 	}
 	scope(exit) raw_conn.close();
+	if (timeout < Duration.max())
+		raw_conn.readTimeout = timeout;
 
 	InterfaceProxy!Stream conn = raw_conn;
 
