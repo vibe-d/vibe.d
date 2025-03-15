@@ -1,21 +1,25 @@
 Changelog
 =========
 
-v0.10.2 - 2024-
+v0.10.2 - 2025-02-14
 --------------------
 
 ### Features and improvements ###
 
 - Adds a new `@viaStatus` REST parameter annotation for customizing the HTTP status - [pull #2806][issue2806]
 - Adds a `MongoCollection.find` overload taking only a `FindOptions` parameter - [pull #2804][issue2804]
+- Made the whole Redis API `@safe` - [pull #2815][issue2815]
 
 ### Bug fixes ###
 
-- Fixes parsing plural-only translations in PO files and improves error messages - [pull #2805][issue2805]
+- Fixed parsing plural-only translations in PO files and improves error messages - [pull #2805][issue2805]
+- Fixed a compilation error when using `Confirm!T` parameters in a web interface - [pull #2816][issue2816]
 
 [issue2804]: https://github.com/vibe-d/vibe.d/issues/2804
 [issue2805]: https://github.com/vibe-d/vibe.d/issues/2805
 [issue2806]: https://github.com/vibe-d/vibe.d/issues/2806
+[issue2815]: https://github.com/vibe-d/vibe.d/issues/2815
+[issue2816]: https://github.com/vibe-d/vibe.d/issues/2816
 
 
 v0.10.1 - 2024-09-07

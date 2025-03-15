@@ -20,6 +20,8 @@ import std.conv;
 import std.exception;
 import std.string;
 
+import core.time;
+
 @safe:
 
 
@@ -130,17 +132,24 @@ final class Mail {
 	at least the headers "To", "From", Sender" and "Subject".
 
 	Valid headers can be found at http://tools.ietf.org/html/rfc4021
+
+	Params:
+	  settings = Settings to send this email (e.g. server, credentials, TLS context)
+	  mail = The email data to send
+	  timeout = A timeout that will be applied to connection & reading.
 */
-void sendMail(in SMTPClientSettings settings, Mail mail)
+void sendMail(in SMTPClientSettings settings, Mail mail, in Duration timeout = Duration.max())
 {
 	TCPConnection raw_conn;
 	try {
-		raw_conn = connectTCP(settings.host, settings.port);
+		raw_conn = connectTCP(settings.host, settings.port, null, 0, timeout);
 	} catch(Exception e){
 		throw new Exception("Failed to connect to SMTP server at "~settings.host~" port "
 			~to!string(settings.port), e);
 	}
 	scope(exit) raw_conn.close();
+	if (timeout < Duration.max())
+		raw_conn.readTimeout = timeout;
 
 	InterfaceProxy!Stream conn = raw_conn;
 
