@@ -470,7 +470,7 @@ struct MongoCollection {
 	if (!is(U == FindOptions))
 	{
 		options.projection = serializeToBson(projection);
-		return find(query, options);
+		return find!R(query, options);
 	}
 
 	///
