@@ -159,9 +159,10 @@ final class MongoClient {
 	 */
 	auto getDatabases()()
 	{
-		import std.algorithm : map;
-		return lockConnection.listDatabases()
-			.map!(info => MongoDatabase(this, info.name));
+		MongoDatabase[] ret;
+		foreach (info; lockConnection.listDatabases())
+			ret ~= MongoDatabase(this, info.name);
+		return ret;
 	}
 
 	package auto lockConnection() { return m_connections.lockConnection(); }
