@@ -152,11 +152,6 @@ int main(string[] args)
 	ushort port = args.length > 1
 		? args[1].to!ushort
 		: MongoClientSettings.defaultPort;
-	runTask(() nothrow {
-		try runTest(port);
-		catch (Exception e) assert(false, e.toString());
-		finally exitEventLoop(true);
-	});
-	runEventLoop();
+	runTest(port);
 	return ret;
 }
