@@ -1164,7 +1164,12 @@ private string getHostArchitecture()
 	else
 		string arch = "unknown ";
 
-	return arch ~ os.endian.to!string;
+	static if(os.endian == os.Endian.bigEndian)
+		string endian = "bigEndian";
+	else static if(os.endian == os.Endian.littleEndian)
+		string endian = "littleEndian";
+
+	return arch ~ endian;
 }
 
 private static immutable hostArchitecture = getHostArchitecture;
