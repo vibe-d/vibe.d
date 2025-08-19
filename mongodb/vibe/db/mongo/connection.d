@@ -714,7 +714,7 @@ final class MongoConnection {
 	{
 		import std.traits;
 
-		auto bytes_read = m_bytesRead;
+		auto packet_start_index = m_bytesRead;
 		int msglen = recvInt();
 		int resid = recvInt();
 		int respto = recvInt();
@@ -731,7 +731,7 @@ final class MongoConnection {
 			sectionLength -= uint.sizeof; // CRC present
 
 		bool gotSec0;
-		while (m_bytesRead - bytes_read < sectionLength) {
+		while (m_bytesRead - packet_start_index < msglen) {
 			// TODO: directly deserialize from the wire
 			static if (!dupBson) {
 				ubyte[256] buf = void;
@@ -783,9 +783,9 @@ final class MongoConnection {
 			logDiagnostic("recvData: crc=%s (discarded)", crc);
 		}
 
-		assert(bytes_read + msglen == m_bytesRead,
+		assert(packet_start_index + msglen == m_bytesRead,
 			format!"Packet size mismatch! Expected %s bytes, but read %s."(
-				msglen, m_bytesRead - bytes_read));
+				msglen, m_bytesRead - packet_start_index));
 
 		return resid;
 	}
