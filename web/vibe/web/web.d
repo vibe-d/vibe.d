@@ -513,6 +513,52 @@ do
 }
 
 /**
+	Returns the current session object.
+	If no session exists, a  new session is started.
+
+	Note that this may only be called from a function/method
+	registered using registerWebInterface.
+
+    See_Also: $(LREF terminateSession)
+*/
+auto session() @safe
+{
+	auto ctx = getRequestContext();
+	assert(request !is null, "session() used outside of a web interface request!");
+	auto _session = ctx.req.session;
+	if (!_session)
+	    _session = ctx.res.startSession;
+	return _session;
+}
+
+///
+@safe unittest {
+	class WebService {
+		// GET /me
+		Json getMe() {
+			enforceHTTP(session.isKeySet("username"), HTTPStatus.forbidden, "Not authorized to perform this action!");
+
+			return Json(["username": session.get!string("username").Json]);
+		}
+
+		// POST
+		void postLogin(string username) {
+			session.set("username", username);
+		}
+	}
+
+	void run()
+	{
+		auto router = new URLRouter;
+		router.registerWebInterface(new WebService);
+
+		auto settings = new HTTPServerSettings;
+		settings.sessionStore = new MemorySessionStore();
+		settings.port = 8080;
+		listenHTTP(settings, router);
+	}
+}
+/**
 	Returns the agreed upon language.
 
 	Note that this may only be called from a function/method
@@ -606,6 +652,8 @@ do
 
 	Note that this may only be called from a function/method
 	registered using registerWebInterface.
+
+    See_Also: $(LREF session)
 */
 void terminateSession()
 @safe {
