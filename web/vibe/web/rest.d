@@ -2107,11 +2107,23 @@ private HTTPClientResponse request(URL base_url,
 
 	if (!isSuccessCode(cast(HTTPStatus)client_res.statusCode))
 	{
-		Json msg = Json(["statusMessage": Json(client_res.statusPhrase)]);
-		if (client_res.contentType.length)
-			if (client_res.contentType.splitter(";").front.strip.sicmp("application/json") == 0)
-				msg = client_res.readJson();
-		client_res.dropBody();
+		import std.base64;
+
+		Json msg;
+		auto ctypeR = client_res.contentType.splitter(";");
+		const ctype = ctypeR.empty ? string.init : ctypeR.front.strip;
+		if (ctype.sicmp("application/json") == 0)
+			msg = client_res.readJson();
+		else if (ctype.sicmp("text/plain") == 0)
+			msg = Json(["statusMessage": Json(client_res.bodyReader.readAllUTF8())]);
+		else {
+			msg = Json(["statusMessage": Json(client_res.statusPhrase)]);
+			if (client_res.contentType.length)
+				msg["contentType"] = Json(client_res.contentType);
+			ubyte[] data = client_res.bodyReader.readAll();
+			if (data.length)
+				msg["data"] = Base64.encode(data);
+		}
 		throw new RestException(client_res.statusCode, msg);
 	}
 

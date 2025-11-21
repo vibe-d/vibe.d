@@ -1,0 +1,2 @@
+name "vibe-web-rest-error-test"
+dependency "vibe-d:web" path="../../"
