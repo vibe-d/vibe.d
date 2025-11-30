@@ -349,7 +349,7 @@ final class MongoConnection {
 	void query(T)(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		scope(failure) disconnect();
-		flags |= m_settings.defQueryFlags;
+
 		int id;
 		if (returnFieldSelector.isNull)
 			id = send(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query);

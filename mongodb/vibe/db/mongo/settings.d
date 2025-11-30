@@ -411,8 +411,6 @@ class MongoClientSettings
 	 */
 	string database;
 
-	deprecated("unused since at least before v3.6") QueryFlags defQueryFlags = QueryFlags.None;
-
 	/**
 	 * Specifies the name of the replica set, if the mongod is a member of a
 	 * replica set.
@@ -522,7 +520,7 @@ class MongoClientSettings
 	 */
 	string sslCAFile;
 
-	/** 
+	/**
 	 * Specify the database name associated with the user's credentials. If
 	 * `authSource` is unspecified, `authSource` defaults to the `defaultauthdb`
 	 * specified in the connection string. If `defaultauthdb` is unspecified,
@@ -545,7 +543,7 @@ class MongoClientSettings
 	 */
 	MongoAuthMechanism authMechanism;
 
-	/** 
+	/**
 	 * Specify properties for the specified authMechanism as a comma-separated
 	 * list of colon-separated key-value pairs.
 	 *
@@ -608,7 +606,7 @@ class MongoClientSettings
 		this.sslCAFile = sslCAFile;
 	}
 
-	/** 
+	/**
 	 * Resolves the database to run authentication commands on.
 	 * (authSource if set, otherwise the URI's database if set, otherwise "admin")
 	 */
