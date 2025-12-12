@@ -71,7 +71,10 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 		IDType add(U)(U args)
 		{
 			auto id = createID();
-			this[id] = args;
+			static if (__traits(compiles, this.opIndexAssign))
+				this[id] = args;
+			else
+				this[id].opAssign(args); // workaround rvalue struct assign error
 			return id;
 		}
 
