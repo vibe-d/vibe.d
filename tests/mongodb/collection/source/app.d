@@ -18,9 +18,16 @@ void runTest(ushort port)
 {
 	MongoClient client = connectMongoDB("127.0.0.1", port);
 
-	/// Drop a collection
-	auto chunks = client.getCollection("test.fs.chunks");
-	chunks.drop;
+	auto coll = client.getCollection("test.drop_test");
+
+	// Insert a document to ensure the collection exists
+	coll.insertOne(["key": Bson("value")]);
+
+	// Drop an existing collection
+	coll.drop;
+
+	// Drop a non-existent collection (must not throw on any MongoDB version)
+	coll.drop;
 }
 
 void main(string[] args)
