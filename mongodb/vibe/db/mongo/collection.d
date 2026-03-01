@@ -1521,10 +1521,9 @@ void enforceWireVersionConstraints(T)(ref T field, int serverVersion,
 		throw new MongoException(exception ~ "from " ~ file ~ ":" ~ line.to!string);
 }
 
-///
-@safe unittest
+version (unittest)
 {
-	struct SomeMongoCommand
+	struct SinceUntilCmd
 	{
 		@embedNullable @since(WireVersion.v34)
 		Nullable!int a;
@@ -1533,24 +1532,205 @@ void enforceWireVersionConstraints(T)(ref T field, int serverVersion,
 		Nullable!int b;
 	}
 
-	SomeMongoCommand cmd;
+	struct ErrorBeforeCmd
+	{
+		@embedNullable @errorBefore(WireVersion.v44)
+		Nullable!int field;
+	}
+
+	struct DeprecatedCmd
+	{
+		@embedNullable @deprecatedSince(WireVersion.v40)
+		Nullable!int oldField;
+	}
+
+	struct CombinedCmd
+	{
+		@embedNullable @errorBefore(WireVersion.v44)
+		Nullable!bool allowDiskUse;
+
+		@embedNullable @since(WireVersion.v32)
+		Nullable!long maxAwaitTimeMS;
+
+		@embedNullable @deprecatedSince(WireVersion.v40)
+		Nullable!long maxScan;
+	}
+
+	struct SinceDeprecatedCmd
+	{
+		@embedNullable @since(WireVersion.v32)
+		Nullable!long maxAwaitTimeMS;
+
+		@embedNullable @deprecatedSince(WireVersion.v40)
+		Nullable!long maxScan;
+	}
+}
+
+/// @since nullifies field when server version is below minimum
+@safe unittest
+{
+	SinceUntilCmd cmd;
 	cmd.a = 1;
 	cmd.b = 2;
-	assert(!cmd.a.isNull);
-	assert(!cmd.b.isNull);
 
-	SomeMongoCommand test = cmd;
+	auto test = cmd;
 	enforceWireVersionConstraints(test, WireVersion.v30);
 	assert(test.a.isNull);
 	assert(!test.b.isNull);
+}
 
-	test = cmd;
+/// @until nullifies field when server version exceeds maximum
+@safe unittest
+{
+	SinceUntilCmd cmd;
+	cmd.a = 1;
+	cmd.b = 2;
+
+	auto test = cmd;
 	enforceWireVersionConstraints(test, WireVersion.v32);
 	assert(test.a.isNull);
 	assert(test.b.isNull);
+}
 
-	test = cmd;
+/// @since preserves field when server version meets minimum
+@safe unittest
+{
+	SinceUntilCmd cmd;
+	cmd.a = 1;
+	cmd.b = 2;
+
+	auto test = cmd;
 	enforceWireVersionConstraints(test, WireVersion.v34);
 	assert(!test.a.isNull);
 	assert(test.b.isNull);
+}
+
+/// @errorBefore throws when field is set and server version is below threshold
+@safe unittest
+{
+	ErrorBeforeCmd cmd;
+	cmd.field = 42;
+	try {
+		enforceWireVersionConstraints(cmd, WireVersion.v40);
+		assert(false, "Should have thrown");
+	} catch (MongoException e) {
+		// expected
+	}
+}
+
+/// @errorBefore does not throw when field is set and server version is at threshold
+@safe unittest
+{
+	ErrorBeforeCmd cmd;
+	cmd.field = 42;
+	enforceWireVersionConstraints(cmd, WireVersion.v44);
+	assert(!cmd.field.isNull);
+}
+
+/// @errorBefore does not throw when field is set and server version is above threshold
+@safe unittest
+{
+	ErrorBeforeCmd cmd;
+	cmd.field = 42;
+	enforceWireVersionConstraints(cmd, WireVersion.v60);
+	assert(!cmd.field.isNull);
+}
+
+/// @errorBefore does not throw when field is not set
+@safe unittest
+{
+	ErrorBeforeCmd cmd;
+	enforceWireVersionConstraints(cmd, WireVersion.v30);
+	assert(cmd.field.isNull);
+}
+
+/// @deprecatedSince preserves field and only logs at deprecated version
+@safe unittest
+{
+	DeprecatedCmd cmd;
+	cmd.oldField = 10;
+	enforceWireVersionConstraints(cmd, WireVersion.v40);
+	assert(!cmd.oldField.isNull);
+	assert(cmd.oldField.get == 10);
+}
+
+/// @deprecatedSince preserves field above deprecated version
+@safe unittest
+{
+	DeprecatedCmd cmd;
+	cmd.oldField = 10;
+	enforceWireVersionConstraints(cmd, WireVersion.v60);
+	assert(!cmd.oldField.isNull);
+}
+
+/// @deprecatedSince preserves field below deprecated version without warning
+@safe unittest
+{
+	DeprecatedCmd cmd;
+	cmd.oldField = 10;
+	enforceWireVersionConstraints(cmd, WireVersion.v36);
+	assert(!cmd.oldField.isNull);
+}
+
+/// @deprecatedSince does nothing when field is not set
+@safe unittest
+{
+	DeprecatedCmd cmd;
+	enforceWireVersionConstraints(cmd, WireVersion.v60);
+	assert(cmd.oldField.isNull);
+}
+
+/// Combined UDAs: @errorBefore throws while @since and @deprecatedSince still apply
+@safe unittest
+{
+	CombinedCmd cmd;
+	cmd.allowDiskUse = true;
+	cmd.maxAwaitTimeMS = 5000;
+	cmd.maxScan = 100;
+
+	auto t1 = cmd;
+	try {
+		enforceWireVersionConstraints(t1, WireVersion.v30);
+		assert(false, "Should have thrown due to errorBefore(v44)");
+	} catch (MongoException e) {
+		// expected
+	}
+}
+
+/// Combined UDAs: all fields valid at v44, @deprecatedSince only logs
+@safe unittest
+{
+	CombinedCmd cmd;
+	cmd.allowDiskUse = true;
+	cmd.maxAwaitTimeMS = 5000;
+	cmd.maxScan = 100;
+
+	enforceWireVersionConstraints(cmd, WireVersion.v44);
+	assert(!cmd.allowDiskUse.isNull);
+	assert(!cmd.maxAwaitTimeMS.isNull);
+	assert(!cmd.maxScan.isNull);
+}
+
+/// Combined UDAs: @since nullifies field below minimum while others are independent
+@safe unittest
+{
+	SinceDeprecatedCmd cmd;
+	cmd.maxAwaitTimeMS = 5000;
+	cmd.maxScan = 100;
+
+	enforceWireVersionConstraints(cmd, WireVersion.v30);
+	assert(cmd.maxAwaitTimeMS.isNull);
+	assert(!cmd.maxScan.isNull);
+}
+
+/// Combined UDAs: @since preserves field at sufficient version
+@safe unittest
+{
+	SinceDeprecatedCmd cmd;
+	cmd.maxAwaitTimeMS = 5000;
+	cmd.maxScan = 100;
+
+	enforceWireVersionConstraints(cmd, WireVersion.v34);
+	assert(!cmd.maxAwaitTimeMS.isNull);
+	assert(!cmd.maxScan.isNull);
 }
