@@ -1653,10 +1653,10 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				returnHeaders();
 				res.writeBody(cast(ubyte[])null);
 			} else static if (isInputStream!RT) {
-				returnHeaders();
 				auto ret = evaluateOutputModifiers!CFunc(
 						__traits(getMember, inst, Method)(params), req, res);
-				res.headers["Content-Type"] = "application/octet-stream";
+				returnHeaders();
+				res.headers["Content-Type"] = res.headers.get("Content-Type", "application/octet-stream");
 				ret.pipe(res.bodyWriter);
 			} else {
 				// TODO: remove after deprecation period
