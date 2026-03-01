@@ -232,6 +232,11 @@ void testEmptyCollectionBehavior(MongoClient client)
 	auto coll = client.getCollection("test.empty_coll");
 	coll.drop();
 
+	// Create then empty the collection so it physically exists on the server.
+	// estimatedDocumentCount uses $collStats which requires an existing collection.
+	coll.insertOne(["_placeholder": true]);
+	coll.deleteAll();
+
 	// find on empty collection returns empty cursor
 	auto cursor = coll.find(Bson.emptyObject);
 	assert(cursor.empty);
