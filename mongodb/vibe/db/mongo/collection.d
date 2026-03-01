@@ -1235,7 +1235,13 @@ struct MongoCollection {
 
 		CMD cmd;
 		cmd.drop = m_name;
-		database.runCommandChecked(cmd);
+		auto reply = database.runCommandUnchecked(cmd);
+		if (reply["ok"].get!double != 1.0) {
+			auto code = reply["code"].opt!int(0);
+			if (code != 26) // NamespaceNotFound
+				throw new MongoDriverException(
+					"command failed: " ~ reply["errmsg"].opt!string("(no message)"));
+		}
 	}
 }
 

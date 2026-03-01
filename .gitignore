@@ -35,6 +35,9 @@ tests/*/tests
 __test__*__
 vibe-d-test*
 vibe-d-*-test*
+tests/mongodb/collection/tests
+tests/mongodb/cursor/tests
+tests/mongodb/insert-remove-aggregate/tests
 
 # Examples
 examples/*/*-example
