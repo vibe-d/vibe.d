@@ -8,6 +8,7 @@ import vibe.appmain;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.core.stream : InputStreamProxy;
+import vibe.stream.memory;
 import vibe.data.json;
 import vibe.http.router;
 import vibe.http.server;
@@ -562,6 +563,34 @@ class Example8 : Example8API
 	}
 }
 
+/* --------- EXAMPLE 9 ---------- */
+
+/*
+ * This example shows how to return data from a rest endpoint and setting the
+ * Content-Type. If and only if the return type is a vibe.d InputStream, which
+ * MemoryStream is, assigning the Content-Type via out variable will work.
+ */
+@rootPathFromName
+interface Example9API
+{
+	@safe:
+
+	// The parameter is the name of the field in the header,
+	MemoryStream getImage(out @viaHeader("Content-Type") string contentType);
+}
+
+class Example9 : Example9API
+{
+override:
+	MemoryStream getImage(out string contentType)
+	{
+		contentType = "image/jpeg";
+		return () @trusted {
+			return createMemoryStream(cast(ubyte[])"Hello World", false);
+		}();
+	}
+}
+
 unittest
 {
 	auto router = new URLRouter;
@@ -749,6 +778,17 @@ void runTests(string url)
 		assert(api.getEnum(Example8API.E.bar) == Example8API.E.foo);
 		assert(api.getEnum(Example8API.E.baz) == Example8API.E.bar);
 	}
+
+	// Example 9
+	{
+		import vibe.http.client : requestHTTP;
+
+		auto res = requestHTTP(url ~ "/example9_api/image");
+		assert(res.statusCode == 200);
+		string rslt = res.bodyReader.readAllUTF8();
+		assert(rslt == "Hello World", rslt);
+		assert(res.headers["Content-Type"] == "image/jpeg", res.headers["Content-Type"]);
+	}
 }
 
 shared static this()
@@ -765,6 +805,7 @@ shared static this()
 	registerRestInterface(routes, new Example6());
 	registerRestInterface(routes, new Example7());
 	registerRestInterface(routes, new Example8());
+	registerRestInterface(routes, new Example9());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 0;
