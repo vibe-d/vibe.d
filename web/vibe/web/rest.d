@@ -2626,7 +2626,7 @@ unittest {
 }
 
 // Reject unattributed / @queryParam or @bodyParam ref / out parameters
-unittest {
+deprecated unittest {
 	interface QueryRef {
 		@queryParam("auth", "auth")
 		string getData(ref string auth);
