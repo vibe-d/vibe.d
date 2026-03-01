@@ -276,10 +276,9 @@ void testAggregationPipeline(MongoClient client)
 	coll.insertOne(Bson(["category": Bson("B"), "value": Bson(40L)]));
 	coll.insertOne(Bson(["category": Bson("B"), "value": Bson(50L)]));
 
-	// $group stage with $sum accumulator
-	auto grouped = coll.aggregate(
-		["$group": Bson(["_id": Bson("$category"), "total": Bson(["$sum": Bson("$value")])])]
-	).get!(Bson[]);
+	// $group stage with $sum accumulator (use Bson[] pipeline for cursor-based overload)
+	Bson[] groupPipeline = [Bson(["$group": Bson(["_id": Bson("$category"), "total": Bson(["$sum": Bson("$value")])])])];
+	auto grouped = coll.aggregate(groupPipeline, AggregateOptions.init).array;
 	assert(grouped.length == 2);
 
 	// Verify group totals by looking up each category
@@ -292,9 +291,8 @@ void testAggregationPipeline(MongoClient client)
 	assert(totalB == 120);
 
 	// $project stage
-	auto projected = coll.aggregate(
-		["$project": Bson(["category": Bson(1), "_id": Bson(0)])]
-	).get!(Bson[]);
+	Bson[] projectPipeline = [Bson(["$project": Bson(["category": Bson(1), "_id": Bson(0)])])];
+	auto projected = coll.aggregate(projectPipeline, AggregateOptions.init).array;
 	assert(projected.length == 5);
 	// Verify only category field present (no _id, no value)
 	foreach (doc; projected) {
@@ -318,9 +316,7 @@ void testAggregationPipeline(MongoClient client)
 	// Aggregation on empty collection
 	auto emptyColl = client.getCollection("test.agg_empty");
 	emptyColl.drop();
-	auto emptyResult = emptyColl.aggregate(
-		["$group": Bson(["_id": Bson("$category"), "total": Bson(["$sum": Bson("$value")])])]
-	).get!(Bson[]);
+	auto emptyResult = emptyColl.aggregate(groupPipeline, AggregateOptions.init).array;
 	assert(emptyResult.length == 0);
 
 	coll.drop();
