@@ -119,15 +119,56 @@ package struct ScramState
 		return buffer ? () @trusted { return assumeUnique(buffer); } () : user;
 	}
 
+	/// escapeUsername preserves plain usernames unchanged
 	unittest
 	{
 		string user = "user";
 		assert(escapeUsername(user) == user);
 		assert(escapeUsername(user) is user);
+	}
+
+	/// escapeUsername encodes commas as =2C
+	unittest
+	{
 		assert(escapeUsername("user,1") == "user=2C1");
+	}
+
+	/// escapeUsername encodes equals as =3D
+	unittest
+	{
 		assert(escapeUsername("user=1") == "user=3D1");
+	}
+
+	/// escapeUsername encodes mixed commas and equals
+	unittest
+	{
 		assert(escapeUsername("u,=ser1") == "u=2C=3Dser1");
 		assert(escapeUsername("u=se=r1") == "u=3Dse=3Dr1");
+	}
+
+	/// escapeUsername returns empty string for empty input
+	unittest
+	{
+		assert(escapeUsername("") == "");
+	}
+
+	/// escapeUsername encodes strings with only commas
+	unittest
+	{
+		assert(escapeUsername(",,") == "=2C=2C");
+	}
+
+	/// escapeUsername encodes strings with only equals
+	unittest
+	{
+		assert(escapeUsername("==") == "=3D=3D");
+	}
+
+	/// escapeUsername returns identity for plain alphanumeric strings
+	unittest
+	{
+		assert(escapeUsername("plainuser123") == "plainuser123");
+		assert(escapeUsername("plainuser123") is "plainuser123");
 	}
 
 	private static auto getClientProof(DigestType!SHA1 saltedPassword, string authMessage)
@@ -171,10 +212,9 @@ private DigestType!SHA1 pbkdf2(const ubyte[] password, const ubyte[] salt, int i
 	return current;
 }
 
+/// SCRAM-SHA-1 full authentication flow using MongoDB spec test vectors
 unittest
 {
-	// https://github.com/mongodb/specifications/blob/59390a7ab2d5c8f9c29b8af1775ff25915c44036/source/auth/auth.rst#id5
-
 	import vibe.db.mongo.settings : MongoClientSettings;
 
 	ScramState state;
@@ -186,4 +226,104 @@ unittest
 		last);
 	last = state.finalize("v=UMWeI25JD1yNYZRMpZ4VHvhZ9e0=");
 	assert(last == "", last);
+}
+
+/// SCRAM update throws on missing r= prefix in server challenge
+unittest
+{
+	import std.exception : assertThrown;
+
+	ScramState s;
+	s.createInitialRequestWithFixedNonce("user", "testnonce");
+	assertThrown!Exception(s.update("digest", "invalid_challenge"));
+}
+
+/// SCRAM update throws on missing s= field in server challenge
+unittest
+{
+	import std.exception : assertThrown;
+
+	ScramState s;
+	s.createInitialRequestWithFixedNonce("user", "testnonce");
+	assertThrown!Exception(s.update("digest", "r=testnonceServer,x=bad"));
+}
+
+/// SCRAM update throws when server nonce doesn't start with client nonce
+unittest
+{
+	import std.exception : assertThrown;
+
+	ScramState s;
+	s.createInitialRequestWithFixedNonce("user", "testnonce");
+	assertThrown!Exception(s.update("digest",
+		"r=WRONGnonceServer,s=QSXCR+Q6sek8bf92,i=4096"));
+}
+
+/// SCRAM update throws when iteration count 4095 is below minimum 4096
+unittest
+{
+	import std.exception : assertThrown;
+
+	ScramState s;
+	s.createInitialRequestWithFixedNonce("user", "testnonce");
+	assertThrown!Exception(s.update("digest",
+		"r=testnonceServer,s=QSXCR+Q6sek8bf92,i=4095"));
+}
+
+/// SCRAM update succeeds when iteration count is exactly minimum 4096
+unittest
+{
+	import vibe.db.mongo.settings : MongoClientSettings;
+
+	ScramState s;
+	s.createInitialRequestWithFixedNonce("user", "testnonce");
+	auto digest = MongoClientSettings.makeDigest("user", "pencil");
+	s.update(digest, "r=testnonceServer,s=QSXCR+Q6sek8bf92,i=4096");
+}
+
+// Test vectors from the MongoDB SCRAM-SHA-1 specification:
+// https://github.com/mongodb/specifications/blob/59390a7ab2d5c8f9c29b8af1775ff25915c44036/source/auth/auth.rst#id5
+// Nonce, salt, iteration count, and server response are all from that spec.
+version (unittest)
+{
+	private enum scramTestNonce = "fyko+d2lbbFgONRv9qkxdawL";
+	private enum scramTestChallenge =
+		"r=fyko+d2lbbFgONRv9qkxdawLHo+Vgk7qvUOKUwuWLIWg4l/9SraGMHEE,s=rQ9ZY3MntBeuP3E1TDVC4w==,i=10000";
+
+	private ScramState createScramStateForFinalize()
+	{
+		import vibe.db.mongo.settings : MongoClientSettings;
+
+		ScramState s;
+		s.createInitialRequestWithFixedNonce("user", scramTestNonce);
+		s.update(MongoClientSettings.makeDigest("user", "pencil"), scramTestChallenge);
+		return s;
+	}
+}
+
+/// SCRAM finalize throws when response doesn't start with "v="
+unittest
+{
+	import std.exception : assertThrown;
+
+	auto s = createScramStateForFinalize();
+	assertThrown!Exception(s.finalize("invalid_format"));
+}
+
+/// SCRAM finalize throws on wrong server signature value
+unittest
+{
+	import std.exception : assertThrown;
+
+	auto s = createScramStateForFinalize();
+	assertThrown!Exception(s.finalize("v=AAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
+}
+
+/// SCRAM finalize throws when response is too short
+unittest
+{
+	import std.exception : assertThrown;
+
+	auto s = createScramStateForFinalize();
+	assertThrown!Exception(s.finalize("v"));
 }

@@ -9,6 +9,7 @@ import vibe.data.bson;
 import vibe.db.mongo.mongo;
 
 import std.algorithm : all, canFind, equal, map, sort;
+import std.array : array;
 import std.conv : to;
 import std.encoding : sanitize;
 import std.exception : assertThrown;
@@ -104,6 +105,10 @@ void runTest(ushort port)
 	assert(d == ["bar", "foo"]);
 
 	testIndexInsert(client);
+	testUpdateOperations(client);
+	testDeleteOperations(client);
+	testEmptyCollectionBehavior(client);
+	testAggregationPipeline(client);
 }
 
 void testIndexInsert(MongoClient client)
@@ -144,6 +149,182 @@ void testIndexInsert(MongoClient client)
 	])));
 
 	assert(coll.estimatedDocumentCount == 3);
+}
+
+void testUpdateOperations(MongoClient client)
+{
+	auto coll = client.getCollection("test.update_ops");
+	coll.deleteAll();
+
+	coll.insertOne(Bson(["name": Bson("Alice"), "score": Bson(100L)]));
+	coll.insertOne(Bson(["name": Bson("Bob"), "score": Bson(200L)]));
+	coll.insertOne(Bson(["name": Bson("Charlie"), "score": Bson(150L)]));
+
+	// updateOne with $set
+	auto res = coll.updateOne(["name": "Alice"], ["$set": Bson(["score": Bson(110L)])]);
+	assert(res.matchedCount == 1);
+	assert(res.modifiedCount == 1);
+	assert(coll.findOne(["name": "Alice"])["score"].get!long == 110);
+
+	// updateOne with $inc
+	coll.updateOne(["name": "Bob"], ["$inc": Bson(["score": Bson(50L)])]);
+	assert(coll.findOne(["name": "Bob"])["score"].get!long == 250);
+
+	// updateOne with $unset
+	coll.updateOne(["name": "Charlie"], ["$unset": Bson(["score": Bson("")])]);
+	auto charlie = coll.findOne(["name": "Charlie"]);
+	assert(charlie["score"].type == Bson.Type.null_);
+
+	// updateMany - update all documents
+	auto manyRes = coll.updateMany(Bson.emptyObject, ["$set": Bson(["active": Bson(true)])]);
+	assert(manyRes.matchedCount == 3);
+	assert(manyRes.modifiedCount == 3);
+
+	// updateOne with upsert on non-existing document
+	UpdateOptions upsertOpts;
+	upsertOpts.upsert = true;
+	coll.updateOne(["name": "Dave"], ["$set": Bson(["name": Bson("Dave"), "score": Bson(99L)])], upsertOpts);
+	assert(!coll.findOne(["name": "Dave"]).isNull());
+
+	// updateOne matching nothing (no upsert)
+	res = coll.updateOne(["name": "NoSuchPerson"], ["$set": Bson(["score": Bson(0L)])]);
+	assert(res.matchedCount == 0);
+	assert(res.modifiedCount == 0);
+
+	coll.drop();
+}
+
+void testDeleteOperations(MongoClient client)
+{
+	auto coll = client.getCollection("test.delete_ops");
+	coll.deleteAll();
+
+	coll.insertOne(["key": "a"]);
+	coll.insertOne(["key": "b"]);
+	coll.insertOne(["key": "b"]);
+	coll.insertOne(["key": "c"]);
+
+	// deleteOne removes exactly one matching document
+	auto res = coll.deleteOne(["key": "b"]);
+	assert(res.deletedCount == 1);
+	assert(coll.countDocuments(["key": "b"]) == 1);
+
+	// deleteMany removes all matching documents
+	coll.insertOne(["key": "b"]);
+	res = coll.deleteMany(["key": "b"]);
+	assert(res.deletedCount == 2);
+	assert(coll.countDocuments(["key": "b"]) == 0);
+
+	// deleteOne with no match
+	res = coll.deleteOne(["key": "nonexistent"]);
+	assert(res.deletedCount == 0);
+
+	// deleteAll empties collection
+	assert(coll.countDocuments(Bson.emptyObject) > 0);
+	coll.deleteAll();
+	assert(coll.countDocuments(Bson.emptyObject) == 0);
+
+	coll.drop();
+}
+
+void testEmptyCollectionBehavior(MongoClient client)
+{
+	auto coll = client.getCollection("test.empty_coll");
+	coll.drop();
+
+	// Create then empty the collection so it physically exists on the server.
+	// estimatedDocumentCount uses $collStats which requires an existing collection.
+	coll.insertOne(["_placeholder": true]);
+	coll.deleteAll();
+
+	// find on empty collection returns empty cursor
+	auto cursor = coll.find(Bson.emptyObject);
+	assert(cursor.empty);
+
+	// findOne on empty collection returns null Bson
+	assert(coll.findOne(Bson.emptyObject).isNull());
+
+	// countDocuments on empty collection returns 0
+	assert(coll.countDocuments(Bson.emptyObject) == 0);
+
+	// estimatedDocumentCount on empty collection returns 0
+	assert(coll.estimatedDocumentCount() == 0);
+
+	// updateOne on empty collection matches nothing
+	auto ures = coll.updateOne(["key": "x"], ["$set": Bson(["key": Bson("y")])]);
+	assert(ures.matchedCount == 0);
+	assert(ures.modifiedCount == 0);
+
+	// updateMany on empty collection matches nothing
+	ures = coll.updateMany(Bson.emptyObject, ["$set": Bson(["key": Bson("y")])]);
+	assert(ures.matchedCount == 0);
+
+	// deleteOne on empty collection deletes nothing
+	auto dres = coll.deleteOne(["key": "x"]);
+	assert(dres.deletedCount == 0);
+
+	// deleteMany on empty collection deletes nothing
+	dres = coll.deleteMany(Bson.emptyObject);
+	assert(dres.deletedCount == 0);
+
+	coll.drop();
+}
+
+void testAggregationPipeline(MongoClient client)
+{
+	auto coll = client.getCollection("test.agg_pipeline");
+	coll.drop();
+
+	coll.insertOne(Bson(["category": Bson("A"), "value": Bson(10L)]));
+	coll.insertOne(Bson(["category": Bson("A"), "value": Bson(20L)]));
+	coll.insertOne(Bson(["category": Bson("B"), "value": Bson(30L)]));
+	coll.insertOne(Bson(["category": Bson("B"), "value": Bson(40L)]));
+	coll.insertOne(Bson(["category": Bson("B"), "value": Bson(50L)]));
+
+	// $group stage with $sum accumulator (use Bson[] pipeline for cursor-based overload)
+	Bson[] groupPipeline = [Bson(["$group": Bson(["_id": Bson("$category"), "total": Bson(["$sum": Bson("$value")])])])];
+	auto grouped = coll.aggregate(groupPipeline, AggregateOptions.init).array;
+	assert(grouped.length == 2);
+
+	// Verify group totals by looking up each category
+	long totalA, totalB;
+	foreach (doc; grouped) {
+		if (doc["_id"].get!string == "A") totalA = doc["total"].get!long;
+		if (doc["_id"].get!string == "B") totalB = doc["total"].get!long;
+	}
+	assert(totalA == 30);
+	assert(totalB == 120);
+
+	// $project stage
+	Bson[] projectPipeline = [Bson(["$project": Bson(["category": Bson(1), "_id": Bson(0)])])];
+	auto projected = coll.aggregate(projectPipeline, AggregateOptions.init).array;
+	assert(projected.length == 5);
+	// Verify only category field present (no _id, no value)
+	foreach (doc; projected) {
+		auto keys = doc.get!(Bson[string]).byKey.array;
+		assert(keys.canFind("category"));
+		assert(!keys.canFind("_id"));
+		assert(!keys.canFind("value"));
+	}
+
+	// countDocuments with skip and limit
+	CountOptions countOpts;
+	countOpts.skip = 1L;
+	countOpts.limit = 2L;
+	assert(coll.countDocuments(["category": "B"], countOpts) == 2);
+
+	// countDocuments with skip exceeding match count
+	CountOptions skipAllOpts;
+	skipAllOpts.skip = 100L;
+	assert(coll.countDocuments(["category": "B"], skipAllOpts) == 0);
+
+	// Aggregation on empty collection
+	auto emptyColl = client.getCollection("test.agg_empty");
+	emptyColl.drop();
+	auto emptyResult = emptyColl.aggregate(groupPipeline, AggregateOptions.init).array;
+	assert(emptyResult.length == 0);
+
+	coll.drop();
 }
 
 int main(string[] args)

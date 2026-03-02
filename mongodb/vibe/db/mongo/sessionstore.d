@@ -221,13 +221,65 @@ private string unescape(string key)
 	return ret.data;
 }
 
+/// escape/unescape round-trips plain alphanumeric string
 @safe unittest {
-	void test(string raw, string enc) {
-		assert(escape(raw) == enc);
-		assert(unescape(enc) == raw);
-	}
-	test("foo", "f_foo");
-	test("foo.bar", "f_foo+2Ebar");
-	test("foo+bar", "f_foo+2Bbar");
+	assert(escape("foo") == "f_foo");
+	assert(unescape("f_foo") == "foo");
+}
+
+/// escape/unescape round-trips string with dot
+@safe unittest {
+	assert(escape("foo.bar") == "f_foo+2Ebar");
+	assert(unescape("f_foo+2Ebar") == "foo.bar");
+}
+
+/// escape/unescape round-trips string with plus
+@safe unittest {
+	assert(escape("foo+bar") == "f_foo+2Bbar");
+	assert(unescape("f_foo+2Bbar") == "foo+bar");
+}
+
+/// escape/unescape round-trips empty string
+@safe unittest {
+	assert(escape("") == "f_");
+	assert(unescape("f_") == "");
+}
+
+/// escape/unescape round-trips all alphanumeric without escaping
+@safe unittest {
+	assert(escape("abcXYZ123") == "f_abcXYZ123");
+	assert(unescape("f_abcXYZ123") == "abcXYZ123");
+}
+
+/// escape/unescape round-trips underscores and hyphens without escaping
+@safe unittest {
+	assert(escape("foo_bar-baz") == "f_foo_bar-baz");
+	assert(unescape("f_foo_bar-baz") == "foo_bar-baz");
+}
+
+/// escape/unescape round-trips multiple dots
+@safe unittest {
+	assert(escape("a.b.c.d") == "f_a+2Eb+2Ec+2Ed");
+	assert(unescape("f_a+2Eb+2Ec+2Ed") == "a.b.c.d");
+}
+
+/// escape/unescape round-trips space character
+@safe unittest {
+	assert(escape(" ") == "f_+20");
+	assert(unescape("f_+20") == " ");
+}
+
+/// escape/unescape round-trips at sign, equals, and slash
+@safe unittest {
+	assert(escape("key@host") == "f_key+40host");
+	assert(unescape("f_key+40host") == "key@host");
+	assert(escape("key=val") == "f_key+3Dval");
+	assert(escape("key/path") == "f_key+2Fpath");
+}
+
+/// escape/unescape round-trips mixed safe and unsafe characters
+@safe unittest {
+	assert(escape("a.b_c-d+e") == "f_a+2Eb_c-d+2Be");
+	assert(unescape("f_a+2Eb_c-d+2Be") == "a.b_c-d+e");
 }
 

@@ -1143,6 +1143,52 @@ enum WireVersion : int
 	v60 = 17
 }
 
+/// satisfiesVersion returns true for versions up to maxWireVersion v36
+@safe unittest
+{
+	ServerDescription desc;
+	desc.maxWireVersion = WireVersion.v36;
+	assert(desc.satisfiesVersion(WireVersion.old));
+	assert(desc.satisfiesVersion(WireVersion.v26));
+	assert(desc.satisfiesVersion(WireVersion.v30));
+	assert(desc.satisfiesVersion(WireVersion.v34));
+	assert(desc.satisfiesVersion(WireVersion.v36));
+	assert(!desc.satisfiesVersion(WireVersion.v40));
+	assert(!desc.satisfiesVersion(WireVersion.v44));
+	assert(!desc.satisfiesVersion(WireVersion.v60));
+}
+
+/// satisfiesVersion with maxWireVersion old only satisfies old
+@safe unittest
+{
+	ServerDescription oldServer;
+	oldServer.maxWireVersion = WireVersion.old;
+	assert(oldServer.satisfiesVersion(WireVersion.old));
+	assert(!oldServer.satisfiesVersion(WireVersion.v26));
+	assert(!oldServer.satisfiesVersion(WireVersion.v30));
+}
+
+/// satisfiesVersion with maxWireVersion v60 satisfies all versions
+@safe unittest
+{
+	ServerDescription latestServer;
+	latestServer.maxWireVersion = WireVersion.v60;
+	assert(latestServer.satisfiesVersion(WireVersion.old));
+	assert(latestServer.satisfiesVersion(WireVersion.v36));
+	assert(latestServer.satisfiesVersion(WireVersion.v44));
+	assert(latestServer.satisfiesVersion(WireVersion.v60));
+}
+
+/// Default-initialized ServerDescription has maxWireVersion 0 and unknown type
+@safe unittest
+{
+	ServerDescription def;
+	assert(def.maxWireVersion == 0);
+	assert(def.type == ServerDescription.ServerType.unknown);
+	assert(def.satisfiesVersion(WireVersion.old));
+	assert(!def.satisfiesVersion(WireVersion.v26));
+}
+
 private string getHostArchitecture()
 {
 	import os = std.system;

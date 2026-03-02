@@ -209,7 +209,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	return true;
 }
 
-/* Test for parseMongoDBUrl */
+/// parseMongoDBUrl parses minimal localhost URL with all defaults
 unittest
 {
 	MongoClientSettings cfg;
@@ -229,31 +229,43 @@ unittest
 	assert(cfg.socketTimeoutMS == long.init);
 	assert(cfg.ssl == bool.init);
 	assert(cfg.sslverifycertificate == true);
+}
 
-	cfg = MongoClientSettings.init;
+/// parseMongoDBUrl parses URL with username and password
+unittest
+{
+	MongoClientSettings cfg;
+
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:foobar@localhost"));
 	assert(cfg.username == "fred");
-	//assert(cfg.password == "foobar");
 	assert(cfg.digest == MongoClientSettings.makeDigest("fred", "foobar"));
 	assert(cfg.hosts.length == 1);
 	assert(cfg.database == "");
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
+}
 
-	cfg = MongoClientSettings.init;
+/// parseMongoDBUrl parses URL with empty password and database
+unittest
+{
+	MongoClientSettings cfg;
+
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:@localhost/baz"));
 	assert(cfg.username == "fred");
-	//assert(cfg.password == "");
 	assert(cfg.digest == MongoClientSettings.makeDigest("fred", ""));
 	assert(cfg.database == "baz");
 	assert(cfg.hosts.length == 1);
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
+}
 
-	cfg = MongoClientSettings.init;
+/// parseMongoDBUrl parses multi-host URL with safe, w, wtimeoutMS, ssl options
+unittest
+{
+	MongoClientSettings cfg;
+
 	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&ssl=true&sslverifycertificate=false"));
 	assert(cfg.username == "");
-	//assert(cfg.password == "");
 	assert(cfg.digest == "");
 	assert(cfg.database == "");
 	assert(cfg.hosts.length == 3);
@@ -268,13 +280,17 @@ unittest
 	assert(cfg.wTimeoutMS == 2000);
 	assert(cfg.ssl == true);
 	assert(cfg.sslverifycertificate == false);
+}
 
-	cfg = MongoClientSettings.init;
+/// parseMongoDBUrl parses full URL with credentials, multi-host with ports, database, and all options
+unittest
+{
+	MongoClientSettings cfg;
+
 	assert(parseMongoDBUrl(cfg,
 				"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
 				~ "27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
 	assert(cfg.username == "fred");
-	//assert(cfg.password == "flinstone");
 	assert(cfg.digest == MongoClientSettings.makeDigest("fred", "flinstone"));
 	assert(cfg.database == "mydb");
 	assert(cfg.hosts.length == 3);
@@ -290,26 +306,400 @@ unittest
 	assert(cfg.socketTimeoutMS == 1000);
 	assert(cfg.w == Bson("majority"));
 	assert(cfg.safe == true);
+}
 
-	// Invalid URLs - these should fail to parse
-	cfg = MongoClientSettings.init;
-	assert(! (parseMongoDBUrl(cfg, "localhost:27018")));
-	assert(! (parseMongoDBUrl(cfg, "http://blah")));
-	assert(! (parseMongoDBUrl(cfg, "mongodb://@localhost")));
-	assert(! (parseMongoDBUrl(cfg, "mongodb://:thepass@localhost")));
-	assert(! (parseMongoDBUrl(cfg, "mongodb://:badport/")));
+/// parseMongoDBUrl returns false for invalid URLs
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!(parseMongoDBUrl(cfg, "localhost:27018")));
+	assert(!(parseMongoDBUrl(cfg, "http://blah")));
+	assert(!(parseMongoDBUrl(cfg, "mongodb://@localhost")));
+	assert(!(parseMongoDBUrl(cfg, "mongodb://:thepass@localhost")));
+	assert(!(parseMongoDBUrl(cfg, "mongodb://:badport/")));
+}
+
+/// parseMongoDBUrl parses URL with special characters in password
+unittest
+{
+	MongoClientSettings cfg;
 
 	assert(parseMongoDBUrl(cfg, "mongodb://me:sl$ash/w0+rd@localhost"));
 	assert(cfg.digest == MongoClientSettings.makeDigest("me", "sl$ash/w0+rd"));
 	assert(cfg.hosts.length == 1);
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
+}
+
+/// parseMongoDBUrl parses URL with special characters in password and database
+unittest
+{
+	MongoClientSettings cfg;
+
 	assert(parseMongoDBUrl(cfg, "mongodb://me:sl$ash/w0+rd@localhost/mydb"));
 	assert(cfg.digest == MongoClientSettings.makeDigest("me", "sl$ash/w0+rd"));
 	assert(cfg.database == "mydb");
 	assert(cfg.hosts.length == 1);
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
+}
+
+/// parseMongoDBUrl parses authMechanism=SCRAM-SHA-1
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://user:pass@localhost/?authMechanism=SCRAM-SHA-1"));
+	assert(cfg.authMechanism == MongoAuthMechanism.scramSHA1);
+}
+
+/// parseMongoDBUrl parses authMechanism=MONGODB-CR
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://user:pass@localhost/?authMechanism=MONGODB-CR"));
+	assert(cfg.authMechanism == MongoAuthMechanism.mongoDBCR);
+}
+
+/// parseMongoDBUrl parses authMechanism=MONGODB-X509
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://user:pass@localhost/?authMechanism=MONGODB-X509"));
+	assert(cfg.authMechanism == MongoAuthMechanism.mongoDBX509);
+}
+
+/// parseMongoDBUrl throws on invalid authMechanism
+unittest
+{
+	import std.exception : assertThrown;
+
+	MongoClientSettings cfg;
+
+	assertThrown!Exception(parseMongoDBUrl(cfg, "mongodb://user:pass@localhost/?authMechanism=INVALID"));
+}
+
+/// parseMongoDBUrl parses authSource overriding database for getAuthDatabase
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://user:pass@localhost/mydb?authSource=admin"));
+	assert(cfg.authSource == "admin");
+	assert(cfg.getAuthDatabase() == "admin");
+}
+
+/// parseMongoDBUrl parses appName option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?appName=myApp"));
+	assert(cfg.appName == "myApp");
+}
+
+/// parseMongoDBUrl parses replicaSet option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0"));
+	assert(cfg.replicaSet == "rs0");
+}
+
+/// parseMongoDBUrl parses tls=true as ssl alias
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?tls=true"));
+	assert(cfg.ssl == true);
+}
+
+/// parseMongoDBUrl parses tls=false as ssl alias
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?tls=false"));
+	assert(cfg.ssl == false);
+}
+
+/// parseMongoDBUrl parses connectTimeoutMS
+unittest
+{
+	import core.time : msecs;
+
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?connectTimeoutMS=5000"));
+	assert(cfg.connectTimeout == 5000.msecs);
+	assert(cfg.connectTimeoutMS == 5000);
+}
+
+/// parseMongoDBUrl parses socketTimeoutMS
+unittest
+{
+	import core.time : msecs;
+
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?socketTimeoutMS=3000"));
+	assert(cfg.socketTimeout == 3000.msecs);
+	assert(cfg.socketTimeoutMS == 3000);
+}
+
+/// parseMongoDBUrl parses w=1 as integer write concern
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?w=1"));
+	assert(cfg.w == Bson(1L));
+}
+
+/// parseMongoDBUrl parses w=majority as string write concern
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?w=majority"));
+	assert(cfg.w == Bson("majority"));
+}
+
+/// parseMongoDBUrl sets safe=true when journal=true
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?journal=true"));
+	assert(cfg.journal == true);
+	assert(cfg.safe == true);
+}
+
+/// parseMongoDBUrl sets safe=true when fsync=true
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?fsync=true"));
+	assert(cfg.fsync == true);
+	assert(cfg.safe == true);
+}
+
+/// parseMongoDBUrl parses sslverifycertificate=false
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?sslverifycertificate=false"));
+	assert(cfg.sslverifycertificate == false);
+}
+
+/// parseMongoDBUrl parses multiple combined options
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?appName=test&replicaSet=rs1&ssl=true&authSource=admin"));
+	assert(cfg.appName == "test");
+	assert(cfg.replicaSet == "rs1");
+	assert(cfg.ssl == true);
+	assert(cfg.authSource == "admin");
+}
+
+/// parseMongoDBUrl parses URL with database and no options
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/mydb"));
+	assert(cfg.database == "mydb");
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
+}
+
+/// parseMongoDBUrl parses URL with database and trailing empty query string
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/mydb?"));
+	assert(cfg.database == "mydb");
+}
+
+/// parseMongoDBUrl parses URL with no database but with options
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?safe=true"));
+	assert(cfg.database == "");
+	assert(cfg.safe == true);
+}
+
+/// parseMongoDBUrl parses explicit non-default port
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost:27018"));
+	assert(cfg.hosts[0].port == 27018);
+}
+
+/// parseMongoDBUrl parses minimum valid port 1
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost:1"));
+	assert(cfg.hosts[0].port == 1);
+}
+
+/// parseMongoDBUrl parses maximum valid port 65535
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost:65535"));
+	assert(cfg.hosts[0].port == 65535);
+}
+
+/// parseMongoDBUrl parses port 0
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost:0"));
+	assert(cfg.hosts[0].port == 0);
+}
+
+/// parseMongoDBUrl returns false for port exceeding ushort range
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost:65536"));
+}
+
+/// parseMongoDBUrl returns false for non-numeric port
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost:abc"));
+}
+
+/// getAuthDatabase returns authSource when set
+unittest
+{
+	auto cfg = new MongoClientSettings();
+	cfg.authSource = "external";
+	cfg.database = "mydb";
+	assert(cfg.getAuthDatabase() == "external");
+}
+
+/// getAuthDatabase returns database when authSource is empty
+unittest
+{
+	auto cfg = new MongoClientSettings();
+	cfg.database = "mydb";
+	assert(cfg.getAuthDatabase() == "mydb");
+}
+
+/// getAuthDatabase returns "admin" when both authSource and database are empty
+unittest
+{
+	auto cfg = new MongoClientSettings();
+	assert(cfg.getAuthDatabase() == "admin");
+}
+
+/// makeDigest produces deterministic output for same inputs
+unittest
+{
+	assert(MongoClientSettings.makeDigest("user", "pass") ==
+	       MongoClientSettings.makeDigest("user", "pass"));
+}
+
+/// makeDigest produces different output for different passwords
+unittest
+{
+	assert(MongoClientSettings.makeDigest("user", "pass1") !=
+	       MongoClientSettings.makeDigest("user", "pass2"));
+}
+
+/// makeDigest produces different output for different usernames
+unittest
+{
+	assert(MongoClientSettings.makeDigest("user1", "pass") !=
+	       MongoClientSettings.makeDigest("user2", "pass"));
+}
+
+/// connectTimeoutMS defaults to 10000 and round-trips through Duration
+unittest
+{
+	import core.time : msecs, seconds;
+
+	auto cfg = new MongoClientSettings();
+
+	assert(cfg.connectTimeoutMS == 10_000);
+	assert(cfg.connectTimeout == 10.seconds);
+
+	cfg.connectTimeoutMS = 2500;
+	assert(cfg.connectTimeout == 2500.msecs);
+	assert(cfg.connectTimeoutMS == 2500);
+
+	cfg.connectTimeout = 7.seconds;
+	assert(cfg.connectTimeoutMS == 7000);
+}
+
+/// socketTimeoutMS defaults to 0 and round-trips through Duration
+unittest
+{
+	import core.time : msecs;
+
+	auto cfg = new MongoClientSettings();
+
+	assert(cfg.socketTimeoutMS == 0);
+
+	cfg.socketTimeoutMS = 5000;
+	assert(cfg.socketTimeout == 5000.msecs);
+	assert(cfg.socketTimeoutMS == 5000);
+}
+
+/// authenticatePassword sets username and digest
+unittest
+{
+	auto cfg = new MongoClientSettings();
+
+	cfg.authenticatePassword("fred", "secret");
+	assert(cfg.username == "fred");
+	assert(cfg.digest == MongoClientSettings.makeDigest("fred", "secret"));
+}
+
+/// authenticateSSL sets ssl, username, PEM key file, and CA file
+unittest
+{
+	auto cfg = new MongoClientSettings();
+
+	cfg.authenticateSSL("CN=client", "/path/to/cert.pem", "/path/to/ca.pem");
+	assert(cfg.ssl == true);
+	assert(cfg.username == "CN=client");
+	assert(cfg.digest is null);
+	assert(cfg.sslPEMKeyFile == "/path/to/cert.pem");
+	assert(cfg.sslCAFile == "/path/to/ca.pem");
+}
+
+/// authenticateSSL without CA file sets sslCAFile to null
+unittest
+{
+	auto cfg = new MongoClientSettings();
+
+	cfg.authenticateSSL("CN=client2", "/path/to/cert2.pem");
+	assert(cfg.sslCAFile is null);
 }
 
 /**
