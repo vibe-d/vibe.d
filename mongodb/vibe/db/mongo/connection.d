@@ -302,39 +302,69 @@ final class MongoConnection {
 			break;
 		}
 
-		logInfo("Connected to: %s master=%s secondary=%s", m_description.me, m_description.ismaster, m_description.secondary);
+		logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
 	}
 
 	void connect()
 	{
-		Exception e;
+		Exception lastException;
 
 		foreach (host; m_settings.hosts) {
 			try {
 				connectToHost(host);
 			} catch(Exception ex) {
-				e = ex;
-				logError(e.msg);
+				lastException = ex;
+				logError("Failed to connect to %s:%s: %s", host.name, host.port, ex.msg);
+				continue;
 			}
 
-			if(!m_description.ismaster && m_description.secondary) {
-				logInfo("Connected to a secondary MongoDb node. The primary is: %s", m_description.primary);
+			if (!matchesReplicaSet(m_settings.replicaSet, m_description)) {
+				disconnect();
+				continue;
+			}
 
-				auto split = m_description.primary.indexOf(":");
+			if (m_description.isPrimary)
+				return;
 
-				if(split != -1 && split < m_description.primary.length - 1) {
-					disconnect();
-					logInfo("Disconnected from the secondary MongoDb node.");
+			if (m_description.isSecondaryNode && m_description.primary.length) {
+				logInfo("Connected to secondary %s:%s, primary is: %s", host.name, host.port, m_description.primary);
+				disconnect();
 
-					connectToHost(MongoHost(m_description.primary[0..split], m_description.primary[split+1..$].to!ushort));
-					return;
+				auto primaryHost = parseHostPort(m_description.primary);
+				if (primaryHost == MongoHost.init) {
+					logWarn("Could not parse primary address '%s'", m_description.primary);
+					continue;
 				}
+
+				try {
+					connectToHost(primaryHost);
+
+					if (!matchesReplicaSet(m_settings.replicaSet, m_description)) {
+						disconnect();
+						continue;
+					}
+
+					if (m_description.isPrimary)
+						return;
+
+					logWarn("Host %s reported as primary but did not identify as master, disconnecting.",
+						m_description.primary);
+					disconnect();
+				} catch (Exception ex) {
+					lastException = ex;
+					logError("Failed to connect to reported primary %s: %s", m_description.primary, ex.msg);
+				}
+			} else {
+				logWarn("Connected to %s:%s which is neither primary nor has primary info, disconnecting.",
+					host.name, host.port);
+				disconnect();
 			}
 		}
 
-		if(e !is null) {
-			throw e;
-		}
+		if (lastException !is null)
+			throw lastException;
+
+		throw new MongoDriverException("Failed to connect to any MongoDB host");
 	}
 
 	void disconnect()
@@ -1144,12 +1174,28 @@ struct ServerDescription
 	string primary;
 	bool secondary;
 	bool ismaster;
+	bool isWritablePrimary;
 	string lastUpdateTime = "infinity ago";
 	Nullable!int logicalSessionTimeoutMinutes;
 
 	bool satisfiesVersion(WireVersion wireVersion) @safe const @nogc pure nothrow
 	{
 		return maxWireVersion >= wireVersion;
+	}
+
+	bool isPrimary() @safe const @nogc pure nothrow
+	{
+		return (ismaster || isWritablePrimary) && !secondary;
+	}
+
+	bool isSecondaryNode() @safe const @nogc pure nothrow
+	{
+		return secondary && !ismaster && !isWritablePrimary;
+	}
+
+	bool isReplicaSetMember() @safe const @nogc pure nothrow
+	{
+		return setName.length > 0;
 	}
 }
 
@@ -1171,6 +1217,57 @@ enum WireVersion : int
 	v52 = 15,
 	v53 = 16,
 	v60 = 17
+}
+
+/**
+ * Checks whether the server's replica set name matches the expected one.
+ * Returns true if no replica set is configured (empty string) or if
+ * the names match.
+ */
+package bool matchesReplicaSet(string expectedSet, ref const ServerDescription desc)
+@safe @nogc pure nothrow
+{
+	if (!expectedSet.length)
+		return true;
+	return desc.setName == expectedSet;
+}
+
+/// matchesReplicaSet returns true when no replica set is configured
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	assert(matchesReplicaSet("", desc));
+}
+
+/// matchesReplicaSet returns true when replica set names match
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	assert(matchesReplicaSet("rs0", desc));
+}
+
+/// matchesReplicaSet returns false when replica set names differ
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs1";
+	assert(!matchesReplicaSet("rs0", desc));
+}
+
+/// matchesReplicaSet returns false when server has no setName but one is expected
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	assert(!matchesReplicaSet("rs0", desc));
+}
+
+/// matchesReplicaSet returns true when both are empty
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	assert(matchesReplicaSet("", desc));
 }
 
 /// satisfiesVersion returns true for versions up to maxWireVersion v36
@@ -1217,6 +1314,111 @@ enum WireVersion : int
 	assert(def.type == ServerDescription.ServerType.unknown);
 	assert(def.satisfiesVersion(WireVersion.old));
 	assert(!def.satisfiesVersion(WireVersion.v26));
+}
+
+/// isPrimary returns true when ismaster=true and secondary=false
+@safe unittest
+{
+	ServerDescription desc;
+	desc.ismaster = true;
+	desc.secondary = false;
+	assert(desc.isPrimary);
+}
+
+/// isPrimary returns false when both ismaster=true and secondary=true
+@safe unittest
+{
+	ServerDescription desc;
+	desc.ismaster = true;
+	desc.secondary = true;
+	assert(!desc.isPrimary);
+}
+
+/// isPrimary returns false when ismaster=false
+@safe unittest
+{
+	ServerDescription desc;
+	desc.ismaster = false;
+	desc.secondary = false;
+	assert(!desc.isPrimary);
+}
+
+/// isPrimary returns true when isWritablePrimary=true (hello response)
+@safe unittest
+{
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.secondary = false;
+	assert(desc.isPrimary);
+}
+
+/// isPrimary returns false when isWritablePrimary=true but secondary=true
+@safe unittest
+{
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.secondary = true;
+	assert(!desc.isPrimary);
+}
+
+/// isSecondaryNode returns true when secondary=true and ismaster=false
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.ismaster = false;
+	assert(desc.isSecondaryNode);
+}
+
+/// isSecondaryNode returns false when ismaster=true
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.ismaster = true;
+	assert(!desc.isSecondaryNode);
+}
+
+/// isSecondaryNode returns false when isWritablePrimary=true
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.isWritablePrimary = true;
+	assert(!desc.isSecondaryNode);
+}
+
+/// isSecondaryNode returns false when secondary=false
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = false;
+	desc.ismaster = false;
+	assert(!desc.isSecondaryNode);
+}
+
+/// isReplicaSetMember returns true when setName is non-empty
+@safe unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	assert(desc.isReplicaSetMember);
+}
+
+/// isReplicaSetMember returns false when setName is empty
+@safe unittest
+{
+	ServerDescription desc;
+	assert(!desc.isReplicaSetMember);
+}
+
+/// Default ServerDescription is not primary, not secondary, not RS member
+@safe unittest
+{
+	ServerDescription desc;
+	assert(!desc.isPrimary);
+	assert(!desc.isSecondaryNode);
+	assert(!desc.isReplicaSetMember);
 }
 
 private string getHostArchitecture()

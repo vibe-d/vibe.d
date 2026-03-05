@@ -790,8 +790,8 @@ class MongoClientSettings
 	/**
 	 * MongoDB hosts to try to connect to.
 	 *
-	 * Bugs: currently only a connection to the first host is attempted, more
-	 * hosts are simply ignored.
+	 * When connecting to a replica set, each host is tried in order. If a
+	 * secondary is reached, the driver follows the reported primary.
 	 */
 	MongoHost[] hosts;
 
@@ -1018,4 +1018,103 @@ struct MongoHost
 	string name;
 	/// The port of the MongoDB server. See `MongoClientSettings.defaultPort`.
 	ushort port;
+
+	bool opEquals(const MongoHost other) const @safe @nogc pure nothrow
+	{
+		return name == other.name && port == other.port;
+	}
+}
+
+/**
+ * Parses a "host:port" string into a MongoHost. Returns MongoHost.init if
+ * the string cannot be parsed.
+ */
+MongoHost parseHostPort(string hostPort) @safe pure nothrow
+{
+	import std.string : indexOf;
+	import std.conv : to;
+
+	if (!hostPort.length)
+		return MongoHost.init;
+
+	auto colonIdx = hostPort.indexOf(':');
+	if (colonIdx <= 0 || colonIdx >= cast(ptrdiff_t)(hostPort.length - 1))
+		return MongoHost.init;
+
+	try {
+		return MongoHost(
+			hostPort[0 .. colonIdx],
+			hostPort[colonIdx + 1 .. $].to!ushort
+		);
+	} catch (Exception) {
+		return MongoHost.init;
+	}
+}
+
+/// parseHostPort parses valid host:port string
+@safe pure nothrow unittest
+{
+	auto host = parseHostPort("mongo1.example.com:27017");
+	assert(host.name == "mongo1.example.com");
+	assert(host.port == 27017);
+}
+
+/// parseHostPort parses non-default port
+@safe pure nothrow unittest
+{
+	auto host = parseHostPort("10.0.0.1:27018");
+	assert(host.name == "10.0.0.1");
+	assert(host.port == 27018);
+}
+
+/// parseHostPort returns init for empty string
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("") == MongoHost.init);
+}
+
+/// parseHostPort returns init for host without port
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("localhost") == MongoHost.init);
+}
+
+/// parseHostPort returns init for host with colon but no port
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("localhost:") == MongoHost.init);
+}
+
+/// parseHostPort returns init for colon-only string
+@safe pure nothrow unittest
+{
+	assert(parseHostPort(":27017") == MongoHost.init);
+}
+
+/// parseHostPort returns init for non-numeric port
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("localhost:abc") == MongoHost.init);
+}
+
+/// parseHostPort returns init for port exceeding ushort range
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("localhost:99999") == MongoHost.init);
+}
+
+/// MongoHost equality compares both name and port
+@safe pure nothrow @nogc unittest
+{
+	assert(MongoHost("a", 1) == MongoHost("a", 1));
+	assert(MongoHost("a", 1) != MongoHost("a", 2));
+	assert(MongoHost("a", 1) != MongoHost("b", 1));
+}
+
+/// MongoHost.init has empty name and port 0
+@safe pure nothrow @nogc unittest
+{
+	auto h = MongoHost.init;
+	assert(h.name == "");
+	assert(h.port == 0);
 }
