@@ -169,7 +169,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 				default: logWarn("Unknown MongoDB option %s", option); break;
 				case "appname": cfg.appName = value; break;
-				case "replicaset": cfg.replicaSet = value; warnNotImplemented(); break;
+				case "replicaset": cfg.replicaSet = value; break;
+				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
@@ -408,6 +409,34 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0"));
 	assert(cfg.replicaSet == "rs0");
+}
+
+/// parseMongoDBUrl parses readPreference option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreference=secondaryPreferred"));
+	assert(cfg.readPreference == ReadPreference.secondaryPreferred);
+}
+
+/// parseMongoDBUrl parses readPreference=primary (default)
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreference=primary"));
+	assert(cfg.readPreference == ReadPreference.primary);
+}
+
+/// parseMongoDBUrl parses readPreference combined with replicaSet
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0&readPreference=nearest"));
+	assert(cfg.replicaSet == "rs0");
+	assert(cfg.readPreference == ReadPreference.nearest);
 }
 
 /// parseMongoDBUrl parses tls=true as ssl alias
@@ -753,6 +782,41 @@ private MongoAuthMechanism parseAuthMechanism(string str)
 }
 
 /**
+ * Determines which replica set members are acceptable for read operations.
+ *
+ * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
+ */
+enum ReadPreference
+{
+	/** Route all reads to the primary. This is the default. */
+	primary,
+
+	/** Read from the primary if available, otherwise a secondary. */
+	primaryPreferred,
+
+	/** Route all reads to secondaries. */
+	secondary,
+
+	/** Read from a secondary if available, otherwise the primary. */
+	secondaryPreferred,
+
+	/** Read from the member with the lowest network latency. */
+	nearest,
+}
+
+private ReadPreference parseReadPreference(string str)
+@safe {
+	switch (str) {
+		case "primary": return ReadPreference.primary;
+		case "primaryPreferred": return ReadPreference.primaryPreferred;
+		case "secondary": return ReadPreference.secondary;
+		case "secondaryPreferred": return ReadPreference.secondaryPreferred;
+		case "nearest": return ReadPreference.nearest;
+		default: throw new Exception("Read preference \"" ~ str ~ "\" not supported");
+	}
+}
+
+/**
  * See_Also: $(LINK https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options)
  */
 class MongoClientSettings
@@ -803,11 +867,18 @@ class MongoClientSettings
 
 	/**
 	 * Specifies the name of the replica set, if the mongod is a member of a
-	 * replica set.
-	 *
-	 * Bugs: Not yet implemented
+	 * replica set. When set, the driver validates that any connected server
+	 * belongs to this replica set and discovers the primary through
+	 * secondary-to-primary chasing.
 	 */
 	string replicaSet;
+
+	/**
+	 * Specifies the read preference mode for this connection.
+	 *
+	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
+	 */
+	ReadPreference readPreference;
 
 	/**
 	 * Automatically check for errors when operating on collections and throw a
