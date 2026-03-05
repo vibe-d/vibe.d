@@ -34,6 +34,7 @@ final class MongoClient {
 
 	private {
 		ConnectionPool!MongoConnection m_connections;
+		MongoClientSettings m_settings;
 	}
 
 	package this(string host, ushort port)
@@ -62,6 +63,7 @@ final class MongoClient {
 
 	package this(MongoClientSettings settings)
 	{
+		m_settings = settings;
 		m_connections = new ConnectionPool!MongoConnection({
 				auto ret = new MongoConnection(settings);
 				try ret.connect();
@@ -80,6 +82,12 @@ final class MongoClient {
 
 		// force a connection to cause an exception for wrong URLs
 		lockConnection();
+	}
+
+	/// Returns the read preference configured for this client.
+	@property ReadPreference readPreference() const
+	{
+		return m_settings.readPreference;
 	}
 
 	/** Disconnects all currently unused connections to the server.

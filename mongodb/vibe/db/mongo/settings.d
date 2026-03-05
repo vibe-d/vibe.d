@@ -169,7 +169,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 				default: logWarn("Unknown MongoDB option %s", option); break;
 				case "appname": cfg.appName = value; break;
-				case "replicaset": cfg.replicaSet = value; warnNotImplemented(); break;
+				case "replicaset": cfg.replicaSet = value; break;
+				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
@@ -408,6 +409,34 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0"));
 	assert(cfg.replicaSet == "rs0");
+}
+
+/// parseMongoDBUrl parses readPreference option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreference=secondaryPreferred"));
+	assert(cfg.readPreference == ReadPreference.secondaryPreferred);
+}
+
+/// parseMongoDBUrl parses readPreference=primary (default)
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreference=primary"));
+	assert(cfg.readPreference == ReadPreference.primary);
+}
+
+/// parseMongoDBUrl parses readPreference combined with replicaSet
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0&readPreference=nearest"));
+	assert(cfg.replicaSet == "rs0");
+	assert(cfg.readPreference == ReadPreference.nearest);
 }
 
 /// parseMongoDBUrl parses tls=true as ssl alias
@@ -753,6 +782,41 @@ private MongoAuthMechanism parseAuthMechanism(string str)
 }
 
 /**
+ * Determines which replica set members are acceptable for read operations.
+ *
+ * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
+ */
+enum ReadPreference
+{
+	/** Route all reads to the primary. This is the default. */
+	primary,
+
+	/** Read from the primary if available, otherwise a secondary. */
+	primaryPreferred,
+
+	/** Route all reads to secondaries. */
+	secondary,
+
+	/** Read from a secondary if available, otherwise the primary. */
+	secondaryPreferred,
+
+	/** Read from the member with the lowest network latency. */
+	nearest,
+}
+
+private ReadPreference parseReadPreference(string str)
+@safe {
+	switch (str) {
+		case "primary": return ReadPreference.primary;
+		case "primaryPreferred": return ReadPreference.primaryPreferred;
+		case "secondary": return ReadPreference.secondary;
+		case "secondaryPreferred": return ReadPreference.secondaryPreferred;
+		case "nearest": return ReadPreference.nearest;
+		default: throw new Exception("Read preference \"" ~ str ~ "\" not supported");
+	}
+}
+
+/**
  * See_Also: $(LINK https://docs.mongodb.com/manual/reference/connection-string/#connections-connection-options)
  */
 class MongoClientSettings
@@ -790,8 +854,8 @@ class MongoClientSettings
 	/**
 	 * MongoDB hosts to try to connect to.
 	 *
-	 * Bugs: currently only a connection to the first host is attempted, more
-	 * hosts are simply ignored.
+	 * When connecting to a replica set, each host is tried in order. If a
+	 * secondary is reached, the driver follows the reported primary.
 	 */
 	MongoHost[] hosts;
 
@@ -803,11 +867,18 @@ class MongoClientSettings
 
 	/**
 	 * Specifies the name of the replica set, if the mongod is a member of a
-	 * replica set.
-	 *
-	 * Bugs: Not yet implemented
+	 * replica set. When set, the driver validates that any connected server
+	 * belongs to this replica set and discovers the primary through
+	 * secondary-to-primary chasing.
 	 */
 	string replicaSet;
+
+	/**
+	 * Specifies the read preference mode for this connection.
+	 *
+	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
+	 */
+	ReadPreference readPreference;
 
 	/**
 	 * Automatically check for errors when operating on collections and throw a
@@ -1018,4 +1089,103 @@ struct MongoHost
 	string name;
 	/// The port of the MongoDB server. See `MongoClientSettings.defaultPort`.
 	ushort port;
+
+	bool opEquals(const MongoHost other) const @safe @nogc pure nothrow
+	{
+		return name == other.name && port == other.port;
+	}
+}
+
+/**
+ * Parses a "host:port" string into a MongoHost. Returns MongoHost.init if
+ * the string cannot be parsed.
+ */
+MongoHost parseHostPort(string hostPort) @safe pure nothrow
+{
+	import std.string : indexOf;
+	import std.conv : to;
+
+	if (!hostPort.length)
+		return MongoHost.init;
+
+	auto colonIdx = hostPort.indexOf(':');
+	if (colonIdx <= 0 || colonIdx >= cast(ptrdiff_t)(hostPort.length - 1))
+		return MongoHost.init;
+
+	try {
+		return MongoHost(
+			hostPort[0 .. colonIdx],
+			hostPort[colonIdx + 1 .. $].to!ushort
+		);
+	} catch (Exception) {
+		return MongoHost.init;
+	}
+}
+
+/// parseHostPort parses valid host:port string
+@safe pure nothrow unittest
+{
+	auto host = parseHostPort("mongo1.example.com:27017");
+	assert(host.name == "mongo1.example.com");
+	assert(host.port == 27017);
+}
+
+/// parseHostPort parses non-default port
+@safe pure nothrow unittest
+{
+	auto host = parseHostPort("10.0.0.1:27018");
+	assert(host.name == "10.0.0.1");
+	assert(host.port == 27018);
+}
+
+/// parseHostPort returns init for empty string
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("") == MongoHost.init);
+}
+
+/// parseHostPort returns init for host without port
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("localhost") == MongoHost.init);
+}
+
+/// parseHostPort returns init for host with colon but no port
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("localhost:") == MongoHost.init);
+}
+
+/// parseHostPort returns init for colon-only string
+@safe pure nothrow unittest
+{
+	assert(parseHostPort(":27017") == MongoHost.init);
+}
+
+/// parseHostPort returns init for non-numeric port
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("localhost:abc") == MongoHost.init);
+}
+
+/// parseHostPort returns init for port exceeding ushort range
+@safe pure nothrow unittest
+{
+	assert(parseHostPort("localhost:99999") == MongoHost.init);
+}
+
+/// MongoHost equality compares both name and port
+@safe pure nothrow @nogc unittest
+{
+	assert(MongoHost("a", 1) == MongoHost("a", 1));
+	assert(MongoHost("a", 1) != MongoHost("a", 2));
+	assert(MongoHost("a", 1) != MongoHost("b", 1));
+}
+
+/// MongoHost.init has empty name and port 0
+@safe pure nothrow @nogc unittest
+{
+	auto h = MongoHost.init;
+	assert(h.name == "");
+	assert(h.port == 0);
 }
