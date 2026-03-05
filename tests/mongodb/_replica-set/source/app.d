@@ -12,14 +12,16 @@ import std.exception;
 int main(string[] args)
 {
 	bool expectFail;
+	bool expectSecondary;
 	string replicaSet;
+	string readPrefStr;
 	MongoHost[] hosts;
 
 	setLogLevel(LogLevel.diagnostic);
 
 	if (args.length < 2)
 	{
-		logError("Usage: %s <port1,port2,...> [--replicaSet <name>] [--expectFail]", args[0]);
+		logError("Usage: %s <port1,port2,...> [--replicaSet <name>] [--readPreference <pref>] [--expectFail] [--expectSecondary]", args[0]);
 		return 1;
 	}
 
@@ -34,8 +36,12 @@ int main(string[] args)
 	{
 		if (arg == "--replicaSet" && i + 1 < args[2 .. $].length)
 			replicaSet = args[2 .. $][i + 1];
+		else if (arg == "--readPreference" && i + 1 < args[2 .. $].length)
+			readPrefStr = args[2 .. $][i + 1];
 		else if (arg == "--expectFail")
 			expectFail = true;
+		else if (arg == "--expectSecondary")
+			expectSecondary = true;
 	}
 
 	auto settings = new MongoClientSettings;
@@ -45,11 +51,25 @@ int main(string[] args)
 	settings.socketTimeoutMS = 5_000;
 	settings.appName = "VibeReplicaSetTest";
 
+	if (readPrefStr.length)
+	{
+		switch (readPrefStr)
+		{
+			case "primary": settings.readPreference = ReadPreference.primary; break;
+			case "primaryPreferred": settings.readPreference = ReadPreference.primaryPreferred; break;
+			case "secondary": settings.readPreference = ReadPreference.secondary; break;
+			case "secondaryPreferred": settings.readPreference = ReadPreference.secondaryPreferred; break;
+			case "nearest": settings.readPreference = ReadPreference.nearest; break;
+			default: logError("Unknown readPreference: %s", readPrefStr); return 1;
+		}
+	}
+
 	MongoClient client;
 
 	try
 	{
-		logInfo("Connecting to %(%s, %) replicaSet=%s", hosts.map!(h => h.name ~ ":" ~ h.port.to!string), replicaSet);
+		logInfo("Connecting to %(%s, %) replicaSet=%s readPreference=%s",
+			hosts.map!(h => h.name ~ ":" ~ h.port.to!string), replicaSet, readPrefStr);
 		client = connectMongoDB(settings);
 	}
 	catch (Exception e)
@@ -69,6 +89,17 @@ int main(string[] args)
 	}
 
 	assert(client !is null);
+
+	if (expectSecondary)
+	{
+		auto status = client.getDatabase("admin").runCommand(Bson(["hello": Bson(1)]));
+		auto isSecondary = status["secondary"].get!bool;
+		auto me = status["me"].get!string;
+		logInfo("Connected to %s (secondary=%s)", me, isSecondary);
+		enforce(isSecondary, "Expected to be connected to a secondary, but connected to: " ~ me);
+		logInfo("Correctly connected to secondary %s", me);
+		return 0;
+	}
 
 	logInfo("Connection established, running CRUD smoke test");
 

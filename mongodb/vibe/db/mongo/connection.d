@@ -18,6 +18,7 @@ import vibe.core.net;
 import vibe.data.bson;
 import vibe.db.mongo.flags;
 import vibe.db.mongo.settings;
+import vibe.db.mongo.topology;
 import vibe.inet.webform;
 import vibe.stream.tls;
 
@@ -307,64 +308,88 @@ final class MongoConnection {
 
 	void connect()
 	{
+		connect(m_settings.readPreference);
+	}
+
+	void connect(ReadPreference readPreference)
+	{
+		TopologyDescription topology;
 		Exception lastException;
 
+		// Phase 1: Discover topology by probing seed hosts
 		foreach (host; m_settings.hosts) {
-			try {
-				connectToHost(host);
-			} catch(Exception ex) {
-				lastException = ex;
-				logError("Failed to connect to %s:%s: %s", host.name, host.port, ex.msg);
-				continue;
-			}
-
-			if (!matchesReplicaSet(m_settings.replicaSet, m_description)) {
-				disconnect();
-				continue;
-			}
-
-			if (m_description.isPrimary)
-				return;
-
-			if (m_description.isSecondaryNode && m_description.primary.length) {
-				logInfo("Connected to secondary %s:%s, primary is: %s", host.name, host.port, m_description.primary);
-				disconnect();
-
-				auto primaryHost = parseHostPort(m_description.primary);
-				if (primaryHost == MongoHost.init) {
-					logWarn("Could not parse primary address '%s'", m_description.primary);
-					continue;
-				}
-
-				try {
-					connectToHost(primaryHost);
-
-					if (!matchesReplicaSet(m_settings.replicaSet, m_description)) {
-						disconnect();
-						continue;
-					}
-
-					if (m_description.isPrimary)
-						return;
-
-					logWarn("Host %s reported as primary but did not identify as master, disconnecting.",
-						m_description.primary);
-					disconnect();
-				} catch (Exception ex) {
-					lastException = ex;
-					logError("Failed to connect to reported primary %s: %s", m_description.primary, ex.msg);
-				}
-			} else {
-				logWarn("Connected to %s:%s which is neither primary nor has primary info, disconnecting.",
-					host.name, host.port);
-				disconnect();
-			}
+			probeHost(topology, host, lastException);
 		}
 
-		if (lastException !is null)
-			throw lastException;
+		// Phase 2: Discover additional hosts reported by the topology
+		auto knownHosts = topology.allKnownHosts();
+		foreach (host; knownHosts) {
+			bool alreadyProbed = false;
+			foreach (ref s; topology.servers) {
+				if (s.host == host) {
+					alreadyProbed = true;
+					break;
+				}
+			}
+			if (!alreadyProbed)
+				probeHost(topology, host, lastException);
+		}
 
-		throw new MongoDriverException("Failed to connect to any MongoDB host");
+		// Phase 3: Select server based on read preference
+		auto selected = selectServer(topology, readPreference);
+
+		if (selected.isNull) {
+			if (lastException !is null)
+				throw lastException;
+			throw new MongoDriverException("No suitable server found for read preference");
+		}
+
+		// Phase 4: Connect to the selected server (may already be connected)
+		auto targetHost = selected.get;
+
+		if (!connected || !isConnectedTo(targetHost)) {
+			if (connected)
+				disconnect();
+
+			try {
+				connectToHost(targetHost);
+			} catch (Exception ex) {
+				throw new MongoDriverException(
+					format("Failed to connect to selected server %s:%s", targetHost.name, targetHost.port),
+					__FILE__, __LINE__, ex);
+			}
+		}
+	}
+
+	private void probeHost(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
+	{
+		try {
+			connectToHost(host);
+		} catch (Exception ex) {
+			lastException = ex;
+			logError("Failed to connect to %s:%s: %s", host.name, host.port, ex.msg);
+			topology.markFailed(host);
+			return;
+		}
+
+		if (!matchesReplicaSet(m_settings.replicaSet, m_description)) {
+			logWarn("Host %s:%s belongs to replica set '%s', expected '%s'",
+				host.name, host.port, m_description.setName, m_settings.replicaSet);
+			disconnect();
+			return;
+		}
+
+		topology.update(host, m_description);
+		disconnect();
+	}
+
+	private bool isConnectedTo(MongoHost host) const
+	{
+		if (m_description.me.length) {
+			auto meHost = parseHostPort(m_description.me);
+			return meHost == host;
+		}
+		return false;
 	}
 
 	void disconnect()
