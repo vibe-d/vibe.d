@@ -48,3 +48,5 @@ examples/bench-http-server/bench-http-server
 examples/bench-mongodb/bench-mongodb
 examples/bench-urlrouter/bench-urlrouter
 *.exe
+tests/mongodb/_replica-set/replica-set-test
+tests/mongodb/_replica-set/log*

@@ -18,6 +18,7 @@ import vibe.core.net;
 import vibe.data.bson;
 import vibe.db.mongo.flags;
 import vibe.db.mongo.settings;
+import vibe.db.mongo.topology;
 import vibe.inet.webform;
 import vibe.stream.tls;
 
@@ -161,15 +162,9 @@ final class MongoConnection {
 	this(MongoClientSettings cfg)
 	{
 		m_settings = cfg;
-
-		// Now let's check for features that are not yet supported.
-		if(m_settings.hosts.length > 1)
-			logWarn("Multiple mongodb hosts are not yet supported. Using first one: %s:%s",
-					m_settings.hosts[0].name, m_settings.hosts[0].port);
 	}
 
-	void connect()
-	{
+	void connectToHost(MongoHost host) {
 		bool isTLS;
 
 		/*
@@ -183,7 +178,7 @@ final class MongoConnection {
 			if (m_settings.connectTimeoutMS == 0)
 				connectTimeout = Duration.max;
 
-			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port, null, 0, connectTimeout);
+			m_conn = connectTCP(host.name, host.port, null, 0, connectTimeout);
 			m_conn.tcpNoDelay = true;
 			if (m_settings.socketTimeout != Duration.zero)
 				m_conn.readTimeout = m_settings.socketTimeout;
@@ -200,7 +195,7 @@ final class MongoConnection {
 					ctx.useTrustedCertificateFile(m_settings.sslCAFile);
 				}
 
-				m_stream = createTLSStream(m_conn, ctx, m_settings.hosts[0].name);
+				m_stream = createTLSStream(m_conn, ctx, host.name);
 				isTLS = true;
 			}
 			else {
@@ -209,7 +204,7 @@ final class MongoConnection {
 			m_outRange = streamOutputRange(m_stream);
 		}
 		catch (Exception e) {
-			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
+			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", host.name, host.port), __FILE__, __LINE__, e);
 		}
 
 		scope (failure) disconnect();
@@ -307,6 +302,94 @@ final class MongoConnection {
 			authenticate();
 			break;
 		}
+
+		logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
+	}
+
+	void connect()
+	{
+		connect(m_settings.readPreference);
+	}
+
+	void connect(ReadPreference readPreference)
+	{
+		TopologyDescription topology;
+		Exception lastException;
+
+		// Phase 1: Discover topology by probing seed hosts
+		foreach (host; m_settings.hosts) {
+			probeHost(topology, host, lastException);
+		}
+
+		// Phase 2: Discover additional hosts reported by the topology
+		auto knownHosts = topology.allKnownHosts();
+		foreach (host; knownHosts) {
+			bool alreadyProbed = false;
+			foreach (ref s; topology.servers) {
+				if (s.host == host) {
+					alreadyProbed = true;
+					break;
+				}
+			}
+			if (!alreadyProbed)
+				probeHost(topology, host, lastException);
+		}
+
+		// Phase 3: Select server based on read preference
+		auto selected = selectServer(topology, readPreference);
+
+		if (selected.isNull) {
+			if (lastException !is null)
+				throw lastException;
+			throw new MongoDriverException("No suitable server found for read preference");
+		}
+
+		// Phase 4: Connect to the selected server (may already be connected)
+		auto targetHost = selected.get;
+
+		if (!connected || !isConnectedTo(targetHost)) {
+			if (connected)
+				disconnect();
+
+			try {
+				connectToHost(targetHost);
+			} catch (Exception ex) {
+				throw new MongoDriverException(
+					format("Failed to connect to selected server %s:%s", targetHost.name, targetHost.port),
+					__FILE__, __LINE__, ex);
+			}
+		}
+	}
+
+	private void probeHost(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
+	{
+		try {
+			connectToHost(host);
+		} catch (Exception ex) {
+			lastException = ex;
+			logError("Failed to connect to %s:%s: %s", host.name, host.port, ex.msg);
+			topology.markFailed(host);
+			return;
+		}
+
+		if (!matchesReplicaSet(m_settings.replicaSet, m_description)) {
+			logWarn("Host %s:%s belongs to replica set '%s', expected '%s'",
+				host.name, host.port, m_description.setName, m_settings.replicaSet);
+			disconnect();
+			return;
+		}
+
+		topology.update(host, m_description);
+		disconnect();
+	}
+
+	private bool isConnectedTo(MongoHost host) const
+	{
+		if (m_description.me.length) {
+			auto meHost = parseHostPort(m_description.me);
+			return meHost == host;
+		}
+		return false;
 	}
 
 	void disconnect()
@@ -1114,12 +1197,37 @@ struct ServerDescription
 	Nullable!int setVersion;
 	Nullable!BsonObjectID electionId;
 	string primary;
+
+	/// Deprecated since MongoDB 5.0: the `isMaster` command was replaced by `hello`.
+	/// The `secondary` field itself is still present in the `hello` response.
+	bool secondary;
+
+	/// Deprecated since MongoDB 5.0: renamed to `isWritablePrimary` in the `hello` command response.
+	/// True if the instance is a primary, mongos, or standalone mongod.
+	bool ismaster;
+
+	bool isWritablePrimary;
 	string lastUpdateTime = "infinity ago";
 	Nullable!int logicalSessionTimeoutMinutes;
 
 	bool satisfiesVersion(WireVersion wireVersion) @safe const @nogc pure nothrow
 	{
 		return maxWireVersion >= wireVersion;
+	}
+
+	bool isPrimary() @safe const @nogc pure nothrow
+	{
+		return (ismaster || isWritablePrimary) && !secondary;
+	}
+
+	bool isSecondaryNode() @safe const @nogc pure nothrow
+	{
+		return secondary && !ismaster && !isWritablePrimary;
+	}
+
+	bool isReplicaSetMember() @safe const @nogc pure nothrow
+	{
+		return setName.length > 0;
 	}
 }
 
@@ -1141,6 +1249,57 @@ enum WireVersion : int
 	v52 = 15,
 	v53 = 16,
 	v60 = 17
+}
+
+/**
+ * Checks whether the server's replica set name matches the expected one.
+ * Returns true if no replica set is configured (empty string) or if
+ * the names match.
+ */
+package bool matchesReplicaSet(string expectedSet, ref const ServerDescription desc)
+@safe @nogc pure nothrow
+{
+	if (!expectedSet.length)
+		return true;
+	return desc.setName == expectedSet;
+}
+
+/// matchesReplicaSet returns true when no replica set is configured
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	assert(matchesReplicaSet("", desc));
+}
+
+/// matchesReplicaSet returns true when replica set names match
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	assert(matchesReplicaSet("rs0", desc));
+}
+
+/// matchesReplicaSet returns false when replica set names differ
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs1";
+	assert(!matchesReplicaSet("rs0", desc));
+}
+
+/// matchesReplicaSet returns false when server has no setName but one is expected
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	assert(!matchesReplicaSet("rs0", desc));
+}
+
+/// matchesReplicaSet returns true when both are empty
+@safe @nogc pure nothrow unittest
+{
+	ServerDescription desc;
+	assert(matchesReplicaSet("", desc));
 }
 
 /// satisfiesVersion returns true for versions up to maxWireVersion v36
@@ -1187,6 +1346,111 @@ enum WireVersion : int
 	assert(def.type == ServerDescription.ServerType.unknown);
 	assert(def.satisfiesVersion(WireVersion.old));
 	assert(!def.satisfiesVersion(WireVersion.v26));
+}
+
+/// isPrimary returns true when ismaster=true and secondary=false
+@safe unittest
+{
+	ServerDescription desc;
+	desc.ismaster = true;
+	desc.secondary = false;
+	assert(desc.isPrimary);
+}
+
+/// isPrimary returns false when both ismaster=true and secondary=true
+@safe unittest
+{
+	ServerDescription desc;
+	desc.ismaster = true;
+	desc.secondary = true;
+	assert(!desc.isPrimary);
+}
+
+/// isPrimary returns false when ismaster=false
+@safe unittest
+{
+	ServerDescription desc;
+	desc.ismaster = false;
+	desc.secondary = false;
+	assert(!desc.isPrimary);
+}
+
+/// isPrimary returns true when isWritablePrimary=true (hello response)
+@safe unittest
+{
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.secondary = false;
+	assert(desc.isPrimary);
+}
+
+/// isPrimary returns false when isWritablePrimary=true but secondary=true
+@safe unittest
+{
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.secondary = true;
+	assert(!desc.isPrimary);
+}
+
+/// isSecondaryNode returns true when secondary=true and ismaster=false
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.ismaster = false;
+	assert(desc.isSecondaryNode);
+}
+
+/// isSecondaryNode returns false when ismaster=true
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.ismaster = true;
+	assert(!desc.isSecondaryNode);
+}
+
+/// isSecondaryNode returns false when isWritablePrimary=true
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.isWritablePrimary = true;
+	assert(!desc.isSecondaryNode);
+}
+
+/// isSecondaryNode returns false when secondary=false
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = false;
+	desc.ismaster = false;
+	assert(!desc.isSecondaryNode);
+}
+
+/// isReplicaSetMember returns true when setName is non-empty
+@safe unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	assert(desc.isReplicaSetMember);
+}
+
+/// isReplicaSetMember returns false when setName is empty
+@safe unittest
+{
+	ServerDescription desc;
+	assert(!desc.isReplicaSetMember);
+}
+
+/// Default ServerDescription is not primary, not secondary, not RS member
+@safe unittest
+{
+	ServerDescription desc;
+	assert(!desc.isPrimary);
+	assert(!desc.isSecondaryNode);
+	assert(!desc.isReplicaSetMember);
 }
 
 private string getHostArchitecture()
