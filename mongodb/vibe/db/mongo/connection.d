@@ -1197,8 +1197,15 @@ struct ServerDescription
 	Nullable!int setVersion;
 	Nullable!BsonObjectID electionId;
 	string primary;
+
+	/// Deprecated since MongoDB 5.0: the `isMaster` command was replaced by `hello`.
+	/// The `secondary` field itself is still present in the `hello` response.
 	bool secondary;
+
+	/// Deprecated since MongoDB 5.0: renamed to `isWritablePrimary` in the `hello` command response.
+	/// True if the instance is a primary, mongos, or standalone mongod.
 	bool ismaster;
+
 	bool isWritablePrimary;
 	string lastUpdateTime = "infinity ago";
 	Nullable!int logicalSessionTimeoutMinutes;
