@@ -102,6 +102,15 @@ struct TopologyDescription
 		}
 		return result;
 	}
+
+	Nullable!MongoHost randomSecondaryHost() const
+	{
+		auto hosts = secondaryHosts;
+		if (!hosts.length)
+			return Nullable!MongoHost.init;
+		import std.random : uniform;
+		return Nullable!MongoHost(hosts[uniform(0, hosts.length)]);
+	}
 }
 
 struct ServerRecord
@@ -127,31 +136,22 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 		auto primary = topology.primaryHost;
 		if (!primary.isNull)
 			return primary;
-		auto secondaries = topology.secondaryHosts;
-		if (secondaries.length)
-			return Nullable!MongoHost(secondaries[0]);
-		return Nullable!MongoHost.init;
+		return topology.randomSecondaryHost;
 
 	case ReadPreference.secondary:
-		auto secondaries = topology.secondaryHosts;
-		if (secondaries.length)
-			return Nullable!MongoHost(secondaries[0]);
-		return Nullable!MongoHost.init;
+		return topology.randomSecondaryHost;
 
 	case ReadPreference.secondaryPreferred:
-		auto secondaries = topology.secondaryHosts;
-		if (secondaries.length)
-			return Nullable!MongoHost(secondaries[0]);
+		auto secondary = topology.randomSecondaryHost;
+		if (!secondary.isNull)
+			return secondary;
 		return topology.primaryHost;
 
 	case ReadPreference.nearest:
 		auto primary = topology.primaryHost;
 		if (!primary.isNull)
 			return primary;
-		auto secondaries = topology.secondaryHosts;
-		if (secondaries.length)
-			return Nullable!MongoHost(secondaries[0]);
-		return Nullable!MongoHost.init;
+		return topology.randomSecondaryHost;
 	}
 }
 
