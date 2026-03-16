@@ -171,8 +171,12 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "appname": cfg.appName = value; break;
 				case "replicaset": cfg.replicaSet = value; break;
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
+<<<<<<< HEAD
 				case "localthresholdms": setLong(cfg.localThresholdMS); break;
 				case "readconcernlevel": cfg.readConcern = ReadConcern(value); break;
+=======
+				case "readconcernlevel": cfg.readConcern = parseReadConcern(value); break;
+>>>>>>> fa5835ae (feat: enhance read concern support in MongoCollection and settings)
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
@@ -866,6 +870,17 @@ enum ReadPreference
 
 	/** Read from the member with the lowest network latency. */
 	nearest,
+}
+
+private ReadConcern parseReadConcern(string str)
+@safe {
+	import std.traits : EnumMembers;
+	foreach (level; EnumMembers!(ReadConcern.Level)) {
+		if (str == cast(string)level) {
+			return ReadConcern(str);
+		}
+	}
+	throw new Exception("Read concern level \"" ~ str ~ "\" not supported");
 }
 
 private ReadPreference parseReadPreference(string str)

@@ -759,11 +759,18 @@ struct MongoCollection {
 		return countImpl!T(query);
 	}
 
-	private ulong countImpl(T)(T query)
+	private ulong countImpl(T)(T query, Nullable!ReadConcern readConcern = Nullable!ReadConcern.init)
 	{
 		Bson cmd = Bson.emptyObject;
 		cmd["count"] = m_name;
 		cmd["query"] = serializeToBson(query);
+
+		if (!readConcern.isNull) {
+			cmd["readConcern"] = serializeToBson(readConcern.get);
+		} else if (m_readConcern.level.length > 0) {
+			cmd["readConcern"] = serializeToBson(m_readConcern);
+		}
+
 		auto reply = database.runCommandChecked(cmd);
 		switch (reply["n"].type) with (Bson.Type) {
 			default: assert(false, "Unsupported data type in BSON reply for COUNT");
@@ -786,7 +793,6 @@ struct MongoCollection {
 	*/
 	ulong countDocuments(T)(T filter, CountOptions options = CountOptions.init)
 	{
-		applyDefaultReadConcern(options);
 		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details
 		Bson[] pipeline = [Bson(["$match": serializeToBson(filter)])];
 		if (!options.skip.isNull)
@@ -817,7 +823,6 @@ struct MongoCollection {
 	*/
 	ulong estimatedDocumentCount(EstimatedDocumentCountOptions options = EstimatedDocumentCountOptions.init)
 	{
-		applyDefaultReadConcern(options);
 		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details
 		MongoConnection conn = m_client.lockConnection();
 		if (conn.description.satisfiesVersion(WireVersion.v49)) {
@@ -834,7 +839,7 @@ struct MongoCollection {
 			auto reply = aggregate(pipeline, aggOptions).front;
 			return reply["n"].to!long;
 		} else {
-			return countImpl(null);
+			return countImpl(null, options.readConcern);
 		}
 	}
 
