@@ -249,9 +249,39 @@ final class MongoConnection {
 			handshake["client"]["application"] = Bson(["name": Bson(m_settings.appName)]);
 		}
 
+		import vibe.db.mongo.sasl;
+		import std.digest.sha : SHA1, SHA256;
+
+		ScramState!SHA256 speculativeScramSHA256;
+		ScramState!SHA1 speculativeScramSHA1;
+		string speculativePayload;
+		bool speculatingScram = false;
+		MongoAuthMechanism speculativeMechanism = MongoAuthMechanism.none;
+
 		if (m_settings.username.length) {
 			string authDb = m_settings.getAuthDatabase;
 			handshake["saslSupportedMechs"] = Bson(authDb ~ "." ~ m_settings.username);
+
+			if (m_settings.password.length) {
+				speculativePayload = speculativeScramSHA256.createInitialRequest(m_settings.username);
+				speculativeMechanism = MongoAuthMechanism.scramSHA256;
+			} else if (m_settings.digest.length) {
+				speculativePayload = speculativeScramSHA1.createInitialRequest(m_settings.username);
+				speculativeMechanism = MongoAuthMechanism.scramSHA1;
+			}
+
+			if (speculativePayload.length) {
+				string mechStr = speculativeMechanism == MongoAuthMechanism.scramSHA256
+					? "SCRAM-SHA-256" : "SCRAM-SHA-1";
+
+				auto specAuth = Bson.emptyObject;
+				specAuth["saslStart"] = Bson(1);
+				specAuth["mechanism"] = Bson(mechStr);
+				specAuth["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, speculativePayload.representation));
+
+				handshake["speculativeAuthenticate"] = specAuth;
+				speculatingScram = true;
+			}
 		}
 
 		auto reply = runCommand!(Bson, MongoAuthException)("admin", handshake);
@@ -261,8 +291,10 @@ final class MongoConnection {
 			m_supportsOpMsg = true;
 
 		bool serverSupportsSHA256 = false;
+		bool hasSaslSupportedMechs = false;
 		auto saslMechs = reply.tryIndex("saslSupportedMechs");
 		if (!saslMechs.isNull) {
+			hasSaslSupportedMechs = true;
 			foreach (mech; saslMechs) {
 				if (mech.get!string == "SCRAM-SHA-256") {
 					serverSupportsSHA256 = true;
@@ -270,6 +302,11 @@ final class MongoConnection {
 				}
 			}
 		}
+
+		Bson speculativeResult = Bson(null);
+		auto specResultField = reply.tryIndex("speculativeAuthenticate");
+		if (!specResultField.isNull)
+			speculativeResult = specResultField.get;
 
 		m_bytesRead = 0;
 		auto authMechanism = m_settings.authMechanism;
@@ -282,6 +319,8 @@ final class MongoConnection {
 			else if (m_settings.digest.length || m_settings.password.length)
 			{
 				if (serverSupportsSHA256 && m_settings.password.length)
+					authMechanism = MongoAuthMechanism.scramSHA256;
+				else if (!hasSaslSupportedMechs && m_description.satisfiesVersion(WireVersion.v40) && m_settings.password.length)
 					authMechanism = MongoAuthMechanism.scramSHA256;
 				else if (m_description.satisfiesVersion(WireVersion.v30))
 					authMechanism = MongoAuthMechanism.scramSHA1;
@@ -308,6 +347,10 @@ final class MongoConnection {
 		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !isTLS)
 			throw new MongoAuthException("Trying to force MONGODB-X509 authentication, but didn't use ssl!");
 
+		bool canUseSpeculative = speculatingScram
+			&& speculativeMechanism == authMechanism
+			&& speculativeResult != Bson(null);
+
 		m_isAuthenticating = true;
 		scope (exit)
 			m_isAuthenticating = false;
@@ -319,10 +362,16 @@ final class MongoConnection {
 			certAuthenticate();
 			break;
 		case MongoAuthMechanism.scramSHA1:
-			scramAuthenticate();
+			if (canUseSpeculative)
+				scramAuthenticateContinue(speculativeScramSHA1, m_settings.digest, speculativeResult);
+			else
+				scramAuthenticate();
 			break;
 		case MongoAuthMechanism.scramSHA256:
-			scramSHA256Authenticate();
+			if (canUseSpeculative)
+				scramAuthenticateContinue(speculativeScramSHA256, saslPrep(m_settings.password), speculativeResult);
+			else
+				scramSHA256Authenticate();
 			break;
 		case MongoAuthMechanism.mongoDBCR:
 			authenticate();
@@ -1129,24 +1178,7 @@ final class MongoConnection {
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 
 		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
-		string response = cast(string)doc["payload"].get!BsonBinData().rawData;
-		Bson conversationId = doc["conversationId"];
-
-		payload = state.update(m_settings.digest, response);
-		cmd = Bson.emptyObject;
-		cmd["saslContinue"] = Bson(1);
-		cmd["conversationId"] = conversationId;
-		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-
-		doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
-		response = cast(string)doc["payload"].get!BsonBinData().rawData;
-
-		payload = state.finalize(response);
-		cmd = Bson.emptyObject;
-		cmd["saslContinue"] = Bson(1);
-		cmd["conversationId"] = conversationId;
-		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		runCommand!(Bson, MongoAuthException)(cn, cmd);
+		scramFinishAuth(state, m_settings.digest, doc, cn);
 	}
 
 	private void scramSHA256Authenticate()
@@ -1165,11 +1197,23 @@ final class MongoConnection {
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 
 		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		scramFinishAuth(state, saslPrep(m_settings.password), doc, cn);
+	}
+
+	private void scramAuthenticateContinue(ScramStateType)(ref ScramStateType state, string credential, Bson speculativeResult)
+	{
+		string cn = m_settings.getAuthDatabase;
+		scramFinishAuth(state, credential, speculativeResult, cn);
+	}
+
+	private void scramFinishAuth(ScramStateType)(ref ScramStateType state, string credential, Bson doc, string cn)
+	{
+
 		string response = cast(string)doc["payload"].get!BsonBinData().rawData;
 		Bson conversationId = doc["conversationId"];
 
-		payload = state.update(m_settings.password, response);
-		cmd = Bson.emptyObject;
+		string payload = state.update(credential, response);
+		auto cmd = Bson.emptyObject;
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
@@ -1178,6 +1222,11 @@ final class MongoConnection {
 		response = cast(string)doc["payload"].get!BsonBinData().rawData;
 
 		payload = state.finalize(response);
+
+		auto doneField = doc.tryIndex("done");
+		if (!doneField.isNull && doneField.get.get!bool)
+			return;
+
 		cmd = Bson.emptyObject;
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;
