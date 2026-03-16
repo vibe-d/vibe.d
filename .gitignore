@@ -50,3 +50,4 @@ examples/bench-urlrouter/bench-urlrouter
 *.exe
 tests/mongodb/_replica-set/replica-set-test
 tests/mongodb/_replica-set/log*
+tests/mongodb/readconcern/readconcern-test
