@@ -171,6 +171,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "appname": cfg.appName = value; break;
 				case "replicaset": cfg.replicaSet = value; break;
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
+				case "localthresholdms": setLong(cfg.localThresholdMS); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
@@ -437,6 +438,24 @@ unittest
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0&readPreference=nearest"));
 	assert(cfg.replicaSet == "rs0");
 	assert(cfg.readPreference == ReadPreference.nearest);
+}
+
+/// parseMongoDBUrl parses localThresholdMS option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?localThresholdMS=25"));
+	assert(cfg.localThresholdMS == 25);
+}
+
+/// parseMongoDBUrl uses default localThresholdMS of 15
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
+	assert(cfg.localThresholdMS == 15);
 }
 
 /// parseMongoDBUrl parses tls=true as ssl alias
@@ -879,6 +898,15 @@ class MongoClientSettings
 	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
 	 */
 	ReadPreference readPreference;
+
+	/**
+	 * Upper bound on the acceptable latency window for nearest server selection.
+	 * Servers within (fastest RTT + localThresholdMS) are eligible.
+	 * Default: 15ms per MongoDB spec.
+	 *
+	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.localThresholdMS)
+	 */
+	long localThresholdMS = 15;
 
 	/**
 	 * Automatically check for errors when operating on collections and throw a
