@@ -820,11 +820,6 @@ private MongoAuthMechanism parseAuthMechanism(string str)
 }
 
 /**
- * Determines which replica set members are acceptable for read operations.
- *
- * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
- */
-/**
   Specifies a level of isolation for read operations. For example, you can use read concern to only
   read data that has propagated to a majority of nodes in a replica set.
 
@@ -850,6 +845,11 @@ struct ReadConcern {
 	string level;
 }
 
+/**
+ * Determines which replica set members are acceptable for read operations.
+ *
+ * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
+ */
 enum ReadPreference
 {
 	/** Route all reads to the primary. This is the default. */
