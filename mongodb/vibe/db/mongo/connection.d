@@ -295,7 +295,7 @@ final class MongoConnection {
 		auto saslMechs = reply.tryIndex("saslSupportedMechs");
 		if (!saslMechs.isNull) {
 			hasSaslSupportedMechs = true;
-			foreach (mech; saslMechs) {
+			foreach (mech; saslMechs.get.byValue) {
 				if (mech.get!string == "SCRAM-SHA-256") {
 					serverSupportsSHA256 = true;
 					break;
@@ -1164,40 +1164,33 @@ final class MongoConnection {
 
 	private void scramAuthenticate()
 	{
-		import vibe.db.mongo.sasl;
 		import std.digest.sha : SHA1;
-
-		string cn = m_settings.getAuthDatabase;
-
-		ScramState!SHA1 state;
-		string payload = state.createInitialRequest(m_settings.username);
-
-		auto cmd = Bson.emptyObject;
-		cmd["saslStart"] = Bson(1);
-		cmd["mechanism"] = Bson("SCRAM-SHA-1");
-		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-
-		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
-		scramFinishAuth(state, m_settings.digest, doc, cn);
+		scramStartAuth!SHA1("SCRAM-SHA-1", m_settings.digest);
 	}
 
 	private void scramSHA256Authenticate()
 	{
-		import vibe.db.mongo.sasl;
+		import vibe.db.mongo.sasl : saslPrep;
 		import std.digest.sha : SHA256;
+		scramStartAuth!SHA256("SCRAM-SHA-256", saslPrep(m_settings.password));
+	}
+
+	private void scramStartAuth(HashType)(string mechanism, string credential)
+	{
+		import vibe.db.mongo.sasl;
 
 		string cn = m_settings.getAuthDatabase;
 
-		ScramState!SHA256 state;
+		ScramState!HashType state;
 		string payload = state.createInitialRequest(m_settings.username);
 
 		auto cmd = Bson.emptyObject;
 		cmd["saslStart"] = Bson(1);
-		cmd["mechanism"] = Bson("SCRAM-SHA-256");
+		cmd["mechanism"] = Bson(mechanism);
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 
 		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
-		scramFinishAuth(state, saslPrep(m_settings.password), doc, cn);
+		scramFinishAuth(state, credential, doc, cn);
 	}
 
 	private void scramAuthenticateContinue(ScramStateType)(ref ScramStateType state, string credential, Bson speculativeResult)
@@ -1208,7 +1201,6 @@ final class MongoConnection {
 
 	private void scramFinishAuth(ScramStateType)(ref ScramStateType state, string credential, Bson doc, string cn)
 	{
-
 		string response = cast(string)doc["payload"].get!BsonBinData().rawData;
 		Bson conversationId = doc["conversationId"];
 

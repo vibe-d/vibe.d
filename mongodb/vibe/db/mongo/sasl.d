@@ -303,7 +303,6 @@ private bool isNonAsciiSpace(dchar ch) @safe @nogc pure nothrow
 		case 0x2008: // PUNCTUATION SPACE
 		case 0x2009: // THIN SPACE
 		case 0x200A: // HAIR SPACE
-		case 0x200B: // ZERO WIDTH SPACE
 		case 0x202F: // NARROW NO-BREAK SPACE
 		case 0x205F: // MEDIUM MATHEMATICAL SPACE
 		case 0x3000: // IDEOGRAPHIC SPACE
@@ -383,10 +382,6 @@ private bool isProhibited(dchar ch) @safe @nogc pure nothrow
 
 	// C.5 Surrogate codes (shouldn't appear in valid UTF, but check anyway)
 	if (ch >= 0xD800 && ch <= 0xDFFF)
-		return true;
-
-	// C.6 Inappropriate for plain text
-	if (ch == 0xFFF9 || ch == 0xFFFA || ch == 0xFFFB || ch == 0xFFFC)
 		return true;
 
 	// C.7 Inappropriate for canonical representation
