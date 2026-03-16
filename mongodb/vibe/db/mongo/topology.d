@@ -112,34 +112,29 @@ struct TopologyDescription
 		return Nullable!MongoHost(hosts[uniform(0, hosts.length)]);
 	}
 
-	MongoHost[] allDataBearingHosts() const
-	{
-		MongoHost[] result;
-		foreach (ref s; servers)
-		{
-			if (s.description.isPrimary || s.description.isSecondaryNode)
-				result ~= s.host;
-		}
-		return result;
-	}
-
 	Nullable!MongoHost randomHostWithinLatencyWindow(long localThresholdMS) const
 	{
-		float minRTT = float.max;
+		double minRTT = double.max;
 		foreach (ref s; servers)
 		{
-			if ((s.description.isPrimary || s.description.isSecondaryNode) && s.description.roundTripTime < minRTT)
+			if (!s.description.isPrimary && !s.description.isSecondaryNode)
+				continue;
+
+			if (s.description.roundTripTime < minRTT)
 				minRTT = s.description.roundTripTime;
 		}
 
-		if (minRTT == float.max)
+		if (minRTT == double.max)
 			return Nullable!MongoHost.init;
 
-		float threshold = minRTT + localThresholdMS / 1_000.0f;
+		double threshold = minRTT + localThresholdMS / 1_000.0;
 		MongoHost[] eligible;
 		foreach (ref s; servers)
 		{
-			if ((s.description.isPrimary || s.description.isSecondaryNode) && s.description.roundTripTime <= threshold)
+			if (!s.description.isPrimary && !s.description.isSecondaryNode)
+				continue;
+
+			if (s.description.roundTripTime <= threshold)
 				eligible ~= s.host;
 		}
 
