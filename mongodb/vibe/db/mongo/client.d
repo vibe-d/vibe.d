@@ -91,7 +91,7 @@ final class MongoClient {
 	}
 
 	/// Returns the read concern configured for this client.
-	@property ReadConcern readConcern() const
+	ReadConcern readConcern() const
 	{
 		return m_settings.readConcern;
 	}
