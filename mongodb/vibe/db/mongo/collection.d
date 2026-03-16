@@ -79,7 +79,7 @@ struct MongoCollection {
 	@property string name() const @safe { return m_name; }
 
 	/// The read concern for this collection, inherited from the database unless overridden.
-	@property ReadConcern readConcern() const @safe { return m_readConcern; }
+	ReadConcern readConcern() const @safe { return m_readConcern; }
 
 	/// Returns a copy of this collection with the given read concern.
 	MongoCollection withReadConcern(ReadConcern rc) @safe
