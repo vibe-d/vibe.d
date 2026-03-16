@@ -90,6 +90,12 @@ final class MongoClient {
 		return m_settings.readPreference;
 	}
 
+	/// Returns the read concern configured for this client.
+	@property ReadConcern readConcern() const
+	{
+		return m_settings.readConcern;
+	}
+
 	/** Disconnects all currently unused connections to the server.
 	*/
 	void cleanupConnections()

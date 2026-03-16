@@ -41,6 +41,7 @@ struct MongoCollection {
 		MongoDatabase m_db;
 		string m_name;
 		string m_fullPath;
+		ReadConcern m_readConcern;
 	}
 
 	this(MongoClient client, string fullPath)
@@ -54,6 +55,7 @@ struct MongoCollection {
 		m_fullPath = fullPath;
 		m_db = m_client.getDatabase(fullPath[0 .. dotidx]);
 		m_name = fullPath[dotidx+1 .. $];
+		m_readConcern = m_db.readConcern;
 	}
 
 	this(ref MongoDatabase db, string name)
@@ -63,6 +65,7 @@ struct MongoCollection {
 		m_fullPath = db.name ~ "." ~ name;
 		m_db = db;
 		m_name = name;
+		m_readConcern = db.readConcern;
 	}
 
 	/**
@@ -74,6 +77,26 @@ struct MongoCollection {
 	  Returns: Name of this collection (excluding the database name).
 	 */
 	@property string name() const @safe { return m_name; }
+
+	/// The read concern for this collection, inherited from the database unless overridden.
+	@property ReadConcern readConcern() const @safe { return m_readConcern; }
+
+	/// Returns a copy of this collection with the given read concern.
+	MongoCollection withReadConcern(ReadConcern rc) @safe
+	{
+		auto coll = this;
+		coll.m_readConcern = rc;
+		return coll;
+	}
+
+	private void applyDefaultReadConcern(Options)(ref Options options)
+	{
+		static if (__traits(hasMember, Options, "readConcern")) {
+			if (options.readConcern.isNull && m_readConcern.level.length > 0) {
+				options.readConcern = m_readConcern;
+			}
+		}
+	}
 
 	/**
 	  Performs an update operation on documents matching 'selector', updating them with 'update'.
@@ -496,6 +519,7 @@ struct MongoCollection {
 	 */
 	MongoCursor!R find(R = Bson, Q)(Q query, FindOptions options = FindOptions.init)
 	{
+		applyDefaultReadConcern(options);
 		return MongoCursor!R(m_client, m_db.name, m_name, query, options);
 	}
 
@@ -762,6 +786,7 @@ struct MongoCollection {
 	*/
 	ulong countDocuments(T)(T filter, CountOptions options = CountOptions.init)
 	{
+		applyDefaultReadConcern(options);
 		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details
 		Bson[] pipeline = [Bson(["$match": serializeToBson(filter)])];
 		if (!options.skip.isNull)
@@ -792,6 +817,7 @@ struct MongoCollection {
 	*/
 	ulong estimatedDocumentCount(EstimatedDocumentCountOptions options = EstimatedDocumentCountOptions.init)
 	{
+		applyDefaultReadConcern(options);
 		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details
 		MongoConnection conn = m_client.lockConnection();
 		if (conn.description.satisfiesVersion(WireVersion.v49)) {
@@ -804,6 +830,7 @@ struct MongoCollection {
 			];
 			AggregateOptions aggOptions;
 			aggOptions.maxTimeMS = options.maxTimeMS;
+			aggOptions.readConcern = options.readConcern;
 			auto reply = aggregate(pipeline, aggOptions).front;
 			return reply["n"].to!long;
 		} else {
@@ -847,6 +874,7 @@ struct MongoCollection {
 	MongoCursor!R aggregate(R = Bson, S = Bson)(S[] pipeline, AggregateOptions options) @safe
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+		applyDefaultReadConcern(options);
 
 		Bson cmd = Bson.emptyObject; // empty object because order is important
 		cmd["aggregate"] = Bson(m_name);
@@ -917,6 +945,7 @@ struct MongoCollection {
 	auto distinct(R = Bson, Q)(string fieldName, Q query, DistinctOptions options = DistinctOptions.init)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
+		applyDefaultReadConcern(options);
 
 		Bson cmd = Bson.emptyObject; // empty object because order is important
 		cmd["distinct"] = Bson(m_name);
@@ -1319,27 +1348,7 @@ struct MongoCollection {
 	}
 }
 
-/**
-  Specifies a level of isolation for read operations. For example, you can use read concern to only read data that has propagated to a majority of nodes in a replica set.
-
-  See_Also: $(LINK https://docs.mongodb.com/manual/reference/read-concern/)
- */
-struct ReadConcern {
-	///
-	enum Level : string {
-		/// This is the default read concern level.
-		local = "local",
-		/// This is the default for reads against secondaries when afterClusterTime and "level" are unspecified. The query returns the the instance’s most recent data.
-		available = "available",
-		/// Available for replica sets that use WiredTiger storage engine.
-		majority = "majority",
-		/// Available for read operations on the primary only.
-		linearizable = "linearizable"
-	}
-
-	/// The level of the read concern.
-	string level;
-}
+public import vibe.db.mongo.settings : ReadConcern;
 
 /**
   See_Also: $(LINK https://docs.mongodb.com/manual/reference/write-concern/)

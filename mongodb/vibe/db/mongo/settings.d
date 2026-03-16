@@ -172,6 +172,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "replicaset": cfg.replicaSet = value; break;
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
 				case "localthresholdms": setLong(cfg.localThresholdMS); break;
+				case "readconcernlevel": cfg.readConcern = ReadConcern(value); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
@@ -456,6 +457,24 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
 	assert(cfg.localThresholdMS == 15);
+}
+
+/// parseMongoDBUrl parses readConcernLevel option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readConcernLevel=majority"));
+	assert(cfg.readConcern.level == "majority");
+}
+
+/// parseMongoDBUrl defaults readConcern to empty
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost"));
+	assert(cfg.readConcern.level == "");
 }
 
 /// parseMongoDBUrl parses tls=true as ssl alias
@@ -805,6 +824,32 @@ private MongoAuthMechanism parseAuthMechanism(string str)
  *
  * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
  */
+/**
+  Specifies a level of isolation for read operations. For example, you can use read concern to only
+  read data that has propagated to a majority of nodes in a replica set.
+
+  See_Also: $(LINK https://docs.mongodb.com/manual/reference/read-concern/)
+ */
+struct ReadConcern {
+	///
+	enum Level : string {
+		/// This is the default read concern level.
+		local = "local",
+		/// This is the default for reads against secondaries when afterClusterTime and "level" are unspecified.
+		/// The query returns the instance's most recent data.
+		available = "available",
+		/// Available for replica sets that use WiredTiger storage engine.
+		majority = "majority",
+		/// Available for read operations on the primary only.
+		linearizable = "linearizable",
+		/// Available for read operations within multi-document transactions.
+		snapshot = "snapshot"
+	}
+
+	/// The level of the read concern.
+	string level;
+}
+
 enum ReadPreference
 {
 	/** Route all reads to the primary. This is the default. */
@@ -907,6 +952,13 @@ class MongoClientSettings
 	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.localThresholdMS)
 	 */
 	long localThresholdMS = 15;
+
+	/**
+	 * Specifies the default read concern level for read operations.
+	 *
+	 * See_Also: $(LINK https://docs.mongodb.com/manual/reference/read-concern/)
+	 */
+	ReadConcern readConcern;
 
 	/**
 	 * Automatically check for errors when operating on collections and throw a

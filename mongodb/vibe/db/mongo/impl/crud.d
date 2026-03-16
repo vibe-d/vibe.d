@@ -417,6 +417,16 @@ struct EstimatedDocumentCountOptions
 	@safe {
 		maxTimeMS = cast(long)d.total!"msecs";
 	}
+
+	/**
+		The level of the read concern.
+
+		Aggregate commands do not support the $(D ReadConcern.Level.linearizable)
+		read concern level.
+
+		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
+	*/
+	@embedNullable Nullable!ReadConcern readConcern;
 }
 
 /**
