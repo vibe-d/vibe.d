@@ -1256,7 +1256,14 @@ enum WireVersion : int
 	v51 = 14,
 	v52 = 15,
 	v53 = 16,
-	v60 = 17
+	v60 = 17,
+	v61 = 18,
+	v62 = 19,
+	v70 = 21,
+	v71 = 22,
+	v72 = 23,
+	v73 = 24,
+	v80 = 25
 }
 
 /**
@@ -1335,15 +1342,17 @@ package bool matchesReplicaSet(string expectedSet, ref const ServerDescription d
 	assert(!oldServer.satisfiesVersion(WireVersion.v30));
 }
 
-/// satisfiesVersion with maxWireVersion v60 satisfies all versions
+/// satisfiesVersion with maxWireVersion v80 satisfies all versions
 @safe unittest
 {
 	ServerDescription latestServer;
-	latestServer.maxWireVersion = WireVersion.v60;
+	latestServer.maxWireVersion = WireVersion.v80;
 	assert(latestServer.satisfiesVersion(WireVersion.old));
 	assert(latestServer.satisfiesVersion(WireVersion.v36));
 	assert(latestServer.satisfiesVersion(WireVersion.v44));
 	assert(latestServer.satisfiesVersion(WireVersion.v60));
+	assert(latestServer.satisfiesVersion(WireVersion.v70));
+	assert(latestServer.satisfiesVersion(WireVersion.v80));
 }
 
 /// Default-initialized ServerDescription has maxWireVersion 0 and unknown type
