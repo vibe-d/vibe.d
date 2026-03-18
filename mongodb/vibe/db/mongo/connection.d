@@ -336,7 +336,7 @@ final class MongoConnection {
 		}
 
 		// Phase 3: Select server based on read preference
-		auto selected = selectServer(topology, readPreference);
+		auto selected = selectServer(topology, readPreference, m_settings.localThresholdMS);
 
 		if (selected.isNull) {
 			if (lastException !is null)
@@ -363,6 +363,11 @@ final class MongoConnection {
 
 	private void probeHost(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
 	{
+		import std.datetime.stopwatch : StopWatch;
+
+		StopWatch sw;
+		sw.start();
+
 		try {
 			connectToHost(host);
 		} catch (Exception ex) {
@@ -371,6 +376,9 @@ final class MongoConnection {
 			topology.markFailed(host);
 			return;
 		}
+
+		sw.stop();
+		m_description.roundTripTime = sw.peek.total!"usecs" / 1_000_000.0f;
 
 		if (!matchesReplicaSet(m_settings.replicaSet, m_description)) {
 			logWarn("Host %s:%s belongs to replica set '%s', expected '%s'",

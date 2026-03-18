@@ -111,6 +111,39 @@ struct TopologyDescription
 		import std.random : uniform;
 		return Nullable!MongoHost(hosts[uniform(0, hosts.length)]);
 	}
+
+	Nullable!MongoHost randomHostWithinLatencyWindow(long localThresholdMS) const
+	{
+		double minRTT = double.max;
+		foreach (ref s; servers)
+		{
+			if (!s.description.isPrimary && !s.description.isSecondaryNode)
+				continue;
+
+			if (s.description.roundTripTime < minRTT)
+				minRTT = s.description.roundTripTime;
+		}
+
+		if (minRTT == double.max)
+			return Nullable!MongoHost.init;
+
+		double threshold = minRTT + localThresholdMS / 1_000.0;
+		MongoHost[] eligible;
+		foreach (ref s; servers)
+		{
+			if (!s.description.isPrimary && !s.description.isSecondaryNode)
+				continue;
+
+			if (s.description.roundTripTime <= threshold)
+				eligible ~= s.host;
+		}
+
+		if (!eligible.length)
+			return Nullable!MongoHost.init;
+
+		import std.random : uniform;
+		return Nullable!MongoHost(eligible[uniform(0, eligible.length)]);
+	}
 }
 
 struct ServerRecord
@@ -125,7 +158,7 @@ struct ServerRecord
  * Returns the host to connect to, or Nullable!MongoHost.init if no
  * suitable server is available.
  */
-Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPreference pref)
+Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPreference pref, long localThresholdMS = 15)
 {
 	final switch (pref)
 	{
@@ -148,10 +181,7 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 		return topology.primaryHost;
 
 	case ReadPreference.nearest:
-		auto primary = topology.primaryHost;
-		if (!primary.isNull)
-			return primary;
-		return topology.randomSecondaryHost;
+		return topology.randomHostWithinLatencyWindow(localThresholdMS);
 	}
 }
 
@@ -332,12 +362,134 @@ unittest
 
 	ServerDescription primaryDesc;
 	primaryDesc.isWritablePrimary = true;
+	primaryDesc.roundTripTime = 0.005;
 
 	topo.update(primary, primaryDesc);
 
 	auto result = selectServer(topo, ReadPreference.nearest);
 	assert(!result.isNull);
 	assert(result.get == primary);
+}
+
+/// selectServer nearest returns secondary when only secondaries available
+unittest
+{
+	TopologyDescription topo;
+	auto sec = MongoHost("secondary", 27017);
+
+	ServerDescription secDesc;
+	secDesc.secondary = true;
+	secDesc.setName = "rs0";
+	secDesc.roundTripTime = 0.010;
+
+	topo.update(sec, secDesc);
+
+	auto result = selectServer(topo, ReadPreference.nearest);
+	assert(!result.isNull);
+	assert(result.get == sec);
+}
+
+/// selectServer nearest selects from all data-bearing members within latency window
+unittest
+{
+	TopologyDescription topo;
+	auto primary = MongoHost("primary", 27017);
+	auto sec1 = MongoHost("secondary1", 27017);
+	auto sec2 = MongoHost("secondary2", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+	primaryDesc.roundTripTime = 0.005;
+
+	ServerDescription sec1Desc;
+	sec1Desc.secondary = true;
+	sec1Desc.setName = "rs0";
+	sec1Desc.roundTripTime = 0.010;
+
+	ServerDescription sec2Desc;
+	sec2Desc.secondary = true;
+	sec2Desc.setName = "rs0";
+	sec2Desc.roundTripTime = 0.012;
+
+	topo.update(primary, primaryDesc);
+	topo.update(sec1, sec1Desc);
+	topo.update(sec2, sec2Desc);
+
+	bool sawPrimary, sawSec1, sawSec2;
+	foreach (_; 0 .. 200)
+	{
+		auto result = selectServer(topo, ReadPreference.nearest);
+		assert(!result.isNull);
+		if (result.get == primary) sawPrimary = true;
+		if (result.get == sec1) sawSec1 = true;
+		if (result.get == sec2) sawSec2 = true;
+	}
+
+	assert(sawPrimary);
+	assert(sawSec1);
+	assert(sawSec2);
+}
+
+/// selectServer nearest excludes servers outside latency window
+unittest
+{
+	TopologyDescription topo;
+	auto fast = MongoHost("fast", 27017);
+	auto slow = MongoHost("slow", 27017);
+
+	ServerDescription fastDesc;
+	fastDesc.isWritablePrimary = true;
+	fastDesc.setName = "rs0";
+	fastDesc.roundTripTime = 0.005;
+
+	ServerDescription slowDesc;
+	slowDesc.secondary = true;
+	slowDesc.setName = "rs0";
+	slowDesc.roundTripTime = 0.500;
+
+	topo.update(fast, fastDesc);
+	topo.update(slow, slowDesc);
+
+	foreach (_; 0 .. 100)
+	{
+		auto result = selectServer(topo, ReadPreference.nearest, 15);
+		assert(!result.isNull);
+		assert(result.get == fast);
+	}
+}
+
+/// selectServer nearest with large localThresholdMS includes all servers
+unittest
+{
+	TopologyDescription topo;
+	auto fast = MongoHost("fast", 27017);
+	auto slow = MongoHost("slow", 27017);
+
+	ServerDescription fastDesc;
+	fastDesc.isWritablePrimary = true;
+	fastDesc.setName = "rs0";
+	fastDesc.roundTripTime = 0.005;
+
+	ServerDescription slowDesc;
+	slowDesc.secondary = true;
+	slowDesc.setName = "rs0";
+	slowDesc.roundTripTime = 0.500;
+
+	topo.update(fast, fastDesc);
+	topo.update(slow, slowDesc);
+
+	bool sawFast, sawSlow;
+	foreach (_; 0 .. 200)
+	{
+		auto result = selectServer(topo, ReadPreference.nearest, 1000);
+		assert(!result.isNull);
+		if (result.get == fast) sawFast = true;
+		if (result.get == slow) sawSlow = true;
+	}
+
+	assert(sawFast);
+	assert(sawSlow);
 }
 
 /// selectServer returns null on empty topology
