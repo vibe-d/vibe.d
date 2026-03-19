@@ -875,12 +875,13 @@ enum ReadPreference
 private ReadConcern parseReadConcern(string str)
 @safe {
 	import std.traits : EnumMembers;
-	foreach (level; EnumMembers!(ReadConcern.Level)) {
-		if (str == cast(string)level) {
-			return ReadConcern(str);
-		}
+	switch (str) {
+		default:
+			throw new Exception("Read concern level \"" ~ str ~ "\" not supported");
+		static foreach (level; EnumMembers!(ReadConcern.Level))
+			case level:
+				return ReadConcern(level);
 	}
-	throw new Exception("Read concern level \"" ~ str ~ "\" not supported");
 }
 
 private ReadPreference parseReadPreference(string str)
