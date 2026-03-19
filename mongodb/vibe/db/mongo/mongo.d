@@ -78,17 +78,20 @@ import std.algorithm;
 */
 MongoClient connectMongoDB(string host, ushort port)
 {
+	import std.conv : to;
+
 	assert(!host.startsWith("mongodb://"));
-	return new MongoClient(host, port);
+	return new MongoClient("mongodb://" ~ host ~ ":" ~ to!string(port) ~ "/?safe=true");
 }
 /// ditto
 MongoClient connectMongoDB(string host_or_url)
 {
-	/* If this looks like a URL try to parse it that way. */
-	if(host_or_url.startsWith("mongodb://")){
+	import std.conv : to;
+
+	if (host_or_url.startsWith("mongodb://")) {
 		return new MongoClient(host_or_url);
 	} else {
-		return new MongoClient(host_or_url, MongoClientSettings.defaultPort);
+		return connectMongoDB(host_or_url, MongoClientSettings.defaultPort);
 	}
 }
 /// ditto

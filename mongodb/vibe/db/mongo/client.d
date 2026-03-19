@@ -18,10 +18,6 @@ import vibe.db.mongo.settings;
 
 import core.thread;
 
-import std.conv;
-import std.string;
-import std.range;
-
 /**
 	Represents a connection to a MongoDB server.
 
@@ -35,38 +31,6 @@ final class MongoClient {
 	private {
 		ConnectionPool!MongoConnection m_connections;
 		MongoClientSettings m_settings;
-	}
-
-	package this(string host, ushort port)
-	{
-		import std.string : indexOf;
-
-		auto slashIdx = host.indexOf('/');
-		auto qIdx = host.indexOf('?');
-
-		string hostname;
-		string pathAndQuery;
-
-		if (slashIdx >= 0) {
-			hostname = host[0 .. slashIdx];
-			pathAndQuery = host[slashIdx .. $];
-		} else if (qIdx >= 0) {
-			hostname = host[0 .. qIdx];
-			pathAndQuery = "/" ~ host[qIdx .. $];
-		} else {
-			hostname = host;
-			pathAndQuery = "/";
-		}
-
-		auto url = "mongodb://" ~ hostname ~ ":" ~ to!string(port) ~ pathAndQuery;
-
-		if (qIdx >= 0) {
-			url ~= "&safe=true";
-		} else {
-			url ~= "?safe=true";
-		}
-
-		this(url);
 	}
 
 	/**
