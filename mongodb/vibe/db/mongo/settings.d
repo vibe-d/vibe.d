@@ -171,12 +171,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "appname": cfg.appName = value; break;
 				case "replicaset": cfg.replicaSet = value; break;
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
-<<<<<<< HEAD
 				case "localthresholdms": setLong(cfg.localThresholdMS); break;
-				case "readconcernlevel": cfg.readConcern = ReadConcern(value); break;
-=======
 				case "readconcernlevel": cfg.readConcern = parseReadConcern(value); break;
->>>>>>> fa5835ae (feat: enhance read concern support in MongoCollection and settings)
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
