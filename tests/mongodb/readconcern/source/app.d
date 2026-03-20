@@ -30,7 +30,7 @@ void testUriParsing()
 
 void testInheritanceChain(ushort port)
 {
-	auto client = connectMongoDB("127.0.0.1/?readConcernLevel=majority", port);
+	auto client = connectMongoDB("mongodb://127.0.0.1:" ~ to!string(port) ~ "/?readConcernLevel=majority");
 	assert(client.readConcern.level == "majority");
 
 	auto db = client.getDatabase("test");
@@ -50,7 +50,7 @@ void testInheritanceChain(ushort port)
 
 void testPerOperationOverride(ushort port)
 {
-	auto client = connectMongoDB("127.0.0.1/?readConcernLevel=majority", port);
+	auto client = connectMongoDB("mongodb://127.0.0.1:" ~ to!string(port) ~ "/?readConcernLevel=majority");
 
 	auto coll = client.getCollection("test.readconcern_test");
 	coll.deleteAll();
