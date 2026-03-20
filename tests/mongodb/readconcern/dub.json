@@ -1,0 +1,7 @@
+{
+    "name": "readconcern-test",
+    "description": "MongoDB readConcern integration tests",
+    "dependencies": {
+        "vibe-d:mongodb": {"path": "../../../"}
+    }
+}

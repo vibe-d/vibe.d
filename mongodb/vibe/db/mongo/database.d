@@ -12,6 +12,7 @@ module vibe.db.mongo.database;
 
 import vibe.db.mongo.client;
 import vibe.db.mongo.collection;
+import vibe.db.mongo.settings : ReadConcern;
 import vibe.data.bson;
 
 import core.time;
@@ -25,6 +26,7 @@ struct MongoDatabase
 	private {
 		string m_name;
 		MongoClient m_client;
+		ReadConcern m_readConcern;
 	}
 
 	//@disable this();
@@ -35,6 +37,7 @@ struct MongoDatabase
 
 		assert(client !is null);
 		m_client = client;
+		m_readConcern = client.readConcern;
 
 		assert(
 				!canFind(name, '.'),
@@ -53,6 +56,20 @@ struct MongoDatabase
 	@property MongoClient client()
 	{
 		return m_client;
+	}
+
+	/// The read concern for this database, inherited from the client unless overridden.
+	ReadConcern readConcern() const
+	{
+		return m_readConcern;
+	}
+
+	/// Returns a copy of this database with the given read concern.
+	MongoDatabase withReadConcern(ReadConcern rc)
+	{
+		auto db = this;
+		db.m_readConcern = rc;
+		return db;
 	}
 
 	/** Accesses the collections of this database.

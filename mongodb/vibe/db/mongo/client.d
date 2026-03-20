@@ -16,11 +16,7 @@ import vibe.core.log;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.settings;
 
-import core.thread;
-
 import std.conv;
-import std.string;
-import std.range;
 
 /**
 	Represents a connection to a MongoDB server.
@@ -88,6 +84,12 @@ final class MongoClient {
 	@property ReadPreference readPreference() const
 	{
 		return m_settings.readPreference;
+	}
+
+	/// Returns the read concern configured for this client.
+	ReadConcern readConcern() const
+	{
+		return m_settings.readConcern;
 	}
 
 	/** Disconnects all currently unused connections to the server.
