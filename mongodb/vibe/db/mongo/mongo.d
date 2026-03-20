@@ -86,8 +86,6 @@ MongoClient connectMongoDB(string host, ushort port)
 /// ditto
 MongoClient connectMongoDB(string host_or_url)
 {
-	import std.conv : to;
-
 	if (host_or_url.startsWith("mongodb://")) {
 		return new MongoClient(host_or_url);
 	} else {
