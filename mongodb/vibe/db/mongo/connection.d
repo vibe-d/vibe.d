@@ -250,6 +250,7 @@ final class MongoConnection {
 		}
 
 		import vibe.db.mongo.sasl;
+		import vibe.db.mongo.saslprep : saslPrep;
 		import std.digest.sha : SHA1, SHA256;
 
 		ScramState!SHA256 speculativeScramSHA256;
@@ -1170,7 +1171,7 @@ final class MongoConnection {
 
 	private void scramSHA256Authenticate()
 	{
-		import vibe.db.mongo.sasl : saslPrep;
+		import vibe.db.mongo.saslprep : saslPrep;
 		import std.digest.sha : SHA256;
 		scramStartAuth!SHA256("SCRAM-SHA-256", saslPrep(m_settings.password));
 	}
