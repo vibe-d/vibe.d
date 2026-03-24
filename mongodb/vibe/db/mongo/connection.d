@@ -279,6 +279,7 @@ final class MongoConnection {
 				specAuth["saslStart"] = Bson(1);
 				specAuth["mechanism"] = Bson(mechStr);
 				specAuth["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, speculativePayload.representation));
+				specAuth["options"] = Bson(["skipEmptyExchange": Bson(true)]);
 
 				handshake["speculativeAuthenticate"] = specAuth;
 				speculatingScram = true;
@@ -1189,6 +1190,7 @@ final class MongoConnection {
 		cmd["saslStart"] = Bson(1);
 		cmd["mechanism"] = Bson(mechanism);
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
+		cmd["options"] = Bson(["skipEmptyExchange": Bson(true)]);
 
 		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
 		scramFinishAuth(state, credential, doc, cn);
