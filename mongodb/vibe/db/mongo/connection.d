@@ -1019,6 +1019,11 @@ final class MongoConnection {
 			"Decompressed size mismatch");
 
 		parseOpMsgBody!dupBson(decompressed, on_sec0, on_sec1_start, on_sec1_doc);
+
+		assert(packet_start_index + msglen == m_bytesRead,
+			format!"Packet size mismatch! Expected %s bytes, but read %s."(
+				msglen, m_bytesRead - packet_start_index));
+
 		return resid;
 	}
 
@@ -1539,6 +1544,52 @@ unittest
 	assert(compressorFromId(1) == Compressor.snappy);
 	assert(compressorFromId(2) == Compressor.zlib);
 	assert(compressorFromId(3) == Compressor.zstd);
+}
+
+unittest
+{
+	auto doc = Bson(["ok": Bson(1.0)]);
+	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
+
+	// Build OP_MSG body: flagBits(4) + payloadType(1) + bsonDocument(N)
+	ubyte[] body_;
+	body_ ~= toBsonData(cast(uint) 0)[];
+	body_ ~= cast(ubyte) 0;
+	body_ ~= docBytes;
+
+	Bson parsed;
+	uint parsedFlags;
+
+	parseOpMsgBody!true(body_,
+		(flags, document) { parsedFlags = flags; parsed = document; },
+		(scope ident, size) {},
+		(scope ident, document) {});
+
+	assert(parsedFlags == 0);
+	assert(parsed["ok"].get!double == 1.0);
+}
+
+unittest
+{
+	auto doc = Bson(["ok": Bson(1.0)]);
+	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
+
+	// Build OP_MSG body, compress it, decompress it, parse it
+	ubyte[] body_;
+	body_ ~= toBsonData(cast(uint) 0)[];
+	body_ ~= cast(ubyte) 0;
+	body_ ~= docBytes;
+
+	auto compressed = compressData(Compressor.zlib, body_, 6);
+	auto decompressed = decompressData(Compressor.zlib, compressed, cast(int) body_.length);
+
+	Bson parsed;
+	parseOpMsgBody!true(decompressed,
+		(flags, document) { parsed = document; },
+		(scope ident, size) {},
+		(scope ident, document) {});
+
+	assert(parsed["ok"].get!double == 1.0);
 }
 
 struct ServerDescription
