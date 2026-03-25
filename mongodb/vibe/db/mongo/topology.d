@@ -27,10 +27,20 @@ import std.typecons : Nullable;
  * Updated after each successful handshake. Used by server selection
  * to pick an appropriate host for a given read preference.
  */
+enum TopologyType
+{
+	unknown,
+	single,
+	replicaSetWithPrimary,
+	replicaSetNoPrimary,
+	sharded
+}
+
 struct TopologyDescription
 {
 	ServerRecord[] servers;
 	string setName;
+	TopologyType type = TopologyType.unknown;
 
 	void update(MongoHost host, ServerDescription desc)
 	{
@@ -56,6 +66,10 @@ struct TopologyDescription
 
 		if (desc.isPrimary)
 			pruneNonMembers(desc);
+
+		auto serverType = desc.classifiedType();
+		removeIncompatible(serverType);
+		transitionType(serverType);
 	}
 
 	private void pruneNonMembers(ref const ServerDescription primaryDesc)
@@ -103,6 +117,81 @@ struct TopologyDescription
 		return result;
 	}
 
+	private void removeIncompatible(ServerDescription.ServerType serverType)
+	{
+		if (type == TopologyType.single)
+			return;
+
+		bool isRS = type == TopologyType.replicaSetWithPrimary
+			|| type == TopologyType.replicaSetNoPrimary;
+		bool isSharded = type == TopologyType.sharded;
+
+		if (isRS && serverType == ServerDescription.ServerType.mongos)
+		{
+			removeServersByType(ServerDescription.ServerType.mongos);
+			return;
+		}
+
+		if (isSharded)
+		{
+			ServerRecord[] kept;
+			foreach (ref s; servers)
+			{
+				auto st = s.description.classifiedType();
+				if (st == ServerDescription.ServerType.mongos || st == ServerDescription.ServerType.unknown)
+					kept ~= s;
+			}
+			servers = kept;
+		}
+	}
+
+	private void removeServersByType(ServerDescription.ServerType serverType)
+	{
+		ServerRecord[] kept;
+		foreach (ref s; servers)
+		{
+			if (s.description.classifiedType() != serverType)
+				kept ~= s;
+		}
+		servers = kept;
+	}
+
+	private void transitionType(ServerDescription.ServerType serverType)
+	{
+		if (type == TopologyType.single)
+			return;
+
+		final switch (serverType) with (ServerDescription.ServerType)
+		{
+		case standalone:
+			if (type == TopologyType.unknown)
+				type = TopologyType.single;
+			break;
+
+		case mongos:
+			if (type == TopologyType.unknown)
+				type = TopologyType.sharded;
+			break;
+
+		case RSPrimary:
+			type = TopologyType.replicaSetWithPrimary;
+			break;
+
+		case RSSecondary, RSArbiter, RSOther, RSGhost:
+			if (type == TopologyType.unknown)
+				type = TopologyType.replicaSetNoPrimary;
+			break;
+
+		case unknown, possiblePrimary:
+			if (type == TopologyType.replicaSetWithPrimary)
+			{
+				if (findPrimaryIdx() == -1)
+					type = TopologyType.replicaSetNoPrimary;
+			}
+			break;
+		}
+	}
+
 	void markFailed(MongoHost host)
 	{
 		foreach (ref s; servers)
@@ -110,9 +199,12 @@ struct TopologyDescription
 			if (s.host == host)
 			{
 				s.description = ServerDescription.init;
-				return;
+				break;
 			}
 		}
+
+		if (type == TopologyType.replicaSetWithPrimary && findPrimaryIdx() == -1)
+			type = TopologyType.replicaSetNoPrimary;
 	}
 
 	MongoHost[] allKnownHosts() const
@@ -139,6 +231,21 @@ struct TopologyDescription
 		}
 
 		return result;
+	}
+
+	Nullable!MongoHost randomMongosHost() const
+	{
+		MongoHost[] mongosHosts;
+		foreach (ref s; servers)
+		{
+			if (s.description.classifiedType() == ServerDescription.ServerType.mongos)
+				mongosHosts ~= s.host;
+		}
+
+		if (!mongosHosts.length)
+			return Nullable!MongoHost.init;
+
+		return Nullable!MongoHost(mongosHosts[uniform(0, mongosHosts.length)]);
 	}
 
 	Nullable!MongoHost primaryHost() const
@@ -293,6 +400,15 @@ private enum long HEARTBEAT_FREQUENCY_USECS = 10_000_000;
 Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPreference pref,
 	long localThresholdMS = 15, long maxStalenessSeconds = -1)
 {
+	// Single topology: return the one server regardless of read preference
+	if (topology.type == TopologyType.single && topology.servers.length > 0)
+		return Nullable!MongoHost(topology.servers[0].host);
+
+	// Sharded: return random mongos (read preference forwarded to mongos)
+	if (topology.type == TopologyType.sharded)
+		return topology.randomMongosHost();
+
+	// Replica set or unknown: apply read preference logic
 	final switch (pref)
 	{
 	case ReadPreference.primary:
@@ -412,19 +528,38 @@ unittest
 	assert(result.get == sec);
 }
 
-/// selectServer returns null for ReadPreference.secondary when no secondaries
+/// selectServer returns null for ReadPreference.secondary when no secondaries in replica set
 unittest
 {
 	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
 	auto primary = MongoHost("primary", 27017);
 
 	ServerDescription primaryDesc;
 	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
 
 	topo.update(primary, primaryDesc);
 
 	auto result = selectServer(topo, ReadPreference.secondary);
 	assert(result.isNull);
+}
+
+/// single topology returns server regardless of read preference
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("standalone", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+
+	topo.update(host, desc);
+	assert(topo.type == TopologyType.single);
+
+	auto result = selectServer(topo, ReadPreference.secondary);
+	assert(!result.isNull);
+	assert(result.get == host);
 }
 
 /// selectServer primaryPreferred falls back to secondary
@@ -1025,4 +1160,96 @@ unittest
 		if (r.get == staleSec) sawStale = true;
 	}
 	assert(!sawStale);
+}
+
+/// unknown transitions to replicaSetWithPrimary when primary discovered
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto host = MongoHost("host1", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.setName = "rs0";
+
+	topo.update(host, desc);
+	assert(topo.type == TopologyType.replicaSetWithPrimary);
+}
+
+/// replicaSetWithPrimary transitions to replicaSetNoPrimary when primary fails
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto primary = MongoHost("primary", 27017);
+	auto sec = MongoHost("secondary", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+
+	ServerDescription secDesc;
+	secDesc.secondary = true;
+	secDesc.setName = "rs0";
+
+	topo.update(primary, primaryDesc);
+	topo.update(sec, secDesc);
+	assert(topo.type == TopologyType.replicaSetWithPrimary);
+
+	topo.markFailed(primary);
+	assert(topo.type == TopologyType.replicaSetNoPrimary);
+}
+
+/// sharded topology only keeps mongos servers
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.sharded;
+	auto mongos = MongoHost("mongos", 27017);
+	auto rs = MongoHost("rs", 27017);
+
+	ServerDescription mongosDesc;
+	mongosDesc.msg = "isdbgrid";
+
+	ServerDescription rsDesc;
+	rsDesc.isWritablePrimary = true;
+	rsDesc.setName = "rs0";
+
+	topo.update(mongos, mongosDesc);
+	topo.update(rs, rsDesc);
+
+	// RS server should be removed as incompatible with sharded topology
+	assert(topo.servers.length == 1);
+	assert(topo.servers[0].host == mongos);
+}
+
+/// server type classification from hello response fields
+unittest
+{
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.setName = "rs0";
+	assert(primary.classifiedType() == ServerDescription.ServerType.RSPrimary);
+
+	ServerDescription secondary;
+	secondary.secondary = true;
+	secondary.setName = "rs0";
+	assert(secondary.classifiedType() == ServerDescription.ServerType.RSSecondary);
+
+	ServerDescription arbiter;
+	arbiter.arbiterOnly = true;
+	arbiter.setName = "rs0";
+	assert(arbiter.classifiedType() == ServerDescription.ServerType.RSArbiter);
+
+	ServerDescription mongos;
+	mongos.msg = "isdbgrid";
+	assert(mongos.classifiedType() == ServerDescription.ServerType.mongos);
+
+	ServerDescription standalone;
+	standalone.isWritablePrimary = true;
+	assert(standalone.classifiedType() == ServerDescription.ServerType.standalone);
+
+	ServerDescription unknown;
+	assert(unknown.classifiedType() == ServerDescription.ServerType.unknown);
 }
