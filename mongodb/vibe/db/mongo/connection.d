@@ -1370,6 +1370,8 @@ struct ServerDescription
 	bool ismaster;
 
 	bool isWritablePrimary;
+	bool arbiterOnly;
+	string msg;
 	Nullable!int logicalSessionTimeoutMinutes;
 
 	/// Set by the driver after probing, not deserialized from the server response.
@@ -1393,6 +1395,31 @@ struct ServerDescription
 	bool isReplicaSetMember() @safe const @nogc pure nothrow
 	{
 		return setName.length > 0;
+	}
+
+	ServerType classifiedType() @safe const @nogc pure nothrow
+	{
+		if (msg == "isdbgrid")
+			return ServerType.mongos;
+
+		if (setName.length)
+		{
+			if (isPrimary)
+				return ServerType.RSPrimary;
+
+			if (isSecondaryNode)
+				return ServerType.RSSecondary;
+
+			if (arbiterOnly)
+				return ServerType.RSArbiter;
+
+			return ServerType.RSOther;
+		}
+
+		if (isPrimary)
+			return ServerType.standalone;
+
+		return ServerType.unknown;
 	}
 }
 
