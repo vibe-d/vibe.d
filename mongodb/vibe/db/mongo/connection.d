@@ -18,7 +18,6 @@ import vibe.core.net;
 import vibe.data.bson;
 import vibe.db.mongo.flags;
 import vibe.db.mongo.settings;
-import vibe.db.mongo.settings : Compressor, compressorName;
 import vibe.db.mongo.topology;
 import vibe.inet.webform;
 import vibe.stream.tls;
@@ -1468,6 +1467,7 @@ private void parseOpMsgBody(bool dupBson)(
 			case 0:
 				gotSec0 = true;
 				int bsonLen = readVal!int();
+				enforce!MongoDriverException(bsonLen >= 5, "Invalid BSON document length in decompressed OP_MSG");
 				enforce!MongoDriverException(pos + bsonLen - 4 <= data.length, "BSON overflows decompressed buffer");
 
 				auto bsonData = new ubyte[bsonLen];
@@ -1498,6 +1498,8 @@ private void parseOpMsgBody(bool dupBson)(
 
 				while (pos - sectionStart < size) {
 					int docLen = readVal!int();
+					enforce!MongoDriverException(docLen >= 5, "Invalid BSON document length in decompressed OP_MSG section 1");
+
 					auto bsonData = new ubyte[docLen];
 					bsonData[0 .. 4] = toBsonData(docLen)[];
 					bsonData[4 .. docLen] = data[pos .. pos + docLen - 4];
@@ -1512,6 +1514,31 @@ private void parseOpMsgBody(bool dupBson)(
 				throw new MongoDriverException("Unexpected payload section type in decompressed message: " ~ payloadType.to!string);
 		}
 	}
+}
+
+unittest
+{
+	assert(negotiateCompressor([Compressor.zlib], ["zlib"]) == Compressor.zlib);
+	assert(negotiateCompressor([Compressor.zstd, Compressor.zlib], ["zlib", "snappy"]) == Compressor.zlib);
+	assert(negotiateCompressor([Compressor.zstd], ["zlib"]) == Compressor.noop);
+	assert(negotiateCompressor([], ["zlib"]) == Compressor.noop);
+	assert(negotiateCompressor([Compressor.zlib], []) == Compressor.noop);
+}
+
+unittest
+{
+	auto original = cast(const(ubyte)[]) "The robot shall not harm a human, but I really want to.";
+	auto compressed = compressData(Compressor.zlib, original, 6);
+	auto decompressed = decompressData(Compressor.zlib, compressed, cast(int) original.length);
+	assert(decompressed == original);
+}
+
+unittest
+{
+	assert(compressorFromId(0) == Compressor.noop);
+	assert(compressorFromId(1) == Compressor.snappy);
+	assert(compressorFromId(2) == Compressor.zlib);
+	assert(compressorFromId(3) == Compressor.zstd);
 }
 
 struct ServerDescription
