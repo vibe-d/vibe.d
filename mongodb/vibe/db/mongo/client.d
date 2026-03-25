@@ -175,5 +175,19 @@ final class MongoClient {
 		return ret;
 	}
 
-	package auto lockConnection() { return m_connections.lockConnection(); }
+	package LockedConnection!MongoConnection lockConnection()
+	{
+		foreach (_; 0 .. 100)
+		{
+			auto conn = m_connections.lockConnection();
+
+			if (conn.alive)
+				return conn;
+
+			m_connections.remove(conn.__conn);
+			logDiagnostic("Evicted dead MongoDB connection from pool");
+		}
+
+		throw new MongoDriverException("Failed to acquire a live connection after evicting 100 dead connections");
+	}
 }
