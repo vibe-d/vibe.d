@@ -1253,3 +1253,208 @@ unittest
 	ServerDescription unknown;
 	assert(unknown.classifiedType() == ServerDescription.ServerType.unknown);
 }
+
+/// RSOther classification for setName member that is neither primary, secondary, nor arbiter
+unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	assert(desc.classifiedType() == ServerDescription.ServerType.RSOther);
+}
+
+/// malformed response with both isWritablePrimary and secondary classifies as RSOther
+unittest
+{
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.secondary = true;
+	desc.setName = "rs0";
+	assert(desc.classifiedType() == ServerDescription.ServerType.RSOther);
+}
+
+/// unknown transitions to sharded when mongos discovered
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("mongos1", 27017);
+
+	ServerDescription desc;
+	desc.msg = "isdbgrid";
+
+	topo.update(host, desc);
+	assert(topo.type == TopologyType.sharded);
+}
+
+/// unknown transitions to replicaSetNoPrimary when secondary discovered
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("sec1", 27017);
+
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.setName = "rs0";
+
+	topo.update(host, desc);
+	assert(topo.type == TopologyType.replicaSetNoPrimary);
+}
+
+/// replicaSetNoPrimary transitions to replicaSetWithPrimary when primary arrives
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto sec = MongoHost("sec", 27017);
+	auto pri = MongoHost("pri", 27017);
+
+	ServerDescription secDesc;
+	secDesc.secondary = true;
+	secDesc.setName = "rs0";
+	topo.update(sec, secDesc);
+	assert(topo.type == TopologyType.replicaSetNoPrimary);
+
+	ServerDescription priDesc;
+	priDesc.isWritablePrimary = true;
+	priDesc.setName = "rs0";
+	topo.update(pri, priDesc);
+	assert(topo.type == TopologyType.replicaSetWithPrimary);
+}
+
+/// sharded selectServer returns random mongos
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.sharded;
+	auto m1 = MongoHost("mongos1", 27017);
+	auto m2 = MongoHost("mongos2", 27017);
+
+	ServerDescription desc;
+	desc.msg = "isdbgrid";
+
+	topo.update(m1, desc);
+	topo.update(m2, desc);
+
+	bool sawM1, sawM2;
+	foreach (_; 0 .. 200)
+	{
+		auto r = selectServer(topo, ReadPreference.primary);
+		assert(!r.isNull);
+		if (r.get == m1) sawM1 = true;
+		if (r.get == m2) sawM2 = true;
+	}
+	assert(sawM1);
+	assert(sawM2);
+}
+
+/// sharded selectServer returns null when no mongos available
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.sharded;
+
+	auto result = selectServer(topo, ReadPreference.primary);
+	assert(result.isNull);
+}
+
+/// selectServer on empty single topology returns null
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.single;
+
+	auto result = selectServer(topo, ReadPreference.primary);
+	assert(result.isNull);
+}
+
+/// nearest read preference with staleness filtering excludes stale secondaries
+unittest
+{
+	import vibe.data.bson : BsonDate;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto freshSec = MongoHost("fresh", 27017);
+	auto staleSec = MongoHost("stale", 27017);
+
+	ServerDescription freshDesc;
+	freshDesc.secondary = true;
+	freshDesc.setName = "rs0";
+	freshDesc.roundTripTime = 0.005;
+	freshDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(1_000_000)));
+	freshDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	ServerDescription staleDesc;
+	staleDesc.secondary = true;
+	staleDesc.setName = "rs0";
+	staleDesc.roundTripTime = 0.005;
+	staleDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(900_000)));
+	staleDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	topo.update(freshSec, freshDesc);
+	topo.update(staleSec, staleDesc);
+
+	// staleSec has 110s staleness, maxStaleness=90s should exclude it
+	bool sawStale = false;
+	foreach (_; 0 .. 100)
+	{
+		auto r = selectServer(topo, ReadPreference.nearest, 15, 90);
+		assert(!r.isNull);
+		if (r.get == staleSec) sawStale = true;
+	}
+	assert(!sawStale);
+}
+
+/// secondaryPreferred with all secondaries stale falls back to primary
+unittest
+{
+	import vibe.data.bson : BsonDate;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto primary = MongoHost("primary", 27017);
+	auto staleSec = MongoHost("stale", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+	primaryDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(1_000_000)));
+	primaryDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	ServerDescription staleDesc;
+	staleDesc.secondary = true;
+	staleDesc.setName = "rs0";
+	staleDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(800_000)));
+	staleDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	topo.update(primary, primaryDesc);
+	topo.update(staleSec, staleDesc);
+
+	// staleSec has 200s + 10s staleness, maxStaleness=90 excludes it, falls back to primary
+	auto result = selectServer(topo, ReadPreference.secondaryPreferred, 15, 90);
+	assert(!result.isNull);
+	assert(result.get == primary);
+}
+
+/// isStaleUpdate: incoming has topologyVersion but existing does not — accepts update
+unittest
+{
+	auto pid = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
+
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+
+	ServerDescription desc1;
+	desc1.isWritablePrimary = true;
+	desc1.setName = "rs0";
+
+	topo.update(host, desc1);
+	assert(topo.servers[0].description.isPrimary);
+
+	ServerDescription desc2;
+	desc2.secondary = true;
+	desc2.setName = "rs0";
+	desc2.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 1));
+
+	topo.update(host, desc2);
+	assert(topo.servers[0].description.isSecondaryNode);
+}
