@@ -34,6 +34,7 @@ final class MongoClient {
 		ConnectionPool!MongoConnection m_connections;
 		MongoClientSettings m_settings;
 		TopologyDescription m_topology;
+		bool m_discoveryInProgress;
 	}
 
 	package this(string host, ushort port)
@@ -66,30 +67,8 @@ final class MongoClient {
 
 		discoverTopology();
 
-		m_connections = new ConnectionPool!MongoConnection({
-				auto targetHost = getSelectedHost();
-				auto ret = new MongoConnection(settings);
-
-				try {
-					ret.connectToHost(targetHost);
-				} catch (Exception e) {
-					() @trusted { destroy(ret); } ();
-
-					// Topology may be stale — re-discover and retry once
-					discoverTopology();
-					targetHost = getSelectedHost();
-
-					ret = new MongoConnection(settings);
-					try {
-						ret.connectToHost(targetHost);
-					} catch (Exception e2) {
-						() @trusted { destroy(ret); } ();
-						throw e2;
-					}
-				}
-
-				return ret;
-			},
+		m_connections = new ConnectionPool!MongoConnection(
+			&createConnection,
 			settings.maxConnections
 		);
 
@@ -216,34 +195,72 @@ final class MongoClient {
 		return selected.get;
 	}
 
+	private MongoConnection createConnection() @safe
+	{
+		auto targetHost = getSelectedHost();
+		auto ret = new MongoConnection(m_settings);
+
+		try {
+			ret.connectToHost(targetHost);
+			return ret;
+		} catch (Exception e) {
+			() @trusted { destroy(ret); } ();
+
+			logWarn("Connection to %s:%s failed: %s — re-discovering topology",
+				targetHost.name, targetHost.port, e.msg);
+		}
+
+		discoverTopology();
+		targetHost = getSelectedHost();
+
+		ret = new MongoConnection(m_settings);
+		try {
+			ret.connectToHost(targetHost);
+		} catch (Exception e2) {
+			() @trusted { destroy(ret); } ();
+			throw e2;
+		}
+
+		return ret;
+	}
+
 	private void discoverTopology()
 	{
 		import std.algorithm : canFind;
 
-		m_topology = TopologyDescription.init;
+		if (m_discoveryInProgress)
+			return;
+
+		m_discoveryInProgress = true;
+		scope (exit)
+			m_discoveryInProgress = false;
+
+		TopologyDescription newTopology;
 		Exception lastException;
 
 		foreach (host; m_settings.hosts) {
-			probeAndUpdate(host, lastException);
+			probeAndUpdate(newTopology, host, lastException);
 		}
 
-		foreach (host; m_topology.allKnownHosts()) {
-			if (m_topology.servers.canFind!(s => s.host == host))
+		foreach (host; newTopology.allKnownHosts()) {
+			if (newTopology.servers.canFind!(s => s.host == host))
 				continue;
 
-			probeAndUpdate(host, lastException);
+			probeAndUpdate(newTopology, host, lastException);
 		}
 
-		auto selected = selectServer(m_topology, m_settings.readPreference, m_settings.localThresholdMS);
+		auto selected = selectServer(newTopology, m_settings.readPreference, m_settings.localThresholdMS);
 
 		if (selected.isNull) {
 			throw lastException !is null
 				? lastException
 				: new MongoDriverException("No suitable server found during topology discovery");
 		}
+
+		m_topology = newTopology;
 	}
 
-	private void probeAndUpdate(MongoHost host, ref Exception lastException)
+	private void probeAndUpdate(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
 	{
 		try {
 			auto desc = probeServer(m_settings, host);
@@ -251,11 +268,11 @@ final class MongoClient {
 			if (!matchesReplicaSet(m_settings.replicaSet, desc))
 				return;
 
-			m_topology.update(host, desc);
+			topology.update(host, desc);
 		} catch (Exception ex) {
 			lastException = ex;
 			logError("Failed to probe %s:%s: %s", host.name, host.port, ex.msg);
-			m_topology.markFailed(host);
+			topology.markFailed(host);
 		}
 	}
 }
