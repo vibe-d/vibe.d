@@ -1078,30 +1078,19 @@ final class MongoConnection {
 
 	private int send(ARGS...)(OpCode code, int response_to, scope ARGS args)
 	{
-		if( !connected() ) {
-			if (m_allowReconnect) connect();
-			else if (m_isAuthenticating) throw new MongoAuthException("Connection got closed while authenticating");
-			else throw new MongoDriverException("Connection got closed while connecting");
-		}
+		ensureConnected();
+
 		int id = nextMessageId();
-		// sendValue!int to make sure we don't accidentally send other types after arithmetic operations/changing types
-		sendValue!int(16 + sendLength(args));
-		sendValue!int(id);
-		sendValue!int(response_to);
-		sendValue!int(cast(int)code);
+		sendHeader(16 + sendLength(args), id, response_to, code);
 		foreach (a; args) sendValue(a);
 		m_outRange.flush();
-		// logDebugV("Sent mongo opcode %s (id %s) in response to %s with args %s", code, id, response_to, tuple(args));
+
 		return id;
 	}
 
 	private int sendMsg(int response_to, uint flagBits, Bson document)
 	{
-		if( !connected() ) {
-			if (m_allowReconnect) connect();
-			else if (m_isAuthenticating) throw new MongoAuthException("Connection got closed while authenticating");
-			else throw new MongoDriverException("Connection got closed while connecting");
-		}
+		ensureConnected();
 
 		int id = nextMessageId();
 		const bool hasCRC = (flagBits & (1 << 16)) != 0;
@@ -1111,10 +1100,7 @@ final class MongoConnection {
 			&& !m_isAuthenticating;
 
 		if (!shouldCompress) {
-			sendValue!int(21 + sendLength(document));
-			sendValue!int(id);
-			sendValue!int(response_to);
-			sendValue!int(cast(int) OpCode.Msg);
+			sendHeader(21 + sendLength(document), id, response_to, OpCode.Msg);
 			sendValue!uint(flagBits);
 			sendValue!ubyte(0);
 			sendValue(document);
@@ -1134,10 +1120,7 @@ final class MongoConnection {
 			m_negotiatedCompressor, uncompressedBody, m_settings.zlibCompressionLevel);
 
 		int msgLen = cast(int)(16 + 4 + 4 + 1 + compressedBody.length);
-		sendValue!int(msgLen);
-		sendValue!int(id);
-		sendValue!int(response_to);
-		sendValue!int(cast(int) OpCode.Compressed);
+		sendHeader(msgLen, id, response_to, OpCode.Compressed);
 		sendValue!int(cast(int) OpCode.Msg);
 		sendValue!int(uncompressedSize);
 		sendValue!ubyte(cast(ubyte) m_negotiatedCompressor);
@@ -1145,6 +1128,30 @@ final class MongoConnection {
 		m_outRange.flush();
 
 		return id;
+	}
+
+	private void ensureConnected()
+	{
+		if (connected()) {
+			return;
+		}
+
+		if (m_allowReconnect) {
+			connect();
+			return;
+		}
+
+		throw m_isAuthenticating
+			? new MongoAuthException("Connection got closed while authenticating")
+			: new MongoDriverException("Connection got closed while connecting");
+	}
+
+	private void sendHeader(int messageLength, int id, int responseTo, OpCode code)
+	{
+		sendValue!int(messageLength);
+		sendValue!int(id);
+		sendValue!int(responseTo);
+		sendValue!int(cast(int) code);
 	}
 
 	private void sendValue(T)(scope T value)
