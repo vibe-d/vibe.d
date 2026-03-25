@@ -43,7 +43,7 @@ int main(string[] args)
 
 	auto coll = client.getCollection("deadconn_test.items");
 
-	// Insert documents using separate lockConnection calls to grow the pool
+	// Insert documents to ensure at least one pooled connection exists
 	foreach (i; 0 .. 5)
 	{
 		auto objID = BsonObjectID.generate;

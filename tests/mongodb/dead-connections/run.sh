@@ -3,9 +3,14 @@ set -e
 
 MONGOPORT=22840
 MONGOPID=0
+APP_PID=0
 
 cleanup() {
 	echo "[INFO] Cleaning up..."
+	if [ "$APP_PID" != "0" ] && kill -0 "$APP_PID" 2>/dev/null; then
+		kill "$APP_PID" 2>/dev/null || true
+		wait "$APP_PID" 2>/dev/null || true
+	fi
 	if [ "$MONGOPID" != "0" ] && kill -0 "$MONGOPID" 2>/dev/null; then
 		kill "$MONGOPID" 2>/dev/null || true
 		while kill -0 "$MONGOPID" 2>/dev/null; do sleep 1; done
