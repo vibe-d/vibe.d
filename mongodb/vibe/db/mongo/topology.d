@@ -11,9 +11,12 @@
 */
 module vibe.db.mongo.topology;
 
-import vibe.db.mongo.connection : ServerDescription;
+import vibe.db.mongo.connection : ServerDescription, TopologyVersion;
+import vibe.data.bson : BsonObjectID;
 import vibe.db.mongo.settings;
 import vibe.core.log;
+
+import std.typecons : Nullable;
 
 @safe:
 
@@ -34,6 +37,9 @@ struct TopologyDescription
 		{
 			if (s.host == host)
 			{
+				if (isStaleUpdate(s.description, desc))
+					return;
+
 				s.description = desc;
 				return;
 			}
@@ -195,7 +201,27 @@ private bool hasHost(const MongoHost[] hosts, MongoHost h) pure nothrow @nogc
 	return false;
 }
 
-private import std.typecons : Nullable;
+/**
+ * Returns true if `incoming` is stale relative to `existing`.
+ *
+ * Per the SDAM spec, a server description with the same processId but
+ * a lower or equal counter is stale. A different processId means the
+ * server restarted, so the update is always fresh.
+ */
+private bool isStaleUpdate(ref const ServerDescription existing, ref const ServerDescription incoming)
+	pure nothrow @nogc
+{
+	if (existing.topologyVersion.isNull || incoming.topologyVersion.isNull)
+		return false;
+
+	auto oldTV = existing.topologyVersion.get;
+	auto newTV = incoming.topologyVersion.get;
+
+	if (oldTV.processId != newTV.processId)
+		return false;
+
+	return newTV.counter <= oldTV.counter;
+}
 
 /// selectServer returns primary for ReadPreference.primary
 unittest
@@ -571,4 +597,121 @@ unittest
 
 	auto known = topo.allKnownHosts();
 	assert(known.length == 3);
+}
+
+/// update with higher topology version counter overwrites
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+	auto pid = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
+
+	ServerDescription desc1;
+	desc1.secondary = true;
+	desc1.setName = "rs0";
+	desc1.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 1));
+
+	topo.update(host, desc1);
+	assert(topo.servers[0].description.isSecondaryNode);
+
+	ServerDescription desc2;
+	desc2.isWritablePrimary = true;
+	desc2.setName = "rs0";
+	desc2.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 2));
+
+	topo.update(host, desc2);
+	assert(topo.servers[0].description.isPrimary);
+}
+
+/// update with lower topology version counter is rejected
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+	auto pid = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
+
+	ServerDescription desc1;
+	desc1.isWritablePrimary = true;
+	desc1.setName = "rs0";
+	desc1.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
+
+	topo.update(host, desc1);
+	assert(topo.servers[0].description.isPrimary);
+
+	ServerDescription desc2;
+	desc2.secondary = true;
+	desc2.setName = "rs0";
+	desc2.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 3));
+
+	topo.update(host, desc2);
+	assert(topo.servers[0].description.isPrimary);
+}
+
+/// update with equal topology version counter is rejected
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+	auto pid = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
+
+	ServerDescription desc1;
+	desc1.isWritablePrimary = true;
+	desc1.setName = "rs0";
+	desc1.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
+
+	topo.update(host, desc1);
+
+	ServerDescription desc2;
+	desc2.secondary = true;
+	desc2.setName = "rs0";
+	desc2.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
+
+	topo.update(host, desc2);
+	assert(topo.servers[0].description.isPrimary);
+}
+
+/// update with different processId always overwrites (server restarted)
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+	auto pid1 = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
+	auto pid2 = BsonObjectID.fromHexString("112233aabbccddeeff001122");
+
+	ServerDescription desc1;
+	desc1.isWritablePrimary = true;
+	desc1.setName = "rs0";
+	desc1.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid1, 100));
+
+	topo.update(host, desc1);
+	assert(topo.servers[0].description.isPrimary);
+
+	ServerDescription desc2;
+	desc2.secondary = true;
+	desc2.setName = "rs0";
+	desc2.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid2, 1));
+
+	topo.update(host, desc2);
+	assert(topo.servers[0].description.isSecondaryNode);
+}
+
+/// update without topologyVersion always overwrites (pre-4.4 compat)
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+
+	ServerDescription desc1;
+	desc1.isWritablePrimary = true;
+	desc1.setName = "rs0";
+
+	topo.update(host, desc1);
+	assert(topo.servers[0].description.isPrimary);
+
+	ServerDescription desc2;
+	desc2.secondary = true;
+	desc2.setName = "rs0";
+
+	topo.update(host, desc2);
+	assert(topo.servers[0].description.isSecondaryNode);
 }
