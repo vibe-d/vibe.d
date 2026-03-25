@@ -189,7 +189,7 @@ final class MongoClient {
 
 	package MongoHost getSelectedHost()
 	{
-		auto selected = selectServer(m_topology, m_settings.readPreference, m_settings.localThresholdMS);
+		auto selected = selectServer(m_topology, m_settings.readPreference, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
 		enforce!MongoDriverException(!selected.isNull, "No suitable server found for read preference");
 
 		return selected.get;
@@ -249,7 +249,7 @@ final class MongoClient {
 			probeAndUpdate(newTopology, host, lastException);
 		}
 
-		auto selected = selectServer(newTopology, m_settings.readPreference, m_settings.localThresholdMS);
+		auto selected = selectServer(newTopology, m_settings.readPreference, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
 
 		if (selected.isNull) {
 			throw lastException !is null

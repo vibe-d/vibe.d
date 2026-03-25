@@ -1338,11 +1338,17 @@ struct ServerDescription
 		RSGhost
 	}
 
+	static struct LastWrite
+	{
+	@optional:
+		Nullable!BsonDate lastWriteDate;
+	}
+
 @optional:
 	string address;
 	string error;
 	float roundTripTime = 0;
-	Nullable!BsonDate lastWriteDate;
+	LastWrite lastWrite;
 	Nullable!BsonObjectID opTime;
 	ServerType type = ServerType.unknown;
 	int minWireVersion, maxWireVersion;
@@ -1364,8 +1370,10 @@ struct ServerDescription
 	bool ismaster;
 
 	bool isWritablePrimary;
-	string lastUpdateTime = "infinity ago";
 	Nullable!int logicalSessionTimeoutMinutes;
+
+	/// Set by the driver after probing, not deserialized from the server response.
+	long lastUpdateTimeUsecs;
 
 	bool satisfiesVersion(WireVersion wireVersion) @safe const @nogc pure nothrow
 	{
@@ -1492,6 +1500,10 @@ package ServerDescription probeServer(MongoClientSettings settings, MongoHost ho
 
 	auto desc = conn.m_description;
 	desc.roundTripTime = sw.peek.total!"usecs" / 1_000_000.0f;
+
+	import core.time : MonoTime;
+	auto now = MonoTime.currTime;
+	desc.lastUpdateTimeUsecs = now.ticks * 1_000_000 / MonoTime.ticksPerSecond;
 
 	return desc;
 }

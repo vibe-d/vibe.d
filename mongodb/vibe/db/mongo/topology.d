@@ -16,6 +16,7 @@ import vibe.data.bson : BsonObjectID;
 import vibe.db.mongo.settings;
 import vibe.core.log;
 
+import std.random : uniform;
 import std.typecons : Nullable;
 
 @safe:
@@ -150,32 +151,41 @@ struct TopologyDescription
 		return Nullable!MongoHost.init;
 	}
 
-	MongoHost[] secondaryHosts() const
+	Nullable!MongoHost randomSecondaryHost(long maxStalenessSeconds = -1) const
+	{
+		auto hosts = secondaryHosts(maxStalenessSeconds);
+		if (!hosts.length)
+			return Nullable!MongoHost.init;
+
+		return Nullable!MongoHost(hosts[uniform(0, hosts.length)]);
+	}
+
+	MongoHost[] secondaryHosts(long maxStalenessSeconds = -1) const
 	{
 		MongoHost[] result;
 		foreach (ref s; servers)
 		{
-			if (s.description.isSecondaryNode)
-				result ~= s.host;
+			if (!s.description.isSecondaryNode)
+				continue;
+
+			if (maxStalenessSeconds >= 0 && isStaleSecondary(s.description, maxStalenessSeconds))
+				continue;
+
+			result ~= s.host;
 		}
 		return result;
 	}
 
-	Nullable!MongoHost randomSecondaryHost() const
-	{
-		auto hosts = secondaryHosts;
-		if (!hosts.length)
-			return Nullable!MongoHost.init;
-		import std.random : uniform;
-		return Nullable!MongoHost(hosts[uniform(0, hosts.length)]);
-	}
-
-	Nullable!MongoHost randomHostWithinLatencyWindow(long localThresholdMS) const
+	Nullable!MongoHost randomHostWithinLatencyWindow(long localThresholdMS, long maxStalenessSeconds = -1) const
 	{
 		double minRTT = double.max;
 		foreach (ref s; servers)
 		{
 			if (!s.description.isPrimary && !s.description.isSecondaryNode)
+				continue;
+
+			if (s.description.isSecondaryNode && maxStalenessSeconds >= 0
+				&& isStaleSecondary(s.description, maxStalenessSeconds))
 				continue;
 
 			if (s.description.roundTripTime < minRTT)
@@ -192,6 +202,10 @@ struct TopologyDescription
 			if (!s.description.isPrimary && !s.description.isSecondaryNode)
 				continue;
 
+			if (s.description.isSecondaryNode && maxStalenessSeconds >= 0
+				&& isStaleSecondary(s.description, maxStalenessSeconds))
+				continue;
+
 			if (s.description.roundTripTime <= threshold)
 				eligible ~= s.host;
 		}
@@ -202,6 +216,63 @@ struct TopologyDescription
 		import std.random : uniform;
 		return Nullable!MongoHost(eligible[uniform(0, eligible.length)]);
 	}
+
+	private bool isStaleSecondary(ref const ServerDescription desc, long maxStalenessSeconds) const
+	{
+		if (desc.lastWrite.lastWriteDate.isNull)
+			return false;
+
+		auto primaryIdx = findPrimaryIdx();
+		auto hasPrimaryWriteDate = primaryIdx != -1
+			&& !servers[primaryIdx].description.lastWrite.lastWriteDate.isNull;
+
+		auto stalenessUsecs = hasPrimaryWriteDate
+			? stalenessWithPrimary(desc, servers[primaryIdx].description)
+			: stalenessWithoutPrimary(desc);
+
+		if (stalenessUsecs < 0)
+			return false;
+
+		return stalenessUsecs > maxStalenessSeconds * 1_000_000L;
+	}
+
+	private long stalenessWithPrimary(ref const ServerDescription sec, ref const ServerDescription pri) const
+	{
+		auto sLag = sec.lastUpdateTimeUsecs - sec.lastWrite.lastWriteDate.get.value * 1000;
+		auto pLag = pri.lastUpdateTimeUsecs - pri.lastWrite.lastWriteDate.get.value * 1000;
+
+		return sLag - pLag + HEARTBEAT_FREQUENCY_USECS;
+	}
+
+	private long stalenessWithoutPrimary(ref const ServerDescription desc) const
+	{
+		long maxWriteDate = long.min;
+		foreach (ref s; servers)
+		{
+			if (!s.description.isSecondaryNode || s.description.lastWrite.lastWriteDate.isNull)
+				continue;
+
+			auto wd = s.description.lastWrite.lastWriteDate.get.value * 1000;
+			if (wd > maxWriteDate)
+				maxWriteDate = wd;
+		}
+
+		if (maxWriteDate == long.min)
+			return -1;
+
+		auto sWriteDate = desc.lastWrite.lastWriteDate.get.value * 1000;
+		return maxWriteDate - sWriteDate + HEARTBEAT_FREQUENCY_USECS;
+	}
+
+	private long findPrimaryIdx() const
+	{
+		foreach (i, ref s; servers)
+		{
+			if (s.description.isPrimary)
+				return cast(long) i;
+		}
+		return -1;
+	}
 }
 
 struct ServerRecord
@@ -210,13 +281,17 @@ struct ServerRecord
 	ServerDescription description;
 }
 
+/// Default heartbeat frequency (10 seconds) used for staleness calculation.
+private enum long HEARTBEAT_FREQUENCY_USECS = 10_000_000;
+
 /**
  * Selects a server from the topology based on the given read preference.
  *
  * Returns the host to connect to, or Nullable!MongoHost.init if no
  * suitable server is available.
  */
-Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPreference pref, long localThresholdMS = 15)
+Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPreference pref,
+	long localThresholdMS = 15, long maxStalenessSeconds = -1)
 {
 	final switch (pref)
 	{
@@ -227,19 +302,19 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 		auto primary = topology.primaryHost;
 		if (!primary.isNull)
 			return primary;
-		return topology.randomSecondaryHost;
+		return topology.randomSecondaryHost(maxStalenessSeconds);
 
 	case ReadPreference.secondary:
-		return topology.randomSecondaryHost;
+		return topology.randomSecondaryHost(maxStalenessSeconds);
 
 	case ReadPreference.secondaryPreferred:
-		auto secondary = topology.randomSecondaryHost;
+		auto secondary = topology.randomSecondaryHost(maxStalenessSeconds);
 		if (!secondary.isNull)
 			return secondary;
 		return topology.primaryHost;
 
 	case ReadPreference.nearest:
-		return topology.randomHostWithinLatencyWindow(localThresholdMS);
+		return topology.randomHostWithinLatencyWindow(localThresholdMS, maxStalenessSeconds);
 	}
 }
 
@@ -834,4 +909,120 @@ unittest
 	topo.update(hostB, secDesc);
 	topo.update(hostC, secDesc);
 	assert(topo.servers.length == 3);
+}
+
+/// selectServer excludes stale secondary with maxStalenessSeconds
+unittest
+{
+	import vibe.data.bson : BsonDate;
+
+	TopologyDescription topo;
+	auto primary = MongoHost("primary", 27017);
+	auto freshSec = MongoHost("fresh", 27017);
+	auto staleSec = MongoHost("stale", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+	primaryDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(1_000_000)));
+	primaryDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	ServerDescription freshDesc;
+	freshDesc.secondary = true;
+	freshDesc.setName = "rs0";
+	freshDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(999_000)));
+	freshDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	ServerDescription staleDesc;
+	staleDesc.secondary = true;
+	staleDesc.setName = "rs0";
+	staleDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(900_000)));
+	staleDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	topo.update(primary, primaryDesc);
+	topo.update(freshSec, freshDesc);
+	topo.update(staleSec, staleDesc);
+
+	// maxStaleness=120s: staleSec has 100s lag, should be included
+	auto result = selectServer(topo, ReadPreference.secondary, 15, 120);
+	assert(!result.isNull);
+
+	// maxStaleness=90s: staleSec has 100s lag, only freshSec eligible
+	bool sawStale = false;
+	foreach (_; 0 .. 100)
+	{
+		auto r = selectServer(topo, ReadPreference.secondary, 15, 90);
+		assert(!r.isNull);
+		if (r.get == staleSec) sawStale = true;
+	}
+	assert(!sawStale);
+}
+
+/// selectServer with maxStalenessSeconds=-1 disables staleness filtering
+unittest
+{
+	import vibe.data.bson : BsonDate;
+
+	TopologyDescription topo;
+	auto primary = MongoHost("primary", 27017);
+	auto staleSec = MongoHost("stale", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+	primaryDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(1_000_000)));
+	primaryDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	ServerDescription staleDesc;
+	staleDesc.secondary = true;
+	staleDesc.setName = "rs0";
+	staleDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(1)));
+	staleDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	topo.update(primary, primaryDesc);
+	topo.update(staleSec, staleDesc);
+
+	auto result = selectServer(topo, ReadPreference.secondary, 15, -1);
+	assert(!result.isNull);
+	assert(result.get == staleSec);
+}
+
+/// staleness calc without primary uses SMax fallback
+unittest
+{
+	import vibe.data.bson : BsonDate;
+
+	TopologyDescription topo;
+	auto freshSec = MongoHost("fresh", 27017);
+	auto staleSec = MongoHost("stale", 27017);
+
+	ServerDescription freshDesc;
+	freshDesc.secondary = true;
+	freshDesc.setName = "rs0";
+	freshDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(1_000_000)));
+	freshDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	ServerDescription staleDesc;
+	staleDesc.secondary = true;
+	staleDesc.setName = "rs0";
+	staleDesc.lastWrite = ServerDescription.LastWrite(Nullable!BsonDate(BsonDate(900_000)));
+	staleDesc.lastUpdateTimeUsecs = 1_000_000_000;
+
+	topo.update(freshSec, freshDesc);
+	topo.update(staleSec, staleDesc);
+
+	// No primary. SMax.lastWriteDate - S.lastWriteDate = 100s + 10s heartbeat = 110s
+	// maxStaleness=120s: both eligible
+	auto result = selectServer(topo, ReadPreference.secondary, 15, 120);
+	assert(!result.isNull);
+
+	// maxStaleness=90s: staleSec has 110s staleness, excluded
+	bool sawStale = false;
+	foreach (_; 0 .. 100)
+	{
+		auto r = selectServer(topo, ReadPreference.secondary, 15, 90);
+		assert(!r.isNull);
+		if (r.get == staleSec) sawStale = true;
+	}
+	assert(!sawStale);
 }
