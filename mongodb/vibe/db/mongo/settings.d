@@ -786,6 +786,7 @@ unittest
 	assert(cfg.sslCAFile is null);
 }
 
+/// parseMongoDBUrl parses single compressor option
 unittest
 {
 	MongoClientSettings cfg;
@@ -793,6 +794,7 @@ unittest
 	assert(cfg.compressors == [Compressor.zlib]);
 }
 
+/// parseMongoDBUrl parses multiple compressors preserving order
 unittest
 {
 	MongoClientSettings cfg;
@@ -800,6 +802,7 @@ unittest
 	assert(cfg.compressors == [Compressor.snappy, Compressor.zlib, Compressor.zstd]);
 }
 
+/// parseMongoDBUrl parses compressors together with zlibCompressionLevel
 unittest
 {
 	MongoClientSettings cfg;
@@ -808,6 +811,7 @@ unittest
 	assert(cfg.zlibCompressionLevel == 6);
 }
 
+/// parseMongoDBUrl silently skips unknown compressors
 unittest
 {
 	MongoClientSettings cfg;

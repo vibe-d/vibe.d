@@ -1521,6 +1521,7 @@ private void parseOpMsgBody(bool dupBson)(
 	}
 }
 
+/// negotiateCompressor picks first client-preferred compressor supported by server
 unittest
 {
 	assert(negotiateCompressor([Compressor.zlib], ["zlib"]) == Compressor.zlib);
@@ -1530,6 +1531,7 @@ unittest
 	assert(negotiateCompressor([Compressor.zlib], []) == Compressor.noop);
 }
 
+/// compressData and decompressData round-trip preserves original data
 unittest
 {
 	auto original = cast(const(ubyte)[]) "The robot shall not harm a human, but I really want to.";
@@ -1538,6 +1540,7 @@ unittest
 	assert(decompressed == original);
 }
 
+/// compressorFromId maps wire protocol IDs to Compressor enum values
 unittest
 {
 	assert(compressorFromId(0) == Compressor.noop);
@@ -1546,12 +1549,12 @@ unittest
 	assert(compressorFromId(3) == Compressor.zstd);
 }
 
+/// parseOpMsgBody parses section 0 document and flags from raw OP_MSG body
 unittest
 {
 	auto doc = Bson(["ok": Bson(1.0)]);
 	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
 
-	// Build OP_MSG body: flagBits(4) + payloadType(1) + bsonDocument(N)
 	ubyte[] body_;
 	body_ ~= toBsonData(cast(uint) 0)[];
 	body_ ~= cast(ubyte) 0;
@@ -1569,12 +1572,12 @@ unittest
 	assert(parsed["ok"].get!double == 1.0);
 }
 
+/// parseOpMsgBody correctly parses a compressed and decompressed OP_MSG body
 unittest
 {
 	auto doc = Bson(["ok": Bson(1.0)]);
 	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
 
-	// Build OP_MSG body, compress it, decompress it, parse it
 	ubyte[] body_;
 	body_ ~= toBsonData(cast(uint) 0)[];
 	body_ ~= cast(ubyte) 0;
