@@ -43,6 +43,7 @@ struct TopologyDescription
 	ServerRecord[] servers;
 	string setName;
 	TopologyType type = TopologyType.unknown;
+	uint seedCount;
 	Nullable!BsonObjectID maxElectionId;
 	Nullable!int maxSetVersion;
 
@@ -232,7 +233,12 @@ struct TopologyDescription
 		{
 		case standalone:
 			if (type == TopologyType.unknown)
-				removeServersByType(ServerDescription.ServerType.standalone);
+			{
+				if (seedCount <= 1)
+					type = TopologyType.single;
+				else
+					removeServersByType(ServerDescription.ServerType.standalone);
+			}
 			break;
 
 		case mongos:
@@ -1556,6 +1562,7 @@ unittest
 unittest
 {
 	TopologyDescription topo;
+	topo.seedCount = 2;
 	auto standalone = MongoHost("standalone", 27017);
 	auto other = MongoHost("other", 27017);
 
@@ -1570,6 +1577,21 @@ unittest
 	assert(topo.type == TopologyType.unknown);
 	assert(topo.servers.length == 1);
 	assert(topo.servers[0].host == other);
+}
+
+/// standalone in unknown single-seed topology transitions to single
+unittest
+{
+	TopologyDescription topo;
+	topo.seedCount = 1;
+	auto host = MongoHost("standalone", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+
+	topo.update(host, desc);
+	assert(topo.type == TopologyType.single);
+	assert(topo.servers.length == 1);
 }
 
 /// standalone in replica set topology is removed

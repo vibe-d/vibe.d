@@ -237,6 +237,7 @@ final class MongoClient {
 
 		TopologyDescription newTopology;
 		newTopology.type = initialTopologyType();
+		newTopology.seedCount = cast(uint) m_settings.hosts.length;
 		Exception lastException;
 
 		foreach (host; m_settings.hosts) {
@@ -279,9 +280,6 @@ final class MongoClient {
 
 	private TopologyType initialTopologyType()
 	{
-		if (m_settings.hosts.length == 1 && !m_settings.replicaSet.length)
-			return TopologyType.single;
-
 		if (m_settings.replicaSet.length)
 			return TopologyType.replicaSetNoPrimary;
 
