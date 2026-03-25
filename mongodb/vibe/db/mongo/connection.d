@@ -144,6 +144,7 @@ final class MongoConnection {
 		int m_msgid = 1;
 		StreamOutputRange!(InterfaceProxy!Stream) m_outRange;
 		ServerDescription m_description;
+		MongoHost m_connectedHost;
 		/// Flag to prevent recursive connections when server closes connection while connecting
 		bool m_allowReconnect;
 		bool m_isAuthenticating;
@@ -311,11 +312,14 @@ final class MongoConnection {
 			speculativeResult = specResultField.get;
 
 		m_bytesRead = 0;
+		m_connectedHost = host;
 
-		if (doAuthenticate)
+		if (doAuthenticate) {
 			doAuth(isTLS);
-
-		logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
+			logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
+		} else {
+			logDiagnostic("Probed: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
+		}
 	}
 
 	private void doAuth(bool isTLS)
@@ -391,11 +395,13 @@ final class MongoConnection {
 		}
 	}
 
+	deprecated("Topology discovery is now handled by MongoClient. Use connectToHost instead.")
 	void connect()
 	{
 		connect(m_settings.readPreference);
 	}
 
+	deprecated("Topology discovery is now handled by MongoClient. Use connectToHost instead.")
 	void connect(ReadPreference readPreference)
 	{
 		TopologyDescription topology;
@@ -1042,7 +1048,7 @@ final class MongoConnection {
 	private int send(ARGS...)(OpCode code, int response_to, scope ARGS args)
 	{
 		if( !connected() ) {
-			if (m_allowReconnect) connect();
+			if (m_allowReconnect) connectToHost(m_connectedHost);
 			else if (m_isAuthenticating) throw new MongoAuthException("Connection got closed while authenticating");
 			else throw new MongoDriverException("Connection got closed while connecting");
 		}
@@ -1061,7 +1067,7 @@ final class MongoConnection {
 	private int sendMsg(int response_to, uint flagBits, Bson document)
 	{
 		if( !connected() ) {
-			if (m_allowReconnect) connect();
+			if (m_allowReconnect) connectToHost(m_connectedHost);
 			else if (m_isAuthenticating) throw new MongoAuthException("Connection got closed while authenticating");
 			else throw new MongoDriverException("Connection got closed while connecting");
 		}
