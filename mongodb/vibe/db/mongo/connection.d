@@ -1316,6 +1316,13 @@ private int sendLength(ARGS...)(scope ARGS args)
 	else return sendLength(args[0 .. $/2]) + sendLength(args[$/2 .. $]);
 }
 
+struct TopologyVersion
+{
+@optional:
+	BsonObjectID processId;
+	long counter = -1;
+}
+
 struct ServerDescription
 {
 	enum ServerType
@@ -1346,6 +1353,7 @@ struct ServerDescription
 	Nullable!int setVersion;
 	Nullable!BsonObjectID electionId;
 	string primary;
+	Nullable!TopologyVersion topologyVersion;
 
 	/// Deprecated since MongoDB 5.0: the `isMaster` command was replaced by `hello`.
 	/// The `secondary` field itself is still present in the `hello` response.
