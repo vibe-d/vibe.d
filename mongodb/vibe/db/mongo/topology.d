@@ -33,6 +33,7 @@ struct TopologyDescription
 
 	void update(MongoHost host, ServerDescription desc)
 	{
+		bool found = false;
 		foreach (ref s; servers)
 		{
 			if (s.host == host)
@@ -41,13 +42,64 @@ struct TopologyDescription
 					return;
 
 				s.description = desc;
-				return;
+				found = true;
+				break;
 			}
 		}
-		servers ~= ServerRecord(host, desc);
+
+		if (!found)
+			servers ~= ServerRecord(host, desc);
 
 		if (!setName.length && desc.setName.length)
 			setName = desc.setName;
+
+		if (desc.isPrimary)
+			pruneNonMembers(desc);
+	}
+
+	private void pruneNonMembers(ref const ServerDescription primaryDesc)
+	{
+		auto memberHosts = collectMemberHosts(primaryDesc);
+
+		if (!memberHosts.length)
+			return;
+
+		ServerRecord[] kept;
+		foreach (ref s; servers)
+		{
+			if (hasHost(memberHosts, s.host))
+				kept ~= s;
+		}
+
+		servers = kept;
+	}
+
+	private static MongoHost[] collectMemberHosts(ref const ServerDescription desc)
+	{
+		MongoHost[] result;
+
+		foreach (h; desc.hosts)
+		{
+			auto parsed = parseHostPort(h);
+			if (parsed != MongoHost.init)
+				result ~= parsed;
+		}
+
+		foreach (h; desc.passives)
+		{
+			auto parsed = parseHostPort(h);
+			if (parsed != MongoHost.init && !hasHost(result, parsed))
+				result ~= parsed;
+		}
+
+		foreach (h; desc.arbiters)
+		{
+			auto parsed = parseHostPort(h);
+			if (parsed != MongoHost.init && !hasHost(result, parsed))
+				result ~= parsed;
+		}
+
+		return result;
 	}
 
 	void markFailed(MongoHost host)
@@ -714,4 +766,72 @@ unittest
 
 	topo.update(host, desc2);
 	assert(topo.servers[0].description.isSecondaryNode);
+}
+
+/// primary update removes server not in member list
+unittest
+{
+	TopologyDescription topo;
+	auto hostA = MongoHost("hostA", 27017);
+	auto hostB = MongoHost("hostB", 27017);
+	auto hostC = MongoHost("hostC", 27017);
+
+	ServerDescription secDesc;
+	secDesc.secondary = true;
+	secDesc.setName = "rs0";
+
+	topo.update(hostA, secDesc);
+	topo.update(hostB, secDesc);
+	topo.update(hostC, secDesc);
+	assert(topo.servers.length == 3);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+	primaryDesc.hosts = ["hostA:27017", "hostB:27017"];
+
+	topo.update(hostA, primaryDesc);
+	assert(topo.servers.length == 2);
+	assert(!topo.primaryHost.isNull);
+	assert(topo.primaryHost.get == hostA);
+}
+
+/// primary update keeps all servers in member list
+unittest
+{
+	TopologyDescription topo;
+	auto hostA = MongoHost("hostA", 27017);
+	auto hostB = MongoHost("hostB", 27017);
+
+	ServerDescription secDesc;
+	secDesc.secondary = true;
+	secDesc.setName = "rs0";
+	topo.update(hostB, secDesc);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+	primaryDesc.hosts = ["hostA:27017", "hostB:27017"];
+
+	topo.update(hostA, primaryDesc);
+	assert(topo.servers.length == 2);
+}
+
+/// secondary update does not remove any servers
+unittest
+{
+	TopologyDescription topo;
+	auto hostA = MongoHost("hostA", 27017);
+	auto hostB = MongoHost("hostB", 27017);
+	auto hostC = MongoHost("hostC", 27017);
+
+	ServerDescription secDesc;
+	secDesc.secondary = true;
+	secDesc.setName = "rs0";
+	secDesc.hosts = ["hostA:27017", "hostB:27017"];
+
+	topo.update(hostA, secDesc);
+	topo.update(hostB, secDesc);
+	topo.update(hostC, secDesc);
+	assert(topo.servers.length == 3);
 }
