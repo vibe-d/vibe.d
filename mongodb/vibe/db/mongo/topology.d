@@ -126,9 +126,10 @@ struct TopologyDescription
 			|| type == TopologyType.replicaSetNoPrimary;
 		bool isSharded = type == TopologyType.sharded;
 
-		if (isRS && serverType == ServerDescription.ServerType.mongos)
+		if (isRS)
 		{
 			removeServersByType(ServerDescription.ServerType.mongos);
+			removeServersByType(ServerDescription.ServerType.standalone);
 			return;
 		}
 
@@ -165,7 +166,7 @@ struct TopologyDescription
 		{
 		case standalone:
 			if (type == TopologyType.unknown)
-				type = TopologyType.single;
+				removeServersByType(ServerDescription.ServerType.standalone);
 			break;
 
 		case mongos:
@@ -549,6 +550,7 @@ unittest
 unittest
 {
 	TopologyDescription topo;
+	topo.type = TopologyType.single;
 	auto host = MongoHost("standalone", 27017);
 
 	ServerDescription desc;
@@ -646,10 +648,12 @@ unittest
 unittest
 {
 	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
 	auto primary = MongoHost("primary", 27017);
 
 	ServerDescription primaryDesc;
 	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
 	primaryDesc.roundTripTime = 0.005;
 
 	topo.update(primary, primaryDesc);
@@ -819,10 +823,12 @@ unittest
 unittest
 {
 	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
 	auto host = MongoHost("host1", 27017);
 
 	ServerDescription desc;
 	desc.isWritablePrimary = true;
+	desc.setName = "rs0";
 
 	topo.update(host, desc);
 	assert(topo.primaryHost.get == host);
@@ -835,6 +841,7 @@ unittest
 unittest
 {
 	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
 	auto host = MongoHost("host1", 27017);
 
 	ServerDescription desc;
@@ -849,10 +856,12 @@ unittest
 unittest
 {
 	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
 	auto host = MongoHost("host1", 27017);
 
 	ServerDescription desc;
 	desc.isWritablePrimary = true;
+	desc.setName = "rs0";
 	desc.hosts = ["host1:27017", "host2:27017", "host3:27017"];
 
 	topo.update(host, desc);
@@ -1441,6 +1450,7 @@ unittest
 	auto pid = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
 
 	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
 	auto host = MongoHost("host1", 27017);
 
 	ServerDescription desc1;
@@ -1457,4 +1467,86 @@ unittest
 
 	topo.update(host, desc2);
 	assert(topo.servers[0].description.isSecondaryNode);
+}
+
+/// standalone in unknown multi-seed topology is removed, not promoted to single
+unittest
+{
+	TopologyDescription topo;
+	auto standalone = MongoHost("standalone", 27017);
+	auto other = MongoHost("other", 27017);
+
+	ServerDescription standaloneDesc;
+	standaloneDesc.isWritablePrimary = true;
+
+	ServerDescription unknownDesc;
+
+	topo.update(other, unknownDesc);
+	topo.update(standalone, standaloneDesc);
+
+	assert(topo.type == TopologyType.unknown);
+	assert(topo.servers.length == 1);
+	assert(topo.servers[0].host == other);
+}
+
+/// standalone in replica set topology is removed
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto sec = MongoHost("sec", 27017);
+	auto standalone = MongoHost("standalone", 27017);
+
+	ServerDescription secDesc;
+	secDesc.secondary = true;
+	secDesc.setName = "rs0";
+	topo.update(sec, secDesc);
+
+	ServerDescription standaloneDesc;
+	standaloneDesc.isWritablePrimary = true;
+	topo.update(standalone, standaloneDesc);
+
+	assert(topo.servers.length == 1);
+	assert(topo.servers[0].host == sec);
+}
+
+/// mongos in replica set topology is removed
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto sec = MongoHost("sec", 27017);
+	auto mongos = MongoHost("mongos", 27017);
+
+	ServerDescription secDesc;
+	secDesc.secondary = true;
+	secDesc.setName = "rs0";
+	topo.update(sec, secDesc);
+
+	ServerDescription mongosDesc;
+	mongosDesc.msg = "isdbgrid";
+	topo.update(mongos, mongosDesc);
+
+	assert(topo.servers.length == 1);
+	assert(topo.servers[0].host == sec);
+}
+
+/// standalone in sharded topology is removed
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.sharded;
+	auto mongos = MongoHost("mongos", 27017);
+	auto standalone = MongoHost("standalone", 27017);
+
+	ServerDescription mongosDesc;
+	mongosDesc.msg = "isdbgrid";
+	topo.update(mongos, mongosDesc);
+
+	ServerDescription standaloneDesc;
+	standaloneDesc.isWritablePrimary = true;
+	topo.update(standalone, standaloneDesc);
+
+	assert(topo.servers.length == 1);
+	assert(topo.servers[0].host == mongos);
 }
