@@ -38,9 +38,13 @@ enum TopologyType
 
 struct TopologyDescription
 {
+	import vibe.data.bson : BsonObjectID;
+
 	ServerRecord[] servers;
 	string setName;
 	TopologyType type = TopologyType.unknown;
+	Nullable!BsonObjectID maxElectionId;
+	Nullable!int maxSetVersion;
 
 	void update(MongoHost host, ServerDescription desc)
 	{
@@ -65,11 +69,73 @@ struct TopologyDescription
 			setName = desc.setName;
 
 		if (desc.isPrimary)
-			pruneNonMembers(desc);
+		{
+			if (handleNewPrimary(host, desc))
+				pruneNonMembers(desc);
+			else
+				return;
+		}
 
 		auto serverType = desc.classifiedType();
 		removeIncompatible(serverType);
 		transitionType(serverType);
+	}
+
+	/**
+	 * Handles a new primary: compares electionId/setVersion against the
+	 * topology's max to detect stale primaries. Demotes the old primary
+	 * if the new one is fresher, or demotes the new one if it's stale.
+	 *
+	 * Returns true if the new primary is accepted, false if it was stale.
+	 */
+	private bool handleNewPrimary(MongoHost host, ref const ServerDescription desc)
+	{
+		if (!desc.electionId.isNull && !maxElectionId.isNull)
+		{
+			bool newIsStale = false;
+
+			if (!desc.setVersion.isNull && !maxSetVersion.isNull)
+			{
+				if (desc.setVersion.get < maxSetVersion.get)
+					newIsStale = true;
+				else if (desc.setVersion.get == maxSetVersion.get
+					&& desc.electionId.get < maxElectionId.get)
+					newIsStale = true;
+			}
+			else if (desc.electionId.get < maxElectionId.get)
+			{
+				newIsStale = true;
+			}
+
+			if (newIsStale)
+			{
+				foreach (ref s; servers)
+				{
+					if (s.host == host)
+					{
+						s.description = ServerDescription.init;
+						break;
+					}
+				}
+				transitionType(ServerDescription.ServerType.unknown);
+				return false;
+			}
+		}
+
+		// Demote old primary if different from the new one
+		foreach (ref s; servers)
+		{
+			if (s.host != host && s.description.isPrimary)
+				s.description = ServerDescription.init;
+		}
+
+		if (!desc.electionId.isNull)
+			maxElectionId = desc.electionId;
+
+		if (!desc.setVersion.isNull)
+			maxSetVersion = desc.setVersion;
+
+		return true;
 	}
 
 	private void pruneNonMembers(ref const ServerDescription primaryDesc)
@@ -234,19 +300,36 @@ struct TopologyDescription
 		return result;
 	}
 
-	Nullable!MongoHost randomMongosHost() const
+	Nullable!MongoHost randomMongosHost(long localThresholdMS = 15) const
 	{
-		MongoHost[] mongosHosts;
+		double minRTT = double.max;
 		foreach (ref s; servers)
 		{
-			if (s.description.classifiedType() == ServerDescription.ServerType.mongos)
-				mongosHosts ~= s.host;
+			if (s.description.classifiedType() != ServerDescription.ServerType.mongos)
+				continue;
+
+			if (s.description.roundTripTime < minRTT)
+				minRTT = s.description.roundTripTime;
 		}
 
-		if (!mongosHosts.length)
+		if (minRTT == double.max)
 			return Nullable!MongoHost.init;
 
-		return Nullable!MongoHost(mongosHosts[uniform(0, mongosHosts.length)]);
+		double threshold = minRTT + localThresholdMS / 1_000.0;
+		MongoHost[] eligible;
+		foreach (ref s; servers)
+		{
+			if (s.description.classifiedType() != ServerDescription.ServerType.mongos)
+				continue;
+
+			if (s.description.roundTripTime <= threshold)
+				eligible ~= s.host;
+		}
+
+		if (!eligible.length)
+			return Nullable!MongoHost.init;
+
+		return Nullable!MongoHost(eligible[uniform(0, eligible.length)]);
 	}
 
 	Nullable!MongoHost primaryHost() const
@@ -407,7 +490,7 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 
 	// Sharded: return random mongos (read preference forwarded to mongos)
 	if (topology.type == TopologyType.sharded)
-		return topology.randomMongosHost();
+		return topology.randomMongosHost(localThresholdMS);
 
 	// Replica set or unknown: apply read preference logic
 	final switch (pref)
@@ -1549,4 +1632,175 @@ unittest
 
 	assert(topo.servers.length == 1);
 	assert(topo.servers[0].host == mongos);
+}
+
+/// new primary demotes old primary (split-brain)
+unittest
+{
+	import vibe.data.bson : BsonObjectID;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto host1 = MongoHost("host1", 27017);
+	auto host2 = MongoHost("host2", 27017);
+
+	auto eid1 = BsonObjectID.fromHexString("aabbccddeeff00112233aa01");
+	auto eid2 = BsonObjectID.fromHexString("aabbccddeeff00112233aa02");
+
+	ServerDescription desc1;
+	desc1.isWritablePrimary = true;
+	desc1.setName = "rs0";
+	desc1.setVersion = Nullable!int(1);
+	desc1.electionId = Nullable!BsonObjectID(eid1);
+
+	topo.update(host1, desc1);
+	assert(topo.servers[0].description.isPrimary);
+
+	ServerDescription desc2;
+	desc2.isWritablePrimary = true;
+	desc2.setName = "rs0";
+	desc2.setVersion = Nullable!int(1);
+	desc2.electionId = Nullable!BsonObjectID(eid2);
+
+	topo.update(host2, desc2);
+
+	bool host1Primary, host2Primary;
+	foreach (ref s; topo.servers)
+	{
+		if (s.host == host1 && s.description.isPrimary) host1Primary = true;
+		if (s.host == host2 && s.description.isPrimary) host2Primary = true;
+	}
+	assert(!host1Primary);
+	assert(host2Primary);
+}
+
+/// stale primary with lower electionId is demoted to unknown
+unittest
+{
+	import vibe.data.bson : BsonObjectID;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto host1 = MongoHost("host1", 27017);
+	auto host2 = MongoHost("host2", 27017);
+
+	auto eid1 = BsonObjectID.fromHexString("aabbccddeeff00112233aa02");
+	auto eid2 = BsonObjectID.fromHexString("aabbccddeeff00112233aa01");
+
+	ServerDescription desc1;
+	desc1.isWritablePrimary = true;
+	desc1.setName = "rs0";
+	desc1.setVersion = Nullable!int(1);
+	desc1.electionId = Nullable!BsonObjectID(eid1);
+	topo.update(host1, desc1);
+
+	ServerDescription desc2;
+	desc2.isWritablePrimary = true;
+	desc2.setName = "rs0";
+	desc2.setVersion = Nullable!int(1);
+	desc2.electionId = Nullable!BsonObjectID(eid2);
+	topo.update(host2, desc2);
+
+	bool host1Primary, host2Primary;
+	foreach (ref s; topo.servers)
+	{
+		if (s.host == host1 && s.description.isPrimary) host1Primary = true;
+		if (s.host == host2 && s.description.isPrimary) host2Primary = true;
+	}
+	assert(host1Primary);
+	assert(!host2Primary);
+}
+
+/// stale primary with lower setVersion is demoted
+unittest
+{
+	import vibe.data.bson : BsonObjectID;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto host1 = MongoHost("host1", 27017);
+	auto host2 = MongoHost("host2", 27017);
+
+	auto eid = BsonObjectID.fromHexString("aabbccddeeff00112233aa01");
+
+	ServerDescription desc1;
+	desc1.isWritablePrimary = true;
+	desc1.setName = "rs0";
+	desc1.setVersion = Nullable!int(2);
+	desc1.electionId = Nullable!BsonObjectID(eid);
+	topo.update(host1, desc1);
+
+	ServerDescription desc2;
+	desc2.isWritablePrimary = true;
+	desc2.setName = "rs0";
+	desc2.setVersion = Nullable!int(1);
+	desc2.electionId = Nullable!BsonObjectID(eid);
+	topo.update(host2, desc2);
+
+	bool host1Primary, host2Primary;
+	foreach (ref s; topo.servers)
+	{
+		if (s.host == host1 && s.description.isPrimary) host1Primary = true;
+		if (s.host == host2 && s.description.isPrimary) host2Primary = true;
+	}
+	assert(host1Primary);
+	assert(!host2Primary);
+}
+
+/// sharded selectServer applies latency window to mongos selection
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.sharded;
+	auto fast = MongoHost("fast-mongos", 27017);
+	auto slow = MongoHost("slow-mongos", 27017);
+
+	ServerDescription fastDesc;
+	fastDesc.msg = "isdbgrid";
+	fastDesc.roundTripTime = 0.005;
+
+	ServerDescription slowDesc;
+	slowDesc.msg = "isdbgrid";
+	slowDesc.roundTripTime = 0.500;
+
+	topo.update(fast, fastDesc);
+	topo.update(slow, slowDesc);
+
+	foreach (_; 0 .. 100)
+	{
+		auto r = selectServer(topo, ReadPreference.primary, 15);
+		assert(!r.isNull);
+		assert(r.get == fast);
+	}
+}
+
+/// sharded selectServer with large threshold includes all mongos
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.sharded;
+	auto fast = MongoHost("fast-mongos", 27017);
+	auto slow = MongoHost("slow-mongos", 27017);
+
+	ServerDescription fastDesc;
+	fastDesc.msg = "isdbgrid";
+	fastDesc.roundTripTime = 0.005;
+
+	ServerDescription slowDesc;
+	slowDesc.msg = "isdbgrid";
+	slowDesc.roundTripTime = 0.500;
+
+	topo.update(fast, fastDesc);
+	topo.update(slow, slowDesc);
+
+	bool sawFast, sawSlow;
+	foreach (_; 0 .. 200)
+	{
+		auto r = selectServer(topo, ReadPreference.primary, 1000);
+		assert(!r.isNull);
+		if (r.get == fast) sawFast = true;
+		if (r.get == slow) sawSlow = true;
+	}
+	assert(sawFast);
+	assert(sawSlow);
 }
