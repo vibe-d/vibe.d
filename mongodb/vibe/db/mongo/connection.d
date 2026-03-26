@@ -144,6 +144,7 @@ final class MongoConnection {
 		int m_msgid = 1;
 		StreamOutputRange!(InterfaceProxy!Stream) m_outRange;
 		ServerDescription m_description;
+		MongoHost m_connectedHost;
 		/// Flag to prevent recursive connections when server closes connection while connecting
 		bool m_allowReconnect;
 		bool m_isAuthenticating;
@@ -165,7 +166,7 @@ final class MongoConnection {
 		m_settings = cfg;
 	}
 
-	void connectToHost(MongoHost host) {
+	void connectToHost(MongoHost host, bool doAuthenticate = true) {
 		bool isTLS;
 
 		/*
@@ -323,14 +324,15 @@ final class MongoConnection {
 			m_settings.compressors, m_description.compression);
 
 		m_bytesRead = 0;
-		auto authMechanism = m_settings.authMechanism;
-		if (authMechanism == MongoAuthMechanism.none)
-		{
-			if (m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
-			{
+		m_connectedHost = host;
+
+		if (doAuthenticate) {
+			auto authMechanism = m_settings.authMechanism;
+
+			if (authMechanism == MongoAuthMechanism.none && m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
 				authMechanism = MongoAuthMechanism.mongoDBX509;
-			}
-			else if (m_settings.digest.length || m_settings.password.length)
+
+			if (authMechanism == MongoAuthMechanism.none && (m_settings.digest.length || m_settings.password.length))
 			{
 				if (serverSupportsSHA256 && m_settings.password.length)
 					authMechanism = MongoAuthMechanism.scramSHA256;
@@ -341,152 +343,61 @@ final class MongoConnection {
 				else
 					authMechanism = MongoAuthMechanism.mongoDBCR;
 			}
-		}
 
-		if (authMechanism == MongoAuthMechanism.mongoDBCR && m_description.satisfiesVersion(WireVersion.v40))
-			throw new MongoAuthException("Trying to force MONGODB-CR authentication on a >=4.0 server not supported");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.mongoDBCR || !m_description.satisfiesVersion(WireVersion.v40),
+				"Trying to force MONGODB-CR authentication on a >=4.0 server not supported");
 
-		if (authMechanism == MongoAuthMechanism.scramSHA1 && !m_description.satisfiesVersion(WireVersion.v30))
-			throw new MongoAuthException("Trying to force SCRAM-SHA-1 authentication on a <3.0 server not supported");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.scramSHA1 || m_description.satisfiesVersion(WireVersion.v30),
+				"Trying to force SCRAM-SHA-1 authentication on a <3.0 server not supported");
 
-		if (authMechanism == MongoAuthMechanism.scramSHA256 && !m_description.satisfiesVersion(WireVersion.v40))
-			throw new MongoAuthException("Trying to force SCRAM-SHA-256 authentication on a <4.0 server not supported");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.scramSHA256 || m_description.satisfiesVersion(WireVersion.v40),
+				"Trying to force SCRAM-SHA-256 authentication on a <4.0 server not supported");
 
-		if (authMechanism == MongoAuthMechanism.scramSHA256 && !m_settings.password.length)
-			throw new MongoAuthException("SCRAM-SHA-256 requires the raw password, not just the MD5 digest");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.scramSHA256 || m_settings.password.length > 0,
+				"SCRAM-SHA-256 requires the raw password, not just the MD5 digest");
 
-		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !m_description.satisfiesVersion(WireVersion.v26))
-			throw new MongoAuthException("Trying to force MONGODB-X509 authentication on a <2.6 server not supported");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.mongoDBX509 || m_description.satisfiesVersion(WireVersion.v26),
+				"Trying to force MONGODB-X509 authentication on a <2.6 server not supported");
 
-		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !isTLS)
-			throw new MongoAuthException("Trying to force MONGODB-X509 authentication, but didn't use ssl!");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.mongoDBX509 || isTLS,
+				"Trying to force MONGODB-X509 authentication, but didn't use ssl!");
 
-		bool canUseSpeculative = speculatingScram
-			&& speculativeMechanism == authMechanism
-			&& speculativeResult != Bson(null);
+			bool canUseSpeculative = speculatingScram
+				&& speculativeMechanism == authMechanism
+				&& speculativeResult != Bson(null);
 
-		m_isAuthenticating = true;
-		scope (exit)
-			m_isAuthenticating = false;
-		final switch (authMechanism)
-		{
-		case MongoAuthMechanism.none:
-			break;
-		case MongoAuthMechanism.mongoDBX509:
-			certAuthenticate();
-			break;
-		case MongoAuthMechanism.scramSHA1:
-			if (canUseSpeculative)
-				scramAuthenticateContinue(speculativeScramSHA1, m_settings.digest, speculativeResult);
-			else
-				scramAuthenticate();
-			break;
-		case MongoAuthMechanism.scramSHA256:
-			if (canUseSpeculative)
-				scramAuthenticateContinue(speculativeScramSHA256, saslPrep(m_settings.password), speculativeResult);
-			else
-				scramSHA256Authenticate();
-			break;
-		case MongoAuthMechanism.mongoDBCR:
-			authenticate();
-			break;
-		}
+			m_isAuthenticating = true;
+			scope (exit)
+				m_isAuthenticating = false;
 
-		logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
-	}
-
-	void connect()
-	{
-		connect(m_settings.readPreference);
-	}
-
-	void connect(ReadPreference readPreference)
-	{
-		TopologyDescription topology;
-		Exception lastException;
-
-		// Phase 1: Discover topology by probing seed hosts
-		foreach (host; m_settings.hosts) {
-			probeHost(topology, host, lastException);
-		}
-
-		// Phase 2: Discover additional hosts reported by the topology
-		auto knownHosts = topology.allKnownHosts();
-		foreach (host; knownHosts) {
-			bool alreadyProbed = false;
-			foreach (ref s; topology.servers) {
-				if (s.host == host) {
-					alreadyProbed = true;
-					break;
-				}
+			final switch (authMechanism)
+			{
+			case MongoAuthMechanism.none:
+				break;
+			case MongoAuthMechanism.mongoDBX509:
+				certAuthenticate();
+				break;
+			case MongoAuthMechanism.scramSHA1:
+				if (canUseSpeculative)
+					scramAuthenticateContinue(speculativeScramSHA1, m_settings.digest, speculativeResult);
+				else
+					scramAuthenticate();
+				break;
+			case MongoAuthMechanism.scramSHA256:
+				if (canUseSpeculative)
+					scramAuthenticateContinue(speculativeScramSHA256, saslPrep(m_settings.password), speculativeResult);
+				else
+					scramSHA256Authenticate();
+				break;
+			case MongoAuthMechanism.mongoDBCR:
+				authenticate();
+				break;
 			}
-			if (!alreadyProbed)
-				probeHost(topology, host, lastException);
+
+			logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
+		} else {
+			logDiagnostic("Probed: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
 		}
-
-		// Phase 3: Select server based on read preference
-		auto selected = selectServer(topology, readPreference, m_settings.localThresholdMS);
-
-		if (selected.isNull) {
-			if (lastException !is null)
-				throw lastException;
-			throw new MongoDriverException("No suitable server found for read preference");
-		}
-
-		// Phase 4: Connect to the selected server (may already be connected)
-		auto targetHost = selected.get;
-
-		if (!connected || !isConnectedTo(targetHost)) {
-			if (connected)
-				disconnect();
-
-			try {
-				connectToHost(targetHost);
-			} catch (Exception ex) {
-				throw new MongoDriverException(
-					format("Failed to connect to selected server %s:%s", targetHost.name, targetHost.port),
-					__FILE__, __LINE__, ex);
-			}
-		}
-	}
-
-	private void probeHost(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
-	{
-		import std.datetime.stopwatch : StopWatch;
-
-		StopWatch sw;
-		sw.start();
-
-		try {
-			connectToHost(host);
-		} catch (Exception ex) {
-			lastException = ex;
-			logError("Failed to connect to %s:%s: %s", host.name, host.port, ex.msg);
-			topology.markFailed(host);
-			return;
-		}
-
-		sw.stop();
-		m_description.roundTripTime = sw.peek.total!"usecs" / 1_000_000.0f;
-
-		if (!matchesReplicaSet(m_settings.replicaSet, m_description)) {
-			logWarn("Host %s:%s belongs to replica set '%s', expected '%s'",
-				host.name, host.port, m_description.setName, m_settings.replicaSet);
-			disconnect();
-			return;
-		}
-
-		topology.update(host, m_description);
-		disconnect();
-	}
-
-	private bool isConnectedTo(MongoHost host) const
-	{
-		if (m_description.me.length) {
-			auto meHost = parseHostPort(m_description.me);
-			return meHost == host;
-		}
-		return false;
 	}
 
 	void disconnect()
@@ -522,8 +433,8 @@ final class MongoConnection {
 			return false;
 
 		auto status = m_conn.waitForDataEx(Duration.zero);
-		// timeout (wouldBlock) means the socket is alive but no data pending — that's fine
-		// dataAvailable means there's unread data — also alive
+		// timeout (wouldBlock) means the socket is alive but no data pending, which is fine
+		// dataAvailable means there's unread data, so the socket is also alive
 		// noMoreData means the remote end closed the connection
 		return status != typeof(status).noMoreData;
 	}
@@ -1095,7 +1006,6 @@ final class MongoConnection {
 	private int sendMsg(int response_to, uint flagBits, Bson document)
 	{
 		ensureConnected();
-
 		int id = nextMessageId();
 		const bool hasCRC = (flagBits & (1 << 16)) != 0;
 		assert(!hasCRC, "sending with CRC bits not yet implemented");
@@ -1141,7 +1051,7 @@ final class MongoConnection {
 		}
 
 		if (m_allowReconnect) {
-			connect();
+			connectToHost(m_connectedHost);
 			return;
 		}
 
@@ -1595,6 +1505,13 @@ unittest
 	assert(parsed["ok"].get!double == 1.0);
 }
 
+struct TopologyVersion
+{
+@optional:
+	BsonObjectID processId;
+	long counter = -1;
+}
+
 struct ServerDescription
 {
 	enum ServerType
@@ -1610,11 +1527,17 @@ struct ServerDescription
 		RSGhost
 	}
 
+	static struct LastWrite
+	{
+	@optional:
+		Nullable!BsonDate lastWriteDate;
+	}
+
 @optional:
 	string address;
 	string error;
 	float roundTripTime = 0;
-	Nullable!BsonDate lastWriteDate;
+	LastWrite lastWrite;
 	Nullable!BsonObjectID opTime;
 	ServerType type = ServerType.unknown;
 	int minWireVersion, maxWireVersion;
@@ -1625,6 +1548,7 @@ struct ServerDescription
 	Nullable!int setVersion;
 	Nullable!BsonObjectID electionId;
 	string primary;
+	Nullable!TopologyVersion topologyVersion;
 
 	/// Deprecated since MongoDB 5.0: the `isMaster` command was replaced by `hello`.
 	/// The `secondary` field itself is still present in the `hello` response.
@@ -1635,9 +1559,13 @@ struct ServerDescription
 	bool ismaster;
 
 	bool isWritablePrimary;
-	string lastUpdateTime = "infinity ago";
+	bool arbiterOnly;
+	string msg;
 	Nullable!int logicalSessionTimeoutMinutes;
 	string[] compression;
+
+	/// Set by the driver after probing, not deserialized from the server response.
+	long lastUpdateTimeUsecs;
 
 	bool satisfiesVersion(WireVersion wireVersion) @safe const @nogc pure nothrow
 	{
@@ -1657,6 +1585,31 @@ struct ServerDescription
 	bool isReplicaSetMember() @safe const @nogc pure nothrow
 	{
 		return setName.length > 0;
+	}
+
+	ServerType classifiedType() @safe const @nogc pure nothrow
+	{
+		if (msg == "isdbgrid")
+			return ServerType.mongos;
+
+		if (setName.length)
+		{
+			if (isPrimary)
+				return ServerType.RSPrimary;
+
+			if (isSecondaryNode)
+				return ServerType.RSSecondary;
+
+			if (arbiterOnly)
+				return ServerType.RSArbiter;
+
+			return ServerType.RSOther;
+		}
+
+		if (isPrimary)
+			return ServerType.standalone;
+
+		return ServerType.unknown;
 	}
 }
 
@@ -1736,6 +1689,40 @@ package bool matchesReplicaSet(string expectedSet, ref const ServerDescription d
 {
 	ServerDescription desc;
 	assert(matchesReplicaSet("", desc));
+}
+
+/**
+ * Probes a MongoDB host by performing a hello handshake without authentication.
+ *
+ * Creates a temporary connection, sends the hello command, measures round-trip
+ * time, and returns the resulting ServerDescription. Used by MongoClient for
+ * topology discovery without consuming a pool connection.
+ */
+package ServerDescription probeServer(MongoClientSettings settings, MongoHost host) @safe
+{
+	import std.datetime.stopwatch : StopWatch;
+
+	StopWatch sw;
+	sw.start();
+
+	auto conn = new MongoConnection(settings);
+	scope (exit) {
+		conn.disconnect();
+		() @trusted { destroy(conn); } ();
+	}
+
+	conn.connectToHost(host, false);
+
+	sw.stop();
+
+	auto desc = conn.m_description;
+	desc.roundTripTime = sw.peek.total!"usecs" / 1_000_000.0f;
+
+	import core.time : MonoTime;
+	auto now = MonoTime.currTime;
+	desc.lastUpdateTimeUsecs = now.ticks * 1_000_000 / MonoTime.ticksPerSecond;
+
+	return desc;
 }
 
 /// satisfiesVersion returns true for versions up to maxWireVersion v36

@@ -174,6 +174,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "replicaset": cfg.replicaSet = value; break;
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
 				case "localthresholdms": setLong(cfg.localThresholdMS); break;
+				case "maxstalenessseconds": setLong(cfg.maxStalenessSeconds); break;
 				case "readconcernlevel": cfg.readConcern = parseReadConcern(value); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
@@ -474,6 +475,24 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
 	assert(cfg.localThresholdMS == 15);
+}
+
+/// parseMongoDBUrl parses maxStalenessSeconds option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?maxStalenessSeconds=120"));
+	assert(cfg.maxStalenessSeconds == 120);
+}
+
+/// parseMongoDBUrl uses default maxStalenessSeconds of -1
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
+	assert(cfg.maxStalenessSeconds == -1);
 }
 
 /// parseMongoDBUrl parses readConcernLevel option
@@ -1070,6 +1089,14 @@ class MongoClientSettings
 	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.localThresholdMS)
 	 */
 	long localThresholdMS = 15;
+
+	/**
+	 * Maximum replication lag (in seconds) for a secondary to be eligible.
+	 * -1 means no max staleness check. Minimum allowed value is 90 seconds.
+	 *
+	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.maxStalenessSeconds)
+	 */
+	long maxStalenessSeconds = -1;
 
 	/**
 	 * Specifies the default read concern level for read operations.
