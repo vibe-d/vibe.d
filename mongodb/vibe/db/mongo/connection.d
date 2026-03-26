@@ -496,6 +496,26 @@ final class MongoConnection {
 
 	@property bool connected() const { return m_conn && m_conn.connected; }
 
+	/**
+	 * Checks if the connection is alive by probing the socket for remote close.
+	 *
+	 * Unlike `connected`, which only checks local socket state, this detects
+	 * when the remote end has sent a FIN (server shutdown, timeout, etc.).
+	 */
+	@property bool alive()
+	{
+		import core.time : Duration;
+
+		if (!m_conn || !m_conn.connected)
+			return false;
+
+		auto status = m_conn.waitForDataEx(Duration.zero);
+		// timeout (wouldBlock) means the socket is alive but no data pending — that's fine
+		// dataAvailable means there's unread data — also alive
+		// noMoreData means the remote end closed the connection
+		return status != typeof(status).noMoreData;
+	}
+
 	@property const(ServerDescription) description() const { return m_description; }
 
 	deprecated("Non-functional since MongoDB 5.1") void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)

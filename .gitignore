@@ -51,3 +51,4 @@ examples/bench-urlrouter/bench-urlrouter
 tests/mongodb/_replica-set/replica-set-test
 tests/mongodb/_replica-set/log*
 tests/mongodb/readconcern/readconcern-test
+tests/mongodb/dead-connections/dead-connections-test
