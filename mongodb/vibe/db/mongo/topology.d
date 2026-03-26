@@ -147,10 +147,12 @@ struct TopologyDescription
 		if (!memberHosts.length)
 			return;
 
+		import std.algorithm : canFind;
+
 		ServerRecord[] kept;
 		foreach (ref s; servers)
 		{
-			if (hasHost(memberHosts, s.host))
+			if (memberHosts.canFind(s.host))
 				kept ~= s;
 		}
 
@@ -159,12 +161,14 @@ struct TopologyDescription
 
 	private static MongoHost[] collectMemberHosts(ref const ServerDescription desc)
 	{
+		import std.algorithm : canFind;
+
 		MongoHost[] result;
 
 		foreach (h; chain(desc.hosts, desc.passives, desc.arbiters))
 		{
 			auto parsed = parseHostPort(h);
-			if (parsed != MongoHost.init && !hasHost(result, parsed))
+			if (parsed != MongoHost.init && !result.canFind(parsed))
 				result ~= parsed;
 		}
 
@@ -269,23 +273,16 @@ struct TopologyDescription
 
 	MongoHost[] allKnownHosts() const
 	{
-		import std.algorithm : map, filter;
-		import std.array : array;
+		import std.algorithm : canFind;
 
 		MongoHost[] result;
 
 		foreach (ref s; servers)
 		{
-			foreach (hostStr; s.description.hosts)
+			foreach (hostStr; chain(s.description.hosts, s.description.passives))
 			{
 				auto h = parseHostPort(hostStr);
-				if (h != MongoHost.init && !hasHost(result, h))
-					result ~= h;
-			}
-			foreach (hostStr; s.description.passives)
-			{
-				auto h = parseHostPort(hostStr);
-				if (h != MongoHost.init && !hasHost(result, h))
+				if (h != MongoHost.init && !result.canFind(h))
 					result ~= h;
 			}
 		}
@@ -509,16 +506,6 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 	case ReadPreference.nearest:
 		return topology.randomHostWithinLatencyWindow(localThresholdMS, maxStalenessSeconds);
 	}
-}
-
-private bool hasHost(const MongoHost[] hosts, MongoHost h) pure nothrow @nogc
-{
-	foreach (ref existing; hosts)
-	{
-		if (existing == h)
-			return true;
-	}
-	return false;
 }
 
 /**
