@@ -6,8 +6,9 @@
 
 	See_Also: $(LINK https://github.com/mongodb/specifications/blob/master/source/server-selection/server-selection.md)
 
-	Copyright: © 2026 GISCollective
+	Copyright: © 2026 Szabo Bogdan
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Szabo Bogdan
 */
 module vibe.db.mongo.topology;
 
