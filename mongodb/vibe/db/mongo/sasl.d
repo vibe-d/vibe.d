@@ -10,6 +10,7 @@ module vibe.db.mongo.sasl;
 import std.algorithm;
 import std.base64;
 import std.conv;
+import std.digest;
 import std.digest.hmac;
 import std.digest.sha;
 import std.exception;
@@ -18,6 +19,7 @@ import std.string;
 import std.traits;
 import std.utf;
 import vibe.crypto.cryptorand;
+import vibe.db.mongo.saslprep;
 
 @safe:
 
@@ -28,13 +30,13 @@ private SHA1HashMixerRNG g_rng()
 	return m_rng;
 }
 
-package struct ScramState
+package struct ScramState(HashType = SHA1)
 {
 	@safe:
 
 	private string m_firstMessageBare;
 	private string m_nonce;
-	private DigestType!SHA1 m_saltedPassword;
+	private DigestType!HashType m_saltedPassword;
 	private string m_authMessage;
 
 	string createInitialRequest(string user)
@@ -79,7 +81,7 @@ package struct ScramState
 			throw new Exception("Invalid server nonce received");
 		string finalMessage = format("c=biws,r=%s", serverNonce);
 
-		m_saltedPassword = pbkdf2(password.representation, salt, iterations);
+		m_saltedPassword = pbkdf2!HashType(password.representation, salt, iterations);
 		m_authMessage = format("%s,%s,%s", m_firstMessageBare, serverFirstMessage, finalMessage);
 
 		auto proof = getClientProof(m_saltedPassword, m_authMessage);
@@ -171,11 +173,11 @@ package struct ScramState
 		assert(escapeUsername("plainuser123") is "plainuser123");
 	}
 
-	private static auto getClientProof(DigestType!SHA1 saltedPassword, string authMessage)
+	private static auto getClientProof(DigestType!HashType saltedPassword, string authMessage)
 	{
-		auto clientKey = () @trusted { return hmac!SHA1("Client Key".representation, saltedPassword); } ();
-		auto storedKey = sha1Of(clientKey);
-		auto clientSignature = () @trusted { return hmac!SHA1(authMessage.representation, storedKey); } ();
+		auto clientKey = () @trusted { return hmac!HashType("Client Key".representation, saltedPassword); } ();
+		auto storedKey = digest!HashType(clientKey);
+		auto clientSignature = () @trusted { return hmac!HashType(authMessage.representation, storedKey); } ();
 
 		foreach (i; 0 .. clientKey.length)
 		{
@@ -184,26 +186,26 @@ package struct ScramState
 		return clientKey;
 	}
 
-	private static bool verifyServerSignature(ubyte[] signature, DigestType!SHA1 saltedPassword, string authMessage)
+	private static bool verifyServerSignature(ubyte[] signature, DigestType!HashType saltedPassword, string authMessage)
 	@trusted {
-		auto serverKey = hmac!SHA1("Server Key".representation, saltedPassword);
-		auto serverSignature = hmac!SHA1(authMessage.representation, serverKey);
-		return serverSignature == signature;
+		auto serverKey = hmac!HashType("Server Key".representation, saltedPassword);
+		auto serverSignature = hmac!HashType(authMessage.representation, serverKey);
+		return constantTimeEquals(serverSignature[], signature);
 	}
 }
 
-private DigestType!SHA1 pbkdf2(const ubyte[] password, const ubyte[] salt, int iterations)
+private DigestType!HashType pbkdf2(HashType)(const ubyte[] password, const ubyte[] salt, int iterations)
 {
 	import std.bitmanip;
 
 	ubyte[4] intBytes = [0, 0, 0, 1];
-	auto last = () @trusted { return hmac!SHA1(salt, intBytes[], password); } ();
+	auto last = () @trusted { return hmac!HashType(salt, intBytes[], password); } ();
 	static assert(isStaticArray!(typeof(last)),
 		"Code is written so that the hash array is expected to be placed on the stack");
 	auto current = last;
 	foreach (i; 1 .. iterations)
 	{
-		last = () @trusted { return hmac!SHA1(last[], password); } ();
+		last = () @trusted { return hmac!HashType(last[], password); } ();
 		foreach (j; 0 .. current.length)
 		{
 			current[j] = current[j] ^ last[j];
@@ -212,12 +214,50 @@ private DigestType!SHA1 pbkdf2(const ubyte[] password, const ubyte[] salt, int i
 	return current;
 }
 
+/// Constant-time comparison to prevent timing attacks on signature verification.
+private bool constantTimeEquals(const ubyte[] a, const ubyte[] b)
+@safe @nogc pure nothrow {
+	if (a.length != b.length)
+		return false;
+
+	ubyte result = 0;
+	foreach (i; 0 .. a.length)
+	{
+		result |= a[i] ^ b[i];
+	}
+	return result == 0;
+}
+
+/// constantTimeEquals returns true for identical arrays
+unittest
+{
+	ubyte[4] a = [1, 2, 3, 4];
+	ubyte[4] b = [1, 2, 3, 4];
+	assert(constantTimeEquals(a[], b[]));
+}
+
+/// constantTimeEquals returns false for different arrays
+unittest
+{
+	ubyte[4] a = [1, 2, 3, 4];
+	ubyte[4] b = [1, 2, 3, 5];
+	assert(!constantTimeEquals(a[], b[]));
+}
+
+/// constantTimeEquals returns false for different lengths
+unittest
+{
+	ubyte[3] a = [1, 2, 3];
+	ubyte[4] b = [1, 2, 3, 4];
+	assert(!constantTimeEquals(a[], b[]));
+}
+
 /// SCRAM-SHA-1 full authentication flow using MongoDB spec test vectors
 unittest
 {
 	import vibe.db.mongo.settings : MongoClientSettings;
 
-	ScramState state;
+	ScramState!SHA1 state;
 	assert(state.createInitialRequestWithFixedNonce("user", "fyko+d2lbbFgONRv9qkxdawL")
 		== "n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL");
 	auto last = state.update(MongoClientSettings.makeDigest("user", "pencil"),
@@ -231,9 +271,7 @@ unittest
 /// SCRAM update throws on missing r= prefix in server challenge
 unittest
 {
-	import std.exception : assertThrown;
-
-	ScramState s;
+	ScramState!SHA1 s;
 	s.createInitialRequestWithFixedNonce("user", "testnonce");
 	assertThrown!Exception(s.update("digest", "invalid_challenge"));
 }
@@ -241,9 +279,7 @@ unittest
 /// SCRAM update throws on missing s= field in server challenge
 unittest
 {
-	import std.exception : assertThrown;
-
-	ScramState s;
+	ScramState!SHA1 s;
 	s.createInitialRequestWithFixedNonce("user", "testnonce");
 	assertThrown!Exception(s.update("digest", "r=testnonceServer,x=bad"));
 }
@@ -251,9 +287,7 @@ unittest
 /// SCRAM update throws when server nonce doesn't start with client nonce
 unittest
 {
-	import std.exception : assertThrown;
-
-	ScramState s;
+	ScramState!SHA1 s;
 	s.createInitialRequestWithFixedNonce("user", "testnonce");
 	assertThrown!Exception(s.update("digest",
 		"r=WRONGnonceServer,s=QSXCR+Q6sek8bf92,i=4096"));
@@ -262,9 +296,7 @@ unittest
 /// SCRAM update throws when iteration count 4095 is below minimum 4096
 unittest
 {
-	import std.exception : assertThrown;
-
-	ScramState s;
+	ScramState!SHA1 s;
 	s.createInitialRequestWithFixedNonce("user", "testnonce");
 	assertThrown!Exception(s.update("digest",
 		"r=testnonceServer,s=QSXCR+Q6sek8bf92,i=4095"));
@@ -275,7 +307,7 @@ unittest
 {
 	import vibe.db.mongo.settings : MongoClientSettings;
 
-	ScramState s;
+	ScramState!SHA1 s;
 	s.createInitialRequestWithFixedNonce("user", "testnonce");
 	auto digest = MongoClientSettings.makeDigest("user", "pencil");
 	s.update(digest, "r=testnonceServer,s=QSXCR+Q6sek8bf92,i=4096");
@@ -290,11 +322,11 @@ version (unittest)
 	private enum scramTestChallenge =
 		"r=fyko+d2lbbFgONRv9qkxdawLHo+Vgk7qvUOKUwuWLIWg4l/9SraGMHEE,s=rQ9ZY3MntBeuP3E1TDVC4w==,i=10000";
 
-	private ScramState createScramStateForFinalize()
+	private ScramState!SHA1 createScramStateForFinalize()
 	{
 		import vibe.db.mongo.settings : MongoClientSettings;
 
-		ScramState s;
+		ScramState!SHA1 s;
 		s.createInitialRequestWithFixedNonce("user", scramTestNonce);
 		s.update(MongoClientSettings.makeDigest("user", "pencil"), scramTestChallenge);
 		return s;
@@ -304,8 +336,6 @@ version (unittest)
 /// SCRAM finalize throws when response doesn't start with "v="
 unittest
 {
-	import std.exception : assertThrown;
-
 	auto s = createScramStateForFinalize();
 	assertThrown!Exception(s.finalize("invalid_format"));
 }
@@ -313,8 +343,6 @@ unittest
 /// SCRAM finalize throws on wrong server signature value
 unittest
 {
-	import std.exception : assertThrown;
-
 	auto s = createScramStateForFinalize();
 	assertThrown!Exception(s.finalize("v=AAAAAAAAAAAAAAAAAAAAAAAAAAAA"));
 }
@@ -322,8 +350,41 @@ unittest
 /// SCRAM finalize throws when response is too short
 unittest
 {
-	import std.exception : assertThrown;
-
 	auto s = createScramStateForFinalize();
 	assertThrown!Exception(s.finalize("v"));
+}
+
+/// SCRAM-SHA-256 full authentication flow using MongoDB spec test vectors
+unittest
+{
+	// Test vectors from the MongoDB SCRAM-SHA-256 specification:
+	// https://github.com/mongodb/specifications/blob/master/source/auth/auth.rst#scram-sha-256
+	ScramState!SHA256 state;
+	assert(state.createInitialRequestWithFixedNonce("user", "rOprNGfwEbeRWgbNEkqO")
+		== "n,,n=user,r=rOprNGfwEbeRWgbNEkqO");
+
+	auto last = state.update("pencil",
+		"r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096");
+	assert(last == "c=biws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=",
+		last);
+
+	last = state.finalize("v=6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4=");
+	assert(last == "", last);
+}
+
+/// SCRAM-SHA-256 update succeeds with minimum iteration count 4096
+unittest
+{
+	ScramState!SHA256 s;
+	s.createInitialRequestWithFixedNonce("user", "testnonce");
+	s.update("pencil", "r=testnonceServer,s=QSXCR+Q6sek8bf92,i=4096");
+}
+
+/// SCRAM-SHA-256 update throws when iteration count is below minimum 4096
+unittest
+{
+	ScramState!SHA256 s;
+	s.createInitialRequestWithFixedNonce("user", "testnonce");
+	assertThrown!Exception(s.update("pencil",
+		"r=testnonceServer,s=QSXCR+Q6sek8bf92,i=4095"));
 }

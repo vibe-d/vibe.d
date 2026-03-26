@@ -249,11 +249,66 @@ final class MongoConnection {
 			handshake["client"]["application"] = Bson(["name": Bson(m_settings.appName)]);
 		}
 
+		import vibe.db.mongo.sasl;
+		import vibe.db.mongo.saslprep : saslPrep;
+		import std.digest.sha : SHA1, SHA256;
+
+		ScramState!SHA256 speculativeScramSHA256;
+		ScramState!SHA1 speculativeScramSHA1;
+		string speculativePayload;
+		bool speculatingScram = false;
+		MongoAuthMechanism speculativeMechanism = MongoAuthMechanism.none;
+
+		if (m_settings.username.length) {
+			string authDb = m_settings.getAuthDatabase;
+			handshake["saslSupportedMechs"] = Bson(authDb ~ "." ~ m_settings.username);
+
+			if (m_settings.password.length) {
+				speculativePayload = speculativeScramSHA256.createInitialRequest(m_settings.username);
+				speculativeMechanism = MongoAuthMechanism.scramSHA256;
+			} else if (m_settings.digest.length) {
+				speculativePayload = speculativeScramSHA1.createInitialRequest(m_settings.username);
+				speculativeMechanism = MongoAuthMechanism.scramSHA1;
+			}
+
+			if (speculativePayload.length) {
+				string mechStr = speculativeMechanism == MongoAuthMechanism.scramSHA256
+					? "SCRAM-SHA-256" : "SCRAM-SHA-1";
+
+				auto specAuth = Bson.emptyObject;
+				specAuth["saslStart"] = Bson(1);
+				specAuth["mechanism"] = Bson(mechStr);
+				specAuth["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, speculativePayload.representation));
+				specAuth["options"] = Bson(["skipEmptyExchange": Bson(true)]);
+
+				handshake["speculativeAuthenticate"] = specAuth;
+				speculatingScram = true;
+			}
+		}
+
 		auto reply = runCommand!(Bson, MongoAuthException)("admin", handshake);
 		m_description = deserializeBson!ServerDescription(reply);
 
 		if (m_description.satisfiesVersion(WireVersion.v36))
 			m_supportsOpMsg = true;
+
+		bool serverSupportsSHA256 = false;
+		bool hasSaslSupportedMechs = false;
+		auto saslMechs = reply.tryIndex("saslSupportedMechs");
+		if (!saslMechs.isNull) {
+			hasSaslSupportedMechs = true;
+			foreach (mech; saslMechs.get.byValue) {
+				if (mech.get!string == "SCRAM-SHA-256") {
+					serverSupportsSHA256 = true;
+					break;
+				}
+			}
+		}
+
+		Bson speculativeResult = Bson(null);
+		auto specResultField = reply.tryIndex("speculativeAuthenticate");
+		if (!specResultField.isNull)
+			speculativeResult = specResultField.get;
 
 		m_bytesRead = 0;
 		auto authMechanism = m_settings.authMechanism;
@@ -263,10 +318,13 @@ final class MongoConnection {
 			{
 				authMechanism = MongoAuthMechanism.mongoDBX509;
 			}
-			else if (m_settings.digest.length)
+			else if (m_settings.digest.length || m_settings.password.length)
 			{
-				// SCRAM-SHA-1 default since 3.0, otherwise use legacy authentication
-				if (m_description.satisfiesVersion(WireVersion.v30))
+				if (serverSupportsSHA256 && m_settings.password.length)
+					authMechanism = MongoAuthMechanism.scramSHA256;
+				else if (!hasSaslSupportedMechs && m_description.satisfiesVersion(WireVersion.v40) && m_settings.password.length)
+					authMechanism = MongoAuthMechanism.scramSHA256;
+				else if (m_description.satisfiesVersion(WireVersion.v30))
 					authMechanism = MongoAuthMechanism.scramSHA1;
 				else
 					authMechanism = MongoAuthMechanism.mongoDBCR;
@@ -279,11 +337,21 @@ final class MongoConnection {
 		if (authMechanism == MongoAuthMechanism.scramSHA1 && !m_description.satisfiesVersion(WireVersion.v30))
 			throw new MongoAuthException("Trying to force SCRAM-SHA-1 authentication on a <3.0 server not supported");
 
+		if (authMechanism == MongoAuthMechanism.scramSHA256 && !m_description.satisfiesVersion(WireVersion.v40))
+			throw new MongoAuthException("Trying to force SCRAM-SHA-256 authentication on a <4.0 server not supported");
+
+		if (authMechanism == MongoAuthMechanism.scramSHA256 && !m_settings.password.length)
+			throw new MongoAuthException("SCRAM-SHA-256 requires the raw password, not just the MD5 digest");
+
 		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !m_description.satisfiesVersion(WireVersion.v26))
 			throw new MongoAuthException("Trying to force MONGODB-X509 authentication on a <2.6 server not supported");
 
 		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !isTLS)
 			throw new MongoAuthException("Trying to force MONGODB-X509 authentication, but didn't use ssl!");
+
+		bool canUseSpeculative = speculatingScram
+			&& speculativeMechanism == authMechanism
+			&& speculativeResult != Bson(null);
 
 		m_isAuthenticating = true;
 		scope (exit)
@@ -296,7 +364,16 @@ final class MongoConnection {
 			certAuthenticate();
 			break;
 		case MongoAuthMechanism.scramSHA1:
-			scramAuthenticate();
+			if (canUseSpeculative)
+				scramAuthenticateContinue(speculativeScramSHA1, m_settings.digest, speculativeResult);
+			else
+				scramAuthenticate();
+			break;
+		case MongoAuthMechanism.scramSHA256:
+			if (canUseSpeculative)
+				scramAuthenticateContinue(speculativeScramSHA256, saslPrep(m_settings.password), speculativeResult);
+			else
+				scramSHA256Authenticate();
 			break;
 		case MongoAuthMechanism.mongoDBCR:
 			authenticate();
@@ -1089,24 +1166,49 @@ final class MongoConnection {
 
 	private void scramAuthenticate()
 	{
+		import std.digest.sha : SHA1;
+		scramStartAuth!SHA1("SCRAM-SHA-1", m_settings.digest);
+	}
+
+	private void scramSHA256Authenticate()
+	{
+		import vibe.db.mongo.saslprep : saslPrep;
+		import std.digest.sha : SHA256;
+		scramStartAuth!SHA256("SCRAM-SHA-256", saslPrep(m_settings.password));
+	}
+
+	private void scramStartAuth(HashType)(string mechanism, string credential)
+	{
 		import vibe.db.mongo.sasl;
 
 		string cn = m_settings.getAuthDatabase;
 
-		ScramState state;
+		ScramState!HashType state;
 		string payload = state.createInitialRequest(m_settings.username);
 
 		auto cmd = Bson.emptyObject;
 		cmd["saslStart"] = Bson(1);
-		cmd["mechanism"] = Bson("SCRAM-SHA-1");
+		cmd["mechanism"] = Bson(mechanism);
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
+		cmd["options"] = Bson(["skipEmptyExchange": Bson(true)]);
 
 		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		scramFinishAuth(state, credential, doc, cn);
+	}
+
+	private void scramAuthenticateContinue(ScramStateType)(ref ScramStateType state, string credential, Bson speculativeResult)
+	{
+		string cn = m_settings.getAuthDatabase;
+		scramFinishAuth(state, credential, speculativeResult, cn);
+	}
+
+	private void scramFinishAuth(ScramStateType)(ref ScramStateType state, string credential, Bson doc, string cn)
+	{
 		string response = cast(string)doc["payload"].get!BsonBinData().rawData;
 		Bson conversationId = doc["conversationId"];
 
-		payload = state.update(m_settings.digest, response);
-		cmd = Bson.emptyObject;
+		string payload = state.update(credential, response);
+		auto cmd = Bson.emptyObject;
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
@@ -1115,6 +1217,11 @@ final class MongoConnection {
 		response = cast(string)doc["payload"].get!BsonBinData().rawData;
 
 		payload = state.finalize(response);
+
+		auto doneField = doc.tryIndex("done");
+		if (!doneField.isNull && doneField.get.get!bool)
+			return;
+
 		cmd = Bson.emptyObject;
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;

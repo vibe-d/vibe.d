@@ -10,7 +10,7 @@ import std.exception;
 
 int main(string[] args)
 {
-	bool failConnect, failDB, failAuth;
+	bool failConnect, failDB, failAuth, useSHA256;
 	string username, password;
 	ushort port;
 
@@ -53,6 +53,11 @@ int main(string[] args)
 				failAuth = true;
 			else if (arg == "auth")
 				authStep = 1;
+			else if (arg == "auth256")
+			{
+				useSHA256 = true;
+				authStep = 1;
+			}
 			else
 				logError("Unknown argument '%s'", arg);
 		}
@@ -60,10 +65,23 @@ int main(string[] args)
 
 	settings.hosts = [MongoHost("127.0.0.1", port)];
 	settings.appName = "VibeConnectTest";
-	if (username.length)
+
+	if (username.length && password.length)
+	{
+		if (useSHA256)
+		{
+			settings.authenticatePassword(username, password);
+		}
+		else
+		{
+			settings.username = username;
+			settings.digest = MongoClientSettings.makeDigest(username, password);
+		}
+	}
+	else if (username.length)
+	{
 		settings.username = username;
-	if (password.length)
-		settings.digest = MongoClientSettings.makeDigest(username, password);
+	}
 
 	MongoClient client;
 
