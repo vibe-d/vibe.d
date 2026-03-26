@@ -18,6 +18,7 @@ import vibe.db.mongo.settings;
 import vibe.core.log;
 
 import std.random : uniform;
+import std.range : chain;
 import std.typecons : Nullable;
 
 @safe:
@@ -161,21 +162,7 @@ struct TopologyDescription
 	{
 		MongoHost[] result;
 
-		foreach (h; desc.hosts)
-		{
-			auto parsed = parseHostPort(h);
-			if (parsed != MongoHost.init)
-				result ~= parsed;
-		}
-
-		foreach (h; desc.passives)
-		{
-			auto parsed = parseHostPort(h);
-			if (parsed != MongoHost.init && !hasHost(result, parsed))
-				result ~= parsed;
-		}
-
-		foreach (h; desc.arbiters)
+		foreach (h; chain(desc.hosts, desc.passives, desc.arbiters))
 		{
 			auto parsed = parseHostPort(h);
 			if (parsed != MongoHost.init && !hasHost(result, parsed))
