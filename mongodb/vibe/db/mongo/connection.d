@@ -329,6 +329,7 @@ final class MongoConnection {
 		if (authMechanism == MongoAuthMechanism.none)
 		{
 			if (m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
+			{
 				authMechanism = MongoAuthMechanism.mongoDBX509;
 			}
 			else if (m_settings.digest.length || m_settings.password.length)
