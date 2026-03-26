@@ -315,24 +315,12 @@ final class MongoConnection {
 		m_connectedHost = host;
 
 		if (doAuthenticate) {
-			doAuth(isTLS);
-			logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
-		} else {
-			logDiagnostic("Probed: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
-		}
-	}
+			auto authMechanism = m_settings.authMechanism;
 
-	private void doAuth(bool isTLS)
-	{
-		auto authMechanism = m_settings.authMechanism;
-
-		if (authMechanism == MongoAuthMechanism.none)
-		{
-			if (m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
-			{
+			if (authMechanism == MongoAuthMechanism.none && m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
 				authMechanism = MongoAuthMechanism.mongoDBX509;
-			}
-			else if (m_settings.digest.length || m_settings.password.length)
+
+			if (authMechanism == MongoAuthMechanism.none && (m_settings.digest.length || m_settings.password.length))
 			{
 				if (serverSupportsSHA256 && m_settings.password.length)
 					authMechanism = MongoAuthMechanism.scramSHA256;
@@ -343,56 +331,60 @@ final class MongoConnection {
 				else
 					authMechanism = MongoAuthMechanism.mongoDBCR;
 			}
-		}
 
-		if (authMechanism == MongoAuthMechanism.mongoDBCR && m_description.satisfiesVersion(WireVersion.v40))
-			throw new MongoAuthException("Trying to force MONGODB-CR authentication on a >=4.0 server not supported");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.mongoDBCR || !m_description.satisfiesVersion(WireVersion.v40),
+				"Trying to force MONGODB-CR authentication on a >=4.0 server not supported");
 
-		if (authMechanism == MongoAuthMechanism.scramSHA1 && !m_description.satisfiesVersion(WireVersion.v30))
-			throw new MongoAuthException("Trying to force SCRAM-SHA-1 authentication on a <3.0 server not supported");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.scramSHA1 || m_description.satisfiesVersion(WireVersion.v30),
+				"Trying to force SCRAM-SHA-1 authentication on a <3.0 server not supported");
 
-		if (authMechanism == MongoAuthMechanism.scramSHA256 && !m_description.satisfiesVersion(WireVersion.v40))
-			throw new MongoAuthException("Trying to force SCRAM-SHA-256 authentication on a <4.0 server not supported");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.scramSHA256 || m_description.satisfiesVersion(WireVersion.v40),
+				"Trying to force SCRAM-SHA-256 authentication on a <4.0 server not supported");
 
-		if (authMechanism == MongoAuthMechanism.scramSHA256 && !m_settings.password.length)
-			throw new MongoAuthException("SCRAM-SHA-256 requires the raw password, not just the MD5 digest");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.scramSHA256 || m_settings.password.length > 0,
+				"SCRAM-SHA-256 requires the raw password, not just the MD5 digest");
 
-		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !m_description.satisfiesVersion(WireVersion.v26))
-			throw new MongoAuthException("Trying to force MONGODB-X509 authentication on a <2.6 server not supported");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.mongoDBX509 || m_description.satisfiesVersion(WireVersion.v26),
+				"Trying to force MONGODB-X509 authentication on a <2.6 server not supported");
 
-		if (authMechanism == MongoAuthMechanism.mongoDBX509 && !isTLS)
-			throw new MongoAuthException("Trying to force MONGODB-X509 authentication, but didn't use ssl!");
+			enforce!MongoAuthException(authMechanism != MongoAuthMechanism.mongoDBX509 || isTLS,
+				"Trying to force MONGODB-X509 authentication, but didn't use ssl!");
 
-		bool canUseSpeculative = speculatingScram
-			&& speculativeMechanism == authMechanism
-			&& speculativeResult != Bson(null);
+			bool canUseSpeculative = speculatingScram
+				&& speculativeMechanism == authMechanism
+				&& speculativeResult != Bson(null);
 
-		m_isAuthenticating = true;
-		scope (exit)
-			m_isAuthenticating = false;
+			m_isAuthenticating = true;
+			scope (exit)
+				m_isAuthenticating = false;
 
-		final switch (authMechanism)
-		{
-		case MongoAuthMechanism.none:
-			break;
-		case MongoAuthMechanism.mongoDBX509:
-			certAuthenticate();
-			break;
-		case MongoAuthMechanism.scramSHA1:
-			if (canUseSpeculative)
-				scramAuthenticateContinue(speculativeScramSHA1, m_settings.digest, speculativeResult);
-			else
-				scramAuthenticate();
-			break;
-		case MongoAuthMechanism.scramSHA256:
-			if (canUseSpeculative)
-				scramAuthenticateContinue(speculativeScramSHA256, saslPrep(m_settings.password), speculativeResult);
-			else
-				scramSHA256Authenticate();
-			break;
-		case MongoAuthMechanism.mongoDBCR:
-			authenticate();
-			break;
+			final switch (authMechanism)
+			{
+			case MongoAuthMechanism.none:
+				break;
+			case MongoAuthMechanism.mongoDBX509:
+				certAuthenticate();
+				break;
+			case MongoAuthMechanism.scramSHA1:
+				if (canUseSpeculative)
+					scramAuthenticateContinue(speculativeScramSHA1, m_settings.digest, speculativeResult);
+				else
+					scramAuthenticate();
+				break;
+			case MongoAuthMechanism.scramSHA256:
+				if (canUseSpeculative)
+					scramAuthenticateContinue(speculativeScramSHA256, saslPrep(m_settings.password), speculativeResult);
+				else
+					scramSHA256Authenticate();
+				break;
+			case MongoAuthMechanism.mongoDBCR:
+				authenticate();
+				break;
+			}
+
+			logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
+		} else {
+			logDiagnostic("Probed: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
 		}
 	}
 
