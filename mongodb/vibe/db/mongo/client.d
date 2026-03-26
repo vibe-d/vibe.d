@@ -15,8 +15,10 @@ import vibe.core.connectionpool;
 import vibe.core.log;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.settings;
+import vibe.db.mongo.topology;
 
 import std.conv;
+import std.exception : enforce;
 
 /**
 	Represents a connection to a MongoDB server.
@@ -31,6 +33,7 @@ final class MongoClient {
 	private {
 		ConnectionPool!MongoConnection m_connections;
 		MongoClientSettings m_settings;
+		TopologyDescription m_topology;
 	}
 
 	package this(string host, ushort port)
@@ -60,17 +63,31 @@ final class MongoClient {
 	package this(MongoClientSettings settings)
 	{
 		m_settings = settings;
+
+		discoverTopology();
+
 		m_connections = new ConnectionPool!MongoConnection({
+				auto targetHost = getSelectedHost();
 				auto ret = new MongoConnection(settings);
-				try ret.connect();
-				catch (Exception e) {
-					// avoid leaking the connection to the GC, which might
-					// destroy it during shutdown when all of vibe.d has
-					// already been destroyed, which in turn causes a null
-					// pointer
+
+				try {
+					ret.connectToHost(targetHost);
+				} catch (Exception e) {
 					() @trusted { destroy(ret); } ();
-					throw e;
+
+					// Topology may be stale — re-discover and retry once
+					discoverTopology();
+					targetHost = getSelectedHost();
+
+					ret = new MongoConnection(settings);
+					try {
+						ret.connectToHost(targetHost);
+					} catch (Exception e2) {
+						() @trusted { destroy(ret); } ();
+						throw e2;
+					}
 				}
+
 				return ret;
 			},
 			settings.maxConnections
@@ -189,5 +206,56 @@ final class MongoClient {
 		}
 
 		throw new MongoDriverException("Failed to acquire a live connection after evicting 100 dead connections");
+	}
+
+	package MongoHost getSelectedHost()
+	{
+		auto selected = selectServer(m_topology, m_settings.readPreference, m_settings.localThresholdMS);
+		enforce!MongoDriverException(!selected.isNull, "No suitable server found for read preference");
+
+		return selected.get;
+	}
+
+	private void discoverTopology()
+	{
+		import std.algorithm : canFind;
+
+		m_topology = TopologyDescription.init;
+		Exception lastException;
+
+		foreach (host; m_settings.hosts) {
+			probeAndUpdate(host, lastException);
+		}
+
+		foreach (host; m_topology.allKnownHosts()) {
+			if (m_topology.servers.canFind!(s => s.host == host))
+				continue;
+
+			probeAndUpdate(host, lastException);
+		}
+
+		auto selected = selectServer(m_topology, m_settings.readPreference, m_settings.localThresholdMS);
+
+		if (selected.isNull) {
+			throw lastException !is null
+				? lastException
+				: new MongoDriverException("No suitable server found during topology discovery");
+		}
+	}
+
+	private void probeAndUpdate(MongoHost host, ref Exception lastException)
+	{
+		try {
+			auto desc = probeServer(m_settings, host);
+
+			if (!matchesReplicaSet(m_settings.replicaSet, desc))
+				return;
+
+			m_topology.update(host, desc);
+		} catch (Exception ex) {
+			lastException = ex;
+			logError("Failed to probe %s:%s: %s", host.name, host.port, ex.msg);
+			m_topology.markFailed(host);
+		}
 	}
 }
