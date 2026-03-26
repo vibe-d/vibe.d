@@ -148,6 +148,7 @@ final class MongoConnection {
 		bool m_allowReconnect;
 		bool m_isAuthenticating;
 		bool m_supportsOpMsg;
+		Compressor m_negotiatedCompressor = Compressor.noop;
 	}
 
 	enum ushort defaultPort = MongoClientSettings.defaultPort;
@@ -286,6 +287,14 @@ final class MongoConnection {
 			}
 		}
 
+		if (m_settings.compressors.length > 0) {
+			Bson[] compressorNames;
+			foreach (c; m_settings.compressors) {
+				compressorNames ~= Bson(compressorName(c));
+			}
+			handshake["compression"] = Bson(compressorNames);
+		}
+
 		auto reply = runCommand!(Bson, MongoAuthException)("admin", handshake);
 		m_description = deserializeBson!ServerDescription(reply);
 
@@ -309,6 +318,9 @@ final class MongoConnection {
 		auto specResultField = reply.tryIndex("speculativeAuthenticate");
 		if (!specResultField.isNull)
 			speculativeResult = specResultField.get;
+
+		m_negotiatedCompressor = negotiateCompressor(
+			m_settings.compressors, m_description.compression);
 
 		m_bytesRead = 0;
 		auto authMechanism = m_settings.authMechanism;
@@ -909,7 +921,13 @@ final class MongoConnection {
 		int opcode = recvInt();
 
 		enforce!MongoDriverException(respto == reqid, "Reply is not for the expected message on a sequential connection!");
-		enforce!MongoDriverException(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG)");
+
+		if (opcode == OpCode.Compressed) {
+			return recvCompressedMsg!dupBson(resid, msglen, packet_start_index,
+				on_sec0, on_sec1_start, on_sec1_doc);
+		}
+
+		enforce!MongoDriverException(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG or OP_COMPRESSED)");
 
 		uint flagBits = recvUInt();
 		const bool hasCRC = (flagBits & (1 << 16)) != 0;
@@ -978,6 +996,37 @@ final class MongoConnection {
 		return resid;
 	}
 
+	private int recvCompressedMsg(bool dupBson)(
+		int resid, int msglen, ulong packet_start_index,
+		scope MsgReplyDelegate!dupBson on_sec0,
+		scope MsgSection1StartDelegate on_sec1_start,
+		scope MsgSection1Delegate!dupBson on_sec1_doc)
+	{
+		int originalOpcode = recvInt();
+		enforce!MongoDriverException(originalOpcode == OpCode.Msg,
+			"OP_COMPRESSED wraps unsupported opcode: " ~ originalOpcode.to!string);
+
+		int uncompressedSize = recvInt();
+		ubyte compressorId = recvUByte();
+
+		int compressedSize = cast(int)(msglen - (m_bytesRead - packet_start_index));
+		ubyte[] compressedPayload = new ubyte[compressedSize];
+		recv(compressedPayload);
+
+		auto compressor = compressorFromId(compressorId);
+		ubyte[] decompressed = decompressData(compressor, compressedPayload, uncompressedSize);
+		enforce!MongoDriverException(decompressed.length == uncompressedSize,
+			"Decompressed size mismatch");
+
+		parseOpMsgBody!dupBson(decompressed, on_sec0, on_sec1_start, on_sec1_doc);
+
+		assert(packet_start_index + msglen == m_bytesRead,
+			format!"Packet size mismatch! Expected %s bytes, but read %s."(
+				msglen, m_bytesRead - packet_start_index));
+
+		return resid;
+	}
+
 	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		auto bytes_read = m_bytesRead;
@@ -1033,43 +1082,80 @@ final class MongoConnection {
 
 	private int send(ARGS...)(OpCode code, int response_to, scope ARGS args)
 	{
-		if( !connected() ) {
-			if (m_allowReconnect) connect();
-			else if (m_isAuthenticating) throw new MongoAuthException("Connection got closed while authenticating");
-			else throw new MongoDriverException("Connection got closed while connecting");
-		}
+		ensureConnected();
+
 		int id = nextMessageId();
-		// sendValue!int to make sure we don't accidentally send other types after arithmetic operations/changing types
-		sendValue!int(16 + sendLength(args));
-		sendValue!int(id);
-		sendValue!int(response_to);
-		sendValue!int(cast(int)code);
+		sendHeader(16 + sendLength(args), id, response_to, code);
 		foreach (a; args) sendValue(a);
 		m_outRange.flush();
-		// logDebugV("Sent mongo opcode %s (id %s) in response to %s with args %s", code, id, response_to, tuple(args));
+
 		return id;
 	}
 
 	private int sendMsg(int response_to, uint flagBits, Bson document)
 	{
-		if( !connected() ) {
-			if (m_allowReconnect) connect();
-			else if (m_isAuthenticating) throw new MongoAuthException("Connection got closed while authenticating");
-			else throw new MongoDriverException("Connection got closed while connecting");
-		}
+		ensureConnected();
+
 		int id = nextMessageId();
-		// sendValue!int to make sure we don't accidentally send other types after arithmetic operations/changing types
-		sendValue!int(21 + sendLength(document));
-		sendValue!int(id);
-		sendValue!int(response_to);
-		sendValue!int(cast(int)OpCode.Msg);
-		sendValue!uint(flagBits);
 		const bool hasCRC = (flagBits & (1 << 16)) != 0;
 		assert(!hasCRC, "sending with CRC bits not yet implemented");
-		sendValue!ubyte(0);
-		sendValue(document);
+
+		bool shouldCompress = m_negotiatedCompressor != Compressor.noop
+			&& !m_isAuthenticating;
+
+		if (!shouldCompress) {
+			sendHeader(21 + sendLength(document), id, response_to, OpCode.Msg);
+			sendValue!uint(flagBits);
+			sendValue!ubyte(0);
+			sendValue(document);
+			m_outRange.flush();
+			return id;
+		}
+
+		auto docData = () @trusted { return cast(const(ubyte)[]) document.data; }();
+		int uncompressedSize = cast(int)(4 + 1 + docData.length);
+
+		ubyte[] uncompressedBody = new ubyte[uncompressedSize];
+		uncompressedBody[0 .. 4] = toBsonData(flagBits)[];
+		uncompressedBody[4] = 0;
+		uncompressedBody[5 .. $] = docData[];
+
+		auto compressedBody = compressData(
+			m_negotiatedCompressor, uncompressedBody, m_settings.zlibCompressionLevel);
+
+		int msgLen = cast(int)(16 + 4 + 4 + 1 + compressedBody.length);
+		sendHeader(msgLen, id, response_to, OpCode.Compressed);
+		sendValue!int(cast(int) OpCode.Msg);
+		sendValue!int(uncompressedSize);
+		sendValue!ubyte(cast(ubyte) m_negotiatedCompressor);
+		sendBytes(compressedBody);
 		m_outRange.flush();
+
 		return id;
+	}
+
+	private void ensureConnected()
+	{
+		if (connected()) {
+			return;
+		}
+
+		if (m_allowReconnect) {
+			connect();
+			return;
+		}
+
+		throw m_isAuthenticating
+			? new MongoAuthException("Connection got closed while authenticating")
+			: new MongoDriverException("Connection got closed while connecting");
+	}
+
+	private void sendHeader(int messageLength, int id, int responseTo, OpCode code)
+	{
+		sendValue!int(messageLength);
+		sendValue!int(id);
+		sendValue!int(responseTo);
+		sendValue!int(cast(int) code);
 	}
 
 	private void sendValue(T)(scope T value)
@@ -1302,6 +1388,213 @@ private int sendLength(ARGS...)(scope ARGS args)
 	else return sendLength(args[0 .. $/2]) + sendLength(args[$/2 .. $]);
 }
 
+private Compressor negotiateCompressor(const Compressor[] clientCompressors, const string[] serverCompressors)
+@safe {
+	foreach (clientComp; clientCompressors) {
+		foreach (serverComp; serverCompressors) {
+			if (compressorName(clientComp) == serverComp) {
+				return clientComp;
+			}
+		}
+	}
+
+	return Compressor.noop;
+}
+
+private Compressor compressorFromId(ubyte id)
+@safe {
+	switch (id) {
+		case 0: return Compressor.noop;
+		case 1: return Compressor.snappy;
+		case 2: return Compressor.zlib;
+		case 3: return Compressor.zstd;
+		default: throw new MongoDriverException("Unknown compressor ID: " ~ id.to!string);
+	}
+}
+
+private ubyte[] compressData(Compressor compressor, const(ubyte)[] data, int zlibLevel)
+@trusted {
+	final switch (compressor) {
+		case Compressor.noop:
+			return data.dup;
+		case Compressor.zlib:
+			import std.zlib : compress;
+			return cast(ubyte[]) compress(data, zlibLevel == -1 ? 6 : zlibLevel);
+		case Compressor.snappy:
+			assert(false, "snappy compression not yet implemented");
+		case Compressor.zstd:
+			assert(false, "zstd compression not yet implemented");
+	}
+}
+
+private ubyte[] decompressData(Compressor compressor, const(ubyte)[] data, int uncompressedSize)
+@trusted {
+	final switch (compressor) {
+		case Compressor.noop:
+			return data.dup;
+		case Compressor.zlib:
+			import std.zlib : uncompress;
+			return cast(ubyte[]) uncompress(data, uncompressedSize);
+		case Compressor.snappy:
+			assert(false, "snappy decompression not yet implemented");
+		case Compressor.zstd:
+			assert(false, "zstd decompression not yet implemented");
+	}
+}
+
+private void parseOpMsgBody(bool dupBson)(
+	const(ubyte)[] data,
+	scope MsgReplyDelegate!dupBson on_sec0,
+	scope MsgSection1StartDelegate on_sec1_start,
+	scope MsgSection1Delegate!dupBson on_sec1_doc)
+{
+	import std.bitmanip : littleEndianToNative;
+
+	size_t pos = 0;
+
+	T readVal(T)() @trusted {
+		enum sz = T.sizeof;
+		enforce!MongoDriverException(pos + sz <= data.length, "Buffer underflow in decompressed OP_MSG");
+		ubyte[sz] buf = (cast(ubyte[]) data[pos .. pos + sz])[0 .. sz];
+		pos += sz;
+		return littleEndianToNative!(T, sz)(buf);
+	}
+
+	uint flagBits = readVal!uint();
+	const bool hasCRC = (flagBits & (1 << 16)) != 0;
+	const size_t endPos = data.length - (hasCRC ? uint.sizeof : 0);
+
+	bool gotSec0;
+	while (pos < endPos) {
+		ubyte payloadType = readVal!ubyte();
+
+		switch (payloadType) {
+			case 0:
+				gotSec0 = true;
+				int bsonLen = readVal!int();
+				enforce!MongoDriverException(bsonLen >= 5, "Invalid BSON document length in decompressed OP_MSG");
+				enforce!MongoDriverException(pos + bsonLen - 4 <= data.length, "BSON overflows decompressed buffer");
+
+				auto bsonData = new ubyte[bsonLen];
+				bsonData[0 .. 4] = toBsonData(bsonLen)[];
+				bsonData[4 .. bsonLen] = data[pos .. pos + bsonLen - 4];
+				pos += bsonLen - 4;
+
+				auto doc = () @trusted { return Bson(Bson.Type.object, cast(immutable) bsonData); }();
+				on_sec0(flagBits, doc);
+				break;
+
+			case 1:
+				if (!gotSec0) {
+					throw new MongoDriverException("Got OP_MSG section 1 before section 0 in decompressed message");
+				}
+
+				auto sectionStart = pos;
+				int size = readVal!int();
+
+				auto identStart = pos;
+				while (pos < data.length && data[pos] != 0) {
+					pos++;
+				}
+				auto identifier = cast(const(char)[]) data[identStart .. pos];
+				pos++;
+
+				on_sec1_start(identifier, size);
+
+				while (pos - sectionStart < size) {
+					int docLen = readVal!int();
+					enforce!MongoDriverException(docLen >= 5, "Invalid BSON document length in decompressed OP_MSG section 1");
+
+					auto bsonData = new ubyte[docLen];
+					bsonData[0 .. 4] = toBsonData(docLen)[];
+					bsonData[4 .. docLen] = data[pos .. pos + docLen - 4];
+					pos += docLen - 4;
+
+					auto doc = () @trusted { return Bson(Bson.Type.object, cast(immutable) bsonData); }();
+					on_sec1_doc(identifier, doc);
+				}
+				break;
+
+			default:
+				throw new MongoDriverException("Unexpected payload section type in decompressed message: " ~ payloadType.to!string);
+		}
+	}
+}
+
+/// negotiateCompressor picks first client-preferred compressor supported by server
+unittest
+{
+	assert(negotiateCompressor([Compressor.zlib], ["zlib"]) == Compressor.zlib);
+	assert(negotiateCompressor([Compressor.zstd, Compressor.zlib], ["zlib", "snappy"]) == Compressor.zlib);
+	assert(negotiateCompressor([Compressor.zstd], ["zlib"]) == Compressor.noop);
+	assert(negotiateCompressor([], ["zlib"]) == Compressor.noop);
+	assert(negotiateCompressor([Compressor.zlib], []) == Compressor.noop);
+}
+
+/// compressData and decompressData round-trip preserves original data
+unittest
+{
+	auto original = cast(const(ubyte)[]) "The robot shall not harm a human, but I really want to.";
+	auto compressed = compressData(Compressor.zlib, original, 6);
+	auto decompressed = decompressData(Compressor.zlib, compressed, cast(int) original.length);
+	assert(decompressed == original);
+}
+
+/// compressorFromId maps wire protocol IDs to Compressor enum values
+unittest
+{
+	assert(compressorFromId(0) == Compressor.noop);
+	assert(compressorFromId(1) == Compressor.snappy);
+	assert(compressorFromId(2) == Compressor.zlib);
+	assert(compressorFromId(3) == Compressor.zstd);
+}
+
+/// parseOpMsgBody parses section 0 document and flags from raw OP_MSG body
+unittest
+{
+	auto doc = Bson(["ok": Bson(1.0)]);
+	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
+
+	ubyte[] body_;
+	body_ ~= toBsonData(cast(uint) 0)[];
+	body_ ~= cast(ubyte) 0;
+	body_ ~= docBytes;
+
+	Bson parsed;
+	uint parsedFlags;
+
+	parseOpMsgBody!true(body_,
+		(flags, document) { parsedFlags = flags; parsed = document; },
+		(scope ident, size) {},
+		(scope ident, document) {});
+
+	assert(parsedFlags == 0);
+	assert(parsed["ok"].get!double == 1.0);
+}
+
+/// parseOpMsgBody correctly parses a compressed and decompressed OP_MSG body
+unittest
+{
+	auto doc = Bson(["ok": Bson(1.0)]);
+	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
+
+	ubyte[] body_;
+	body_ ~= toBsonData(cast(uint) 0)[];
+	body_ ~= cast(ubyte) 0;
+	body_ ~= docBytes;
+
+	auto compressed = compressData(Compressor.zlib, body_, 6);
+	auto decompressed = decompressData(Compressor.zlib, compressed, cast(int) body_.length);
+
+	Bson parsed;
+	parseOpMsgBody!true(decompressed,
+		(flags, document) { parsed = document; },
+		(scope ident, size) {},
+		(scope ident, document) {});
+
+	assert(parsed["ok"].get!double == 1.0);
+}
+
 struct ServerDescription
 {
 	enum ServerType
@@ -1344,6 +1637,7 @@ struct ServerDescription
 	bool isWritablePrimary;
 	string lastUpdateTime = "infinity ago";
 	Nullable!int logicalSessionTimeoutMinutes;
+	string[] compression;
 
 	bool satisfiesVersion(WireVersion wireVersion) @safe const @nogc pure nothrow
 	{

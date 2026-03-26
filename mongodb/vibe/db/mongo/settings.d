@@ -18,6 +18,7 @@ import std.digest : toHexString;
 import std.digest.md : md5Of;
 import std.algorithm : splitter, startsWith;
 import std.string : icmp, indexOf, toLower;
+import std.typecons : Nullable, nullable;
 
 
 /**
@@ -186,6 +187,21 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "authmechanismproperties": cfg.authMechanismProperties = value.split(","); warnNotImplemented(); break;
 				case "authsource": cfg.authSource = value; break;
 				case "wtimeoutms": setLong(cfg.wTimeoutMS); break;
+				case "compressors":
+					import std.algorithm : map, filter;
+					import std.array : array;
+					cfg.compressors = value.splitter(",")
+						.map!(c => parseCompressor(c))
+						.filter!(c => !c.isNull)
+						.map!(c => c.get)
+						.array;
+					break;
+				case "zlibcompressionlevel":
+					long level;
+					if (setLong(level)) {
+						cfg.zlibCompressionLevel = cast(int) level;
+					}
+					break;
 				case "w":
 					try {
 						if(icmp(value, "majority") == 0){
@@ -770,6 +786,39 @@ unittest
 	assert(cfg.sslCAFile is null);
 }
 
+/// parseMongoDBUrl parses single compressor option
+unittest
+{
+	MongoClientSettings cfg;
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?compressors=zlib"));
+	assert(cfg.compressors == [Compressor.zlib]);
+}
+
+/// parseMongoDBUrl parses multiple compressors preserving order
+unittest
+{
+	MongoClientSettings cfg;
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?compressors=snappy,zlib,zstd"));
+	assert(cfg.compressors == [Compressor.snappy, Compressor.zlib, Compressor.zstd]);
+}
+
+/// parseMongoDBUrl parses compressors together with zlibCompressionLevel
+unittest
+{
+	MongoClientSettings cfg;
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?compressors=zlib&zlibCompressionLevel=6"));
+	assert(cfg.compressors == [Compressor.zlib]);
+	assert(cfg.zlibCompressionLevel == 6);
+}
+
+/// parseMongoDBUrl silently skips unknown compressors
+unittest
+{
+	MongoClientSettings cfg;
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?compressors=bogus,zlib"));
+	assert(cfg.compressors == [Compressor.zlib]);
+}
+
 /**
  * Describes a vibe.d supported authentication mechanism to use on client
  * connection to a MongoDB server.
@@ -901,6 +950,43 @@ private ReadPreference parseReadPreference(string str)
 		case "secondaryPreferred": return ReadPreference.secondaryPreferred;
 		case "nearest": return ReadPreference.nearest;
 		default: throw new Exception("Read preference \"" ~ str ~ "\" not supported");
+	}
+}
+
+/**
+ * Compression algorithm identifier for OP_COMPRESSED wire protocol messages.
+ *
+ * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#op_compressed)
+ */
+enum Compressor : ubyte {
+	noop   = 0,
+	snappy = 1,
+	zlib   = 2,
+	zstd   = 3,
+}
+
+string compressorName(Compressor c)
+@safe pure nothrow {
+	final switch (c) {
+		case Compressor.noop:   return "noop";
+		case Compressor.snappy: return "snappy";
+		case Compressor.zlib:   return "zlib";
+		case Compressor.zstd:   return "zstd";
+	}
+}
+
+private Nullable!Compressor parseCompressor(const(char)[] name)
+@safe {
+	import std.string : strip;
+
+	switch (strip(name)) {
+		case "noop":   return nullable(Compressor.noop);
+		case "snappy": return nullable(Compressor.snappy);
+		case "zlib":   return nullable(Compressor.zlib);
+		case "zstd":   return nullable(Compressor.zstd);
+		default:
+			logWarn("Unknown compressor: %s", name);
+			return Nullable!Compressor.init;
 	}
 }
 
@@ -1132,6 +1218,19 @@ class MongoClientSettings
 	 * collections.
 	 */
 	string appName;
+
+	/**
+	 * Ordered list of compression algorithms the client is willing to use.
+	 * The server picks the first one it supports.
+	 *
+	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.compressors)
+	 */
+	Compressor[] compressors;
+
+	/**
+	 * Compression level for zlib (1-9). -1 means default (level 6).
+	 */
+	int zlibCompressionLevel = -1;
 
 	/**
 	 * Generates a digest string which can be used for authentication by setting
