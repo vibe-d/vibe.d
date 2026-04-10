@@ -836,8 +836,14 @@ struct MongoCollection {
 			AggregateOptions aggOptions;
 			aggOptions.maxTimeMS = options.maxTimeMS;
 			aggOptions.readConcern = options.readConcern;
-			auto reply = aggregate(pipeline, aggOptions).front;
-			return reply["n"].to!long;
+
+			try {
+				auto reply = aggregate(pipeline, aggOptions).front;
+				return reply["n"].to!long;
+			} catch (MongoDriverException) {
+				// Match the behavior of the mongo shell which returns 0.
+				return 0;
+			}
 		} else {
 			return countImpl(null, options.readConcern);
 		}
