@@ -123,6 +123,7 @@ final class SMTPClientSettings {
 final class Mail {
 	InetHeaderMap headers;
 	string bodyText;
+    string envelopeSender;	//Optional SMTP envelope sender (used in `MAIL FROM`), leave empty to use the From header
 }
 
 /**
@@ -224,9 +225,12 @@ void sendMail(in SMTPClientSettings settings, Mail mail, in Duration timeout = D
 		case SMTPAuthType.cramMd5: assert(false, "TODO!");
 	}
 
-	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
-	expectStatus(conn, SMTPStatus.success, "MAIL FROM");
-
+    auto envelopeFrom = mail.envelopeSender.length
+        ? mail.envelopeSender
+        : mail.headers["From"];
+    conn.write("MAIL FROM:"~addressMailPart(envelopeFrom)~"\r\n");
+    expectStatus(conn, SMTPStatus.success, "MAIL FROM");
+	
 	static immutable rcpt_headers = ["To", "Cc", "Bcc"];
 	foreach (h; rcpt_headers) {
 		mail.headers.getAll(h, (v) @safe {
