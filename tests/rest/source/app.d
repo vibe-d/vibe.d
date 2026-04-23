@@ -361,11 +361,11 @@ unittest
  * - body for POST requests;
  *
  * This is configurable by means of:
- * - @headerParam : Get a parameter from the query header;
- * - @queryParam : Get a parameter from the query URL;
- * - @bodyParam : Get a parameter from the body;
+ * - @viaHeader : Get a parameter from the query header;
+ * - @viaQuery : Get a parameter from the query URL;
+ * - @viaBody : Get a parameter from the body;
  *
- * In addition, @headerParam have a special handling of 'out' and
+ * In addition, @viaHeader have a special handling of 'out' and
  * 'ref' parameters:
  * - 'out' are neither send by the client nor read by the server, but
  *	their value (except for null string) is returned by the server.
@@ -374,26 +374,31 @@ unittest
  * This is to be consistent with the way D 'out' and 'ref' works.
  * However, it makes no sense to have 'ref' or 'out' parameters on
  * body or query parameter, so those are treated as error at compile time.
+ *
+ * If no Json fieldname is passed to @viaBody, the entire Json body is deserialized into the respective field.
  */
 @rootPathFromName
 interface Example6API
 {
 	@safe:
-
-	// The parameter is the name of the field in the header,
+	// The parameter to `viaHeader` is the name of the field in the header,
 	// such as "Accept", "Content-Type", "User-Agent"...
 	string getPortal(@viaHeader("Authorization") string auth,
-					 @viaHeader("X-Custom-Tester") ref string tester,
-					 @viaHeader("WWW-Authenticate") out Nullable!string www);
+		@viaHeader("X-Custom-Tester") ref string tester,
+		@viaHeader("WWW-Authenticate") out Nullable!string www);
 
 	// The parameter is the field name, e.g for a query such as:
-	// 'GET /root/node?foo=bar', it will be "foo".
+	// 'GET /root/node?foo=bar', "foo" will be the second parameter.
 	string postAnswer(@viaQuery("qparam") string fortyTwo);
-	// Finally, there is `@viaBody`. It works as you expect it to work,
+
+	// Finally, there is @viaBody. It works as you expect it to work,
 	// currently serializing passed data as Json and pass them through the body.
 	string postConcat(@viaBody("parameter") FooType myFoo);
 
-	// Without a parameter, it will represent the entire body
+	// If no field name is passed to @viaBody the entire json object is
+	// serialized into the parameter.
+	// Moreover if only one bodyParameter is present, this is the default
+	// behavior.
 	string postConcatBody(@viaBody() FooType obj);
 
 	int testStatus(@viaStatus out int status, @viaStatus out string status_phrase);
