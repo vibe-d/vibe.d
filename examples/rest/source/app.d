@@ -353,11 +353,11 @@ unittest
  * - body for POST requests;
  *
  * This is configurable by means of:
- * - @headerParam : Get a parameter from the query header;
- * - @queryParam : Get a parameter from the query URL;
- * - @bodyParam : Get a parameter from the body;
+ * - @viaHeader : Get a parameter from the query header;
+ * - @viaQuery : Get a parameter from the query URL;
+ * - @viaBody : Get a parameter from the body;
  *
- * In addition, @headerParam have a special handling of 'out' and
+ * In addition, @viaHeader have a special handling of 'out' and
  * 'ref' parameters:
  * - 'out' are neither send by the client nor read by the server, but
  *	their value (except for null string) is returned by the server.
@@ -367,36 +367,31 @@ unittest
  * However, it makes no sense to have 'ref' or 'out' parameters on
  * body or query parameter, so those are treated as error at compile time.
  *
- * If no Json fieldname is passed to @bodyParam, the entire Json body is deserialized into the respective field.
+ * If no Json fieldname is passed to @viaBody, the entire Json body is deserialized into the respective field.
  */
 @rootPathFromName
 interface Example6API
 {
 	@safe:
-	// The first parameter of @headerParam is the identifier (must match one of the parameter name).
-	// The second is the name of the field in the header, such as "Accept", "Content-Type", "User-Agent"...
-	@headerParam("auth", "Authorization")
-	@headerParam("tester", "X-Custom-Tester")
-	@headerParam("www", "WWW-Authenticate")
-	string getPortal(string auth,
-					 ref string tester,
-					 out Nullable!string www);
+	// The parameter to `viaHeader` is the name of the field in the header,
+	// such as "Accept", "Content-Type", "User-Agent"...
+	string getPortal(@viaHeader("Authorization") string auth,
+		@viaHeader("X-Custom-Tester") ref string tester,
+		@viaHeader("WWW-Authenticate") out Nullable!string www);
 
-	// As with @headerParam, the first parameter of @queryParam is the identifier.
-	// The second being the field name, e.g for a query such as: 'GET /root/node?foo=bar', "foo" will be the second parameter.
-	@queryParam("fortyTwo", "qparam")
-	string postAnswer(string fortyTwo);
-	// Finally, there is @bodyParam. It works as you expect it to work,
+	// The parameter is the field name, e.g for a query such as:
+	// 'GET /root/node?foo=bar', "foo" will be the second parameter.
+	string postAnswer(@viaQuery("qparam") string fortyTwo);
+
+	// Finally, there is @viaBody. It works as you expect it to work,
 	// currently serializing passed data as Json and pass them through the body.
-	@bodyParam("myFoo", "parameter")
-	string postConcat(FooType myFoo);
+	string postConcat(@viaBody("parameter") FooType myFoo);
 
-	// If no field name is passed to @bodyParam the entire json object is
+	// If no field name is passed to @viaBody the entire json object is
 	// serialized into the parameter.
 	// Moreover if only one bodyParameter is present, this is the default
 	// behavior.
-	@bodyParam("obj")
-	string postConcatBody(FooType obj);
+	string postConcatBody(@viaBody() FooType obj);
 
 	struct FooType {
 		int a;
