@@ -176,6 +176,9 @@ run_test 10 "readPreference=primary connects to primary (CRUD)" \
 run_test 11 "writes routed to primary despite readPreference=secondary" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --readPreference secondary --expectWriteToPrimary
 
+run_test 12 "per-query readPreference=secondary serves reads from a secondary" \
+	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --expectReadFromSecondary
+
 echo ""
 echo "========================================================"
 echo "  Phase 3: Dead secondary tests"
@@ -196,13 +199,13 @@ for idx in 0 1 2; do
 	fi
 done
 
-run_test 12 "Dead secondary in host list, primary still reachable" \
+run_test 13 "Dead secondary in host list, primary still reachable" \
 	"${SECONDARY_PORTS[0]},$PRIMARY_PORT"
 
-run_test 13 "All hosts listed, one secondary dead" \
+run_test 14 "All hosts listed, one secondary dead" \
 	"$PORT1,$PORT2,$PORT3"
 
-run_test 14 "readPreference=secondary with one dead secondary" \
+run_test 15 "readPreference=secondary with one dead secondary" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --readPreference secondary --expectSecondary
 
 echo ""
@@ -235,10 +238,10 @@ LIVE_PORT=${SECONDARY_PORTS[0]}
 wait_for_primary $LIVE_PORT
 detect_roles
 
-run_test 15 "New primary after old primary killed" \
+run_test 16 "New primary after old primary killed" \
 	"$PORT1,$PORT2,$PORT3"
 
-run_test 16 "readPreference=secondary after primary failover" \
+run_test 17 "readPreference=secondary after primary failover" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --readPreference secondary --expectSecondary
 
 echo ""
@@ -251,7 +254,7 @@ for idx in 0 1 2; do
 	kill_mongod $idx
 done
 
-run_test 17 "All hosts dead (expect fail)" \
+run_test 18 "All hosts dead (expect fail)" \
 	"$PORT1,$PORT2,$PORT3" --expectFail
 
 echo ""
@@ -268,10 +271,10 @@ sleep 2
 wait_for_primary $PORT1
 detect_roles
 
-run_test 18 "Connect after full cluster restart" \
+run_test 19 "Connect after full cluster restart" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0
 
 echo ""
 echo "============================================"
-echo "All $((18)) replica set tests passed!"
+echo "All $((19)) replica set tests passed!"
 echo "============================================"

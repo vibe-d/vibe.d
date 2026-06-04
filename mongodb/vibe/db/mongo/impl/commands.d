@@ -22,6 +22,7 @@ import std.string : indexOf;
 
 import vibe.data.bson;
 import vibe.db.mongo.impl.crud : FindOptions, CursorType, CountOptions, AggregateOptions;
+import vibe.db.mongo.settings : ReadPreference, readPreferenceBson;
 
 /// A "database.collection" namespace split into its two parts.
 struct Namespace
@@ -78,7 +79,7 @@ struct CursorCommand
 
 	See_Also: $(LINK https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst)
 */
-CursorCommand buildFindCommand(Bson command, FindOptions options)
+CursorCommand buildFindCommand(Bson command, FindOptions options, ReadPreference pref = ReadPreference.primary)
 {
 	bool singleBatch;
 	if (!options.limit.isNull && options.limit.get < 0)
@@ -116,6 +117,9 @@ CursorCommand buildFindCommand(Bson command, FindOptions options)
 	auto optionsBson = serializeToBson(options);
 	foreach (string key, value; optionsBson.byKeyValue)
 		command[key] = value;
+
+	if (pref != ReadPreference.primary)
+		command["$readPreference"] = readPreferenceBson(pref);
 
 	return CursorCommand(
 		command,
@@ -183,6 +187,16 @@ unittest {
 	awaitTimed.maxAwaitTimeMS = 800;
 	auto awaitTimedResult = buildFindCommand(base(), awaitTimed);
 	assert(awaitTimedResult.getMoreMaxTime == 800.msecs);
+
+	// a non-primary read preference is injected as $readPreference
+	auto secondaryRead = buildFindCommand(base(), FindOptions.init, ReadPreference.secondary);
+	assert(secondaryRead.command["$readPreference"]["mode"].get!string == "secondary");
+
+	// primary (the default) is omitted from the wire
+	auto primaryRead = buildFindCommand(base(), FindOptions.init, ReadPreference.primary);
+	assert(primaryRead.command["$readPreference"].isNull);
+	auto defaultedRead = buildFindCommand(base(), FindOptions.init);
+	assert(defaultedRead.command["$readPreference"].isNull);
 }
 
 /** Assembles a `delete` command from serialized queries and options.
@@ -331,7 +345,7 @@ unittest {
 
 	When `explain` is set, the spec recommends omitting the `cursor` field.
 */
-CursorCommand buildAggregateCommand(string collection, string database, Bson pipeline, AggregateOptions options)
+CursorCommand buildAggregateCommand(string collection, string database, Bson pipeline, AggregateOptions options, ReadPreference pref = ReadPreference.primary)
 {
 	Bson cmd = Bson.emptyObject;
 	cmd["aggregate"] = Bson(collection);
@@ -343,6 +357,9 @@ CursorCommand buildAggregateCommand(string collection, string database, Bson pip
 			continue;
 		cmd[k] = v;
 	}
+
+	if (pref != ReadPreference.primary)
+		cmd["$readPreference"] = readPreferenceBson(pref);
 
 	return CursorCommand(cmd,
 		!options.batchSize.isNull ? options.batchSize.get : 0,
@@ -379,6 +396,16 @@ unittest {
 	explained.explain = true;
 	auto explainedResult = buildAggregateCommand("coll", "db", pipeline, explained);
 	assert(explainedResult.command["cursor"].isNull);
+
+	// a non-primary read preference is injected as $readPreference
+	auto secondaryRead = buildAggregateCommand("coll", "db", pipeline, AggregateOptions.init, ReadPreference.secondary);
+	assert(secondaryRead.command["$readPreference"]["mode"].get!string == "secondary");
+
+	// primary (the default) is omitted from the wire
+	auto primaryRead = buildAggregateCommand("coll", "db", pipeline, AggregateOptions.init, ReadPreference.primary);
+	assert(primaryRead.command["$readPreference"].isNull);
+	auto defaultedRead = buildAggregateCommand("coll", "db", pipeline, AggregateOptions.init);
+	assert(defaultedRead.command["$readPreference"].isNull);
 }
 
 /// The reduced limit/batch state for a legacy cursor.

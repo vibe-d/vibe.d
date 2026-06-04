@@ -948,6 +948,22 @@ enum ReadPreference
 	nearest,
 }
 
+/** Builds the `$readPreference` command field. Enum names match the wire mode
+	strings. `primary` must be omitted by drivers, so passing it is a programming error.
+*/
+Bson readPreferenceBson(ReadPreference pref)
+@safe {
+	assert(pref != ReadPreference.primary, "primary read preference must not be sent on the wire");
+	return Bson(["mode": Bson(pref.to!string)]);
+}
+
+unittest {
+	assert(readPreferenceBson(ReadPreference.secondary) == Bson(["mode": Bson("secondary")]));
+	assert(readPreferenceBson(ReadPreference.primaryPreferred) == Bson(["mode": Bson("primaryPreferred")]));
+	assert(readPreferenceBson(ReadPreference.secondaryPreferred) == Bson(["mode": Bson("secondaryPreferred")]));
+	assert(readPreferenceBson(ReadPreference.nearest) == Bson(["mode": Bson("nearest")]));
+}
+
 private ReadConcern parseReadConcern(string str)
 @safe {
 	import std.traits : EnumMembers;

@@ -170,33 +170,53 @@ final class MongoClient {
 	/// Locks a connection to the server chosen by the configured read preference.
 	package LockedConnection!MongoConnection lockConnection()
 	{
-		return lockConnectionResolving(false);
+		return lockConnectionResolving(false, m_settings.readPreference);
+	}
+
+	/// Locks a connection to the server chosen by an explicit per-query read preference.
+	package LockedConnection!MongoConnection lockConnection(ReadPreference pref)
+	{
+		return lockConnectionResolving(false, pref);
 	}
 
 	/// Locks a connection to the primary. Used for write operations, which must
 	/// always go to the primary regardless of the configured read preference.
 	package LockedConnection!MongoConnection lockConnectionToPrimary()
 	{
-		return lockConnectionResolving(true);
+		return lockConnectionResolving(true, ReadPreference.primary);
 	}
 
-	private LockedConnection!MongoConnection lockConnectionResolving(bool toPrimary)
+	/// Resolves the host a read should target, retrying once after re-discovering the
+	/// topology. A cursor pins to this host so its getMore/killCursors stay on the same server.
+	package MongoHost resolveHostForRead(ReadPreference pref)
 	{
 		try {
-			return lockConnectionToHost(resolveHost(toPrimary));
+			return resolveHost(false, pref);
+		} catch (Exception e) {
+			logWarn("Read host resolution failed: %s — re-discovering topology", e.msg);
+		}
+
+		discoverTopology();
+		return resolveHost(false, pref);
+	}
+
+	private LockedConnection!MongoConnection lockConnectionResolving(bool toPrimary, ReadPreference pref)
+	{
+		try {
+			return lockConnectionToHost(resolveHost(toPrimary, pref));
 		} catch (Exception e) {
 			logWarn("Connection acquisition failed: %s — re-discovering topology", e.msg);
 		}
 
 		discoverTopology();
-		return lockConnectionToHost(resolveHost(toPrimary));
+		return lockConnectionToHost(resolveHost(toPrimary, pref));
 	}
 
-	private MongoHost resolveHost(bool toPrimary)
+	private MongoHost resolveHost(bool toPrimary, ReadPreference pref)
 	{
 		auto selected = toPrimary
 			? writeTarget(m_topology, m_settings.localThresholdMS)
-			: selectServer(m_topology, m_settings.readPreference, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+			: selectServer(m_topology, pref, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
 
 		enforce!MongoDriverException(!selected.isNull, toPrimary
 			? "No primary server available for write"
@@ -205,7 +225,8 @@ final class MongoClient {
 		return selected.get;
 	}
 
-	private LockedConnection!MongoConnection lockConnectionToHost(MongoHost host)
+	/// Locks a pooled connection for a specific host (e.g. a cursor re-locking its pinned host).
+	package LockedConnection!MongoConnection lockConnectionToHost(MongoHost host)
 	{
 		auto pool = poolFor(host);
 

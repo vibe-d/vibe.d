@@ -18,6 +18,7 @@ public import vibe.db.mongo.impl.wireversion;
 import vibe.core.log;
 import vibe.db.mongo.client;
 import vibe.db.mongo.impl.commands : splitNamespace, buildDeleteCommand, buildUpdateCommand, buildCountPipeline, buildAggregateCommand;
+import vibe.db.mongo.settings : ReadPreference;
 
 import core.time;
 import std.algorithm : among, countUntil, find, findSplit;
@@ -727,7 +728,8 @@ struct MongoCollection {
 		return countImpl!T(query);
 	}
 
-	private ulong countImpl(T)(T query, Nullable!ReadConcern readConcern = Nullable!ReadConcern.init)
+	private ulong countImpl(T)(T query, Nullable!ReadConcern readConcern = Nullable!ReadConcern.init,
+		Nullable!ReadPreference readPreference = Nullable!ReadPreference.init)
 	{
 		Bson cmd = Bson.emptyObject;
 		cmd["count"] = m_name;
@@ -739,7 +741,7 @@ struct MongoCollection {
 			cmd["readConcern"] = serializeToBson(m_readConcern);
 		}
 
-		auto reply = database.runCommandChecked(cmd);
+		auto reply = database.runCommandChecked(cmd, __FUNCTION__, __FILE__, __LINE__, false, readPreference);
 		switch (reply["n"].type) with (Bson.Type) {
 			default: assert(false, "Unsupported data type in BSON reply for COUNT");
 			case double_: return cast(ulong)reply["n"].get!double; // v2.x
@@ -795,6 +797,7 @@ struct MongoCollection {
 			AggregateOptions aggOptions;
 			aggOptions.maxTimeMS = options.maxTimeMS;
 			aggOptions.readConcern = options.readConcern;
+			aggOptions.readPreference = options.readPreference;
 
 			try {
 				auto reply = aggregate(pipeline, aggOptions).front;
@@ -804,7 +807,7 @@ struct MongoCollection {
 				return 0;
 			}
 		} else {
-			return countImpl(null, options.readConcern);
+			return countImpl(null, options.readConcern, options.readPreference);
 		}
 	}
 
@@ -849,9 +852,10 @@ struct MongoCollection {
 		MongoConnection conn = m_client.lockConnection();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 
-		auto result = buildAggregateCommand(m_name, m_db.name, serializeToBson(pipeline), options);
+		auto pref = options.readPreference.isNull ? m_client.readPreference : options.readPreference.get;
+		auto result = buildAggregateCommand(m_name, m_db.name, serializeToBson(pipeline), options, pref);
 
-		return MongoCursor!R(m_client, result.command, result.batchSize, result.getMoreMaxTime);
+		return MongoCursor!R(m_client, result.command, result.batchSize, result.getMoreMaxTime, Nullable!ReadPreference(pref));
 	}
 
 	/// Example taken from the MongoDB documentation
@@ -916,7 +920,7 @@ struct MongoCollection {
 
 		import std.algorithm : map;
 
-		auto res = m_db.runCommandChecked(cmd);
+		auto res = m_db.runCommandChecked(cmd, __FUNCTION__, __FILE__, __LINE__, false, options.readPreference);
 		static if (is(R == Bson)) return res["values"].byValue;
 		else return res["values"].byValue.map!(b => deserializeBson!R(b));
 	}

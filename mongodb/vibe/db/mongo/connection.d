@@ -612,6 +612,7 @@ final class MongoConnection {
 			scope GetMoreHeaderDelegate on_header,
 			scope GetMoreDocumentDelegate!T on_doc,
 			Duration timeout = Duration.max,
+			Nullable!ReadPreference pref = Nullable!ReadPreference.init,
 			string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 		{
 			Bson command = Bson.emptyObject;
@@ -622,6 +623,10 @@ final class MongoConnection {
 				command["batchSize"] = Bson(nret);
 			if (timeout != Duration.max && timeout.total!"msecs" < int.max)
 				command["maxTimeMS"] = Bson(cast(int)timeout.total!"msecs");
+
+			// A secondary keeps serving getMore only if each continuation re-sends $readPreference.
+			if (!pref.isNull && pref.get != ReadPreference.primary)
+				command["$readPreference"] = readPreferenceBson(pref.get);
 
 			string formatErrorInfo(string msg) @safe
 			{
@@ -738,7 +743,7 @@ final class MongoConnection {
 		send(OpCode.KillCursors, -1, cast(int)0, cast(int)cursors.length, cursors);
 	}
 
-	void killCursors(string collection, scope long[] cursors)
+	void killCursors(string collection, scope long[] cursors, Nullable!ReadPreference pref = Nullable!ReadPreference.init)
 	{
 		scope(failure) disconnect();
 		// TODO: could add special case to runCommand to not return anything
@@ -752,6 +757,8 @@ final class MongoConnection {
 					~ collection ~ "'");
 			command["killCursors"] = Bson(parts[2]);
 			command["cursors"] = () @trusted { return cursors; } ().serializeToBson; // NOTE: "escaping" scope here
+			if (!pref.isNull && pref.get != ReadPreference.primary)
+				command["$readPreference"] = readPreferenceBson(pref.get);
 			runCommand!Bson(parts[0], command);
 		}
 		else

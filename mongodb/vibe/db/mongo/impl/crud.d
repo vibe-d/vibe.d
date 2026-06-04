@@ -11,6 +11,7 @@ import core.time;
 
 import vibe.db.mongo.connection : MongoException;
 import vibe.db.mongo.collection;
+import vibe.db.mongo.settings : ReadPreference;
 import vibe.data.bson;
 
 import std.typecons;
@@ -263,6 +264,19 @@ struct FindOptions
 		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
 	*/
 	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
+}
+
+unittest {
+	FindOptions findOpts;
+	findOpts.readPreference = ReadPreference.secondary;
+	assert(serializeToBson(findOpts)["readPreference"].isNull);
+
+	AggregateOptions aggOpts;
+	aggOpts.readPreference = ReadPreference.secondary;
+	assert(serializeToBson(aggOpts)["readPreference"].isNull);
 }
 
 ///
@@ -334,6 +348,9 @@ struct DistinctOptions
 	*/
 	@embedNullable
 	Nullable!string comment;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
 }
 
 /**
@@ -397,6 +414,9 @@ struct CountOptions
 		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
 	*/
 	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
 }
 
 /**
@@ -427,6 +447,9 @@ struct EstimatedDocumentCountOptions
 		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
 	*/
 	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
 }
 
 /**
@@ -547,6 +570,9 @@ struct AggregateOptions
 		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
 	*/
 	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
 }
 
 /**

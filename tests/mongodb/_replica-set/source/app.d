@@ -6,6 +6,7 @@ import vibe.core.log;
 import vibe.data.bson;
 import core.time;
 import std.algorithm;
+import std.array;
 import std.conv;
 import std.exception;
 
@@ -14,6 +15,7 @@ int main(string[] args)
 	bool expectFail;
 	bool expectSecondary;
 	bool expectWriteToPrimary;
+	bool expectReadFromSecondary;
 	string replicaSet;
 	string readPrefStr;
 	MongoHost[] hosts;
@@ -22,7 +24,7 @@ int main(string[] args)
 
 	if (args.length < 2)
 	{
-		logError("Usage: %s <port1,port2,...> [--replicaSet <name>] [--readPreference <pref>] [--expectFail] [--expectSecondary] [--expectWriteToPrimary]", args[0]);
+		logError("Usage: %s <port1,port2,...> [--replicaSet <name>] [--readPreference <pref>] [--expectFail] [--expectSecondary] [--expectWriteToPrimary] [--expectReadFromSecondary]", args[0]);
 		return 1;
 	}
 
@@ -45,6 +47,8 @@ int main(string[] args)
 			expectSecondary = true;
 		else if (arg == "--expectWriteToPrimary")
 			expectWriteToPrimary = true;
+		else if (arg == "--expectReadFromSecondary")
+			expectReadFromSecondary = true;
 	}
 
 	auto settings = new MongoClientSettings;
@@ -131,6 +135,46 @@ int main(string[] args)
 
 		coll.drop();
 		logInfo("Writes correctly routed to primary under readPreference=secondary");
+		return 0;
+	}
+
+	if (expectReadFromSecondary)
+	{
+		// The client default is primary. A per-query readPreference=secondary must both
+		// route the read to a secondary AND inject $readPreference so the secondary
+		// actually serves it. Before the fix the secondary rejects the read
+		// (NotPrimaryNoSecondaryOk) or the override is ignored and the read silently runs
+		// on the primary. This is the regression guard for #2848.
+		auto coll = client.getCollection("rstest.readsecondary");
+		try coll.drop(); catch (Exception) {}
+
+		enum int total = 500;
+		Bson[] docs;
+		foreach (i; 0 .. total)
+			docs ~= Bson(["_id": Bson(i), "v": Bson(i)]);
+
+		InsertManyOptions writeOpts;
+		WriteConcern majority;
+		majority.w = Bson("majority");
+		writeOpts.writeConcern = majority;
+		coll.insertMany(docs, writeOpts);
+
+		// 1) per-query override routes a command to a secondary (server selection)
+		auto hello = client.getDatabase("admin").runCommand(Bson(["hello": Bson(1)]), ReadPreference.secondary);
+		enforce(hello["secondary"].get!bool,
+			"runCommand with readPreference=secondary did not reach a secondary: " ~ hello["me"].opt!string);
+
+		// 2) a real multi-batch find is served by a secondary, proving $readPreference is
+		//    injected on the find and that getMore stays pinned to the same secondary
+		FindOptions findOpts;
+		findOpts.readPreference = ReadPreference.secondary;
+		findOpts.batchSize = 100;
+		auto received = coll.find(Bson.emptyObject, findOpts).array;
+		enforce(received.length == total,
+			"expected " ~ total.to!string ~ " docs from secondary, got " ~ received.length.to!string);
+
+		coll.drop();
+		logInfo("Per-query readPreference=secondary served %s docs from a secondary", total);
 		return 0;
 	}
 

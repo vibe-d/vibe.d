@@ -15,12 +15,14 @@ import vibe.core.log;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
 import vibe.db.mongo.impl.commands : buildFindCommand, collectionFromNamespace, reduceLimit;
+import vibe.db.mongo.settings : ReadPreference, MongoHost;
 
 import core.time;
 import std.array : array;
 import std.algorithm : map, max, min, skipOver;
 import std.exception;
 import std.range : chain;
+import std.typecons : Nullable;
 
 
 /**
@@ -60,15 +62,17 @@ struct MongoCursor(DocType = Bson) {
 		MongoConnection conn = client.lockConnection();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 
-		auto result = buildFindCommand(command, options);
+		auto pref = options.readPreference.isNull ? client.readPreference : options.readPreference.get;
+		auto result = buildFindCommand(command, options, pref);
 
-		this(client, result.command, result.batchSize, result.getMoreMaxTime);
+		this(client, result.command, result.batchSize, result.getMoreMaxTime, Nullable!ReadPreference(pref));
 	}
 
-	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
+	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max,
+		Nullable!ReadPreference pref = Nullable!ReadPreference.init)
 	{
 		// TODO: avoid memory allocation, if possible
-		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTime);
+		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTime, pref);
 	}
 
 	this(this)
@@ -404,15 +408,19 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		DocType[] m_documents;
 		bool m_iterationStarted = false;
 		long m_queryLimit;
+		ReadPreference m_readPreference;
+		MongoHost m_pinnedHost;
 	}
 
-	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
+	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max,
+		Nullable!ReadPreference pref = Nullable!ReadPreference.init)
 	{
 		m_client = client;
 		m_findQuery = command;
 		m_batchSize = batchSize;
 		m_maxTime = getMoreMaxTime;
 		m_database = command["$db"].opt!string;
+		m_readPreference = pref.isNull ? client.readPreference : pref.get;
 	}
 
 	@property bool alive() @safe nothrow { return m_cursor != 0; }
@@ -429,9 +437,9 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		if( m_cursor == 0 )
 			return true;
 
-		auto conn = m_client.lockConnection();
+		auto conn = m_client.lockConnectionToHost(m_pinnedHost);
 		conn.getMore!DocType(m_cursor, m_database, m_collection, m_batchSize,
-			&handleReply, &handleDocument, m_maxTime);
+			&handleReply, &handleDocument, m_maxTime, Nullable!ReadPreference(m_readPreference));
 		return m_readDoc >= m_documents.length;
 	}
 
@@ -475,7 +483,10 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 
 	private void startIterating()
 	@safe {
-		auto conn = m_client.lockConnection();
+		// A cursor id is only valid on the server that created it, so pin one host
+		// and reuse it for getMore/killCursors.
+		m_pinnedHost = m_client.resolveHostForRead(m_readPreference);
+		auto conn = m_client.lockConnectionToHost(m_pinnedHost);
 		m_totalReceived = 0;
 		m_queryLimit = m_findQuery["limit"].opt!long(0);
 		conn.startFind!DocType(m_findQuery, &handleReply, &handleDocument);
@@ -485,8 +496,8 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 	final void killCursors()
 	@safe {
 		if (m_cursor == 0) return;
-		auto conn = m_client.lockConnection();
-		conn.killCursors(m_ns, () @trusted { return (&m_cursor)[0 .. 1]; } ());
+		auto conn = m_client.lockConnectionToHost(m_pinnedHost);
+		conn.killCursors(m_ns, () @trusted { return (&m_cursor)[0 .. 1]; } (), Nullable!ReadPreference(m_readPreference));
 		m_cursor = 0;
 	}
 
