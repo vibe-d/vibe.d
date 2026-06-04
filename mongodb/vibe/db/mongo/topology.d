@@ -466,6 +466,61 @@ struct ServerRecord
 /// Default heartbeat frequency (10 seconds) used for staleness calculation.
 private enum long HEARTBEAT_FREQUENCY_USECS = 10_000_000;
 
+/// Returns a new topology with `desc` applied for `host`, leaving `current`
+/// unchanged. The servers slice is duplicated first, so previously-published
+/// snapshots are never mutated — this is what lets a topology snapshot be shared
+/// (and atomically swapped) without locking.
+TopologyDescription applyDescription(TopologyDescription current, MongoHost host, ServerDescription desc)
+{
+	current.servers = current.servers.dup;
+	current.update(host, desc);
+	return current;
+}
+
+/// Returns a new topology with `host` marked failed, leaving `current` unchanged.
+TopologyDescription applyFailed(TopologyDescription current, MongoHost host)
+{
+	current.servers = current.servers.dup;
+	current.markFailed(host);
+	return current;
+}
+
+/// applyDescription returns a new topology and leaves the input snapshot unchanged
+unittest
+{
+	TopologyDescription before;
+	auto host = MongoHost("primary", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+
+	auto after = applyDescription(before, host, primaryDesc);
+
+	assert(!after.primaryHost.isNull && after.primaryHost.get == host,
+		"the result reflects the applied primary");
+	assert(before.servers.length == 0 && before.primaryHost.isNull,
+		"the input snapshot is not mutated");
+}
+
+/// applyFailed clears the failed host in the result without mutating the input
+unittest
+{
+	auto host = MongoHost("primary", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+
+	TopologyDescription before = applyDescription(TopologyDescription.init, host, primaryDesc);
+
+	auto after = applyFailed(before, host);
+
+	assert(after.primaryHost.isNull, "the result no longer has the failed primary");
+	assert(!before.primaryHost.isNull && before.primaryHost.get == host,
+		"the input snapshot still has the primary");
+}
+
 /**
  * Selects a server from the topology based on the given read preference.
  *
