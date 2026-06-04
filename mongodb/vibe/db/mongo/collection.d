@@ -16,7 +16,7 @@ public import vibe.db.mongo.impl.crud;
 
 import vibe.core.log;
 import vibe.db.mongo.client;
-import vibe.db.mongo.impl.commands : splitNamespace;
+import vibe.db.mongo.impl.commands : splitNamespace, buildDeleteCommand, buildUpdateCommand, buildCountPipeline, buildAggregateCommand;
 
 import core.time;
 import std.algorithm : among, countUntil, find, findSplit;
@@ -247,33 +247,14 @@ struct MongoCollection {
 	@safe {
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
-		alias FieldsMovedIntoChildren = AliasSeq!("limit", "collation", "hint");
-
-		Bson cmd = Bson.emptyObject; // empty object because order is important
-		cmd["delete"] = Bson(m_name);
-
 		MongoConnection conn = m_client.lockConnection();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
-		auto optionsBson = serializeToBson(options);
-		foreach (string k, v; optionsBson.byKeyValue)
-			if (!k.among!FieldsMovedIntoChildren)
-				cmd[k] = v;
 
-		Bson[] deletesBson = new Bson[queries.length];
+		Bson[] queryBsons = new Bson[queries.length];
 		foreach (i, q; queries)
-		{
-			auto deleteBson = Bson.emptyObject;
-			deleteBson["q"] = serializeToBson(q);
-			foreach (string k, v; optionsBson.byKeyValue)
-				if (k.among!FieldsMovedIntoChildren)
-					deleteBson[k] = v;
-			if (i < limits.length)
-				deleteBson["limit"] = Bson(limits[i]);
-			else
-				deleteBson["limit"] = Bson(0);
-			deletesBson[i] = deleteBson;
-		}
-		cmd["deletes"] = Bson(deletesBson);
+			queryBsons[i] = serializeToBson(q);
+
+		Bson cmd = buildDeleteCommand(m_name, queryBsons, serializeToBson(options), limits);
 
 		DeleteResult res;
 		database.runCommandChecked(cmd).handleWriteResult!"deletedCount"(res);
@@ -373,27 +354,15 @@ struct MongoCollection {
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
-		alias FieldsMovedIntoChildren = AliasSeq!("arrayFilters",
-			"collation",
-			"hint",
-			"upsert");
-
-		Bson cmd = Bson.emptyObject; // empty object because order is important
-		cmd["update"] = Bson(m_name);
-
 		MongoConnection conn = m_client.lockConnection();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
-		auto optionsBson = serializeToBson(options);
-		foreach (string k, v; optionsBson.byKeyValue)
-			if (!k.among!FieldsMovedIntoChildren)
-				cmd[k] = v;
 
-		Bson[] updatesBson = new Bson[queries.length];
+		Bson[] queryBsons = new Bson[queries.length];
+		Bson[] documentBsons = new Bson[queries.length];
+		Bson[] perUpdateOptionBsons = new Bson[queries.length];
 		foreach (i, q; queries)
 		{
-			auto updateBson = Bson.emptyObject;
-			auto qbson = serializeToBson(q);
-			updateBson["q"] = qbson;
+			queryBsons[i] = serializeToBson(q);
 			auto ubson = serializeToBson(documents[i]);
 			if (mustBeDocument)
 			{
@@ -431,15 +400,11 @@ struct MongoCollection {
 							~ "(this update call would otherwise replace the entire matched object with the passed in update object)");
 				}
 			}
-			updateBson["u"] = ubson;
-			foreach (string k, v; optionsBson.byKeyValue)
-				if (k.among!FieldsMovedIntoChildren)
-					updateBson[k] = v;
-			foreach (string k, v; perUpdateOptions[i].byKeyValue)
-				updateBson[k] = v;
-			updatesBson[i] = updateBson;
+			documentBsons[i] = ubson;
+			perUpdateOptionBsons[i] = serializeToBson(perUpdateOptions[i]);
 		}
-		cmd["updates"] = Bson(updatesBson);
+
+		Bson cmd = buildUpdateCommand(m_name, queryBsons, documentBsons, perUpdateOptionBsons, serializeToBson(options));
 
 		auto res = database.runCommandChecked(cmd);
 		auto ret = UpdateResult(
@@ -795,16 +760,7 @@ struct MongoCollection {
 	*/
 	ulong countDocuments(T)(T filter, CountOptions options = CountOptions.init)
 	{
-		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details
-		Bson[] pipeline = [Bson(["$match": serializeToBson(filter)])];
-		if (!options.skip.isNull)
-			pipeline ~= Bson(["$skip": Bson(options.skip.get)]);
-		if (!options.limit.isNull)
-			pipeline ~= Bson(["$limit": Bson(options.limit.get)]);
-		pipeline ~= Bson(["$group": Bson([
-			"_id": Bson(1),
-			"n": Bson(["$sum": Bson(1)])
-		])]);
+		Bson[] pipeline = buildCountPipeline(serializeToBson(filter), options);
 		AggregateOptions aggOptions;
 		foreach (i, field; options.tupleof)
 		{
@@ -889,24 +845,12 @@ struct MongoCollection {
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 		applyDefaultReadConcern(options);
 
-		Bson cmd = Bson.emptyObject; // empty object because order is important
-		cmd["aggregate"] = Bson(m_name);
-		cmd["$db"] = Bson(m_db.name);
-		cmd["pipeline"] = serializeToBson(pipeline);
 		MongoConnection conn = m_client.lockConnection();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
-		foreach (string k, v; serializeToBson(options).byKeyValue)
-		{
-			// spec recommends to omit cursor field when explain is true
-			if (!options.explain.isNull && options.explain.get && k == "cursor")
-				continue;
-			cmd[k] = v;
-		}
-		return MongoCursor!R(m_client, cmd,
-			!options.batchSize.isNull ? options.batchSize.get : 0,
-			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get.msecs
-				: !options.maxTimeMS.isNull ? options.maxTimeMS.get.msecs
-				: Duration.max);
+
+		auto result = buildAggregateCommand(m_name, m_db.name, serializeToBson(pipeline), options);
+
+		return MongoCursor!R(m_client, result.command, result.batchSize, result.getMoreMaxTime);
 	}
 
 	/// Example taken from the MongoDB documentation

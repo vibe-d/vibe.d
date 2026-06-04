@@ -15,12 +15,13 @@ module vibe.db.mongo.impl.commands;
 
 import core.time;
 
-import std.algorithm : min, skipOver;
+import std.algorithm : min, skipOver, among;
+import std.meta : AliasSeq;
 import std.range : chain;
 import std.string : indexOf;
 
 import vibe.data.bson;
-import vibe.db.mongo.impl.crud : FindOptions, CursorType;
+import vibe.db.mongo.impl.crud : FindOptions, CursorType, CountOptions, AggregateOptions;
 
 /// A "database.collection" namespace split into its two parts.
 struct Namespace
@@ -61,8 +62,8 @@ unittest {
 	assert(collectionFromNamespace("db.a.b", "db") == "a.b");
 }
 
-/// The completed find command together with the cursor batching parameters.
-struct FindCommandResult
+/// A completed cursor-producing command together with its batching parameters.
+struct CursorCommand
 {
 	Bson command;
 	int batchSize;
@@ -77,7 +78,7 @@ struct FindCommandResult
 
 	See_Also: $(LINK https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst)
 */
-FindCommandResult buildFindCommand(Bson command, FindOptions options)
+CursorCommand buildFindCommand(Bson command, FindOptions options)
 {
 	bool singleBatch;
 	if (!options.limit.isNull && options.limit.get < 0)
@@ -116,7 +117,7 @@ FindCommandResult buildFindCommand(Bson command, FindOptions options)
 	foreach (string key, value; optionsBson.byKeyValue)
 		command[key] = value;
 
-	return FindCommandResult(
+	return CursorCommand(
 		command,
 		options.batchSize.isNull ? 0 : options.batchSize.get,
 		!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get.msecs
@@ -182,6 +183,202 @@ unittest {
 	awaitTimed.maxAwaitTimeMS = 800;
 	auto awaitTimedResult = buildFindCommand(base(), awaitTimed);
 	assert(awaitTimedResult.getMoreMaxTime == 800.msecs);
+}
+
+/** Assembles a `delete` command from serialized queries and options.
+
+	The `limit`, `collation` and `hint` options belong inside each delete
+	statement rather than at the command level, so they are partitioned out.
+*/
+Bson buildDeleteCommand(string collection, Bson[] queries, Bson optionsBson, scope int[] limits)
+{
+	alias FieldsMovedIntoChildren = AliasSeq!("limit", "collation", "hint");
+
+	Bson cmd = Bson.emptyObject;
+	cmd["delete"] = Bson(collection);
+	foreach (string k, v; optionsBson.byKeyValue)
+		if (!k.among!FieldsMovedIntoChildren)
+			cmd[k] = v;
+
+	Bson[] deletesBson = new Bson[queries.length];
+	foreach (i, q; queries)
+	{
+		auto deleteBson = Bson.emptyObject;
+		deleteBson["q"] = q;
+		foreach (string k, v; optionsBson.byKeyValue)
+			if (k.among!FieldsMovedIntoChildren)
+				deleteBson[k] = v;
+		deleteBson["limit"] = Bson(i < limits.length ? limits[i] : 0);
+		deletesBson[i] = deleteBson;
+	}
+	cmd["deletes"] = Bson(deletesBson);
+
+	return cmd;
+}
+
+unittest {
+	auto query = Bson(["x": Bson(1)]);
+	auto cmd = buildDeleteCommand("coll", [query], Bson.emptyObject, [1]);
+	assert(cmd["delete"].get!string == "coll");
+	assert(cmd["deletes"].get!(Bson[]).length == 1);
+	assert(cmd["deletes"][0]["q"] == query);
+	assert(cmd["deletes"][0]["limit"].get!int == 1);
+
+	// missing limit defaults to 0
+	auto noLimit = buildDeleteCommand("coll", [query], Bson.emptyObject, null);
+	assert(noLimit["deletes"][0]["limit"].get!int == 0);
+
+	// limit/collation/hint move into each statement, other options stay top level
+	auto options = Bson(["ordered": Bson(true), "limit": Bson(5), "hint": Bson("idx")]);
+	auto partitioned = buildDeleteCommand("coll", [query], options, null);
+	assert(partitioned["ordered"].get!bool == true);
+	assert(partitioned["limit"].isNull);
+	assert(partitioned["deletes"][0]["hint"].get!string == "idx");
+}
+
+/** Assembles an `update` command from serialized queries, documents,
+	per-update options and command options.
+
+	The `arrayFilters`, `collation`, `hint` and `upsert` options belong inside
+	each update statement rather than at the command level.
+*/
+Bson buildUpdateCommand(string collection, Bson[] queries, Bson[] documents, Bson[] perUpdateOptions, Bson optionsBson)
+{
+	alias FieldsMovedIntoChildren = AliasSeq!("arrayFilters", "collation", "hint", "upsert");
+
+	Bson cmd = Bson.emptyObject;
+	cmd["update"] = Bson(collection);
+	foreach (string k, v; optionsBson.byKeyValue)
+		if (!k.among!FieldsMovedIntoChildren)
+			cmd[k] = v;
+
+	Bson[] updatesBson = new Bson[queries.length];
+	foreach (i, q; queries)
+	{
+		auto updateBson = Bson.emptyObject;
+		updateBson["q"] = q;
+		updateBson["u"] = documents[i];
+		foreach (string k, v; optionsBson.byKeyValue)
+			if (k.among!FieldsMovedIntoChildren)
+				updateBson[k] = v;
+		foreach (string k, v; perUpdateOptions[i].byKeyValue)
+			updateBson[k] = v;
+		updatesBson[i] = updateBson;
+	}
+	cmd["updates"] = Bson(updatesBson);
+
+	return cmd;
+}
+
+unittest {
+	auto query = Bson(["x": Bson(1)]);
+	auto doc = Bson(["$set": Bson(["y": Bson(2)])]);
+	auto perUpdate = Bson(["multi": Bson(true)]);
+	auto options = Bson(["ordered": Bson(true), "upsert": Bson(true)]);
+
+	auto cmd = buildUpdateCommand("coll", [query], [doc], [perUpdate], options);
+	assert(cmd["update"].get!string == "coll");
+	assert(cmd["ordered"].get!bool == true);
+	assert(cmd["upsert"].isNull);
+
+	auto stmt = cmd["updates"][0];
+	assert(stmt["q"] == query);
+	assert(stmt["u"] == doc);
+	assert(stmt["upsert"].get!bool == true);
+	assert(stmt["multi"].get!bool == true);
+}
+
+/** Builds the aggregation pipeline used by `countDocuments`.
+
+	See_Also: $(LINK https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details)
+*/
+Bson[] buildCountPipeline(Bson filter, CountOptions options)
+{
+	Bson[] pipeline = [Bson(["$match": filter])];
+
+	if (!options.skip.isNull)
+		pipeline ~= Bson(["$skip": Bson(options.skip.get)]);
+
+	if (!options.limit.isNull)
+		pipeline ~= Bson(["$limit": Bson(options.limit.get)]);
+
+	pipeline ~= Bson(["$group": Bson([
+		"_id": Bson(1),
+		"n": Bson(["$sum": Bson(1)])
+	])]);
+
+	return pipeline;
+}
+
+unittest {
+	auto filter = Bson(["x": Bson(1)]);
+
+	auto minimal = buildCountPipeline(filter, CountOptions.init);
+	assert(minimal.length == 2);
+	assert(minimal[0]["$match"] == filter);
+	assert(minimal[1]["$group"]["n"]["$sum"].get!int == 1);
+
+	CountOptions skipLimit;
+	skipLimit.skip = 5;
+	skipLimit.limit = 10;
+	auto full = buildCountPipeline(filter, skipLimit);
+	assert(full.length == 4);
+	assert(full[1]["$skip"].get!long == 5);
+	assert(full[2]["$limit"].get!long == 10);
+}
+
+/** Assembles an `aggregate` command and its cursor batching parameters.
+
+	When `explain` is set, the spec recommends omitting the `cursor` field.
+*/
+CursorCommand buildAggregateCommand(string collection, string database, Bson pipeline, AggregateOptions options)
+{
+	Bson cmd = Bson.emptyObject;
+	cmd["aggregate"] = Bson(collection);
+	cmd["$db"] = Bson(database);
+	cmd["pipeline"] = pipeline;
+	foreach (string k, v; serializeToBson(options).byKeyValue)
+	{
+		if (!options.explain.isNull && options.explain.get && k == "cursor")
+			continue;
+		cmd[k] = v;
+	}
+
+	return CursorCommand(cmd,
+		!options.batchSize.isNull ? options.batchSize.get : 0,
+		!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get.msecs
+			: !options.maxTimeMS.isNull ? options.maxTimeMS.get.msecs
+			: Duration.max);
+}
+
+unittest {
+	auto pipeline = Bson([Bson(["$match": Bson.emptyObject])]);
+
+	auto plain = buildAggregateCommand("coll", "db", pipeline, AggregateOptions.init);
+	assert(plain.command["aggregate"].get!string == "coll");
+	assert(plain.command["$db"].get!string == "db");
+	assert(plain.command["pipeline"] == pipeline);
+	assert(plain.batchSize == 0);
+	assert(plain.getMoreMaxTime == Duration.max);
+
+	AggregateOptions timed;
+	timed.maxTimeMS = 1200;
+	auto timedResult = buildAggregateCommand("coll", "db", pipeline, timed);
+	assert(timedResult.getMoreMaxTime == 1200.msecs);
+
+	// maxAwaitTimeMS takes precedence over maxTimeMS for getMore
+	AggregateOptions awaiting;
+	awaiting.maxAwaitTimeMS = 900;
+	awaiting.maxTimeMS = 1200;
+	auto awaitingResult = buildAggregateCommand("coll", "db", pipeline, awaiting);
+	assert(awaitingResult.getMoreMaxTime == 900.msecs);
+
+	// the cursor field is normally present, but omitted when explain is set
+	assert(!plain.command["cursor"].isNull);
+	AggregateOptions explained;
+	explained.explain = true;
+	auto explainedResult = buildAggregateCommand("coll", "db", pipeline, explained);
+	assert(explainedResult.command["cursor"].isNull);
 }
 
 /// The reduced limit/batch state for a legacy cursor.
