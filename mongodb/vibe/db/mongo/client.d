@@ -240,15 +240,24 @@ final class MongoClient {
 		newTopology.seedCount = cast(uint) m_settings.hosts.length;
 		Exception lastException;
 
+		MongoHost[] attempted = m_settings.hosts.dup;
 		foreach (host; m_settings.hosts) {
 			probeAndUpdate(newTopology, host, lastException);
 		}
 
-		foreach (host; newTopology.allKnownHosts()) {
-			if (newTopology.servers.canFind!(s => s.host == host))
-				continue;
+		// A newly discovered host may itself report further hosts we don't know
+		// about yet, so keep probing until a full pass turns up nothing new.
+		for (bool foundNew = true; foundNew; ) {
+			foundNew = false;
 
-			probeAndUpdate(newTopology, host, lastException);
+			foreach (host; newTopology.allKnownHosts()) {
+				if (attempted.canFind(host))
+					continue;
+
+				attempted ~= host;
+				foundNew = true;
+				probeAndUpdate(newTopology, host, lastException);
+			}
 		}
 
 		auto selected = selectServer(newTopology, m_settings.readPreference, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
