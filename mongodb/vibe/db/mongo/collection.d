@@ -16,6 +16,7 @@ public import vibe.db.mongo.impl.crud;
 
 import vibe.core.log;
 import vibe.db.mongo.client;
+import vibe.db.mongo.impl.commands : splitNamespace;
 
 import core.time;
 import std.algorithm : among, countUntil, find, findSplit;
@@ -52,9 +53,10 @@ struct MongoCollection {
 		auto dotidx = fullPath.indexOf('.');
 		assert(dotidx > 0, "The collection name passed to MongoCollection must be of the form \"dbname.collectionname\".");
 
+		auto ns = splitNamespace(fullPath);
 		m_fullPath = fullPath;
-		m_db = m_client.getDatabase(fullPath[0 .. dotidx]);
-		m_name = fullPath[dotidx+1 .. $];
+		m_db = m_client.getDatabase(ns.database);
+		m_name = ns.collection;
 		m_readConcern = m_db.readConcern;
 	}
 

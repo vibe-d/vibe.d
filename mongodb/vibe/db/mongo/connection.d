@@ -1878,6 +1878,99 @@ package ServerDescription probeServer(MongoClientSettings settings, MongoHost ho
 	assert(!desc.isReplicaSetMember);
 }
 
+/// classifiedType returns mongos when msg is isdbgrid
+@safe unittest
+{
+	ServerDescription desc;
+	desc.msg = "isdbgrid";
+	assert(desc.classifiedType == ServerDescription.ServerType.mongos);
+}
+
+/// classifiedType returns RSPrimary for a primary with a set name
+@safe unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	desc.ismaster = true;
+	assert(desc.classifiedType == ServerDescription.ServerType.RSPrimary);
+}
+
+/// classifiedType returns RSSecondary for a secondary with a set name
+@safe unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	desc.secondary = true;
+	assert(desc.classifiedType == ServerDescription.ServerType.RSSecondary);
+}
+
+/// classifiedType returns RSArbiter for an arbiter with a set name
+@safe unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	desc.arbiterOnly = true;
+	assert(desc.classifiedType == ServerDescription.ServerType.RSArbiter);
+}
+
+/// classifiedType returns RSOther for a set member that is neither primary, secondary nor arbiter
+@safe unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	assert(desc.classifiedType == ServerDescription.ServerType.RSOther);
+}
+
+/// classifiedType returns standalone for a primary without a set name
+@safe unittest
+{
+	ServerDescription desc;
+	desc.ismaster = true;
+	assert(desc.classifiedType == ServerDescription.ServerType.standalone);
+}
+
+/// classifiedType returns unknown for a default description
+@safe unittest
+{
+	ServerDescription desc;
+	assert(desc.classifiedType == ServerDescription.ServerType.unknown);
+}
+
+/// sendLength of a string is its length plus one
+unittest
+{
+	assert(sendLength("test") == 5);
+	assert(sendLength("") == 1);
+}
+
+/// sendLength of an int is 4 and of a long is 8
+unittest
+{
+	assert(sendLength(42) == 4);
+	assert(sendLength(42L) == 8);
+}
+
+/// sendLength of a Bson is the length of its raw data
+unittest
+{
+	auto bson = Bson(42);
+	assert(sendLength(bson) == cast(int)bson.data.length);
+}
+
+/// sendLength of an array sums the lengths of its elements
+unittest
+{
+	assert(sendLength(["ab", "c"]) == 5);
+	assert(sendLength(cast(string[])[]) == 0);
+}
+
+/// sendLength of multiple arguments sums each argument
+unittest
+{
+	assert(sendLength("test", 42) == 9);
+	assert(sendLength() == 0);
+}
+
 private string getHostArchitecture()
 {
 	import os = std.system;
