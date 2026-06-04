@@ -949,3 +949,56 @@ package(vibe.db.mongo) void handleWriteResult(string countField = null, T)(
 		}
 	}
 }
+
+unittest {
+	FindOptions find;
+	find.maxTime(2.seconds);
+	find.maxAwaitTime(1500.msecs);
+	assert(find.maxTimeMS == 2000);
+	assert(find.maxAwaitTimeMS == 1500);
+
+	DistinctOptions distinct;
+	distinct.maxTime(3.seconds);
+	assert(distinct.maxTimeMS == 3000);
+
+	CountOptions count;
+	count.maxTime(4.seconds);
+	assert(count.maxTimeMS == 4000);
+
+	EstimatedDocumentCountOptions estimated;
+	estimated.maxTime(5.seconds);
+	assert(estimated.maxTimeMS == 5000);
+
+	AggregateOptions aggregate;
+	aggregate.maxTime(6.seconds);
+	aggregate.maxAwaitTime(700.msecs);
+	aggregate.batchSize = 50;
+	assert(aggregate.maxTimeMS == 6000);
+	assert(aggregate.maxAwaitTimeMS == 700);
+	assert(aggregate.batchSize == 50);
+}
+
+unittest {
+	DeleteResult deleted;
+	handleWriteResult!"deletedCount"(Bson(["n": Bson(7)]), deleted);
+	assert(deleted.deletedCount == 7);
+
+	DeleteResult missingCount;
+	handleWriteResult!"deletedCount"(Bson(["ok": Bson(1.0)]), missingCount);
+	assert(missingCount.deletedCount == 0);
+
+	UpdateResult noErrors;
+	handleWriteResult(Bson(["writeErrors": Bson(cast(Bson[])[])]), noErrors);
+
+	auto writeErrors = Bson([Bson(["code": Bson(11000), "errmsg": Bson("duplicate key")])]);
+	UpdateResult failed;
+	bool threw;
+	try {
+		handleWriteResult(Bson(["writeErrors": writeErrors]), failed);
+	} catch (MongoBulkWriteException e) {
+		threw = true;
+		assert(e.errors.length == 1);
+		assert(e.errors[0].code == 11000);
+	}
+	assert(threw);
+}
