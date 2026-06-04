@@ -510,6 +510,71 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 }
 
 /**
+ * Returns the server that writes must be sent to, regardless of the configured
+ * read preference. Resolves the primary for a replica set, the single server for
+ * a standalone deployment, and a mongos for a sharded cluster. Null if no write
+ * target is currently available (e.g. a replica set with no elected primary).
+ */
+Nullable!MongoHost writeTarget(ref const TopologyDescription topology, long localThresholdMS = 15)
+{
+	return selectServer(topology, ReadPreference.primary, localThresholdMS);
+}
+
+/// writeTarget returns the primary even when a secondary is available
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetWithPrimary;
+
+	auto primary = MongoHost("primary", 27017);
+	ServerDescription pdesc;
+	pdesc.isWritablePrimary = true;
+	pdesc.setName = "rs0";
+	topo.update(primary, pdesc);
+
+	auto secondary = MongoHost("secondary", 27017);
+	ServerDescription sdesc;
+	sdesc.secondary = true;
+	sdesc.setName = "rs0";
+	topo.update(secondary, sdesc);
+
+	auto target = writeTarget(topo);
+	assert(!target.isNull);
+	assert(target.get == primary);
+}
+
+/// writeTarget returns the only server for a standalone topology
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("standalone", 27017);
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	topo.update(host, desc);
+	topo.type = TopologyType.single;
+
+	auto target = writeTarget(topo);
+	assert(!target.isNull);
+	assert(target.get == host);
+}
+
+/// writeTarget returns null when the replica set has no primary
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+
+	auto secondary = MongoHost("secondary", 27017);
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.setName = "rs0";
+	topo.update(secondary, desc);
+
+	auto target = writeTarget(topo);
+	assert(target.isNull);
+}
+
+/**
  * Returns true if `incoming` is stale relative to `existing`.
  *
  * Per the SDAM spec, a server description with the same processId but

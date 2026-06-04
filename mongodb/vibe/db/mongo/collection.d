@@ -111,7 +111,7 @@ struct MongoCollection {
 	void update(T, U)(T selector, U update, UpdateFlags flags = UpdateFlags.None)
 	{
 		assert(m_client !is null, "Updating uninitialized MongoCollection.");
-		auto conn = m_client.lockConnection();
+		auto conn = m_client.lockConnectionToPrimary();
 		ubyte[256] selector_buf = void, update_buf = void;
 		conn.update(m_fullPath, flags, serializeToBson(selector, selector_buf), serializeToBson(update, update_buf));
 	}
@@ -131,7 +131,7 @@ struct MongoCollection {
 	void insert(T)(T document_or_documents, InsertFlags flags = InsertFlags.None)
 	{
 		assert(m_client !is null, "Inserting into uninitialized MongoCollection.");
-		auto conn = m_client.lockConnection();
+		auto conn = m_client.lockConnectionToPrimary();
 		Bson[] docs;
 		Bson bdocs = () @trusted { return serializeToBson(document_or_documents); } ();
 		if( bdocs.type == Bson.Type.Array ) docs = cast(Bson[])bdocs;
@@ -161,12 +161,12 @@ struct MongoCollection {
 			doc["_id"] = Bson(res.insertedId = BsonObjectID.generate);
 		}
 		cmd["documents"] = Bson([doc]);
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
 
-		database.runCommandChecked(cmd).handleWriteResult(res);
+		database.runWriteCommandChecked(cmd).handleWriteResult(res);
 		return res;
 	}
 
@@ -190,13 +190,13 @@ struct MongoCollection {
 			}
 		}
 		cmd["documents"] = Bson(arr);
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
 
 		auto res = InsertManyResult(insertedIds);
-		database.runCommandChecked(cmd).handleWriteResult!"insertedCount"(res);
+		database.runWriteCommandChecked(cmd).handleWriteResult!"insertedCount"(res);
 		return res;
 	}
 
@@ -248,7 +248,7 @@ struct MongoCollection {
 	@safe {
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 
 		Bson[] queryBsons = new Bson[queries.length];
@@ -258,7 +258,7 @@ struct MongoCollection {
 		Bson cmd = buildDeleteCommand(m_name, queryBsons, serializeToBson(options), limits);
 
 		DeleteResult res;
-		database.runCommandChecked(cmd).handleWriteResult!"deletedCount"(res);
+		database.runWriteCommandChecked(cmd).handleWriteResult!"deletedCount"(res);
 		return res;
 	}
 
@@ -355,7 +355,7 @@ struct MongoCollection {
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 
 		Bson[] queryBsons = new Bson[queries.length];
@@ -407,7 +407,7 @@ struct MongoCollection {
 
 		Bson cmd = buildUpdateCommand(m_name, queryBsons, documentBsons, perUpdateOptionBsons, serializeToBson(options));
 
-		auto res = database.runCommandChecked(cmd);
+		auto res = database.runWriteCommandChecked(cmd);
 		auto ret = UpdateResult(
 			res["n"].to!long,
 			res["nModified"].to!long,
@@ -631,7 +631,7 @@ struct MongoCollection {
 	void remove(T)(T selector, DeleteFlags flags = DeleteFlags.None)
 	{
 		assert(m_client !is null, "Removing from uninitialized MongoCollection.");
-		auto conn = m_client.lockConnection();
+		auto conn = m_client.lockConnectionToPrimary();
 		ubyte[256] selector_buf = void;
 		conn.delete_(m_fullPath, flags, serializeToBson(selector, selector_buf));
 	}
@@ -667,7 +667,7 @@ struct MongoCollection {
 		cmd.query = query;
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
-		auto ret = database.runCommandChecked(cmd);
+		auto ret = database.runWriteCommandChecked(cmd);
 		return ret["value"];
 	}
 
@@ -706,7 +706,7 @@ struct MongoCollection {
 			cmd[key] = value;
 			return 0;
 		});
-		auto ret = database.runCommandChecked(cmd);
+		auto ret = database.runWriteCommandChecked(cmd);
 		return ret["value"];
 	}
 
@@ -996,7 +996,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = name;
-		database.runCommandChecked(cmd);
+		database.runWriteCommandChecked(cmd);
 	}
 
 	/// ditto
@@ -1044,14 +1044,14 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = "*";
-		database.runCommandChecked(cmd);
+		database.runWriteCommandChecked(cmd);
 	}
 
 	/// Unofficial API extension, more efficient multi-index removal on
 	/// MongoDB 4.2+
 	void dropIndexes(string[] names, DropIndexOptions options = DropIndexOptions.init)
 	@safe {
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		if (conn.description.satisfiesVersion(WireVersion.v42)) {
 			static struct CMD {
 				string dropIndexes;
@@ -1061,7 +1061,7 @@ struct MongoCollection {
 			CMD cmd;
 			cmd.dropIndexes = m_name;
 			cmd.index = names;
-			database.runCommandChecked(cmd);
+			database.runWriteCommandChecked(cmd);
 		} else {
 			foreach (name; names)
 				dropIndex(name);
@@ -1144,7 +1144,7 @@ struct MongoCollection {
 	@safe {
 		string[] keys = new string[models.length];
 
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		if (conn.description.satisfiesVersion(WireVersion.v26)) {
 			Bson cmd = Bson.emptyObject;
 			cmd["createIndexes"] = m_name;
@@ -1160,7 +1160,7 @@ struct MongoCollection {
 				indexes ~= index;
 			}
 			cmd["indexes"] = Bson(indexes);
-			database.runCommandChecked(cmd);
+			database.runWriteCommandChecked(cmd);
 		} else {
 			foreach (model; models) {
 				// trusted to support old compilers which think opt_dup has
@@ -1222,7 +1222,7 @@ struct MongoCollection {
 
 		CMD cmd;
 		cmd.drop = m_name;
-		auto reply = database.runCommandUnchecked(cmd);
+		auto reply = database.runWriteCommandUnchecked(cmd);
 		if (reply["ok"].get!double != 1.0) {
 			auto code = reply["code"].opt!int(0);
 			if (code != 26) // NamespaceNotFound

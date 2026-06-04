@@ -165,7 +165,8 @@ struct MongoDatabase
 		T command_and_options,
 		string errorInfo = __FUNCTION__,
 		string errorFile = __FILE__,
-		size_t errorLine = __LINE__
+		size_t errorLine = __LINE__,
+		bool toPrimary = false
 	)
 	{
 		Bson cmd;
@@ -173,8 +174,20 @@ struct MongoDatabase
 			cmd = command_and_options;
 		else
 			cmd = command_and_options.serializeToBson;
-		return m_client.lockConnection().runCommand!(Bson, ExceptionT)(
+		auto conn = toPrimary ? m_client.lockConnectionToPrimary() : m_client.lockConnection();
+		return conn.runCommand!(Bson, ExceptionT)(
 			m_name, cmd, errorInfo, errorFile, errorLine);
+	}
+
+	/// ditto, but always sends to the primary (for write operations).
+	Bson runWriteCommandChecked(T, ExceptionT = MongoDriverException)(
+		T command_and_options,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
+	{
+		return runCommandChecked!(T, ExceptionT)(command_and_options, errorInfo, errorFile, errorLine, true);
 	}
 
 	/// ditto
@@ -182,7 +195,8 @@ struct MongoDatabase
 		T command_and_options,
 		string errorInfo = __FUNCTION__,
 		string errorFile = __FILE__,
-		size_t errorLine = __LINE__
+		size_t errorLine = __LINE__,
+		bool toPrimary = false
 	)
 	{
 		Bson cmd;
@@ -190,8 +204,20 @@ struct MongoDatabase
 			cmd = command_and_options;
 		else
 			cmd = command_and_options.serializeToBson;
-		return m_client.lockConnection().runCommandUnchecked!(Bson, ExceptionT)(
+		auto conn = toPrimary ? m_client.lockConnectionToPrimary() : m_client.lockConnection();
+		return conn.runCommandUnchecked!(Bson, ExceptionT)(
 			m_name, cmd, errorInfo, errorFile, errorLine);
+	}
+
+	/// ditto, but always sends to the primary (for write operations).
+	Bson runWriteCommandUnchecked(T, ExceptionT = MongoDriverException)(
+		T command_and_options,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
+		size_t errorLine = __LINE__
+	)
+	{
+		return runCommandUnchecked!(T, ExceptionT)(command_and_options, errorInfo, errorFile, errorLine, true);
 	}
 
 	/// ditto

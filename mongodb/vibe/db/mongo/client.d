@@ -31,7 +31,7 @@ final class MongoClient {
 @safe:
 
 	private {
-		ConnectionPool!MongoConnection m_connections;
+		ConnectionPool!MongoConnection[string] m_connectionPools;
 		MongoClientSettings m_settings;
 		TopologyDescription m_topology;
 		bool m_discoveryInProgress;
@@ -67,11 +67,6 @@ final class MongoClient {
 
 		discoverTopology();
 
-		m_connections = new ConnectionPool!MongoConnection(
-			&createConnection,
-			settings.maxConnections
-		);
-
 		// force a connection to cause an exception for wrong URLs
 		lockConnection();
 	}
@@ -92,14 +87,15 @@ final class MongoClient {
 	*/
 	void cleanupConnections()
 	{
-		m_connections.removeUnused((conn) nothrow @safe {
-			try conn.disconnect();
-			catch (Exception e) {
-				logWarn("Error thrown during MongoDB connection close: %s", e.msg);
-				try () @trusted { logDebug("Full error: %s", e.toString()); } ();
-				catch (Exception e) {}
-			}
-		});
+		foreach (pool; m_connectionPools.byValue)
+			pool.removeUnused((conn) nothrow @safe {
+				try conn.disconnect();
+				catch (Exception e) {
+					logWarn("Error thrown during MongoDB connection close: %s", e.msg);
+					try () @trusted { logDebug("Full error: %s", e.toString()); } ();
+					catch (Exception e) {}
+				}
+			});
 	}
 
 	/**
@@ -171,54 +167,87 @@ final class MongoClient {
 		return ret;
 	}
 
+	/// Locks a connection to the server chosen by the configured read preference.
 	package LockedConnection!MongoConnection lockConnection()
 	{
+		return lockConnectionResolving(false);
+	}
+
+	/// Locks a connection to the primary. Used for write operations, which must
+	/// always go to the primary regardless of the configured read preference.
+	package LockedConnection!MongoConnection lockConnectionToPrimary()
+	{
+		return lockConnectionResolving(true);
+	}
+
+	private LockedConnection!MongoConnection lockConnectionResolving(bool toPrimary)
+	{
+		try {
+			return lockConnectionToHost(resolveHost(toPrimary));
+		} catch (Exception e) {
+			logWarn("Connection acquisition failed: %s — re-discovering topology", e.msg);
+		}
+
+		discoverTopology();
+		return lockConnectionToHost(resolveHost(toPrimary));
+	}
+
+	private MongoHost resolveHost(bool toPrimary)
+	{
+		auto selected = toPrimary
+			? writeTarget(m_topology, m_settings.localThresholdMS)
+			: selectServer(m_topology, m_settings.readPreference, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+
+		enforce!MongoDriverException(!selected.isNull, toPrimary
+			? "No primary server available for write"
+			: "No suitable server found for read preference");
+
+		return selected.get;
+	}
+
+	private LockedConnection!MongoConnection lockConnectionToHost(MongoHost host)
+	{
+		auto pool = poolFor(host);
+
 		foreach (_; 0 .. 100)
 		{
-			auto conn = m_connections.lockConnection();
+			auto conn = pool.lockConnection();
 
 			if (conn.alive)
 				return conn;
 
-			m_connections.remove(conn.__conn);
+			pool.remove(conn.__conn);
 			logDiagnostic("Evicted dead MongoDB connection from pool");
 		}
 
 		throw new MongoDriverException("Failed to acquire a live connection after evicting 100 dead connections");
 	}
 
-	package MongoHost getSelectedHost()
+	private ConnectionPool!MongoConnection poolFor(MongoHost host)
 	{
-		auto selected = selectServer(m_topology, m_settings.readPreference, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
-		enforce!MongoDriverException(!selected.isNull, "No suitable server found for read preference");
+		auto key = host.name ~ ":" ~ host.port.to!string;
 
-		return selected.get;
+		if (auto existing = key in m_connectionPools)
+			return *existing;
+
+		auto pool = new ConnectionPool!MongoConnection(
+			() @safe => createConnectionToHost(host),
+			m_settings.maxConnections
+		);
+		m_connectionPools[key] = pool;
+
+		return pool;
 	}
 
-	private MongoConnection createConnection() @safe
+	private MongoConnection createConnectionToHost(MongoHost host) @safe
 	{
-		auto targetHost = getSelectedHost();
 		auto ret = new MongoConnection(m_settings);
 
 		try {
-			ret.connectToHost(targetHost);
-			return ret;
+			ret.connectToHost(host);
 		} catch (Exception e) {
 			() @trusted { destroy(ret); } ();
-
-			logWarn("Connection to %s:%s failed: %s — re-discovering topology",
-				targetHost.name, targetHost.port, e.msg);
-		}
-
-		discoverTopology();
-		targetHost = getSelectedHost();
-
-		ret = new MongoConnection(m_settings);
-		try {
-			ret.connectToHost(targetHost);
-		} catch (Exception e2) {
-			() @trusted { destroy(ret); } ();
-			throw e2;
+			throw e;
 		}
 
 		return ret;

@@ -13,6 +13,7 @@ int main(string[] args)
 {
 	bool expectFail;
 	bool expectSecondary;
+	bool expectWriteToPrimary;
 	string replicaSet;
 	string readPrefStr;
 	MongoHost[] hosts;
@@ -21,7 +22,7 @@ int main(string[] args)
 
 	if (args.length < 2)
 	{
-		logError("Usage: %s <port1,port2,...> [--replicaSet <name>] [--readPreference <pref>] [--expectFail] [--expectSecondary]", args[0]);
+		logError("Usage: %s <port1,port2,...> [--replicaSet <name>] [--readPreference <pref>] [--expectFail] [--expectSecondary] [--expectWriteToPrimary]", args[0]);
 		return 1;
 	}
 
@@ -42,6 +43,8 @@ int main(string[] args)
 			expectFail = true;
 		else if (arg == "--expectSecondary")
 			expectSecondary = true;
+		else if (arg == "--expectWriteToPrimary")
+			expectWriteToPrimary = true;
 	}
 
 	auto settings = new MongoClientSettings;
@@ -101,6 +104,36 @@ int main(string[] args)
 		return 0;
 	}
 
+	if (expectWriteToPrimary)
+	{
+		// The client is configured with readPreference=secondary, so reads land on a
+		// secondary. Each write below must still be routed to the primary; before the
+		// fix they were sent to the read-preference target and rejected by the server
+		// with NotWritablePrimary. Success here is the regression guard for #2847.
+		auto coll = client.getCollection("rstest.writeprimary");
+		auto objID = BsonObjectID.generate;
+
+		coll.insertOne(Bson(["_id": Bson(objID), "n": Bson(1)]));
+		coll.updateOne(["_id": objID], Bson(["$set": Bson(["n": Bson(2)])]));
+
+		// Confirm the writes reached the primary by reading from it directly. The
+		// primary is read-your-write consistent, so there is no replication lag to
+		// wait on.
+		auto verifier = connectMongoDB(primarySettings(hosts, replicaSet));
+		auto onPrimary = verifier.getCollection("rstest.writeprimary");
+
+		auto stored = onPrimary.findOne(["_id": objID]);
+		enforce(!stored.isNull, "Insert was not routed to the primary");
+		enforce(stored["n"].get!int == 2, "Update was not routed to the primary");
+
+		coll.deleteOne(["_id": objID]);
+		enforce(onPrimary.findOne(["_id": objID]).isNull, "Delete was not routed to the primary");
+
+		coll.drop();
+		logInfo("Writes correctly routed to primary under readPreference=secondary");
+		return 0;
+	}
+
 	logInfo("Connection established, running CRUD smoke test");
 
 	auto coll = client.getCollection("rstest.smoke");
@@ -116,4 +149,17 @@ int main(string[] args)
 
 	logInfo("All replica set tests passed");
 	return 0;
+}
+
+MongoClientSettings primarySettings(MongoHost[] hosts, string replicaSet)
+{
+	auto settings = new MongoClientSettings;
+	settings.hosts = hosts;
+	settings.replicaSet = replicaSet;
+	settings.connectTimeoutMS = 5_000;
+	settings.socketTimeoutMS = 5_000;
+	settings.appName = "VibeReplicaSetWriteVerifier";
+	settings.readPreference = ReadPreference.primary;
+
+	return settings;
 }
