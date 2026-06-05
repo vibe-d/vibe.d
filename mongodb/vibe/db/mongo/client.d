@@ -41,9 +41,7 @@ final class MongoClient {
 		LocalManualEvent m_topologyChanged;
 		bool m_discoveryInProgress;
 
-		ServerProber m_prober;
-		ServerMonitor[string] m_monitors;
-		MongoHost[string] m_monitorHosts;
+		MonitorRegistry m_monitors;
 	}
 
 	package this(string host, ushort port)
@@ -80,8 +78,10 @@ final class MongoClient {
 		// force a connection to cause an exception for wrong URLs
 		lockConnection();
 
-		m_prober = (MongoHost host) @safe => probeServer(m_settings, host);
-		startMonitoring();
+		ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
+		m_monitors = new MonitorRegistry(prober, &onMonitorResult,
+			m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
+		m_monitors.reconcileWith(m_topology.load().allKnownHosts());
 	}
 
 	/// Returns the read preference configured for this client.
@@ -240,7 +240,7 @@ final class MongoClient {
 			if (!selected.isNull)
 				return selected.get;
 
-			requestImmediateChecks();
+			m_monitors.requestAllChecks();
 
 			auto remaining = deadline - MonoTime.currTime;
 			if (remaining <= Duration.zero)
@@ -254,13 +254,6 @@ final class MongoClient {
 			: "No suitable server found for read preference");
 	}
 
-	/// Asks every monitor to run a check now (subject to its minHeartbeat floor).
-	private void requestImmediateChecks()
-	{
-		foreach (monitor; m_monitors.byValue)
-			monitor.requestCheck();
-	}
-
 	/// On a stale-topology command error, marks the host failed and re-checks it.
 	private void handleStaleCommandError(MongoHost host, int code) @safe nothrow
 	{
@@ -270,9 +263,7 @@ final class MongoClient {
 		try {
 			m_topology.publish(applyFailed(m_topology.load(), host));
 			m_topologyChanged.emit();
-
-			if (auto monitor = hostKey(host) in m_monitors)
-				monitor.requestCheck();
+			m_monitors.requestCheck(host);
 		} catch (Exception) {}
 	}
 
@@ -398,43 +389,6 @@ final class MongoClient {
 		return TopologyType.unknown;
 	}
 
-	private static string hostKey(MongoHost host)
-	{
-		return host.name ~ ":" ~ host.port.to!string;
-	}
-
-	/// Spawns a background monitor for every currently-known host.
-	private void startMonitoring()
-	{
-		foreach (host; m_topology.load().allKnownHosts())
-			ensureMonitor(host);
-	}
-
-	/// Starts a monitor for `host` if one is not already running for it.
-	private void ensureMonitor(MongoHost host)
-	{
-		auto key = hostKey(host);
-		if (key in m_monitors)
-			return;
-
-		auto monitor = new ServerMonitor(host, m_prober, &onMonitorResult,
-			m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
-		m_monitors[key] = monitor;
-		m_monitorHosts[key] = host;
-		monitor.start();
-	}
-
-	private void removeMonitor(MongoHost host)
-	{
-		auto key = hostKey(host);
-		if (key !in m_monitors)
-			return;
-
-		m_monitors[key].stop();
-		m_monitors.remove(key);
-		m_monitorHosts.remove(key);
-	}
-
 	/// Publishes a monitor's probe result as a new snapshot and reconciles the monitor set.
 	private void onMonitorResult(MongoHost host, Nullable!ServerDescription desc, Duration rtt)
 	{
@@ -442,20 +396,13 @@ final class MongoClient {
 		m_topology.publish(desc.isNull ? applyFailed(current, host) : applyDescription(current, host, desc.get));
 		m_topologyChanged.emit();
 
-		auto reconciliation = reconcileMonitors(m_monitorHosts.values, m_topology.load().allKnownHosts());
-		foreach (added; reconciliation.toStart)
-			ensureMonitor(added);
-		foreach (removed; reconciliation.toStop)
-			removeMonitor(removed);
+		m_monitors.reconcileWith(m_topology.load().allKnownHosts());
 	}
 
 	/// Stops all background server monitors. Call before discarding the client.
 	void stopMonitoring()
 	{
-		foreach (monitor; m_monitors.byValue)
-			monitor.stop();
-		m_monitors.clear();
-		m_monitorHosts.clear();
+		m_monitors.stopAll();
 	}
 
 	/// Number of background server monitors currently running.

@@ -1385,6 +1385,13 @@ struct MongoHost
 	}
 }
 
+/// Stable map key for a host, "name:port".
+string hostKey(MongoHost host) @safe
+{
+	import std.conv : to;
+	return host.name ~ ":" ~ host.port.to!string;
+}
+
 /**
  * Parses a "host:port" string into a MongoHost. Returns MongoHost.init if
  * the string cannot be parsed.

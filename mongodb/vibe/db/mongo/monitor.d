@@ -8,7 +8,7 @@
 module vibe.db.mongo.monitor;
 
 import vibe.db.mongo.connection : ServerDescription;
-import vibe.db.mongo.settings : MongoHost;
+import vibe.db.mongo.settings : MongoHost, hostKey;
 
 import vibe.core.core : runTask, sleep;
 import vibe.core.task : Task;
@@ -112,6 +112,102 @@ final class ServerMonitor {
 			logError("MongoDB ServerMonitor heartbeat loop failed for %s: %s", m_host, e.msg);
 			return false;
 		}
+	}
+}
+
+/// Owns the live per-host monitors, starting and stopping them as the topology changes.
+final class MonitorRegistry {
+	private {
+		ServerProber m_prober;
+		MonitorResult m_onResult;
+		Duration m_heartbeat;
+		Duration m_minHeartbeat;
+		ServerMonitor[string] m_monitors;
+		MongoHost[string] m_hosts;
+	}
+
+	this(ServerProber prober, MonitorResult onResult, Duration heartbeat, Duration minHeartbeat) @safe
+	{
+		m_prober = prober;
+		m_onResult = onResult;
+		m_heartbeat = heartbeat;
+		m_minHeartbeat = minHeartbeat;
+	}
+
+	/// Number of monitors currently running.
+	size_t length() const @safe
+	{
+		return m_monitors.length;
+	}
+
+	/// Whether a monitor is running for `host`.
+	bool isMonitoring(MongoHost host) const @safe
+	{
+		return (hostKey(host) in m_monitors) !is null;
+	}
+
+	/// The hosts currently being monitored.
+	MongoHost[] hosts() @safe
+	{
+		return m_hosts.values;
+	}
+
+	/// Starts a monitor for `host` unless one is already running.
+	void ensure(MongoHost host) @safe
+	{
+		auto key = hostKey(host);
+		if (key in m_monitors)
+			return;
+
+		auto monitor = new ServerMonitor(host, m_prober, m_onResult, m_heartbeat, m_minHeartbeat);
+		m_monitors[key] = monitor;
+		m_hosts[key] = host;
+		monitor.start();
+	}
+
+	/// Stops and forgets the monitor for `host`.
+	void remove(MongoHost host) @safe
+	{
+		auto key = hostKey(host);
+		if (key !in m_monitors)
+			return;
+
+		m_monitors[key].stop();
+		m_monitors.remove(key);
+		m_hosts.remove(key);
+	}
+
+	/// Starts monitors for new hosts and stops monitors for removed ones.
+	void reconcileWith(MongoHost[] desired) @safe
+	{
+		auto plan = reconcileMonitors(m_hosts.values, desired);
+		foreach (host; plan.toStart)
+			ensure(host);
+		foreach (host; plan.toStop)
+			remove(host);
+	}
+
+	/// Asks every monitor to run a check now.
+	void requestAllChecks() @safe
+	{
+		foreach (monitor; m_monitors.byValue)
+			monitor.requestCheck();
+	}
+
+	/// Asks the monitor for `host`, if any, to run a check now.
+	void requestCheck(MongoHost host) @safe
+	{
+		if (auto monitor = hostKey(host) in m_monitors)
+			monitor.requestCheck();
+	}
+
+	/// Stops and forgets every monitor.
+	void stopAll() @safe
+	{
+		foreach (monitor; m_monitors.byValue)
+			monitor.stop();
+		m_monitors.clear();
+		m_hosts.clear();
 	}
 }
 
@@ -367,4 +463,128 @@ unittest
 	monitor.stop();
 
 	assert(checks > before, "requestCheck causes an immediate re-check instead of waiting the full heartbeat");
+}
+
+version (unittest)
+{
+	private ServerDescription stubProbe(MongoHost h) @safe
+	{
+		ServerDescription desc;
+		desc.isWritablePrimary = true;
+		desc.setName = "rs0";
+		return desc;
+	}
+
+	private void ignoreResult(MongoHost h, Nullable!ServerDescription desc, Duration rtt) @safe {}
+
+	private MonitorRegistry idleRegistry()
+	{
+		import std.functional : toDelegate;
+		return new MonitorRegistry(toDelegate(&stubProbe), toDelegate(&ignoreResult), 1.seconds, 1.msecs);
+	}
+}
+
+/// ensure starts a monitor and is idempotent for the same host
+unittest
+{
+	auto registry = idleRegistry();
+	auto host = MongoHost("a", 27017);
+
+	registry.ensure(host);
+	registry.ensure(host);
+
+	assert(registry.length == 1, "ensure starts exactly one monitor per host");
+	assert(registry.isMonitoring(host), "the host is reported as monitored");
+
+	registry.stopAll();
+}
+
+/// remove stops the monitor and forgets the host
+unittest
+{
+	auto registry = idleRegistry();
+	auto host = MongoHost("a", 27017);
+
+	registry.ensure(host);
+	registry.remove(host);
+
+	assert(registry.length == 0, "remove drops the monitor");
+	assert(!registry.isMonitoring(host), "the removed host is no longer monitored");
+}
+
+/// remove of an unmonitored host is a no-op
+unittest
+{
+	auto registry = idleRegistry();
+
+	registry.remove(MongoHost("missing", 27017));
+
+	assert(registry.length == 0, "removing an unknown host changes nothing");
+}
+
+/// reconcileWith starts newly-discovered hosts and stops removed ones
+unittest
+{
+	auto registry = idleRegistry();
+	auto a = MongoHost("a", 27017);
+	auto b = MongoHost("b", 27017);
+	auto c = MongoHost("c", 27017);
+
+	registry.reconcileWith([a, b]);
+	assert(registry.length == 2, "the first reconcile starts a monitor per host");
+
+	registry.reconcileWith([b, c]);
+
+	assert(registry.length == 2, "the set size matches the new topology");
+	assert(registry.isMonitoring(b), "a host present in both reconciles keeps its monitor");
+	assert(registry.isMonitoring(c), "a newly-discovered host gets a monitor");
+	assert(!registry.isMonitoring(a), "a removed host loses its monitor");
+
+	registry.stopAll();
+}
+
+/// stopAll stops and forgets every monitor
+unittest
+{
+	auto registry = idleRegistry();
+
+	registry.ensure(MongoHost("a", 27017));
+	registry.ensure(MongoHost("b", 27017));
+	registry.stopAll();
+
+	assert(registry.length == 0, "stopAll empties the registry");
+}
+
+/// requestCheck for an unmonitored host is a no-op
+unittest
+{
+	auto registry = idleRegistry();
+
+	registry.requestCheck(MongoHost("missing", 27017));
+
+	assert(registry.length == 0, "requesting a check for an unknown host changes nothing");
+}
+
+/// requestAllChecks triggers an immediate re-check on every monitor
+unittest
+{
+	import vibe.core.core : sleep;
+	import core.time : msecs, hours;
+	import std.functional : toDelegate;
+
+	int checks;
+	void countResult(MongoHost h, Nullable!ServerDescription desc, Duration rtt) @safe { checks++; }
+
+	auto registry = new MonitorRegistry(toDelegate(&stubProbe), &countResult, 1.hours, 1.msecs);
+
+	registry.ensure(MongoHost("a", 27017));
+	registry.ensure(MongoHost("b", 27017));
+	sleep(40.msecs);
+	auto before = checks;
+
+	registry.requestAllChecks();
+	sleep(40.msecs);
+	registry.stopAll();
+
+	assert(checks > before, "requestAllChecks re-checks each monitor instead of waiting the full heartbeat");
 }
