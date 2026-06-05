@@ -18,6 +18,7 @@ import vibe.db.mongo.settings : MongoHost;
 import vibe.core.core : runTask, sleep;
 import vibe.core.task : Task;
 import vibe.core.log : logError;
+import vibe.core.sync : LocalManualEvent, createManualEvent;
 
 import core.time : MonoTime, Duration, seconds, msecs;
 import std.typecons : Nullable;
@@ -35,6 +36,8 @@ final class ServerMonitor {
 		Duration m_minHeartbeat;
 		bool m_running;
 		Task m_loop;
+		LocalManualEvent m_wake;
+		MonoTime m_lastCheck;
 	}
 
 	this(MongoHost host, ServerProber probe, MonitorResult onResult, Duration heartbeat, Duration minHeartbeat) @safe
@@ -44,6 +47,7 @@ final class ServerMonitor {
 		m_onResult = onResult;
 		m_heartbeat = heartbeat;
 		m_minHeartbeat = minHeartbeat;
+		m_wake = createManualEvent();
 	}
 
 	/// Probes the host once and reports the resulting description via the callback.
@@ -94,6 +98,14 @@ final class ServerMonitor {
 		m_running = false;
 	}
 
+	/// Requests an immediate check (e.g. after an operation hit a stale/failed
+	/// server), throttled so it cannot fire more often than minHeartbeat.
+	void requestCheck() @safe
+	{
+		if (shouldCheckNow(m_lastCheck, MonoTime.currTime, m_minHeartbeat))
+			m_wake.emit();
+	}
+
 	/**
 	 * Runs the heartbeat loop until `stop()` is requested.
 	 *
@@ -107,8 +119,10 @@ final class ServerMonitor {
 		{
 			while (m_running)
 			{
+				auto ec = m_wake.emitCount;
 				checkOnce();
-				sleep(m_heartbeat);
+				m_lastCheck = MonoTime.currTime;
+				m_wake.wait(m_heartbeat, ec);
 			}
 			return true;
 		}
@@ -124,6 +138,27 @@ final class ServerMonitor {
 bool shouldCheckNow(MonoTime last, MonoTime now, Duration minInterval) @safe pure nothrow @nogc
 {
 	return now - last >= minInterval;
+}
+
+/// Whether a server error code means the topology is stale — the targeted server
+/// is no longer a usable primary/secondary (stepped down, recovering, shutting
+/// down). Such an error should mark the server failed and trigger an immediate
+/// re-check, per the SDAM "not master or recovering" error set.
+bool isStaleTopologyError(int code) @safe pure nothrow @nogc
+{
+	switch (code)
+	{
+		case 10107: // NotWritablePrimary
+		case 13435: // NotPrimaryNoSecondaryOk
+		case 13436: // NotPrimaryOrSecondary
+		case 11600: // InterruptedAtShutdown
+		case 11602: // InterruptedDueToReplStateChange
+		case 189:   // PrimarySteppedDown
+		case 91:    // ShutdownInProgress
+			return true;
+		default:
+			return false;
+	}
 }
 
 /// The per-host monitors to start and stop after a topology change.
@@ -160,6 +195,19 @@ unittest
 
 	assert(r.toStart == [c], "starts monitors for newly-discovered hosts");
 	assert(r.toStop == [a], "stops monitors for removed hosts");
+}
+
+/// isStaleTopologyError flags the not-master / recovering server error codes
+unittest
+{
+	assert(isStaleTopologyError(10107), "NotWritablePrimary");
+	assert(isStaleTopologyError(13435), "NotPrimaryNoSecondaryOk");
+	assert(isStaleTopologyError(11602), "InterruptedDueToReplStateChange");
+	assert(isStaleTopologyError(189), "PrimarySteppedDown");
+	assert(isStaleTopologyError(91), "ShutdownInProgress");
+
+	assert(!isStaleTopologyError(11000), "duplicate key is not a topology error");
+	assert(!isStaleTopologyError(0), "no error code");
 }
 
 /// shouldCheckNow allows a check once the minHeartbeatFrequencyMS floor has elapsed
@@ -317,4 +365,30 @@ unittest
 	monitor.stop();
 
 	assert(goodChecks >= 1, "the monitor restarted its loop after the failure");
+}
+
+/// requestCheck triggers a check before the heartbeat interval elapses
+unittest
+{
+	import vibe.core.core : sleep;
+	import core.time : msecs, seconds;
+	import vibe.db.mongo.connection : ServerDescription;
+	import vibe.db.mongo.settings : MongoHost;
+
+	auto host = MongoHost("primary", 27017);
+	ServerDescription prober(MongoHost h) @safe { ServerDescription d; d.isWritablePrimary = true; d.setName = "rs0"; return d; }
+
+	int checks;
+	void onResult(MongoHost h, Nullable!ServerDescription desc, Duration rtt) @safe { checks++; }
+
+	auto monitor = new ServerMonitor(host, &prober, &onResult, 10.seconds, 1.msecs);
+
+	monitor.start();
+	sleep(40.msecs);
+	auto before = checks;
+	monitor.requestCheck();
+	sleep(40.msecs);
+	monitor.stop();
+
+	assert(checks > before, "requestCheck causes an immediate re-check instead of waiting the full heartbeat");
 }

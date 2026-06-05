@@ -175,6 +175,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
 				case "localthresholdms": setLong(cfg.localThresholdMS); break;
 				case "maxstalenessseconds": setLong(cfg.maxStalenessSeconds); break;
+				case "heartbeatfrequencyms": setLong(cfg.heartbeatFrequencyMS); break;
+				case "minheartbeatfrequencyms": setLong(cfg.minHeartbeatFrequencyMS); break;
+				case "serverselectiontimeoutms": setLong(cfg.serverSelectionTimeoutMS); break;
 				case "readconcernlevel": cfg.readConcern = parseReadConcern(value); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
@@ -493,6 +496,28 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
 	assert(cfg.maxStalenessSeconds == -1);
+}
+
+/// parseMongoDBUrl parses the SDAM monitoring options
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?heartbeatFrequencyMS=5000&minHeartbeatFrequencyMS=250&serverSelectionTimeoutMS=12000"));
+	assert(cfg.heartbeatFrequencyMS == 5000);
+	assert(cfg.minHeartbeatFrequencyMS == 250);
+	assert(cfg.serverSelectionTimeoutMS == 12000);
+}
+
+/// parseMongoDBUrl uses SDAM monitoring defaults (10000 / 500 / 30000)
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
+	assert(cfg.heartbeatFrequencyMS == 10_000);
+	assert(cfg.minHeartbeatFrequencyMS == 500);
+	assert(cfg.serverSelectionTimeoutMS == 30_000);
 }
 
 /// parseMongoDBUrl parses readConcernLevel option
@@ -1113,6 +1138,28 @@ class MongoClientSettings
 	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.maxStalenessSeconds)
 	 */
 	long maxStalenessSeconds = -1;
+
+	/**
+	 * How often (in ms) each server monitor sends `hello` to refresh the topology.
+	 * Default: 10000ms per the MongoDB SDAM spec.
+	 *
+	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.heartbeatFrequencyMS)
+	 */
+	long heartbeatFrequencyMS = 10_000;
+
+	/**
+	 * Lower bound (in ms) between consecutive monitor checks of a single server,
+	 * so an on-demand re-check cannot hammer a server. Default: 500ms per SDAM.
+	 */
+	long minHeartbeatFrequencyMS = 500;
+
+	/**
+	 * How long (in ms) server selection waits for a suitable server before failing.
+	 * Default: 30000ms per the MongoDB SDAM spec.
+	 *
+	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.serverSelectionTimeoutMS)
+	 */
+	long serverSelectionTimeoutMS = 30_000;
 
 	/**
 	 * Specifies the default read concern level for read operations.

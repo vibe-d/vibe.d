@@ -380,7 +380,8 @@ final class MongoClient {
 
 		// Transitional SDAM defaults (heartbeat, min-heartbeat); PR5 replaces
 		// these literals with the parsed MongoClientSettings fields.
-		auto monitor = new ServerMonitor(host, m_prober, &onMonitorResult, 10.seconds, 500.msecs);
+		auto monitor = new ServerMonitor(host, m_prober, &onMonitorResult,
+			m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
 		m_monitors[key] = monitor;
 		m_monitorHosts[key] = host;
 		monitor.start();
