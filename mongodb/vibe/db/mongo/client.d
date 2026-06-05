@@ -17,9 +17,12 @@ import vibe.core.sync : LocalManualEvent, createManualEvent;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
+import vibe.db.mongo.monitor;
 
+import core.time : Duration, seconds, msecs;
 import std.conv;
 import std.exception : enforce;
+import std.typecons : Nullable;
 
 /**
 	Represents a connection to a MongoDB server.
@@ -37,6 +40,10 @@ final class MongoClient {
 		AtomicTopology m_topology;
 		LocalManualEvent m_topologyChanged;
 		bool m_discoveryInProgress;
+
+		ServerProber m_prober;
+		ServerMonitor[string] m_monitors;
+		MongoHost[string] m_monitorHosts;
 	}
 
 	package this(string host, ushort port)
@@ -72,6 +79,9 @@ final class MongoClient {
 
 		// force a connection to cause an exception for wrong URLs
 		lockConnection();
+
+		m_prober = (MongoHost host) @safe => probeServer(m_settings, host);
+		startMonitoring();
 	}
 
 	/// Returns the read preference configured for this client.
@@ -347,5 +357,72 @@ final class MongoClient {
 			return TopologyType.replicaSetNoPrimary;
 
 		return TopologyType.unknown;
+	}
+
+	private static string hostKey(MongoHost host)
+	{
+		return host.name ~ ":" ~ host.port.to!string;
+	}
+
+	/// Spawns a background monitor for every currently-known host.
+	private void startMonitoring()
+	{
+		foreach (host; m_topology.load().allKnownHosts())
+			ensureMonitor(host);
+	}
+
+	/// Starts a monitor for `host` if one is not already running for it.
+	private void ensureMonitor(MongoHost host)
+	{
+		auto key = hostKey(host);
+		if (key in m_monitors)
+			return;
+
+		// Transitional SDAM defaults (heartbeat, min-heartbeat); PR5 replaces
+		// these literals with the parsed MongoClientSettings fields.
+		auto monitor = new ServerMonitor(host, m_prober, &onMonitorResult, 10.seconds, 500.msecs);
+		m_monitors[key] = monitor;
+		m_monitorHosts[key] = host;
+		monitor.start();
+	}
+
+	private void removeMonitor(MongoHost host)
+	{
+		auto key = hostKey(host);
+		if (key !in m_monitors)
+			return;
+
+		m_monitors[key].stop();
+		m_monitors.remove(key);
+		m_monitorHosts.remove(key);
+	}
+
+	/**
+	 * Called by each ServerMonitor with its latest probe result. Publishes the
+	 * new immutable topology snapshot, wakes anyone waiting on a topology change,
+	 * then reconciles the monitor set against the (possibly newly-discovered or
+	 * removed) members. Runs synchronously within the event loop, so the snapshot
+	 * swap and monitor-set mutations are atomic with respect to other fibers.
+	 */
+	private void onMonitorResult(MongoHost host, Nullable!ServerDescription desc, Duration rtt)
+	{
+		auto current = m_topology.load();
+		m_topology.publish(desc.isNull ? applyFailed(current, host) : applyDescription(current, host, desc.get));
+		m_topologyChanged.emit();
+
+		auto reconciliation = reconcileMonitors(m_monitorHosts.values, m_topology.load().allKnownHosts());
+		foreach (added; reconciliation.toStart)
+			ensureMonitor(added);
+		foreach (removed; reconciliation.toStop)
+			removeMonitor(removed);
+	}
+
+	/// Stops all background server monitors. Call before discarding the client.
+	void stopMonitoring()
+	{
+		foreach (monitor; m_monitors.byValue)
+			monitor.stop();
+		m_monitors.clear();
+		m_monitorHosts.clear();
 	}
 }

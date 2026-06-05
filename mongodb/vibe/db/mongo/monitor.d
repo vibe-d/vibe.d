@@ -126,6 +126,42 @@ bool shouldCheckNow(MonoTime last, MonoTime now, Duration minInterval) @safe pur
 	return now - last >= minInterval;
 }
 
+/// The per-host monitors to start and stop after a topology change.
+struct MonitorReconcile
+{
+	MongoHost[] toStart;
+	MongoHost[] toStop;
+}
+
+/// Diffs the currently-monitored hosts against the desired (current topology)
+/// hosts: `toStart` are newly-discovered hosts, `toStop` are removed ones. Hosts
+/// present in both keep their running monitor.
+MonitorReconcile reconcileMonitors(MongoHost[] current, MongoHost[] desired) @safe pure nothrow
+{
+	import std.algorithm : canFind, filter;
+	import std.array : array;
+
+	MonitorReconcile result;
+	result.toStart = desired.filter!(h => !current.canFind(h)).array;
+	result.toStop = current.filter!(h => !desired.canFind(h)).array;
+	return result;
+}
+
+/// reconcileMonitors starts new hosts and stops removed ones
+unittest
+{
+	import vibe.db.mongo.settings : MongoHost;
+
+	auto a = MongoHost("a", 27017);
+	auto b = MongoHost("b", 27017);
+	auto c = MongoHost("c", 27017);
+
+	auto r = reconcileMonitors([a, b], [b, c]);
+
+	assert(r.toStart == [c], "starts monitors for newly-discovered hosts");
+	assert(r.toStop == [a], "stops monitors for removed hosts");
+}
+
 /// shouldCheckNow allows a check once the minHeartbeatFrequencyMS floor has elapsed
 unittest
 {
