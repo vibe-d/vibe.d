@@ -1139,26 +1139,13 @@ class MongoClientSettings
 	 */
 	long maxStalenessSeconds = -1;
 
-	/**
-	 * How often (in ms) each server monitor sends `hello` to refresh the topology.
-	 * Default: 10000ms per the MongoDB SDAM spec.
-	 *
-	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.heartbeatFrequencyMS)
-	 */
+	/// How often (ms) each monitor sends `hello` to refresh the topology.
 	long heartbeatFrequencyMS = 10_000;
 
-	/**
-	 * Lower bound (in ms) between consecutive monitor checks of a single server,
-	 * so an on-demand re-check cannot hammer a server. Default: 500ms per SDAM.
-	 */
+	/// Minimum interval (ms) between consecutive checks of a single server.
 	long minHeartbeatFrequencyMS = 500;
 
-	/**
-	 * How long (in ms) server selection waits for a suitable server before failing.
-	 * Default: 30000ms per the MongoDB SDAM spec.
-	 *
-	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.serverSelectionTimeoutMS)
-	 */
+	/// How long (ms) server selection waits for a suitable server before failing.
 	long serverSelectionTimeoutMS = 30_000;
 
 	/**

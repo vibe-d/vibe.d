@@ -19,7 +19,7 @@ import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.db.mongo.monitor;
 
-import core.time : Duration, seconds, msecs;
+import core.time : Duration, seconds, msecs, MonoTime;
 import std.conv;
 import std.exception : enforce;
 import std.typecons : Nullable;
@@ -199,8 +199,7 @@ final class MongoClient {
 		return lockConnectionResolving(true, ReadPreference.primary);
 	}
 
-	/// Resolves the host a read should target, retrying once after re-discovering the
-	/// topology. A cursor pins to this host so its getMore/killCursors stay on the same server.
+	/// Resolves the host a read should target, retrying once after re-discovery.
 	package MongoHost resolveHostForRead(ReadPreference pref)
 	{
 		try {
@@ -225,17 +224,56 @@ final class MongoClient {
 		return lockConnectionToHost(resolveHost(toPrimary, pref));
 	}
 
+	/// Selects a target host, blocking up to `serverSelectionTimeoutMS` for one to appear.
 	private MongoHost resolveHost(bool toPrimary, ReadPreference pref)
 	{
-		auto topology = m_topology.load();
-		auto selected = selectTarget(topology, toPrimary, pref,
-			m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+		auto deadline = MonoTime.currTime + m_settings.serverSelectionTimeoutMS.msecs;
 
-		enforce!MongoDriverException(!selected.isNull, toPrimary
+		while (true)
+		{
+			// Read the counter before the snapshot so a concurrent update is not missed.
+			auto topologyVersion = m_topologyChanged.emitCount;
+
+			auto topology = m_topology.load();
+			auto selected = selectTarget(topology, toPrimary, pref,
+				m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+			if (!selected.isNull)
+				return selected.get;
+
+			requestImmediateChecks();
+
+			auto remaining = deadline - MonoTime.currTime;
+			if (remaining <= Duration.zero)
+				break;
+
+			m_topologyChanged.wait(remaining, topologyVersion);
+		}
+
+		throw new MongoDriverException(toPrimary
 			? "No primary server available for write"
 			: "No suitable server found for read preference");
+	}
 
-		return selected.get;
+	/// Asks every monitor to run a check now (subject to its minHeartbeat floor).
+	private void requestImmediateChecks()
+	{
+		foreach (monitor; m_monitors.byValue)
+			monitor.requestCheck();
+	}
+
+	/// On a stale-topology command error, marks the host failed and re-checks it.
+	private void handleStaleCommandError(MongoHost host, int code) @safe nothrow
+	{
+		if (!isStaleTopologyError(code))
+			return;
+
+		try {
+			m_topology.publish(applyFailed(m_topology.load(), host));
+			m_topologyChanged.emit();
+
+			if (auto monitor = hostKey(host) in m_monitors)
+				monitor.requestCheck();
+		} catch (Exception) {}
 	}
 
 	/// Locks a pooled connection for a specific host (e.g. a cursor re-locking its pinned host).
@@ -259,7 +297,7 @@ final class MongoClient {
 
 	private ConnectionPool!MongoConnection poolFor(MongoHost host)
 	{
-		auto key = host.name ~ ":" ~ host.port.to!string;
+		auto key = hostKey(host);
 
 		if (auto existing = key in m_connectionPools)
 			return *existing;
@@ -276,6 +314,7 @@ final class MongoClient {
 	private MongoConnection createConnectionToHost(MongoHost host) @safe
 	{
 		auto ret = new MongoConnection(m_settings);
+		ret.onCommandError(&handleStaleCommandError);
 
 		try {
 			ret.connectToHost(host);
@@ -378,8 +417,6 @@ final class MongoClient {
 		if (key in m_monitors)
 			return;
 
-		// Transitional SDAM defaults (heartbeat, min-heartbeat); PR5 replaces
-		// these literals with the parsed MongoClientSettings fields.
 		auto monitor = new ServerMonitor(host, m_prober, &onMonitorResult,
 			m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
 		m_monitors[key] = monitor;
@@ -398,13 +435,7 @@ final class MongoClient {
 		m_monitorHosts.remove(key);
 	}
 
-	/**
-	 * Called by each ServerMonitor with its latest probe result. Publishes the
-	 * new immutable topology snapshot, wakes anyone waiting on a topology change,
-	 * then reconciles the monitor set against the (possibly newly-discovered or
-	 * removed) members. Runs synchronously within the event loop, so the snapshot
-	 * swap and monitor-set mutations are atomic with respect to other fibers.
-	 */
+	/// Publishes a monitor's probe result as a new snapshot and reconciles the monitor set.
 	private void onMonitorResult(MongoHost host, Nullable!ServerDescription desc, Duration rtt)
 	{
 		auto current = m_topology.load();

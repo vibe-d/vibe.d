@@ -149,6 +149,8 @@ final class MongoConnection {
 		StreamOutputRange!(InterfaceProxy!Stream) m_outRange;
 		ServerDescription m_description;
 		MongoHost m_connectedHost;
+		/// Hook invoked with (host, error code) when a command fails.
+		void delegate(MongoHost host, int code) @safe nothrow m_onCommandError;
 		/// Flag to prevent recursive connections when server closes connection while connecting
 		bool m_allowReconnect;
 		bool m_isAuthenticating;
@@ -168,6 +170,12 @@ final class MongoConnection {
 	this(MongoClientSettings cfg)
 	{
 		m_settings = cfg;
+	}
+
+	/// Sets the hook called with (host, error code) on command failure.
+	package void onCommandError(void delegate(MongoHost host, int code) @safe nothrow handler)
+	{
+		m_onCommandError = handler;
 	}
 
 	void connectToHost(MongoHost host, bool doAuthenticate = true) {
@@ -574,8 +582,13 @@ final class MongoConnection {
 		}
 
 		if (testOk && ret["ok"].get!double != 1.0)
+		{
+			if (m_onCommandError !is null)
+				m_onCommandError(m_connectedHost, ret["code"].opt!int(0));
+
 			throw new CommandFailException(formatErrorInfo("command failed: "
 				~ ret["errmsg"].opt!string("(no message)")));
+		}
 
 		static if (is(T == Bson)) return ret;
 		else {

@@ -466,10 +466,7 @@ struct ServerRecord
 /// Default heartbeat frequency (10 seconds) used for staleness calculation.
 private enum long HEARTBEAT_FREQUENCY_USECS = 10_000_000;
 
-/// Returns a new topology with `desc` applied for `host`, leaving `current`
-/// unchanged. The servers slice is duplicated first, so previously-published
-/// snapshots are never mutated — this is what lets a topology snapshot be shared
-/// (and atomically swapped) without locking.
+/// Returns a new topology with `desc` applied for `host`, leaving `current` unchanged.
 TopologyDescription applyDescription(TopologyDescription current, MongoHost host, ServerDescription desc)
 {
 	current.servers = current.servers.dup;
@@ -485,11 +482,7 @@ TopologyDescription applyFailed(TopologyDescription current, MongoHost host)
 	return current;
 }
 
-/// Holds the current topology behind an atomically-swapped pointer, so readers
-/// always observe a complete, consistent snapshot without locking. Writers
-/// publish a heap copy and atomically replace the pointer; published snapshots
-/// are never mutated (see `applyDescription`/`applyFailed`). This is the shared,
-/// thread-safe topology required by #2846.
+/// Holds the current topology behind an atomically-swapped pointer for lock-free reads.
 struct AtomicTopology
 {
 	private shared(TopologyDescription)* m_current;
@@ -629,12 +622,7 @@ Nullable!MongoHost writeTarget(ref const TopologyDescription topology, long loca
 	return selectServer(topology, ReadPreference.primary, localThresholdMS);
 }
 
-/**
- * Picks the host for an operation: the write target (primary) when `toPrimary`,
- * otherwise the read-preference target. Pure selection over a topology snapshot;
- * returns null when no suitable server is available so callers can either fail or
- * wait for the topology to change.
- */
+/// Picks the primary when `toPrimary`, else the read-preference target; null if none.
 Nullable!MongoHost selectTarget(ref const TopologyDescription topology, bool toPrimary,
 	ReadPreference pref, long localThresholdMS = 15, long maxStalenessSeconds = -1)
 {

@@ -1,11 +1,6 @@
 /**
 	Per-server SDAM health monitoring.
 
-	Implements the heartbeat throttling and server health checks defined by the
-	MongoDB Server Discovery and Monitoring specification.
-
-	See_Also: $(LINK https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.md)
-
 	Copyright: © 2026 Szabo Bogdan
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Szabo Bogdan
@@ -70,14 +65,7 @@ final class ServerMonitor {
 		m_loop = runTask(&supervise);
 	}
 
-	/**
-	 * Supervises `runLoop`, restarting it after a logged failure.
-	 *
-	 * Stops when `runLoop` exits cleanly (returns `true`) or when `stop()` was
-	 * requested. After a crash, waits one `m_heartbeat` before restarting so a
-	 * persistently failing server is retried at the regular heartbeat cadence
-	 * rather than in a tight spin loop.
-	 */
+	/// Restarts `runLoop` after a crash, waiting one heartbeat between attempts.
 	private void supervise() nothrow
 	{
 		while (m_running)
@@ -98,21 +86,14 @@ final class ServerMonitor {
 		m_running = false;
 	}
 
-	/// Requests an immediate check (e.g. after an operation hit a stale/failed
-	/// server), throttled so it cannot fire more often than minHeartbeat.
+	/// Requests an immediate check, throttled by minHeartbeat.
 	void requestCheck() @safe
 	{
 		if (shouldCheckNow(m_lastCheck, MonoTime.currTime, m_minHeartbeat))
 			m_wake.emit();
 	}
 
-	/**
-	 * Runs the heartbeat loop until `stop()` is requested.
-	 *
-	 * Returns: `true` when the loop exits cleanly because `m_running` became
-	 *   false; `false` when an exception escaped the loop body, in which case
-	 *   the failure is logged before returning.
-	 */
+	/// Runs the heartbeat loop until `stop()`; returns false if an exception escaped.
 	private bool runLoop() nothrow
 	{
 		try
@@ -140,10 +121,7 @@ bool shouldCheckNow(MonoTime last, MonoTime now, Duration minInterval) @safe pur
 	return now - last >= minInterval;
 }
 
-/// Whether a server error code means the topology is stale — the targeted server
-/// is no longer a usable primary/secondary (stepped down, recovering, shutting
-/// down). Such an error should mark the server failed and trigger an immediate
-/// re-check, per the SDAM "not master or recovering" error set.
+/// Whether a server error code is in the SDAM "not master or recovering" set.
 bool isStaleTopologyError(int code) @safe pure nothrow @nogc
 {
 	switch (code)
@@ -168,9 +146,7 @@ struct MonitorReconcile
 	MongoHost[] toStop;
 }
 
-/// Diffs the currently-monitored hosts against the desired (current topology)
-/// hosts: `toStart` are newly-discovered hosts, `toStop` are removed ones. Hosts
-/// present in both keep their running monitor.
+/// Set-diffs monitored hosts against desired hosts into hosts to start and to stop.
 MonitorReconcile reconcileMonitors(MongoHost[] current, MongoHost[] desired) @safe pure nothrow
 {
 	import std.algorithm : canFind, filter;
