@@ -182,9 +182,29 @@ int main(string[] args)
 		FindOptions findOpts;
 		findOpts.readPreference = ReadPreference.secondary;
 		findOpts.batchSize = 100;
-		auto received = coll.find(Bson.emptyObject, findOpts).array;
-		enforce(received.length == total,
-			"expected " ~ total.to!string ~ " docs from secondary, got " ~ received.length.to!string);
+
+		// w:majority only guarantees a MAJORITY holds the write; the secondary this
+		// read lands on may not be in that majority yet and can briefly lag behind.
+		// Poll the secondary until replication catches up rather than asserting on
+		// the first (possibly stale) read. The budget is generous for a slow CI
+		// runner but stays well under the 30s global test timeout.
+		size_t received;
+		auto deadline = MonoTime.currTime + 15.seconds;
+		for (auto waited = false; ; waited = true)
+		{
+			received = coll.find(Bson.emptyObject, findOpts).array.length;
+			if (received == total)
+			{
+				if (waited)
+					logInfo("Secondary caught up to %s docs after replication lag", total);
+				break;
+			}
+			if (MonoTime.currTime >= deadline)
+				break;
+			sleep(100.msecs);
+		}
+		enforce(received == total,
+			"expected " ~ total.to!string ~ " docs from secondary, got " ~ received.to!string);
 
 		coll.drop();
 		logInfo("Per-query readPreference=secondary served %s docs from a secondary", total);

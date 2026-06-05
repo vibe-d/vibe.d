@@ -206,8 +206,8 @@ final class MonitorRegistry {
 	{
 		foreach (monitor; m_monitors.byValue)
 			monitor.stop();
-		m_monitors.clear();
-		m_hosts.clear();
+		m_monitors = null;
+		m_hosts = null;
 	}
 }
 
