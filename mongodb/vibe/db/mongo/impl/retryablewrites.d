@@ -8,6 +8,7 @@
 module vibe.db.mongo.impl.retryablewrites;
 
 import vibe.data.bson;
+import vibe.db.mongo.impl.serversession : applySession;
 
 @safe:
 
@@ -64,8 +65,7 @@ bool isRetryableWriteCommand(Bson command)
 /// Stamps a write command with the session id and retryable txnNumber.
 Bson applyRetryableWrite(Bson command, Bson lsid, long txnNumber)
 {
-	Bson result = command;
-	result["lsid"] = lsid;
+	Bson result = applySession(command, lsid);
 	result["txnNumber"] = Bson(txnNumber);
 	return result;
 }

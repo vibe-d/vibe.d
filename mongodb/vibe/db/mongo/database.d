@@ -235,12 +235,19 @@ struct MongoDatabase
 	private Bson runWriteWithRetry(ExceptionT)(
 		Bson cmd, string errorInfo, string errorFile, size_t errorLine, bool checked)
 	{
+		// TODO(B-sess6): lift this acquire / scope(exit)-release dance into a
+		// `withImplicitSession` scope helper, which will also host the universal
+		// implicit-session wiring below.
 		const retryable = m_client.retryWrites && isRetryableWriteCommand(cmd);
+		ServerSession session;
 		if (retryable)
 		{
-			auto session = ServerSession.create();
+			session = m_client.acquireServerSession();
 			cmd = applyRetryableWrite(cmd, session.lsid, session.nextTransactionNumber());
 		}
+		scope (exit)
+			if (retryable)
+				m_client.releaseServerSession(session);
 
 		return retryOnceOnStepDown!Bson(
 			() @safe {
@@ -280,6 +287,11 @@ struct MongoDatabase
 	}
 
 	/// Writes lock the primary; reads lock by effective preference and inject `$readPreference`.
+	// TODO(implicit-sessions): only retryable writes currently carry an lsid. Attach an
+	// implicit session here (applySession from impl.serversession) to EVERY command,
+	// reads and non-retryable writes alike, checking one out of the pool and returning it after.
+	// Cursors must reuse the same lsid across getMore (pin the session for the cursor's
+	// lifetime). This is the large piece that unblocks transactions/causal consistency.
 	private auto resolveCommandConnection(bool toPrimary, ref Bson cmd, Nullable!ReadPreference readPreference)
 	{
 		if (toPrimary)

@@ -18,6 +18,7 @@ import vibe.db.mongo.connection;
 import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.db.mongo.monitor;
+import vibe.db.mongo.impl.serversession : ServerSession, ServerSessionPool, MongoClientSession, endSessionsCommand;
 
 import core.time : Duration, seconds, msecs, MonoTime;
 import std.conv;
@@ -42,6 +43,7 @@ final class MongoClient {
 		bool m_discoveryInProgress;
 
 		MonitorRegistry m_monitors;
+		ServerSessionPool m_sessionPool;
 	}
 
 	package this(string host, ushort port)
@@ -94,6 +96,29 @@ final class MongoClient {
 	@property string[string][] readPreferenceTags()
 	{
 		return m_settings.readPreferenceTags;
+	}
+
+	/** Starts an explicit logical session.
+
+		The returned handle carries a logical session id (`lsid`) drawn from the
+		client's session pool. Call `endSession()` on it when done to return the
+		underlying server session to the pool for reuse.
+	*/
+	MongoClientSession startSession()
+	{
+		return MongoClientSession(m_sessionPool.acquire(), &releaseServerSession);
+	}
+
+	/// Checks out a server session for an implicit session on a single operation.
+	package ServerSession acquireServerSession()
+	{
+		return m_sessionPool.acquire();
+	}
+
+	/// Returns a server session to the pool once its operation (or explicit session) ends.
+	package void releaseServerSession(ServerSession session)
+	{
+		m_sessionPool.release(session);
 	}
 
 	/// Whether retryable writes are enabled for this client.
@@ -427,7 +452,21 @@ final class MongoClient {
 	/// Stops all background server monitors. Call before discarding the client.
 	void stopMonitoring()
 	{
+		endPooledSessions();
 		m_monitors.stopAll();
+	}
+
+	/// Asks the server, on a best-effort basis, to free this client's pooled logical sessions.
+	private void endPooledSessions()
+	{
+		auto lsids = m_sessionPool.takeAllLsids();
+		if (!lsids.length)
+			return;
+
+		try
+			getDatabase("admin").runCommandUnchecked(endSessionsCommand(lsids));
+		catch (Exception e)
+			logDiagnostic("endSessions on shutdown failed: %s", e.msg);
 	}
 
 	/// Number of background server monitors currently running.
