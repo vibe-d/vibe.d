@@ -128,6 +128,61 @@ class MongoAuthException : MongoException
 }
 
 /**
+ * Thrown when the contacted mongo node is no longer primary (e.g. step down).
+ *
+ * Carries the server-reported error code (e.g. 10107).
+ */
+class MongoStepDownException : MongoDriverException
+{
+@safe:
+
+	int code;
+
+	this(string message, int code, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+		this.code = code;
+	}
+}
+
+unittest
+{
+	auto stepDown = new MongoStepDownException("not primary", 10107);
+	assert(stepDown.code == 10107, "expected stored code 10107");
+	assert(cast(MongoDriverException)stepDown !is null,
+		"MongoStepDownException must be catchable as MongoDriverException");
+}
+
+/// Builds the exception for a non-ok command response: a step-down error carrying the
+/// server code for stale-topology codes, otherwise the generic `FallbackException`.
+Exception commandFailureException(FallbackException = MongoDriverException)(string message, int code) @safe
+{
+	import vibe.db.mongo.monitor : isStaleTopologyError;
+
+	if (isStaleTopologyError(code))
+		return new MongoStepDownException(message, code);
+	return new FallbackException(message);
+}
+
+unittest
+{
+	auto e = commandFailureException("primary stepped down", 10107);
+	assert(cast(MongoStepDownException) e !is null,
+		"stale code 10107 must yield a MongoStepDownException");
+	assert((cast(MongoStepDownException) e).code == 10107,
+		"step-down exception must carry the server code 10107");
+}
+
+unittest
+{
+	auto e = commandFailureException("duplicate key", 11000);
+	assert(cast(MongoStepDownException) e is null,
+		"a non-stale code must not be classified as a step-down");
+	assert(cast(MongoDriverException) e !is null,
+		"a non-stale command failure stays a generic MongoDriverException");
+}
+
+/**
   [internal] Provides low-level mongodb protocol access.
 
   It is not intended for direct usage. Please use vibe.db.mongo.db and vibe.db.mongo.collection modules for your code.
@@ -583,11 +638,13 @@ final class MongoConnection {
 
 		if (testOk && ret["ok"].get!double != 1.0)
 		{
+			auto code = ret["code"].opt!int(0);
 			if (m_onCommandError !is null)
-				m_onCommandError(m_connectedHost, ret["code"].opt!int(0));
+				m_onCommandError(m_connectedHost, code);
 
-			throw new CommandFailException(formatErrorInfo("command failed: "
-				~ ret["errmsg"].opt!string("(no message)")));
+			throw commandFailureException!CommandFailException(
+				formatErrorInfo("command failed: " ~ ret["errmsg"].opt!string("(no message)")),
+				code);
 		}
 
 		static if (is(T == Bson)) return ret;

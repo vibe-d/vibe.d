@@ -16,6 +16,7 @@ int main(string[] args)
 	bool expectSecondary;
 	bool expectWriteToPrimary;
 	bool expectReadFromSecondary;
+	bool expectStepDownRetry;
 	string replicaSet;
 	string readPrefStr;
 	MongoHost[] hosts;
@@ -49,6 +50,8 @@ int main(string[] args)
 			expectWriteToPrimary = true;
 		else if (arg == "--expectReadFromSecondary")
 			expectReadFromSecondary = true;
+		else if (arg == "--expectStepDownRetry")
+			expectStepDownRetry = true;
 	}
 
 	auto settings = new MongoClientSettings;
@@ -175,6 +178,45 @@ int main(string[] args)
 
 		coll.drop();
 		logInfo("Per-query readPreference=secondary served %s docs from a secondary", total);
+		return 0;
+	}
+
+	if (expectStepDownRetry)
+	{
+		// When the primary steps down mid-operation, the driver must catch the
+		// NotWritablePrimary error, refresh the topology, find the newly elected
+		// primary, and retry the write once so it lands exactly once.
+		auto coll = client.getCollection("rstest.stepdown");
+		try coll.drop(); catch (Exception) {}
+
+		// Warm the topology and create the collection on the current primary.
+		auto seedID = BsonObjectID.generate;
+		coll.insertOne(Bson(["_id": Bson(seedID), "seq": Bson(0)]));
+
+		// Force the current primary to step down for 60s. The command closes our
+		// connection to it, so the error it returns is expected and ignored.
+		logInfo("Forcing the current primary to step down...");
+		try
+			client.getDatabase("admin").runCommand(
+				Bson(["replSetStepDown": Bson(60), "force": Bson(true)]));
+		catch (Exception e)
+			logInfo("Step-down command returned (expected): %s", e.msg);
+
+		// Immediately issue a write. The first attempt hits the stepped-down node and
+		// fails with NotWritablePrimary; the driver refreshes topology, waits for the
+		// new primary, and retries the insert. A fixed _id makes a double-apply fail
+		// loudly with a duplicate-key error, so success proves exactly-once delivery.
+		auto retriedID = BsonObjectID.generate;
+		coll.insertOne(Bson(["_id": Bson(retriedID), "seq": Bson(1)]));
+		logInfo("Write after step-down succeeded — retried onto the new primary");
+
+		// Verify the retried write is present exactly once on the new primary.
+		auto stored = coll.findOne(["_id": Bson(retriedID)]);
+		enforce(!stored.isNull, "retried write did not land on the new primary");
+		enforce(stored["seq"].get!int == 1, "retried write stored the wrong value");
+
+		coll.drop();
+		logInfo("Primary step-down retry test passed");
 		return 0;
 	}
 

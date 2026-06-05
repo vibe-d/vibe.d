@@ -180,6 +180,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "serverselectiontimeoutms": setLong(cfg.serverSelectionTimeoutMS); break;
 				case "readconcernlevel": cfg.readConcern = parseReadConcern(value); break;
 				case "safe": setBool(cfg.safe); break;
+				case "retrywrites": setBool(cfg.retryWrites); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
 				case "connecttimeoutms": setMsecs(cfg.connectTimeout); break;
@@ -462,6 +463,15 @@ unittest
 	assert(cfg.readPreference == ReadPreference.nearest);
 }
 
+/// parseMongoDBUrl parses retryWrites=false option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?retryWrites=false"));
+	assert(cfg.retryWrites == false, "retryWrites=false disables retryable writes");
+}
+
 /// parseMongoDBUrl parses localThresholdMS option
 unittest
 {
@@ -518,6 +528,13 @@ unittest
 	assert(cfg.heartbeatFrequencyMS == 10_000);
 	assert(cfg.minHeartbeatFrequencyMS == 500);
 	assert(cfg.serverSelectionTimeoutMS == 30_000);
+}
+
+/// MongoClientSettings enables retryWrites by default
+unittest
+{
+	auto cfg = new MongoClientSettings();
+	assert(cfg.retryWrites == true, "retryWrites should default to true");
 }
 
 /// parseMongoDBUrl parses readConcernLevel option
@@ -1165,6 +1182,14 @@ class MongoClientSettings
 	 * * journal is true
 	 */
 	bool safe;
+
+	/**
+	 * Enables retryable writes, retrying eligible write operations once on
+	 * transient network errors. Enabled by default for parity with the Node.js
+	 * driver; the server deduplicates the retried write using the session's
+	 * txnNumber so it is applied at most once.
+	 */
+	bool retryWrites = true;
 
 	/**
 	 * Requests acknowledgment that write operations have propagated to a

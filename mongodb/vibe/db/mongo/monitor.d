@@ -282,6 +282,19 @@ unittest
 	assert(!isStaleTopologyError(0), "no error code");
 }
 
+/// Whether a stale-topology error is retryable: only for idempotent ops or ops with session support.
+bool shouldRetryAfterStepDown(int code, bool idempotent, bool sessionSupport) @safe pure nothrow @nogc
+{
+	return isStaleTopologyError(code) && (idempotent || sessionSupport);
+}
+
+/// shouldRetryAfterStepDown retries idempotent or session-supported ops on a stale-topology error
+unittest
+{
+	assert(shouldRetryAfterStepDown(10107, true, false), "idempotent NotWritablePrimary is retryable");
+	assert(shouldRetryAfterStepDown(10107, false, true), "session-supported NotWritablePrimary is retryable");
+}
+
 /// shouldCheckNow allows a check once the minHeartbeatFrequencyMS floor has elapsed
 unittest
 {

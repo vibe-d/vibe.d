@@ -275,6 +275,14 @@ run_test 19 "Connect after full cluster restart" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0
 
 echo ""
+echo "========================================================"
+echo "  Phase 7: Primary step-down retry"
+echo "========================================================"
+
+run_test 20 "write retries onto new primary after primary step-down" \
+	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --expectStepDownRetry
+
+echo ""
 echo "============================================"
-echo "All $((19)) replica set tests passed!"
+echo "All $((20)) replica set tests passed!"
 echo "============================================"

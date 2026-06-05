@@ -90,6 +90,24 @@ final class MongoClient {
 		return m_settings.readPreference;
 	}
 
+	/// Whether retryable writes are enabled for this client.
+	@property bool retryWrites() const
+	{
+		return m_settings.retryWrites;
+	}
+
+	/// Re-discovers the topology after a primary step-down so the next write
+	/// finds the newly elected primary. Best-effort: if no primary has been
+	/// elected yet, the following primary re-lock blocks until one appears, so
+	/// a failed re-discovery here must not abort the retry.
+	package void refreshTopology()
+	{
+		try
+			discoverTopology();
+		catch (Exception e)
+			logDiagnostic("Topology refresh after step-down found no primary yet: %s", e.msg);
+	}
+
 	/// Returns the read concern configured for this client.
 	ReadConcern readConcern() const
 	{
@@ -410,4 +428,85 @@ final class MongoClient {
 	{
 		return m_monitors.length;
 	}
+}
+
+/// retries once after refreshing topology when the first call steps down
+T retryOnceOnStepDown(T)(scope T delegate() @safe op, bool idempotent, bool sessionSupport, scope void delegate() @safe refresh) @safe
+{
+	try
+		return op();
+	catch (MongoStepDownException e)
+	{
+		if (!shouldRetryAfterStepDown(e.code, idempotent, sessionSupport))
+			throw e;
+		refresh();
+		return op();
+	}
+}
+
+/// retries once after refreshing topology when the first call steps down
+unittest {
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		if (opCalls == 1)
+			throw new MongoStepDownException("primary stepped down", 10107);
+		return 42;
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	auto result = retryOnceOnStepDown!int(op, true, false, refresh);
+
+	assert(result == 42, "expected the second op call's result 42");
+	assert(opCalls == 2, "expected op to be called twice");
+	assert(refreshCalls == 1, "expected refresh to be called once");
+}
+
+/// rethrows without refresh or retry when the op is not retryable
+unittest {
+	import std.exception : assertThrown;
+
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		throw new MongoStepDownException("primary stepped down", 10107);
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	assertThrown!MongoStepDownException(retryOnceOnStepDown!int(op, false, false, refresh));
+
+	assert(opCalls == 1, "expected op to be called once with no retry");
+	assert(refreshCalls == 0, "expected refresh to never be called");
+}
+
+/// retries at most once so a second step-down propagates instead of looping
+unittest {
+	import std.exception : assertThrown;
+
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		throw new MongoStepDownException("primary stepped down again", 10107);
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	assertThrown!MongoStepDownException(retryOnceOnStepDown!int(op, true, false, refresh));
+
+	assert(opCalls == 2, "expected exactly one retry, not an infinite loop");
+	assert(refreshCalls == 1, "expected topology to be refreshed exactly once");
 }

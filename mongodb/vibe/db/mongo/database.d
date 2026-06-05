@@ -13,6 +13,8 @@ module vibe.db.mongo.database;
 import vibe.db.mongo.client;
 import vibe.db.mongo.collection;
 import vibe.db.mongo.settings : ReadConcern, ReadPreference, readPreferenceBson;
+import vibe.db.mongo.impl.retryablewrites : isRetryableWriteCommand, applyRetryableWrite;
+import vibe.db.mongo.impl.serversession : ServerSession;
 import vibe.data.bson;
 
 import core.time;
@@ -197,7 +199,12 @@ struct MongoDatabase
 		size_t errorLine = __LINE__
 	)
 	{
-		return runCommandChecked!(T, ExceptionT)(command_and_options, errorInfo, errorFile, errorLine, true);
+		Bson cmd;
+		static if (is(T : Bson))
+			cmd = command_and_options;
+		else
+			cmd = command_and_options.serializeToBson;
+		return runWriteWithRetry!ExceptionT(cmd, errorInfo, errorFile, errorLine, true);
 	}
 
 	/// ditto
@@ -228,7 +235,39 @@ struct MongoDatabase
 		size_t errorLine = __LINE__
 	)
 	{
-		return runCommandUnchecked!(T, ExceptionT)(command_and_options, errorInfo, errorFile, errorLine, true);
+		Bson cmd;
+		static if (is(T : Bson))
+			cmd = command_and_options;
+		else
+			cmd = command_and_options.serializeToBson;
+		return runWriteWithRetry!ExceptionT(cmd, errorInfo, errorFile, errorLine, false);
+	}
+
+	/// Runs a write command on the primary, retrying once after a primary
+	/// step-down. Retryable writes (per `isRetryableWriteCommand`, when
+	/// `retryWrites` is enabled) carry an `lsid`/`txnNumber` so the server
+	/// deduplicates the retried write; the retry re-discovers the topology and
+	/// re-locks the freshly elected primary before resending the same command.
+	private Bson runWriteWithRetry(ExceptionT)(
+		Bson cmd, string errorInfo, string errorFile, size_t errorLine, bool checked)
+	{
+		const retryable = m_client.retryWrites && isRetryableWriteCommand(cmd);
+		if (retryable)
+		{
+			auto session = ServerSession.create();
+			cmd = applyRetryableWrite(cmd, session.lsid, session.nextTransactionNumber());
+		}
+
+		return retryOnceOnStepDown!Bson(
+			() @safe {
+				auto conn = m_client.lockConnectionToPrimary();
+				return checked
+					? conn.runCommand!(Bson, ExceptionT)(m_name, cmd, errorInfo, errorFile, errorLine)
+					: conn.runCommandUnchecked!(Bson, ExceptionT)(m_name, cmd, errorInfo, errorFile, errorLine);
+			},
+			false,
+			retryable,
+			() @safe { m_client.refreshTopology(); });
 	}
 
 	/// ditto
