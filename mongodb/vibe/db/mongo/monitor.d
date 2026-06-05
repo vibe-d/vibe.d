@@ -277,6 +277,8 @@ unittest
 	assert(isStaleTopologyError(11602), "InterruptedDueToReplStateChange");
 	assert(isStaleTopologyError(189), "PrimarySteppedDown");
 	assert(isStaleTopologyError(91), "ShutdownInProgress");
+	assert(isStaleTopologyError(13436), "NotPrimaryOrSecondary");
+	assert(isStaleTopologyError(11600), "InterruptedAtShutdown");
 
 	assert(!isStaleTopologyError(11000), "duplicate key is not a topology error");
 	assert(!isStaleTopologyError(0), "no error code");

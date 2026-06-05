@@ -122,9 +122,9 @@ for attempt in $(seq 1 5); do
 		rs.initiate({
 			_id: 'rs0',
 			members: [
-				{_id: 0, host: '127.0.0.1:$PORT1'},
-				{_id: 1, host: '127.0.0.1:$PORT2'},
-				{_id: 2, host: '127.0.0.1:$PORT3'}
+				{_id: 0, host: '127.0.0.1:$PORT1', tags: {dc: 'east'}},
+				{_id: 1, host: '127.0.0.1:$PORT2', tags: {dc: 'east'}},
+				{_id: 2, host: '127.0.0.1:$PORT3', tags: {dc: 'west'}}
 			]
 		})
 	" 2>/dev/null; then
@@ -283,6 +283,14 @@ run_test 20 "write retries onto new primary after primary step-down" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --expectStepDownRetry
 
 echo ""
+echo "========================================================"
+echo "  Phase 8: Read preference tag targeting"
+echo "========================================================"
+
+run_test 21 "readPreferenceTags=dc:east routes a secondary read to a dc:east member" \
+	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --expectTagTargeting
+
+echo ""
 echo "============================================"
-echo "All $((20)) replica set tests passed!"
+echo "All $((21)) replica set tests passed!"
 echo "============================================"

@@ -17,6 +17,7 @@ int main(string[] args)
 	bool expectWriteToPrimary;
 	bool expectReadFromSecondary;
 	bool expectStepDownRetry;
+	bool expectTagTargeting;
 	string replicaSet;
 	string readPrefStr;
 	MongoHost[] hosts;
@@ -52,6 +53,8 @@ int main(string[] args)
 			expectReadFromSecondary = true;
 		else if (arg == "--expectStepDownRetry")
 			expectStepDownRetry = true;
+		else if (arg == "--expectTagTargeting")
+			expectTagTargeting = true;
 	}
 
 	auto settings = new MongoClientSettings;
@@ -72,6 +75,13 @@ int main(string[] args)
 			case "nearest": settings.readPreference = ReadPreference.nearest; break;
 			default: logError("Unknown readPreference: %s", readPrefStr); return 1;
 		}
+	}
+
+	if (expectTagTargeting)
+	{
+		// Target the dc:east members. Secondary reads must land on a dc:east secondary.
+		settings.readPreference = ReadPreference.secondary;
+		settings.readPreferenceTags = [["dc": "east"]];
 	}
 
 	MongoClient client;
@@ -178,6 +188,27 @@ int main(string[] args)
 
 		coll.drop();
 		logInfo("Per-query readPreference=secondary served %s docs from a secondary", total);
+		return 0;
+	}
+
+	if (expectTagTargeting)
+	{
+		// A secondary read with readPreferenceTags=dc:east must be served by a
+		// secondary whose tags include dc:east, never the dc:west member. The hello
+		// response reports the contacted member's own tags, so we can prove it.
+		foreach (attempt; 0 .. 5)
+		{
+			auto hello = client.getDatabase("admin").runCommand(Bson(["hello": Bson(1)]));
+			auto me = hello["me"].opt!string("?");
+			enforce(hello["secondary"].get!bool,
+				"tag-targeted read must land on a secondary, got primary " ~ me);
+			enforce(hello["tags"]["dc"].get!string == "east",
+				"readPreferenceTags=dc:east must route to a dc:east member, got " ~ me
+				~ " tagged " ~ hello["tags"].toString());
+			logInfo("Tag-targeted secondary read served by dc:east member %s", me);
+		}
+
+		logInfo("readPreferenceTags=dc:east correctly targeted dc:east secondaries");
 		return 0;
 	}
 

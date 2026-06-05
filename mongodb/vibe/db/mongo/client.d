@@ -90,6 +90,12 @@ final class MongoClient {
 		return m_settings.readPreference;
 	}
 
+	/// Returns the ordered read-preference tag sets configured for this client.
+	@property string[string][] readPreferenceTags()
+	{
+		return m_settings.readPreferenceTags;
+	}
+
 	/// Whether retryable writes are enabled for this client.
 	@property bool retryWrites() const
 	{
@@ -254,7 +260,8 @@ final class MongoClient {
 
 			auto topology = m_topology.load();
 			auto selected = selectTarget(topology, toPrimary, pref,
-				m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+				m_settings.localThresholdMS, m_settings.maxStalenessSeconds,
+				m_settings.readPreferenceTags);
 			if (!selected.isNull)
 				return selected.get;
 

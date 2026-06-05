@@ -173,6 +173,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "appname": cfg.appName = value; break;
 				case "replicaset": cfg.replicaSet = value; break;
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
+				case "readpreferencetags": cfg.readPreferenceTags ~= parseTagSet(value); break;
 				case "localthresholdms": setLong(cfg.localThresholdMS); break;
 				case "maxstalenessseconds": setLong(cfg.maxStalenessSeconds); break;
 				case "heartbeatfrequencyms": setLong(cfg.heartbeatFrequencyMS); break;
@@ -461,6 +462,46 @@ unittest
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0&readPreference=nearest"));
 	assert(cfg.replicaSet == "rs0");
 	assert(cfg.readPreference == ReadPreference.nearest);
+}
+
+/// parseMongoDBUrl parses a single readPreferenceTags set
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreferenceTags=dc:east"));
+	string[string][] expected = [["dc": "east"]];
+	assert(cfg.readPreferenceTags == expected, "readPreferenceTags=dc:east yields one tag set [\"dc\": \"east\"]");
+}
+
+/// parseMongoDBUrl parses a multi-pair readPreferenceTags set
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreferenceTags=dc:east,rack:r1"));
+	string[string][] expected = [["dc": "east", "rack": "r1"]];
+	assert(cfg.readPreferenceTags == expected, "comma-separated pairs form one tag set");
+}
+
+/// parseMongoDBUrl preserves the order of multiple readPreferenceTags occurrences
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreferenceTags=dc:east&readPreferenceTags=dc:west"));
+	string[string][] expected = [["dc": "east"], ["dc": "west"]];
+	assert(cfg.readPreferenceTags == expected, "repeated readPreferenceTags form an ordered list");
+}
+
+/// parseMongoDBUrl parses an empty readPreferenceTags as the catch-all tag set
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreferenceTags="));
+	string[string][] expected = [string[string].init];
+	assert(cfg.readPreferenceTags == expected, "empty readPreferenceTags is the catch-all tag set {}");
 }
 
 /// parseMongoDBUrl parses retryWrites=false option
@@ -993,10 +1034,27 @@ enum ReadPreference
 /** Builds the `$readPreference` command field. Enum names match the wire mode
 	strings. `primary` must be omitted by drivers, so passing it is a programming error.
 */
-Bson readPreferenceBson(ReadPreference pref)
+Bson readPreferenceBson(ReadPreference pref, string[string][] tagSets = null)
 @safe {
 	assert(pref != ReadPreference.primary, "primary read preference must not be sent on the wire");
-	return Bson(["mode": Bson(pref.to!string)]);
+	auto result = Bson(["mode": Bson(pref.to!string)]);
+	if (tagSets.length) {
+		Bson[] tags;
+		foreach (tagSet; tagSets)
+			tags ~= tagSetToBson(tagSet);
+		result["tags"] = Bson(tags);
+	}
+	return result;
+}
+
+/// Converts one read-preference tag set into a wire Bson document. An empty
+/// tag set becomes `{}`, which the server treats as the catch-all.
+private Bson tagSetToBson(string[string] tagSet)
+@safe {
+	Bson[string] doc;
+	foreach (key, value; tagSet)
+		doc[key] = Bson(value);
+	return Bson(doc);
 }
 
 unittest {
@@ -1004,6 +1062,28 @@ unittest {
 	assert(readPreferenceBson(ReadPreference.primaryPreferred) == Bson(["mode": Bson("primaryPreferred")]));
 	assert(readPreferenceBson(ReadPreference.secondaryPreferred) == Bson(["mode": Bson("secondaryPreferred")]));
 	assert(readPreferenceBson(ReadPreference.nearest) == Bson(["mode": Bson("nearest")]));
+}
+
+/// emits an ordered tags array alongside the mode for a tag-targeted read
+unittest {
+	assert(readPreferenceBson(ReadPreference.secondary, [["dc": "east"]])
+		== Bson(["mode": Bson("secondary"), "tags": Bson([Bson(["dc": Bson("east")])])]),
+		"secondary read preference with a tag set emits mode + tags array");
+}
+
+/// preserves the order of multiple tag sets in the wire tags array
+unittest {
+	assert(readPreferenceBson(ReadPreference.nearest, [["dc": "east"], ["dc": "west"]])
+		== Bson(["mode": Bson("nearest"),
+			"tags": Bson([Bson(["dc": Bson("east")]), Bson(["dc": Bson("west")])])]),
+		"the tags array keeps the tag-set order");
+}
+
+/// emits the catch-all empty tag set as an empty document in the tags array
+unittest {
+	assert(readPreferenceBson(ReadPreference.secondary, [string[string].init])
+		== Bson(["mode": Bson("secondary"), "tags": Bson([Bson.emptyObject])]),
+		"an empty tag set is still emitted as {} so the server treats it as catch-all");
 }
 
 private ReadConcern parseReadConcern(string str)
@@ -1028,6 +1108,25 @@ private ReadPreference parseReadPreference(string str)
 		case "nearest": return ReadPreference.nearest;
 		default: throw new Exception("Read preference \"" ~ str ~ "\" not supported");
 	}
+}
+
+/// Parses one comma-separated `key:value` read-preference tag set. An empty
+/// string yields the catch-all (empty) tag set.
+private string[string] parseTagSet(string value)
+@safe {
+	import std.algorithm : findSplit, splitter;
+
+	string[string] tagSet;
+	foreach (pair; value.splitter(",")) {
+		auto keyValue = pair.findSplit(":");
+		tagSet[keyValue[0]] = keyValue[2];
+	}
+	return tagSet;
+}
+
+/// parseTagSet splits comma-separated key:value pairs into one tag set
+@safe unittest {
+	assert(parseTagSet("dc:east,rack:r1") == ["dc": "east", "rack": "r1"]);
 }
 
 /**
@@ -1138,6 +1237,12 @@ class MongoClientSettings
 	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/core/read-preference/)
 	 */
 	ReadPreference readPreference;
+
+	/**
+	 * Ordered list of read-preference tag sets parsed from the `readPreferenceTags`
+	 * URI options. Each occurrence appends one tag set, preserving order.
+	 */
+	string[string][] readPreferenceTags;
 
 	/**
 	 * Upper bound on the acceptable latency window for nearest server selection.

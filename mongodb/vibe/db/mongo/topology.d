@@ -333,19 +333,22 @@ struct TopologyDescription
 		return Nullable!MongoHost.init;
 	}
 
-	Nullable!MongoHost randomSecondaryHost(long maxStalenessSeconds = -1) const
+	Nullable!MongoHost randomSecondaryHost(long maxStalenessSeconds = -1, string[string][] tagSets = null) const
 	{
-		auto hosts = secondaryHosts(maxStalenessSeconds);
+		auto hosts = secondaryHosts(maxStalenessSeconds, tagSets);
 		if (!hosts.length)
 			return Nullable!MongoHost.init;
 
 		return Nullable!MongoHost(hosts[uniform(0, hosts.length)]);
 	}
 
-	MongoHost[] secondaryHosts(long maxStalenessSeconds = -1) const
+	MongoHost[] secondaryHosts(long maxStalenessSeconds = -1, string[string][] tagSets = null) const
 	{
-		MongoHost[] result;
-		foreach (ref s; servers)
+		import std.algorithm : map;
+		import std.array : array;
+
+		size_t[] eligible;
+		foreach (i, ref s; servers)
 		{
 			if (!s.description.isSecondaryNode)
 				continue;
@@ -353,15 +356,37 @@ struct TopologyDescription
 			if (maxStalenessSeconds >= 0 && isStaleSecondary(s.description, maxStalenessSeconds))
 				continue;
 
-			result ~= s.host;
+			eligible ~= i;
 		}
-		return result;
+
+		return selectIndicesByTagSets(eligible, tagSets).map!(i => servers[i].host).array.dup;
 	}
 
-	Nullable!MongoHost randomHostWithinLatencyWindow(long localThresholdMS, long maxStalenessSeconds = -1) const
+	private size_t[] selectIndicesByTagSets(size_t[] indices, string[string][] tagSets) const
 	{
-		double minRTT = double.max;
-		foreach (ref s; servers)
+		import std.algorithm : filter;
+		import std.array : array;
+
+		if (!tagSets.length)
+			return indices;
+
+		foreach (tagSet; tagSets)
+		{
+			auto matched = indices
+				.filter!(i => serverMatchesTagSet(servers[i].description.tags, tagSet))
+				.array;
+			if (matched.length)
+				return matched;
+		}
+
+		return null;
+	}
+
+	Nullable!MongoHost randomHostWithinLatencyWindow(long localThresholdMS,
+		long maxStalenessSeconds = -1, string[string][] tagSets = null) const
+	{
+		size_t[] eligible;
+		foreach (i, ref s; servers)
 		{
 			if (!s.description.isPrimary && !s.description.isSecondaryNode)
 				continue;
@@ -370,33 +395,26 @@ struct TopologyDescription
 				&& isStaleSecondary(s.description, maxStalenessSeconds))
 				continue;
 
-			if (s.description.roundTripTime < minRTT)
-				minRTT = s.description.roundTripTime;
+			eligible ~= i;
 		}
 
-		if (minRTT == double.max)
-			return Nullable!MongoHost.init;
-
-		double threshold = minRTT + localThresholdMS / 1_000.0;
-		MongoHost[] eligible;
-		foreach (ref s; servers)
-		{
-			if (!s.description.isPrimary && !s.description.isSecondaryNode)
-				continue;
-
-			if (s.description.isSecondaryNode && maxStalenessSeconds >= 0
-				&& isStaleSecondary(s.description, maxStalenessSeconds))
-				continue;
-
-			if (s.description.roundTripTime <= threshold)
-				eligible ~= s.host;
-		}
-
+		eligible = selectIndicesByTagSets(eligible, tagSets);
 		if (!eligible.length)
 			return Nullable!MongoHost.init;
 
+		double minRTT = double.max;
+		foreach (i; eligible)
+			if (servers[i].description.roundTripTime < minRTT)
+				minRTT = servers[i].description.roundTripTime;
+
+		double threshold = minRTT + localThresholdMS / 1_000.0;
+		MongoHost[] withinWindow;
+		foreach (i; eligible)
+			if (servers[i].description.roundTripTime <= threshold)
+				withinWindow ~= servers[i].host;
+
 		import std.random : uniform;
-		return Nullable!MongoHost(eligible[uniform(0, eligible.length)]);
+		return Nullable!MongoHost(withinWindow[uniform(0, withinWindow.length)]);
 	}
 
 	private bool isStaleSecondary(ref const ServerDescription desc, long maxStalenessSeconds) const
@@ -575,7 +593,7 @@ unittest
  * suitable server is available.
  */
 Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPreference pref,
-	long localThresholdMS = 15, long maxStalenessSeconds = -1)
+	long localThresholdMS = 15, long maxStalenessSeconds = -1, string[string][] tagSets = null)
 {
 	// Single topology: return the one server regardless of read preference
 	if (topology.type == TopologyType.single && topology.servers.length > 0)
@@ -598,16 +616,16 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 		return topology.randomSecondaryHost(maxStalenessSeconds);
 
 	case ReadPreference.secondary:
-		return topology.randomSecondaryHost(maxStalenessSeconds);
+		return topology.randomSecondaryHost(maxStalenessSeconds, tagSets);
 
 	case ReadPreference.secondaryPreferred:
-		auto secondary = topology.randomSecondaryHost(maxStalenessSeconds);
+		auto secondary = topology.randomSecondaryHost(maxStalenessSeconds, tagSets);
 		if (!secondary.isNull)
 			return secondary;
 		return topology.primaryHost;
 
 	case ReadPreference.nearest:
-		return topology.randomHostWithinLatencyWindow(localThresholdMS, maxStalenessSeconds);
+		return topology.randomHostWithinLatencyWindow(localThresholdMS, maxStalenessSeconds, tagSets);
 	}
 }
 
@@ -624,11 +642,12 @@ Nullable!MongoHost writeTarget(ref const TopologyDescription topology, long loca
 
 /// Picks the primary when `toPrimary`, else the read-preference target; null if none.
 Nullable!MongoHost selectTarget(ref const TopologyDescription topology, bool toPrimary,
-	ReadPreference pref, long localThresholdMS = 15, long maxStalenessSeconds = -1)
+	ReadPreference pref, long localThresholdMS = 15, long maxStalenessSeconds = -1,
+	string[string][] tagSets = null)
 {
 	return toPrimary
 		? writeTarget(topology, localThresholdMS)
-		: selectServer(topology, pref, localThresholdMS, maxStalenessSeconds);
+		: selectServer(topology, pref, localThresholdMS, maxStalenessSeconds, tagSets);
 }
 
 /// writeTarget returns the primary even when a secondary is available
@@ -2000,4 +2019,162 @@ unittest
 	}
 	assert(sawFast);
 	assert(sawSlow);
+}
+
+/// returns true when every required tag is present in the server's tags
+bool serverMatchesTagSet(const(string[string]) serverTags, string[string] required) @safe
+{
+	foreach (key, value; required)
+		if (serverTags.get(key, null) != value)
+			return false;
+	return true;
+}
+
+/// serverMatchesTagSet returns true when the server carries every required tag pair
+unittest
+{
+	string[string] serverTags = ["dc": "east"];
+	string[string] required = ["dc": "east"];
+
+	assert(serverMatchesTagSet(serverTags, required) == true,
+		"server tagged dc:east must satisfy required tag set dc:east");
+}
+
+/// serverMatchesTagSet returns false when a required tag value differs
+unittest
+{
+	assert(serverMatchesTagSet(["dc": "west"], ["dc": "east"]) == false,
+		"server in dc:west must not satisfy required tag set dc:east");
+}
+
+/// serverMatchesTagSet returns true for the empty (catch-all) tag set
+unittest
+{
+	assert(serverMatchesTagSet(["dc": "east"], null) == true,
+		"an empty required tag set matches any server");
+}
+
+version (unittest)
+{
+	/// Builds a replica set with a primary plus dc:east and dc:west secondaries,
+	/// returning the topology and the two tagged secondary host handles.
+	private struct TaggedSecondaries
+	{
+		TopologyDescription topo;
+		MongoHost secEast;
+		MongoHost secWest;
+	}
+
+	private TaggedSecondaries buildTaggedSecondaries()
+	{
+		TopologyDescription topo;
+		topo.type = TopologyType.replicaSetWithPrimary;
+
+		auto primary = MongoHost("primary", 27017);
+		ServerDescription primaryDesc;
+		primaryDesc.isWritablePrimary = true;
+		primaryDesc.setName = "rs0";
+		topo.update(primary, primaryDesc);
+
+		auto secEast = MongoHost("sec-east", 27017);
+		ServerDescription eastDesc;
+		eastDesc.secondary = true;
+		eastDesc.setName = "rs0";
+		eastDesc.tags = ["dc": "east"];
+		topo.update(secEast, eastDesc);
+
+		auto secWest = MongoHost("sec-west", 27017);
+		ServerDescription westDesc;
+		westDesc.secondary = true;
+		westDesc.setName = "rs0";
+		westDesc.tags = ["dc": "west"];
+		topo.update(secWest, westDesc);
+
+		return TaggedSecondaries(topo, secEast, secWest);
+	}
+}
+
+/// secondaryHosts with a single tag set returns only the matching secondary
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto hosts = rs.topo.secondaryHosts(-1, [["dc": "east"]]);
+	assert(hosts == [rs.secEast], "tag set dc:east must select only the matching secondary");
+}
+
+/// secondaryHosts falls through to the second tag set when the first matches nothing
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto hosts = rs.topo.secondaryHosts(-1, [["dc": "nowhere"], ["dc": "east"]]);
+	assert(hosts == [rs.secEast], "must fall through to the second tag set when the first matches nothing");
+}
+
+/// secondaryHosts stops at the first matching tag set and ignores later ones
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto hosts = rs.topo.secondaryHosts(-1, [["dc": "east"], ["dc": "west"]]);
+	assert(hosts == [rs.secEast],
+		"first matching tag set wins; later sets must not add hosts");
+
+	auto none = rs.topo.secondaryHosts(-1, [["dc": "nowhere"]]);
+	assert(none.length == 0, "no tag set matching any secondary yields no hosts");
+}
+
+/// selectServer secondary with tag set dc:east returns only the matching secondary
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto chosen = selectServer(rs.topo, ReadPreference.secondary, 15, -1, [["dc": "east"]]);
+	assert(!chosen.isNull, "tag set dc:east must select a secondary");
+	assert(chosen.get == rs.secEast, "tag set dc:east must select only the matching secondary");
+}
+
+/// selectServer secondaryPreferred with a non-matching tag set falls back to the primary
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto chosen = selectServer(rs.topo, ReadPreference.secondaryPreferred, 15, -1, [["dc": "nowhere"]]);
+	assert(!chosen.isNull, "secondaryPreferred must fall back to a server when no secondary matches");
+	assert(chosen.get == rs.topo.primaryHost.get, "secondaryPreferred with non-matching tags must fall back to the primary");
+}
+
+/// selectServer nearest with a tag set matching no member returns null
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto chosen = selectServer(rs.topo, ReadPreference.nearest, 15, -1, [["dc": "nowhere"]]);
+	assert(chosen.isNull, "nearest with a tag set matching no member must select no server");
+}
+
+/// selectTarget forwards a secondary read tag set dc:east to selectServer and returns the matching secondary
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto chosen = selectTarget(rs.topo, false, ReadPreference.secondary, 15, -1, [["dc": "east"]]);
+	assert(!chosen.isNull, "selectTarget with tag set dc:east must select a secondary");
+	assert(chosen.get == rs.secEast, "selectTarget must forward the tag set so only sec-east is chosen");
+}
+
+/// tag sets never exclude the primary: primary reads and writes ignore them
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+	auto primary = rs.topo.primaryHost.get;
+
+	auto read = selectServer(rs.topo, ReadPreference.primary, 15, -1, [["dc": "nowhere"]]);
+	assert(!read.isNull && read.get == primary,
+		"primary read preference must ignore tag sets and still pick the primary");
+
+	auto write = selectTarget(rs.topo, true, ReadPreference.primary, 15, -1, [["dc": "nowhere"]]);
+	assert(!write.isNull && write.get == primary,
+		"writes must ignore tag sets and still target the primary");
 }

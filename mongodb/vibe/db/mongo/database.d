@@ -181,11 +181,7 @@ struct MongoDatabase
 		Nullable!ReadPreference readPreference = Nullable!ReadPreference.init
 	)
 	{
-		Bson cmd;
-		static if (is(T : Bson))
-			cmd = command_and_options;
-		else
-			cmd = command_and_options.serializeToBson;
+		Bson cmd = toCommandBson(command_and_options);
 		auto conn = resolveCommandConnection(toPrimary, cmd, readPreference);
 		return conn.runCommand!(Bson, ExceptionT)(
 			m_name, cmd, errorInfo, errorFile, errorLine);
@@ -199,11 +195,7 @@ struct MongoDatabase
 		size_t errorLine = __LINE__
 	)
 	{
-		Bson cmd;
-		static if (is(T : Bson))
-			cmd = command_and_options;
-		else
-			cmd = command_and_options.serializeToBson;
+		Bson cmd = toCommandBson(command_and_options);
 		return runWriteWithRetry!ExceptionT(cmd, errorInfo, errorFile, errorLine, true);
 	}
 
@@ -217,11 +209,7 @@ struct MongoDatabase
 		Nullable!ReadPreference readPreference = Nullable!ReadPreference.init
 	)
 	{
-		Bson cmd;
-		static if (is(T : Bson))
-			cmd = command_and_options;
-		else
-			cmd = command_and_options.serializeToBson;
+		Bson cmd = toCommandBson(command_and_options);
 		auto conn = resolveCommandConnection(toPrimary, cmd, readPreference);
 		return conn.runCommandUnchecked!(Bson, ExceptionT)(
 			m_name, cmd, errorInfo, errorFile, errorLine);
@@ -235,11 +223,7 @@ struct MongoDatabase
 		size_t errorLine = __LINE__
 	)
 	{
-		Bson cmd;
-		static if (is(T : Bson))
-			cmd = command_and_options;
-		else
-			cmd = command_and_options.serializeToBson;
+		Bson cmd = toCommandBson(command_and_options);
 		return runWriteWithRetry!ExceptionT(cmd, errorInfo, errorFile, errorLine, false);
 	}
 
@@ -275,18 +259,24 @@ struct MongoDatabase
 		Duration getMoreMaxTime = Duration.max,
 		Nullable!ReadPreference readPreference = Nullable!ReadPreference.init)
 	{
-		Bson cmd;
-		static if (is(T : Bson))
-			cmd = command_and_options;
-		else
-			cmd = command_and_options.serializeToBson;
+		Bson cmd = toCommandBson(command_and_options);
 		cmd["$db"] = Bson(m_name);
 
 		auto pref = readPreference.isNull ? m_client.readPreference : readPreference.get;
 		if (pref != ReadPreference.primary)
-			cmd["$readPreference"] = readPreferenceBson(pref);
+			cmd["$readPreference"] = readPreferenceBson(pref, m_client.readPreferenceTags);
 
 		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTime, Nullable!ReadPreference(pref));
+	}
+
+	/// Normalizes a command argument into its Bson wire form: Bson passes through,
+	/// anything else is serialized.
+	private static Bson toCommandBson(T)(T command_and_options)
+	{
+		static if (is(T : Bson))
+			return command_and_options;
+		else
+			return command_and_options.serializeToBson;
 	}
 
 	/// Writes lock the primary; reads lock by effective preference and inject `$readPreference`.
@@ -297,7 +287,7 @@ struct MongoDatabase
 
 		auto pref = readPreference.isNull ? m_client.readPreference : readPreference.get;
 		if (pref != ReadPreference.primary)
-			cmd["$readPreference"] = readPreferenceBson(pref);
+			cmd["$readPreference"] = readPreferenceBson(pref, m_client.readPreferenceTags);
 
 		return m_client.lockConnection(pref);
 	}

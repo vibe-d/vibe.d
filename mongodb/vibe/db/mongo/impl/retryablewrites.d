@@ -115,6 +115,12 @@ unittest {
 		"insert must be classified as a retryable write command");
 }
 
+/// an empty command document is not a retryable write
+unittest {
+	assert(isRetryableWriteCommand(Bson.emptyObject) == false,
+		"a command with no name must not be classified as a retryable write");
+}
+
 /// an update command is a retryable write
 unittest {
 	Bson cmd = Bson.emptyObject;
