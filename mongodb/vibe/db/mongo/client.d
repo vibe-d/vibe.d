@@ -13,6 +13,7 @@ public import vibe.db.mongo.database;
 
 import vibe.core.connectionpool;
 import vibe.core.log;
+import vibe.core.sync : LocalManualEvent, createManualEvent;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
@@ -33,7 +34,8 @@ final class MongoClient {
 	private {
 		ConnectionPool!MongoConnection[string] m_connectionPools;
 		MongoClientSettings m_settings;
-		TopologyDescription m_topology;
+		AtomicTopology m_topology;
+		LocalManualEvent m_topologyChanged;
 		bool m_discoveryInProgress;
 	}
 
@@ -64,6 +66,7 @@ final class MongoClient {
 	package this(MongoClientSettings settings)
 	{
 		m_settings = settings;
+		m_topologyChanged = createManualEvent();
 
 		discoverTopology();
 
@@ -214,9 +217,9 @@ final class MongoClient {
 
 	private MongoHost resolveHost(bool toPrimary, ReadPreference pref)
 	{
-		auto selected = toPrimary
-			? writeTarget(m_topology, m_settings.localThresholdMS)
-			: selectServer(m_topology, pref, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+		auto topology = m_topology.load();
+		auto selected = selectTarget(topology, toPrimary, pref,
+			m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
 
 		enforce!MongoDriverException(!selected.isNull, toPrimary
 			? "No primary server available for write"
@@ -318,7 +321,8 @@ final class MongoClient {
 				: new MongoDriverException("No suitable server found during topology discovery");
 		}
 
-		m_topology = newTopology;
+		m_topology.publish(newTopology);
+		m_topologyChanged.emit();
 	}
 
 	private void probeAndUpdate(ref TopologyDescription topology, MongoHost host, ref Exception lastException)

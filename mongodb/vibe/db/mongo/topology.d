@@ -485,6 +485,37 @@ TopologyDescription applyFailed(TopologyDescription current, MongoHost host)
 	return current;
 }
 
+/// Holds the current topology behind an atomically-swapped pointer, so readers
+/// always observe a complete, consistent snapshot without locking. Writers
+/// publish a heap copy and atomically replace the pointer; published snapshots
+/// are never mutated (see `applyDescription`/`applyFailed`). This is the shared,
+/// thread-safe topology required by #2846.
+struct AtomicTopology
+{
+	private shared(TopologyDescription)* m_current;
+
+	/// Atomically replace the current snapshot with a heap copy of `topology`.
+	void publish(TopologyDescription topology) @trusted
+	{
+		import core.atomic : atomicStore;
+
+		auto snapshot = new TopologyDescription;
+		*snapshot = topology;
+		atomicStore(m_current, cast(shared(TopologyDescription)*) snapshot);
+	}
+
+	/// Return a value copy of the current snapshot, or the default if none.
+	TopologyDescription load() @trusted const
+	{
+		import core.atomic : atomicLoad;
+
+		auto p = atomicLoad(m_current);
+		if (p is null)
+			return TopologyDescription.init;
+		return *(cast(TopologyDescription*) p);
+	}
+}
+
 /// applyDescription returns a new topology and leaves the input snapshot unchanged
 unittest
 {
@@ -519,6 +550,29 @@ unittest
 	assert(after.primaryHost.isNull, "the result no longer has the failed primary");
 	assert(!before.primaryHost.isNull && before.primaryHost.get == host,
 		"the input snapshot still has the primary");
+}
+
+/// AtomicTopology.load returns the default topology before anything is published
+unittest
+{
+	AtomicTopology holder;
+	assert(holder.load().servers.length == 0);
+}
+
+/// AtomicTopology round-trips the most recently published snapshot
+unittest
+{
+	AtomicTopology holder;
+	auto host = MongoHost("primary", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+
+	holder.publish(applyDescription(TopologyDescription.init, host, primaryDesc));
+
+	auto loaded = holder.load();
+	assert(!loaded.primaryHost.isNull && loaded.primaryHost.get == host);
 }
 
 /**
@@ -575,6 +629,20 @@ Nullable!MongoHost writeTarget(ref const TopologyDescription topology, long loca
 	return selectServer(topology, ReadPreference.primary, localThresholdMS);
 }
 
+/**
+ * Picks the host for an operation: the write target (primary) when `toPrimary`,
+ * otherwise the read-preference target. Pure selection over a topology snapshot;
+ * returns null when no suitable server is available so callers can either fail or
+ * wait for the topology to change.
+ */
+Nullable!MongoHost selectTarget(ref const TopologyDescription topology, bool toPrimary,
+	ReadPreference pref, long localThresholdMS = 15, long maxStalenessSeconds = -1)
+{
+	return toPrimary
+		? writeTarget(topology, localThresholdMS)
+		: selectServer(topology, pref, localThresholdMS, maxStalenessSeconds);
+}
+
 /// writeTarget returns the primary even when a secondary is available
 unittest
 {
@@ -627,6 +695,30 @@ unittest
 
 	auto target = writeTarget(topo);
 	assert(target.isNull);
+}
+
+/// selectTarget routes writes to the primary and reads by read preference
+unittest
+{
+	TopologyDescription topo;
+	auto primary = MongoHost("primary", 27017);
+	auto secondary = MongoHost("secondary", 27017);
+
+	ServerDescription pdesc;
+	pdesc.isWritablePrimary = true;
+	pdesc.setName = "rs0";
+	topo.update(primary, pdesc);
+
+	ServerDescription sdesc;
+	sdesc.secondary = true;
+	sdesc.setName = "rs0";
+	topo.update(secondary, sdesc);
+
+	auto write = selectTarget(topo, true, ReadPreference.secondary);
+	assert(!write.isNull && write.get == primary, "writes go to the primary, ignoring read preference");
+
+	auto read = selectTarget(topo, false, ReadPreference.secondary);
+	assert(!read.isNull && read.get == secondary, "reads honor the read preference");
 }
 
 /**
