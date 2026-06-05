@@ -13,12 +13,16 @@ public import vibe.db.mongo.database;
 
 import vibe.core.connectionpool;
 import vibe.core.log;
+import vibe.core.sync : LocalManualEvent, createManualEvent;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
+import vibe.db.mongo.monitor;
 
+import core.time : Duration, seconds, msecs, MonoTime;
 import std.conv;
 import std.exception : enforce;
+import std.typecons : Nullable;
 
 /**
 	Represents a connection to a MongoDB server.
@@ -33,8 +37,11 @@ final class MongoClient {
 	private {
 		ConnectionPool!MongoConnection[string] m_connectionPools;
 		MongoClientSettings m_settings;
-		TopologyDescription m_topology;
+		AtomicTopology m_topology;
+		LocalManualEvent m_topologyChanged;
 		bool m_discoveryInProgress;
+
+		MonitorRegistry m_monitors;
 	}
 
 	package this(string host, ushort port)
@@ -64,11 +71,17 @@ final class MongoClient {
 	package this(MongoClientSettings settings)
 	{
 		m_settings = settings;
+		m_topologyChanged = createManualEvent();
 
 		discoverTopology();
 
 		// force a connection to cause an exception for wrong URLs
 		lockConnection();
+
+		ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
+		m_monitors = new MonitorRegistry(prober, &onMonitorResult,
+			m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
+		m_monitors.reconcileWith(m_topology.load().allKnownHosts());
 	}
 
 	/// Returns the read preference configured for this client.
@@ -186,8 +199,7 @@ final class MongoClient {
 		return lockConnectionResolving(true, ReadPreference.primary);
 	}
 
-	/// Resolves the host a read should target, retrying once after re-discovering the
-	/// topology. A cursor pins to this host so its getMore/killCursors stay on the same server.
+	/// Resolves the host a read should target, retrying once after re-discovery.
 	package MongoHost resolveHostForRead(ReadPreference pref)
 	{
 		try {
@@ -212,17 +224,47 @@ final class MongoClient {
 		return lockConnectionToHost(resolveHost(toPrimary, pref));
 	}
 
+	/// Selects a target host, blocking up to `serverSelectionTimeoutMS` for one to appear.
 	private MongoHost resolveHost(bool toPrimary, ReadPreference pref)
 	{
-		auto selected = toPrimary
-			? writeTarget(m_topology, m_settings.localThresholdMS)
-			: selectServer(m_topology, pref, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+		auto deadline = MonoTime.currTime + m_settings.serverSelectionTimeoutMS.msecs;
 
-		enforce!MongoDriverException(!selected.isNull, toPrimary
+		while (true)
+		{
+			// Read the counter before the snapshot so a concurrent update is not missed.
+			auto topologyVersion = m_topologyChanged.emitCount;
+
+			auto topology = m_topology.load();
+			auto selected = selectTarget(topology, toPrimary, pref,
+				m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+			if (!selected.isNull)
+				return selected.get;
+
+			m_monitors.requestAllChecks();
+
+			auto remaining = deadline - MonoTime.currTime;
+			if (remaining <= Duration.zero)
+				break;
+
+			m_topologyChanged.wait(remaining, topologyVersion);
+		}
+
+		throw new MongoDriverException(toPrimary
 			? "No primary server available for write"
 			: "No suitable server found for read preference");
+	}
 
-		return selected.get;
+	/// On a stale-topology command error, marks the host failed and re-checks it.
+	private void handleStaleCommandError(MongoHost host, int code) @safe nothrow
+	{
+		if (!isStaleTopologyError(code))
+			return;
+
+		try {
+			m_topology.publish(applyFailed(m_topology.load(), host));
+			m_topologyChanged.emit();
+			m_monitors.requestCheck(host);
+		} catch (Exception) {}
 	}
 
 	/// Locks a pooled connection for a specific host (e.g. a cursor re-locking its pinned host).
@@ -246,7 +288,7 @@ final class MongoClient {
 
 	private ConnectionPool!MongoConnection poolFor(MongoHost host)
 	{
-		auto key = host.name ~ ":" ~ host.port.to!string;
+		auto key = hostKey(host);
 
 		if (auto existing = key in m_connectionPools)
 			return *existing;
@@ -263,6 +305,7 @@ final class MongoClient {
 	private MongoConnection createConnectionToHost(MongoHost host) @safe
 	{
 		auto ret = new MongoConnection(m_settings);
+		ret.onCommandError(&handleStaleCommandError);
 
 		try {
 			ret.connectToHost(host);
@@ -318,7 +361,8 @@ final class MongoClient {
 				: new MongoDriverException("No suitable server found during topology discovery");
 		}
 
-		m_topology = newTopology;
+		m_topology.publish(newTopology);
+		m_topologyChanged.emit();
 	}
 
 	private void probeAndUpdate(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
@@ -343,5 +387,27 @@ final class MongoClient {
 			return TopologyType.replicaSetNoPrimary;
 
 		return TopologyType.unknown;
+	}
+
+	/// Publishes a monitor's probe result as a new snapshot and reconciles the monitor set.
+	private void onMonitorResult(MongoHost host, Nullable!ServerDescription desc, Duration rtt)
+	{
+		auto current = m_topology.load();
+		m_topology.publish(desc.isNull ? applyFailed(current, host) : applyDescription(current, host, desc.get));
+		m_topologyChanged.emit();
+
+		m_monitors.reconcileWith(m_topology.load().allKnownHosts());
+	}
+
+	/// Stops all background server monitors. Call before discarding the client.
+	void stopMonitoring()
+	{
+		m_monitors.stopAll();
+	}
+
+	/// Number of background server monitors currently running.
+	size_t activeMonitorCount() const @property
+	{
+		return m_monitors.length;
 	}
 }

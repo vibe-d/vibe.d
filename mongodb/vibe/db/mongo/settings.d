@@ -175,6 +175,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
 				case "localthresholdms": setLong(cfg.localThresholdMS); break;
 				case "maxstalenessseconds": setLong(cfg.maxStalenessSeconds); break;
+				case "heartbeatfrequencyms": setLong(cfg.heartbeatFrequencyMS); break;
+				case "minheartbeatfrequencyms": setLong(cfg.minHeartbeatFrequencyMS); break;
+				case "serverselectiontimeoutms": setLong(cfg.serverSelectionTimeoutMS); break;
 				case "readconcernlevel": cfg.readConcern = parseReadConcern(value); break;
 				case "safe": setBool(cfg.safe); break;
 				case "fsync": setBool(cfg.fsync); break;
@@ -493,6 +496,28 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
 	assert(cfg.maxStalenessSeconds == -1);
+}
+
+/// parseMongoDBUrl parses the SDAM monitoring options
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?heartbeatFrequencyMS=5000&minHeartbeatFrequencyMS=250&serverSelectionTimeoutMS=12000"));
+	assert(cfg.heartbeatFrequencyMS == 5000);
+	assert(cfg.minHeartbeatFrequencyMS == 250);
+	assert(cfg.serverSelectionTimeoutMS == 12000);
+}
+
+/// parseMongoDBUrl uses SDAM monitoring defaults (10000 / 500 / 30000)
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
+	assert(cfg.heartbeatFrequencyMS == 10_000);
+	assert(cfg.minHeartbeatFrequencyMS == 500);
+	assert(cfg.serverSelectionTimeoutMS == 30_000);
 }
 
 /// parseMongoDBUrl parses readConcernLevel option
@@ -1114,6 +1139,15 @@ class MongoClientSettings
 	 */
 	long maxStalenessSeconds = -1;
 
+	/// How often (ms) each monitor sends `hello` to refresh the topology.
+	long heartbeatFrequencyMS = 10_000;
+
+	/// Minimum interval (ms) between consecutive checks of a single server.
+	long minHeartbeatFrequencyMS = 500;
+
+	/// How long (ms) server selection waits for a suitable server before failing.
+	long serverSelectionTimeoutMS = 30_000;
+
 	/**
 	 * Specifies the default read concern level for read operations.
 	 *
@@ -1349,6 +1383,13 @@ struct MongoHost
 	{
 		return name == other.name && port == other.port;
 	}
+}
+
+/// Stable map key for a host, "name:port".
+string hostKey(MongoHost host) @safe
+{
+	import std.conv : to;
+	return host.name ~ ":" ~ host.port.to!string;
 }
 
 /**
