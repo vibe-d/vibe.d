@@ -457,4 +457,10 @@ final class MongoClient {
 		m_monitors.clear();
 		m_monitorHosts.clear();
 	}
+
+	/// Number of background server monitors currently running.
+	size_t activeMonitorCount() const @property
+	{
+		return m_monitors.length;
+	}
 }
