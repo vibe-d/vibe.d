@@ -20,6 +20,15 @@ string commandName(Bson command)
 	return null;
 }
 
+/// commandName returns the first field of the command document
+unittest {
+	Bson cmd = Bson.emptyObject;
+	cmd["insert"] = Bson("people");
+
+	assert(commandName(cmd) == "insert",
+		"command name must be the first field of the document");
+}
+
 /// Whether any entry in a Bson `statements` array satisfies `disqualifies`.
 /// A non-array (or missing field) yields false: nothing to disqualify.
 bool anyStatement(Bson statements, scope bool delegate(Bson) @safe disqualifies)
@@ -32,11 +41,38 @@ bool anyStatement(Bson statements, scope bool delegate(Bson) @safe disqualifies)
 	return statements.byValue.any!disqualifies;
 }
 
+/// anyStatement matches an entry, ignores non-array input
+unittest {
+	Bson marked = Bson.emptyObject;
+	marked["flag"] = Bson(true);
+
+	bool delegate(Bson) @safe matchesFlag =
+		(Bson entry) @safe => entry["flag"].type == Bson.Type.bool_;
+
+	assert(anyStatement(Bson([marked]), matchesFlag) == true,
+		"a matching entry must be detected");
+	assert(anyStatement(Bson([Bson.emptyObject]), matchesFlag) == false,
+		"a non-matching entry must not be flagged");
+	assert(anyStatement(Bson("not-an-array"), matchesFlag) == false,
+		"a non-array must yield false");
+}
+
 /// Whether any statement in an `updates` array is a multi-document update.
 bool hasMultiStatement(Bson updates)
 {
 	return anyStatement(updates,
 		entry => entry["multi"].type == Bson.Type.bool_ && entry["multi"].get!bool);
+}
+
+/// hasMultiStatement flags an updates array containing a multi:true entry
+unittest {
+	Bson upd = Bson.emptyObject;
+	upd["multi"] = Bson(true);
+
+	assert(hasMultiStatement(Bson([upd])) == true,
+		"a multi:true update statement must be detected");
+	assert(hasMultiStatement(Bson([Bson.emptyObject])) == false,
+		"an update statement without multi:true must not be flagged");
 }
 
 /// Whether any statement in a `deletes` array is a multi-document delete (limit:0).
@@ -60,50 +96,6 @@ bool isRetryableWriteCommand(Bson command)
 		return false;
 
 	return !(name == "delete" && hasUnlimitedDelete(command["deletes"]));
-}
-
-/// Stamps a write command with the session id and retryable txnNumber.
-Bson applyRetryableWrite(Bson command, Bson lsid, long txnNumber)
-{
-	Bson result = applySession(command, lsid);
-	result["txnNumber"] = Bson(txnNumber);
-	return result;
-}
-
-/// commandName returns the first field of the command document
-unittest {
-	Bson cmd = Bson.emptyObject;
-	cmd["insert"] = Bson("people");
-
-	assert(commandName(cmd) == "insert",
-		"command name must be the first field of the document");
-}
-
-/// anyStatement matches an entry, ignores non-array input
-unittest {
-	Bson marked = Bson.emptyObject;
-	marked["flag"] = Bson(true);
-
-	bool delegate(Bson) @safe matchesFlag =
-		(Bson entry) @safe => entry["flag"].type == Bson.Type.bool_;
-
-	assert(anyStatement(Bson([marked]), matchesFlag) == true,
-		"a matching entry must be detected");
-	assert(anyStatement(Bson([Bson.emptyObject]), matchesFlag) == false,
-		"a non-matching entry must not be flagged");
-	assert(anyStatement(Bson("not-an-array"), matchesFlag) == false,
-		"a non-array must yield false");
-}
-
-/// hasMultiStatement flags an updates array containing a multi:true entry
-unittest {
-	Bson upd = Bson.emptyObject;
-	upd["multi"] = Bson(true);
-
-	assert(hasMultiStatement(Bson([upd])) == true,
-		"a multi:true update statement must be detected");
-	assert(hasMultiStatement(Bson([Bson.emptyObject])) == false,
-		"an update statement without multi:true must not be flagged");
 }
 
 /// an insert command is a retryable write
@@ -166,6 +158,14 @@ unittest {
 
 	assert(isRetryableWriteCommand(cmd) == false,
 		"limit:0 delete must not be classified as a retryable write command");
+}
+
+/// Stamps a write command with the session id and retryable txnNumber.
+Bson applyRetryableWrite(Bson command, Bson lsid, long txnNumber)
+{
+	Bson result = applySession(command, lsid);
+	result["txnNumber"] = Bson(txnNumber);
+	return result;
 }
 
 /// applyRetryableWrite sets lsid and txnNumber on the command

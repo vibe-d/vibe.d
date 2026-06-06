@@ -235,9 +235,24 @@ struct MongoDatabase
 	private Bson runWriteWithRetry(ExceptionT)(
 		Bson cmd, string errorInfo, string errorFile, size_t errorLine, bool checked)
 	{
-		// TODO(B-sess6): lift this acquire / scope(exit)-release dance into a
-		// `withImplicitSession` scope helper, which will also host the universal
-		// implicit-session wiring below.
+		return withImplicitSession!Bson(cmd, (preparedCmd, sessionSupport) @safe {
+			return retryOnceOnRetryableError!Bson(
+				() @safe {
+					auto conn = m_client.lockConnectionToPrimary();
+					return checked
+						? conn.runCommand!(Bson, ExceptionT)(m_name, preparedCmd, errorInfo, errorFile, errorLine)
+						: conn.runCommandUnchecked!(Bson, ExceptionT)(m_name, preparedCmd, errorInfo, errorFile, errorLine);
+				},
+				RetryPolicy(false, sessionSupport),
+				() @safe { m_client.refreshTopology(); });
+		});
+	}
+
+	/// Runs `body` with an implicit server session attached when `cmd` is a retryable write:
+	/// acquires a session, stamps the retryable-write fields onto the command, and releases the
+	/// session on exit. `body` receives the (possibly stamped) command and whether session support is active.
+	private T withImplicitSession(T)(Bson cmd, scope T delegate(Bson preparedCmd, bool sessionSupport) @safe body)
+	{
 		const retryable = m_client.retryWrites && m_client.supportsRetryableWrites()
 			&& isRetryableWriteCommand(cmd);
 		ServerSession session;
@@ -250,16 +265,7 @@ struct MongoDatabase
 			if (retryable)
 				m_client.releaseServerSession(session);
 
-		return retryOnceOnStepDown!Bson(
-			() @safe {
-				auto conn = m_client.lockConnectionToPrimary();
-				return checked
-					? conn.runCommand!(Bson, ExceptionT)(m_name, cmd, errorInfo, errorFile, errorLine)
-					: conn.runCommandUnchecked!(Bson, ExceptionT)(m_name, cmd, errorInfo, errorFile, errorLine);
-			},
-			false,
-			retryable,
-			() @safe { m_client.refreshTopology(); });
+		return body(cmd, retryable);
 	}
 
 	/// ditto

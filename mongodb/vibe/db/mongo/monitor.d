@@ -7,7 +7,7 @@
 */
 module vibe.db.mongo.monitor;
 
-import vibe.db.mongo.connection : ServerDescription;
+import vibe.db.mongo.impl.serverdescription : ServerDescription;
 import vibe.db.mongo.settings : MongoHost, hostKey;
 
 import vibe.core.core : runTask, sleep;
@@ -217,22 +217,123 @@ bool shouldCheckNow(MonoTime last, MonoTime now, Duration minInterval) @safe pur
 	return now - last >= minInterval;
 }
 
+/// shouldCheckNow allows a check once the minHeartbeatFrequencyMS floor has elapsed
+unittest
+{
+	auto now = MonoTime.currTime;
+	auto minInterval = 500.msecs;
+
+	auto elapsed = now - 600.msecs;
+	auto tooSoon = now - 400.msecs;
+
+	assert(shouldCheckNow(elapsed, now, minInterval),
+		"a check is allowed once the floor has elapsed");
+	assert(!shouldCheckNow(tooSoon, now, minInterval),
+		"a check is blocked before the floor has elapsed");
+}
+
+/// MongoDB server error codes the driver classifies for retry decisions.
+enum MongoServerErrorCode : int
+{
+	none = 0,
+	hostUnreachable = 6,
+	hostNotFound = 7,
+	networkTimeout = 89,
+	shutdownInProgress = 91,
+	primarySteppedDown = 189,
+	exceededTimeLimit = 262,
+	socketException = 9001,
+	duplicateKey = 11000,
+	notWritablePrimary = 10107,
+	interruptedAtShutdown = 11600,
+	interruptedDueToReplStateChange = 11602,
+	notPrimaryNoSecondaryOk = 13435,
+	notPrimaryOrSecondary = 13436,
+}
+
 /// Whether a server error code is in the SDAM "not master or recovering" set.
-bool isStaleTopologyError(int code) @safe pure nothrow @nogc
+bool isStaleTopologyError(MongoServerErrorCode code) @safe pure nothrow @nogc
 {
 	switch (code)
 	{
-		case 10107: // NotWritablePrimary
-		case 13435: // NotPrimaryNoSecondaryOk
-		case 13436: // NotPrimaryOrSecondary
-		case 11600: // InterruptedAtShutdown
-		case 11602: // InterruptedDueToReplStateChange
-		case 189:   // PrimarySteppedDown
-		case 91:    // ShutdownInProgress
+		case MongoServerErrorCode.notWritablePrimary:
+		case MongoServerErrorCode.notPrimaryNoSecondaryOk:
+		case MongoServerErrorCode.notPrimaryOrSecondary:
+		case MongoServerErrorCode.interruptedAtShutdown:
+		case MongoServerErrorCode.interruptedDueToReplStateChange:
+		case MongoServerErrorCode.primarySteppedDown:
+		case MongoServerErrorCode.shutdownInProgress:
 			return true;
 		default:
 			return false;
 	}
+}
+
+/// isStaleTopologyError flags the not-master / recovering server error codes
+unittest
+{
+	assert(isStaleTopologyError(MongoServerErrorCode.notWritablePrimary), "NotWritablePrimary");
+	assert(isStaleTopologyError(MongoServerErrorCode.notPrimaryNoSecondaryOk), "NotPrimaryNoSecondaryOk");
+	assert(isStaleTopologyError(MongoServerErrorCode.interruptedDueToReplStateChange), "InterruptedDueToReplStateChange");
+	assert(isStaleTopologyError(MongoServerErrorCode.primarySteppedDown), "PrimarySteppedDown");
+	assert(isStaleTopologyError(MongoServerErrorCode.shutdownInProgress), "ShutdownInProgress");
+	assert(isStaleTopologyError(MongoServerErrorCode.notPrimaryOrSecondary), "NotPrimaryOrSecondary");
+	assert(isStaleTopologyError(MongoServerErrorCode.interruptedAtShutdown), "InterruptedAtShutdown");
+
+	assert(!isStaleTopologyError(MongoServerErrorCode.duplicateKey), "duplicate key is not a topology error");
+	assert(!isStaleTopologyError(MongoServerErrorCode.none), "no error code");
+}
+
+/// Whether a server error code marks a write safe to retry once (MongoDB 3.6+
+/// retryable writes). Covers the election/topology set plus the network-error codes.
+bool isRetryableWriteError(MongoServerErrorCode code) @safe pure nothrow @nogc
+{
+	if (isStaleTopologyError(code))
+		return true;
+
+	switch (code)
+	{
+		case MongoServerErrorCode.hostUnreachable:
+		case MongoServerErrorCode.hostNotFound:
+		case MongoServerErrorCode.networkTimeout:
+		case MongoServerErrorCode.socketException:
+		case MongoServerErrorCode.exceededTimeLimit:
+			return true;
+		default:
+			return false;
+	}
+}
+
+/// isRetryableWriteError flags network errors beyond the election set
+unittest
+{
+	assert(isRetryableWriteError(MongoServerErrorCode.networkTimeout), "NetworkTimeout is a retryable write error");
+}
+
+/// isRetryableWriteError flags SocketException as a network error
+unittest
+{
+	assert(isRetryableWriteError(MongoServerErrorCode.socketException) == true, "SocketException is a retryable write error");
+}
+
+/// isRetryableWriteError flags election codes from the stale-topology set
+unittest
+{
+	assert(isRetryableWriteError(MongoServerErrorCode.notWritablePrimary) == true, "an election code is also a retryable write error");
+}
+
+/// isRetryableWriteError rejects non-retryable error codes
+unittest
+{
+	assert(!isRetryableWriteError(MongoServerErrorCode.duplicateKey), "a duplicate-key error is not a retryable write error");
+	assert(!isRetryableWriteError(MongoServerErrorCode.none), "no error code is not a retryable write error");
+}
+
+/// isRetryableWriteError rejects an unknown server error code
+unittest
+{
+	assert(!isRetryableWriteError(cast(MongoServerErrorCode) 99999),
+		"an unknown server error code is not a retryable write error");
 }
 
 /// The per-host monitors to start and stop after a topology change.
@@ -269,23 +370,8 @@ unittest
 	assert(r.toStop == [a], "stops monitors for removed hosts");
 }
 
-/// isStaleTopologyError flags the not-master / recovering server error codes
-unittest
-{
-	assert(isStaleTopologyError(10107), "NotWritablePrimary");
-	assert(isStaleTopologyError(13435), "NotPrimaryNoSecondaryOk");
-	assert(isStaleTopologyError(11602), "InterruptedDueToReplStateChange");
-	assert(isStaleTopologyError(189), "PrimarySteppedDown");
-	assert(isStaleTopologyError(91), "ShutdownInProgress");
-	assert(isStaleTopologyError(13436), "NotPrimaryOrSecondary");
-	assert(isStaleTopologyError(11600), "InterruptedAtShutdown");
-
-	assert(!isStaleTopologyError(11000), "duplicate key is not a topology error");
-	assert(!isStaleTopologyError(0), "no error code");
-}
-
 /// Whether a stale-topology error is retryable: only for idempotent ops or ops with session support.
-bool shouldRetryAfterStepDown(int code, bool idempotent, bool sessionSupport) @safe pure nothrow @nogc
+bool shouldRetryAfterStepDown(MongoServerErrorCode code, bool idempotent, bool sessionSupport) @safe pure nothrow @nogc
 {
 	return isStaleTopologyError(code) && (idempotent || sessionSupport);
 }
@@ -293,29 +379,33 @@ bool shouldRetryAfterStepDown(int code, bool idempotent, bool sessionSupport) @s
 /// shouldRetryAfterStepDown retries idempotent or session-supported ops on a stale-topology error
 unittest
 {
-	assert(shouldRetryAfterStepDown(10107, true, false), "idempotent NotWritablePrimary is retryable");
-	assert(shouldRetryAfterStepDown(10107, false, true), "session-supported NotWritablePrimary is retryable");
+	assert(shouldRetryAfterStepDown(MongoServerErrorCode.notWritablePrimary, true, false), "idempotent NotWritablePrimary is retryable");
+	assert(shouldRetryAfterStepDown(MongoServerErrorCode.notWritablePrimary, false, true), "session-supported NotWritablePrimary is retryable");
 }
 
-/// shouldCheckNow allows a check once the minHeartbeatFrequencyMS floor has elapsed
+/// Whether a failed write may be retried once: a retryable-write error on a
+/// session-supported write (the transaction number lets the server deduplicate).
+bool shouldRetryWrite(MongoServerErrorCode code, bool sessionSupport) @safe pure nothrow @nogc
+{
+	return isRetryableWriteError(code) && sessionSupport;
+}
+
+/// shouldRetryWrite retries a network error on a session-supported write
 unittest
 {
-	auto now = MonoTime.currTime;
-	auto minInterval = 500.msecs;
+	assert(shouldRetryWrite(MongoServerErrorCode.networkTimeout, true) == true, "a network error on a session-supported write is retryable");
+}
 
-	auto elapsed = now - 600.msecs;
-	auto tooSoon = now - 400.msecs;
-
-	assert(shouldCheckNow(elapsed, now, minInterval),
-		"a check is allowed once the floor has elapsed");
-	assert(!shouldCheckNow(tooSoon, now, minInterval),
-		"a check is blocked before the floor has elapsed");
+/// shouldRetryWrite does not retry without session support
+unittest
+{
+	assert(shouldRetryWrite(MongoServerErrorCode.networkTimeout, false) == false, "a write without session support is not retried (the server cannot deduplicate)");
 }
 
 /// checkOnce probes the host and reports the probed description via the callback
 unittest
 {
-	import vibe.db.mongo.connection : ServerDescription;
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
 	import vibe.db.mongo.settings : MongoHost;
 
 	auto host = MongoHost("primary", 27017);
@@ -347,7 +437,7 @@ unittest
 /// checkOnce reports a null description when the prober throws
 unittest
 {
-	import vibe.db.mongo.connection : ServerDescription;
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
 	import vibe.db.mongo.settings : MongoHost;
 
 	auto host = MongoHost("primary", 27017);
@@ -377,7 +467,7 @@ unittest
 {
 	import vibe.core.core : sleep;
 	import core.time : msecs;
-	import vibe.db.mongo.connection : ServerDescription;
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
 	import vibe.db.mongo.settings : MongoHost;
 
 	auto host = MongoHost("primary", 27017);
@@ -412,7 +502,7 @@ unittest
 /// runLoop returns false when the loop body throws
 unittest
 {
-	import vibe.db.mongo.connection : ServerDescription;
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
 	import vibe.db.mongo.settings : MongoHost;
 
 	auto host = MongoHost("primary", 27017);
@@ -432,7 +522,7 @@ unittest
 {
 	import vibe.core.core : sleep;
 	import core.time : msecs;
-	import vibe.db.mongo.connection : ServerDescription;
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
 	import vibe.db.mongo.settings : MongoHost;
 
 	auto host = MongoHost("primary", 27017);
@@ -459,7 +549,7 @@ unittest
 {
 	import vibe.core.core : sleep;
 	import core.time : msecs, seconds;
-	import vibe.db.mongo.connection : ServerDescription;
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
 	import vibe.db.mongo.settings : MongoHost;
 
 	auto host = MongoHost("primary", 27017);

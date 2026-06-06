@@ -314,7 +314,7 @@ final class MongoClient {
 	}
 
 	/// On a stale-topology command error, marks the host failed and re-checks it.
-	private void handleStaleCommandError(MongoHost host, int code) @safe nothrow
+	private void handleStaleCommandError(MongoHost host, MongoServerErrorCode code) @safe nothrow
 	{
 		if (!isStaleTopologyError(code))
 			return;
@@ -485,21 +485,63 @@ final class MongoClient {
 	}
 }
 
-/// retries once after refreshing topology when the first call steps down
-T retryOnceOnStepDown(T)(scope T delegate() @safe op, bool idempotent, bool sessionSupport, scope void delegate() @safe refresh) @safe
+/// Whether a failed op may be retried: idempotent reads and/or session-supported writes.
+struct RetryPolicy
+{
+	bool idempotent;
+	bool sessionSupport;
+}
+
+/// Whether a failed op may be retried once: a raw network failure (on an
+/// idempotent read or a session-supported write), a step-down/stale-topology
+/// error, or a retryable-write error.
+bool isRetryableError(MongoDriverException e, RetryPolicy policy) @safe
+{
+	bool networkRetryable = (cast(MongoNetworkException) e !is null) && (policy.idempotent || policy.sessionSupport);
+	return networkRetryable
+		|| shouldRetryAfterStepDown(e.code, policy.idempotent, policy.sessionSupport)
+		|| shouldRetryWrite(e.code, policy.sessionSupport);
+}
+
+/// isRetryableError classifies network, step-down and retryable-write failures
+unittest
+{
+	auto network = new MongoNetworkException("connection reset");
+	assert(isRetryableError(network, RetryPolicy(true, false)), "a network failure on an idempotent read is retryable");
+	assert(isRetryableError(network, RetryPolicy(false, true)), "a network failure on a session-supported write is retryable");
+	assert(!isRetryableError(network, RetryPolicy(false, false)), "a network failure with neither idempotence nor session support is not retryable");
+
+	auto stepDown = new MongoStepDownException("stepped down", MongoServerErrorCode.notWritablePrimary);
+	assert(isRetryableError(stepDown, RetryPolicy(true, false)), "an idempotent step-down error is retryable");
+	assert(!isRetryableError(stepDown, RetryPolicy(false, false)), "a step-down error without idempotence or session support is not retryable");
+
+	auto writeError = new MongoDriverException("network timeout");
+	writeError.code = MongoServerErrorCode.networkTimeout;
+	assert(isRetryableError(writeError, RetryPolicy(false, true)), "a retryable-write code on a session-supported write is retryable");
+	assert(!isRetryableError(writeError, RetryPolicy(false, false)), "a retryable-write code without session support is not retryable");
+
+	auto duplicateKey = new MongoDriverException("duplicate key");
+	duplicateKey.code = MongoServerErrorCode.duplicateKey;
+	assert(!isRetryableError(duplicateKey, RetryPolicy(true, true)), "a non-retryable error code is never retried");
+}
+
+/// retries the op once, after refreshing topology, when the first call fails with a
+/// retryable error, meaning a raw network failure, a step-down/stale-topology error, or a
+/// retryable-write error.
+T retryOnceOnRetryableError(T)(scope T delegate() @safe op, RetryPolicy policy, scope void delegate() @safe refresh) @safe
 {
 	try
 		return op();
-	catch (MongoStepDownException e)
+	catch (MongoDriverException e)
 	{
-		if (!shouldRetryAfterStepDown(e.code, idempotent, sessionSupport))
+		if (!isRetryableError(e, policy))
 			throw e;
 		refresh();
 		return op();
 	}
 }
 
-/// retries once after refreshing topology when the first call steps down
+/// retries once after refreshing topology when the first call hits a step-down (retryable) error
 unittest {
 	int opCalls = 0;
 	int refreshCalls = 0;
@@ -507,7 +549,7 @@ unittest {
 	int delegate() @safe op = () @safe {
 		opCalls++;
 		if (opCalls == 1)
-			throw new MongoStepDownException("primary stepped down", 10107);
+			throw new MongoStepDownException("primary stepped down", MongoServerErrorCode.notWritablePrimary);
 		return 42;
 	};
 
@@ -515,11 +557,61 @@ unittest {
 		refreshCalls++;
 	};
 
-	auto result = retryOnceOnStepDown!int(op, true, false, refresh);
+	auto result = retryOnceOnRetryableError!int(op, RetryPolicy(true, false), refresh);
 
 	assert(result == 42, "expected the second op call's result 42");
 	assert(opCalls == 2, "expected op to be called twice");
 	assert(refreshCalls == 1, "expected refresh to be called once");
+}
+
+/// retries a retryable-write code that is not a stale-topology code when session support is on
+unittest {
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		if (opCalls == 1)
+			throw new MongoStepDownException("network timeout", MongoServerErrorCode.networkTimeout);
+		return 42;
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	auto result = retryOnceOnRetryableError!int(op, RetryPolicy(false, true), refresh);
+
+	assert(result == 42, "a retryable-write error is retried once and returns the second attempt");
+	assert(opCalls == 2, "the write op is retried exactly once");
+	assert(refreshCalls == 1, "the retry refreshes the topology");
+}
+
+/// retries a plain MongoDriverException carrying a retryable-write code when session support is on
+unittest {
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		if (opCalls == 1)
+		{
+			auto e = new MongoDriverException("network timeout");
+			e.code = MongoServerErrorCode.networkTimeout;
+			throw e;
+		}
+		return 7;
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	auto result = retryOnceOnRetryableError!int(op, RetryPolicy(false, true), refresh);
+
+	assert(result == 7, "a code-carrying retryable command error is retried once");
+	assert(opCalls == 2, "the op is retried exactly once");
+	assert(refreshCalls == 1, "the retry refreshes first");
 }
 
 /// rethrows without refresh or retry when the op is not retryable
@@ -531,14 +623,14 @@ unittest {
 
 	int delegate() @safe op = () @safe {
 		opCalls++;
-		throw new MongoStepDownException("primary stepped down", 10107);
+		throw new MongoStepDownException("primary stepped down", MongoServerErrorCode.notWritablePrimary);
 	};
 
 	void delegate() @safe refresh = () @safe {
 		refreshCalls++;
 	};
 
-	assertThrown!MongoStepDownException(retryOnceOnStepDown!int(op, false, false, refresh));
+	assertThrown!MongoStepDownException(retryOnceOnRetryableError!int(op, RetryPolicy(false, false), refresh));
 
 	assert(opCalls == 1, "expected op to be called once with no retry");
 	assert(refreshCalls == 0, "expected refresh to never be called");
@@ -553,15 +645,60 @@ unittest {
 
 	int delegate() @safe op = () @safe {
 		opCalls++;
-		throw new MongoStepDownException("primary stepped down again", 10107);
+		throw new MongoStepDownException("primary stepped down again", MongoServerErrorCode.notWritablePrimary);
 	};
 
 	void delegate() @safe refresh = () @safe {
 		refreshCalls++;
 	};
 
-	assertThrown!MongoStepDownException(retryOnceOnStepDown!int(op, true, false, refresh));
+	assertThrown!MongoStepDownException(retryOnceOnRetryableError!int(op, RetryPolicy(true, false), refresh));
 
 	assert(opCalls == 2, "expected exactly one retry, not an infinite loop");
 	assert(refreshCalls == 1, "expected topology to be refreshed exactly once");
+}
+
+/// retries a codeless MongoNetworkException once when session support is on
+unittest {
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		if (opCalls == 1)
+			throw new MongoNetworkException("connection reset");
+		return 7;
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	auto result = retryOnceOnRetryableError!int(op, RetryPolicy(false, true), refresh);
+
+	assert(result == 7, "a network failure on a session-supported write is retried once");
+	assert(opCalls == 2, "the op is retried exactly once");
+	assert(refreshCalls == 1, "the retry refreshes first");
+}
+
+/// does not retry a network failure on a write with neither session support nor idempotence
+unittest {
+	import std.exception : assertThrown;
+
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		throw new MongoNetworkException("connection reset");
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	assertThrown!MongoNetworkException(retryOnceOnRetryableError!int(op, RetryPolicy(false, false), refresh));
+
+	assert(opCalls == 1, "a network failure without session support or idempotence is not retried");
+	assert(refreshCalls == 0, "no refresh when the error is not retried");
 }

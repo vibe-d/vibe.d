@@ -21,6 +21,7 @@ import vibe.data.bson;
 import vibe.db.mongo.flags;
 import vibe.db.mongo.impl.compression;
 import vibe.db.mongo.impl.wire;
+import vibe.db.mongo.monitor : MongoServerErrorCode;
 import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.inet.webform;
@@ -71,6 +72,9 @@ class MongoException : Exception
 	/// Server-reported error labels (e.g. "TransientTransactionError").
 	string[] errorLabels;
 
+	/// Server-reported error code as a MongoServerErrorCode (none when there is no error).
+	MongoServerErrorCode code;
+
 	/// Whether the given server error label is present.
 	bool hasErrorLabel(string label) const
 	{
@@ -100,6 +104,12 @@ class MongoDriverException : MongoException
 	this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
+	}
+
+	this(string message, MongoServerErrorCode code, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+		this.code = code;
 	}
 }
 
@@ -144,6 +154,12 @@ class MongoAuthException : MongoException
 	{
 		super(message, file, line, next);
 	}
+
+	this(string message, MongoServerErrorCode code, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+		this.code = code;
+	}
 }
 
 /**
@@ -155,9 +171,7 @@ class MongoStepDownException : MongoDriverException
 {
 @safe:
 
-	int code;
-
-	this(string message, int code, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	this(string message, MongoServerErrorCode code, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
 		this.code = code;
@@ -166,39 +180,104 @@ class MongoStepDownException : MongoDriverException
 
 unittest
 {
-	auto stepDown = new MongoStepDownException("not primary", 10107);
-	assert(stepDown.code == 10107, "expected stored code 10107");
+	auto stepDown = new MongoStepDownException("not primary", MongoServerErrorCode.notWritablePrimary);
+	assert(stepDown.code == MongoServerErrorCode.notWritablePrimary, "expected stored code notWritablePrimary");
 	assert(cast(MongoDriverException)stepDown !is null,
 		"MongoStepDownException must be catchable as MongoDriverException");
 }
 
-/// Builds the exception for a non-ok command response: a step-down error carrying the
-/// server code for stale-topology codes, otherwise the generic `FallbackException`.
-Exception commandFailureException(FallbackException = MongoDriverException)(string message, int code) @safe
+/**
+ * Thrown when a connection-level (network) failure interrupts an operation,
+ * e.g. a socket error or a dropped connection. Retryable for writes with
+ * session support and for idempotent reads.
+ */
+class MongoNetworkException : MongoDriverException
+{
+@safe:
+
+	this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
+/// MongoNetworkException is a MongoDriverException subclass
+unittest
+{
+	auto networkFailure = new MongoNetworkException("connection reset");
+	assert(cast(MongoDriverException) networkFailure !is null,
+		"MongoNetworkException must be catchable as a MongoDriverException");
+}
+
+/// MongoDriverException can carry a server error code
+unittest
+{
+	assert(new MongoDriverException("x", MongoServerErrorCode.networkTimeout).code == MongoServerErrorCode.networkTimeout,
+		"MongoDriverException(message, code) carries the code");
+}
+
+/// asNetworkError passes a MongoException through unchanged
+unittest
+{
+	auto mongo = new MongoDriverException("boom");
+	assert(asNetworkError(mongo) is mongo, "a MongoException must pass through unchanged");
+}
+
+/// asNetworkError wraps a non-Mongo exception as a MongoNetworkException
+unittest
+{
+	auto raw = new Exception("socket reset");
+	auto wrapped = cast(MongoNetworkException) asNetworkError(raw);
+	assert(wrapped !is null, "a non-Mongo exception becomes a MongoNetworkException");
+	assert(wrapped.next is raw, "the original exception is preserved as the cause");
+}
+
+/// Builds the exception for a non-ok command response: a `MongoStepDownException` for
+/// stale-topology codes, otherwise the generic `FallbackException`. In both cases the
+/// returned exception carries the server `code`.
+Exception commandFailureException(FallbackException = MongoDriverException)(string message, MongoServerErrorCode code) @safe
 {
 	import vibe.db.mongo.monitor : isStaleTopologyError;
 
 	if (isStaleTopologyError(code))
 		return new MongoStepDownException(message, code);
-	return new FallbackException(message);
+
+	return new FallbackException(message, code);
 }
 
 unittest
 {
-	auto e = commandFailureException("primary stepped down", 10107);
+	auto e = commandFailureException("primary stepped down", MongoServerErrorCode.notWritablePrimary);
 	assert(cast(MongoStepDownException) e !is null,
-		"stale code 10107 must yield a MongoStepDownException");
-	assert((cast(MongoStepDownException) e).code == 10107,
-		"step-down exception must carry the server code 10107");
+		"stale code notWritablePrimary must yield a MongoStepDownException");
+	assert((cast(MongoStepDownException) e).code == MongoServerErrorCode.notWritablePrimary,
+		"step-down exception must carry the server code notWritablePrimary");
 }
 
 unittest
 {
-	auto e = commandFailureException("duplicate key", 11000);
+	auto e = commandFailureException("duplicate key", MongoServerErrorCode.duplicateKey);
 	assert(cast(MongoStepDownException) e is null,
 		"a non-stale code must not be classified as a step-down");
 	assert(cast(MongoDriverException) e !is null,
 		"a non-stale command failure stays a generic MongoDriverException");
+}
+
+/// A non-stale command failure carries its server error code on the MongoException base.
+unittest
+{
+	auto e = commandFailureException("network timeout", MongoServerErrorCode.networkTimeout);
+	assert((cast(MongoException) e).code == MongoServerErrorCode.networkTimeout,
+		"a non-stale command failure must carry its server error code");
+}
+
+/// Classifies a thrown exception from the wire exchange: a MongoException passes through
+/// unchanged; any other (connection-level) exception becomes a retryable MongoNetworkException.
+Exception asNetworkError(Exception e) @safe
+{
+	if (cast(MongoException) e !is null)
+		return e;
+	return new MongoNetworkException(e.msg, __FILE__, __LINE__, e);
 }
 
 /**
@@ -224,7 +303,7 @@ final class MongoConnection {
 		ServerDescription m_description;
 		MongoHost m_connectedHost;
 		/// Hook invoked with (host, error code) when a command fails.
-		void delegate(MongoHost host, int code) @safe nothrow m_onCommandError;
+		void delegate(MongoHost host, MongoServerErrorCode code) @safe nothrow m_onCommandError;
 		/// Flag to prevent recursive connections when server closes connection while connecting
 		bool m_allowReconnect;
 		bool m_isAuthenticating;
@@ -247,7 +326,7 @@ final class MongoConnection {
 	}
 
 	/// Sets the hook called with (host, error code) on command failure.
-	package void onCommandError(void delegate(MongoHost host, int code) @safe nothrow handler)
+	package void onCommandError(void delegate(MongoHost host, MongoServerErrorCode code) @safe nothrow handler)
 	{
 		m_onCommandError = handler;
 	}
@@ -292,7 +371,7 @@ final class MongoConnection {
 			m_outRange = streamOutputRange(m_stream);
 		}
 		catch (Exception e) {
-			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", host.name, host.port), __FILE__, __LINE__, e);
+			throw new MongoNetworkException(format("Failed to connect to MongoDB server at %s:%s.", host.name, host.port), __FILE__, __LINE__, e);
 		}
 
 		scope (failure) disconnect();
@@ -624,40 +703,54 @@ final class MongoConnection {
 
 			command["$db"] = Bson(database);
 
-			auto id = sendMsg(-1, 0, command);
-			Appender!(Bson[])[string] docs;
-			recvMsg!true(id, (flags, root) @safe {
-				ret = root;
-			}, (scope ident, size) @safe {
-				docs[ident.idup] = appender!(Bson[]);
-			}, (scope ident, push) @safe {
-				auto pd = ident in docs;
-				assert(!!pd, "Received data for unexpected identifier");
-				pd.put(push);
-			});
+			try
+			{
+				auto id = sendMsg(-1, 0, command);
+				Appender!(Bson[])[string] docs;
+				recvMsg!true(id, (flags, root) @safe {
+					ret = root;
+				}, (scope ident, size) @safe {
+					docs[ident.idup] = appender!(Bson[]);
+				}, (scope ident, push) @safe {
+					auto pd = ident in docs;
+					assert(!!pd, "Received data for unexpected identifier");
+					pd.put(push);
+				});
 
-			foreach (ident, app; docs)
-				ret[ident] = Bson(app.data);
+				foreach (ident, app; docs)
+					ret[ident] = Bson(app.data);
+			}
+			catch (Exception e)
+			{
+				throw asNetworkError(e);
+			}
 		}
 		else
 		{
 			debug (VibeVerboseMongo)
 				logDiagnostic("runCommand(legacy): [db=%s] %s", database, command);
-			auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
-			recvReply!T(id,
-				(cursor, flags, first_doc, num_docs) {
-					logTrace("runCommand(%s) flags: %s, cursor: %s, documents: %s", database, flags, cursor, num_docs);
-					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), formatErrorInfo("command query failed"));
-					enforce!MongoDriverException(num_docs == 1, formatErrorInfo("received more than one document in command response"));
-				},
-				(idx, ref doc) {
-					ret = doc;
-				});
+			try
+			{
+				auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
+				recvReply!T(id,
+					(cursor, flags, first_doc, num_docs) {
+						logTrace("runCommand(%s) flags: %s, cursor: %s, documents: %s", database, flags, cursor, num_docs);
+						enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), formatErrorInfo("command query failed"));
+						enforce!MongoDriverException(num_docs == 1, formatErrorInfo("received more than one document in command response"));
+					},
+					(idx, ref doc) {
+						ret = doc;
+					});
+			}
+			catch (Exception e)
+			{
+				throw asNetworkError(e);
+			}
 		}
 
 		if (testOk && ret["ok"].get!double != 1.0)
 		{
-			auto code = ret["code"].opt!int(0);
+			auto code = cast(MongoServerErrorCode) ret["code"].opt!int(0);
 			if (m_onCommandError !is null)
 				m_onCommandError(m_connectedHost, code);
 
