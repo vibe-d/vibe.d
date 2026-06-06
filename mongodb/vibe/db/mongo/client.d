@@ -127,6 +127,15 @@ final class MongoClient {
 		return m_settings.retryWrites;
 	}
 
+	/// Whether the current deployment accepts retryable writes. Standalone
+	/// servers (topology type `single`) reject `lsid`/`txnNumber` with
+	/// "Transaction numbers are only allowed on a replica set member or mongos",
+	/// so retryable writes apply only to replica sets and sharded clusters.
+	package bool supportsRetryableWrites()
+	{
+		return vibe.db.mongo.topology.supportsRetryableWrites(m_topology.load().type);
+	}
+
 	/// Re-discovers the topology after a primary step-down so the next write
 	/// finds the newly elected primary. Best-effort: if no primary has been
 	/// elected yet, the following primary re-lock blocks until one appears, so

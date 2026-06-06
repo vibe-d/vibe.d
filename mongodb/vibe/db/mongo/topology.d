@@ -38,6 +38,11 @@ enum TopologyType
 	sharded
 }
 
+bool supportsRetryableWrites(TopologyType type)
+{
+	return type != TopologyType.single;
+}
+
 struct TopologyDescription
 {
 	import vibe.data.bson : BsonObjectID;
@@ -2177,4 +2182,11 @@ unittest
 	auto write = selectTarget(rs.topo, true, ReadPreference.primary, 15, -1, [["dc": "nowhere"]]);
 	assert(!write.isNull && write.get == primary,
 		"writes must ignore tag sets and still target the primary");
+}
+
+/// supportsRetryableWrites returns false for a standalone (single) topology
+unittest
+{
+	assert(supportsRetryableWrites(TopologyType.single) == false,
+		"standalone mongod rejects lsid/txnNumber, so retryable writes are unsupported on TopologyType.single");
 }

@@ -238,7 +238,8 @@ struct MongoDatabase
 		// TODO(B-sess6): lift this acquire / scope(exit)-release dance into a
 		// `withImplicitSession` scope helper, which will also host the universal
 		// implicit-session wiring below.
-		const retryable = m_client.retryWrites && isRetryableWriteCommand(cmd);
+		const retryable = m_client.retryWrites && m_client.supportsRetryableWrites()
+			&& isRetryableWriteCommand(cmd);
 		ServerSession session;
 		if (retryable)
 		{

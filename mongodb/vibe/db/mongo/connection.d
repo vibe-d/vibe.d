@@ -67,6 +67,25 @@ class MongoException : Exception
 	{
 		super(message, file, line, next);
 	}
+
+	/// Server-reported error labels (e.g. "TransientTransactionError").
+	string[] errorLabels;
+
+	/// Whether the given server error label is present.
+	bool hasErrorLabel(string label) const
+	{
+		import std.algorithm : canFind;
+		return errorLabels.canFind(label);
+	}
+}
+
+/// A MongoException carries server error labels and reports a present one via hasErrorLabel.
+unittest
+{
+	auto e = new MongoException("transient failure");
+	e.errorLabels = ["TransientTransactionError"];
+	assert(e.hasErrorLabel("TransientTransactionError") == true,
+		"hasErrorLabel must return true for an attached label");
 }
 
 /**
