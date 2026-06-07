@@ -42,13 +42,20 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 	string tmpUrl = url[0..$]; // Slice of the URL (not a copy)
 
-	if( !startsWith(tmpUrl, "mongodb://") )
+	if (startsWith(tmpUrl, "mongodb+srv://"))
+	{
+		cfg.srv = true;
+		cfg.ssl = true; // +srv defaults TLS on; an explicit ssl=/tls= option below still overrides it.
+		tmpUrl = tmpUrl["mongodb+srv://".length .. $];
+	}
+	else if (startsWith(tmpUrl, "mongodb://"))
+	{
+		tmpUrl = tmpUrl["mongodb://".length .. $];
+	}
+	else
 	{
 		return false;
 	}
-
-	// Reslice to get rid of 'mongodb://'
-	tmpUrl = tmpUrl[10..$];
 
 	auto authIndex = tmpUrl.indexOf('@');
 	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
@@ -91,6 +98,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			auto hostPort = splitter(entry, ":");
 			string host = hostPort.front;
 			hostPort.popFront();
+			enforce(!cfg.srv || hostPort.empty, "mongodb+srv:// must not specify a port");
 			ushort port = MongoClientSettings.defaultPort;
 			if (!hostPort.empty) {
 				port = to!ushort(hostPort.front);
@@ -108,6 +116,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	{
 		return false;
 	}
+
+	if (cfg.srv && cfg.hosts.length != 1)
+		return false;
 
 	if(slashIndex == tmpUrl.length)
 	{
@@ -215,6 +226,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "sockettimeoutms": setMsecs(cfg.socketTimeout); break;
 				case "tls":
 				case "ssl": setBool(cfg.ssl); break;
+				case "loadbalanced": setBool(cfg.loadBalanced); break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
 				case "authmechanism": cfg.authMechanism = parseAuthMechanism(value); break;
 				case "authmechanismproperties": cfg.authMechanismProperties = value.split(","); warnNotImplemented(); break;
@@ -461,6 +473,48 @@ unittest
 	assert(cfg.serverApi.get.apiVersion == ServerApiVersion.v1, "apiVersion=1 selects ServerApiVersion.v1");
 }
 
+/// parseMongoDBUrl accepts the mongodb+srv:// seedlist scheme and captures its host
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb+srv://test.mongodb.net/"),
+		"mongodb+srv:// is a valid scheme");
+	assert(cfg.srv, "the +srv scheme marks the settings as a seedlist URI");
+	assert(cfg.hosts.length == 1 && cfg.hosts[0].name == "test.mongodb.net",
+		"the +srv host is captured for SRV resolution");
+}
+
+/// parseMongoDBUrl defaults TLS on for the mongodb+srv:// scheme
+unittest
+{
+	MongoClientSettings srvCfg;
+	assert(parseMongoDBUrl(srvCfg, "mongodb+srv://test.mongodb.net/"));
+	assert(srvCfg.ssl, "mongodb+srv:// defaults TLS on");
+
+	MongoClientSettings plainCfg;
+	assert(parseMongoDBUrl(plainCfg, "mongodb://localhost/"));
+	assert(!plainCfg.ssl, "plain mongodb:// does not default TLS on");
+}
+
+/// parseMongoDBUrl rejects a mongodb+srv:// URI that specifies a port
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb+srv://test.mongodb.net:27017/"),
+		"mongodb+srv:// must not specify a port");
+}
+
+/// parseMongoDBUrl rejects a mongodb+srv:// URI with multiple hosts
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb+srv://a.mongodb.net,b.mongodb.net/"),
+		"mongodb+srv:// must contain exactly one host");
+}
+
 /// parseMongoDBUrl rejects an unsupported apiVersion value
 unittest
 {
@@ -604,6 +658,15 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?retryWrites=false"));
 	assert(cfg.retryWrites == false, "retryWrites=false disables retryable writes");
+}
+
+/// parseMongoDBUrl parses the loadBalanced option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=true"));
+	assert(cfg.loadBalanced);
 }
 
 /// parseMongoDBUrl parses localThresholdMS option
@@ -1458,6 +1521,13 @@ class MongoClientSettings
 	 * Enables or disables TLS/SSL for the connection.
 	 */
 	bool ssl;
+
+	/// True when the connection string used the mongodb+srv:// (DNS seedlist) scheme.
+	bool srv;
+
+	/// Enables load-balanced mode, where the driver connects through a MongoDB load
+	/// balancer and advertises `loadBalanced: true` in the connection handshake.
+	bool loadBalanced;
 
 	/**
 	 * Can be set to false to disable TLS peer validation to allow self signed

@@ -382,9 +382,8 @@ final class MongoConnection {
 			m_allowReconnect = true;
 
 		Bson handshake = Bson.emptyObject;
-		static assert(!is(typeof(m_settings.loadBalanced)), "loadBalanced was added to the API, set legacy if it's true here!");
-		// TODO: must use legacy handshake if m_settings.loadBalanced is true
-		// and also once we allow configuring a server API version in the driver
+		// TODO: must use legacy handshake once we allow configuring a server API
+		// version in the driver
 		// (https://github.com/mongodb/specifications/blob/master/source/versioned-api/versioned-api.rst)
 		m_supportsOpMsg = false;
 		bool legacyHandshake = false;
@@ -398,6 +397,9 @@ final class MongoConnection {
 			handshake["hello"] = Bson(1);
 			m_supportsOpMsg = true;
 		}
+
+		if (m_settings.loadBalanced)
+			handshake["loadBalanced"] = Bson(true);
 
 		import os = std.system;
 		import compiler = std.compiler;

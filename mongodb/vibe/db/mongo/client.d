@@ -19,11 +19,34 @@ import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.db.mongo.monitor;
 import vibe.db.mongo.impl.serversession : ServerSession, ServerSessionPool, MongoClientSession, endSessionsCommand;
+import vibe.db.mongo.impl.srv : SrvResolver, applySrvSeedlist;
 
 import core.time : Duration, seconds, msecs, MonoTime;
 import std.conv;
 import std.exception : enforce;
 import std.typecons : Nullable;
+
+/// Binds the mongodb+srv seedlist resolver to vibe-core's live DNS lookups.
+///
+/// SRV/TXT resolution needs `vibe.core.dns`, which only exists in vibe-core
+/// versions that ship the general DNS query API. When linked against an older
+/// vibe-core, `mongodb+srv://` connections throw instead of failing to compile.
+private SrvResolver liveSrvResolver() @safe
+{
+	static if (__traits(compiles, { import vibe.core.dns : lookupSRV, lookupTXT; }))
+	{
+		import vibe.core.dns : lookupSRV, lookupTXT;
+		import std.algorithm : map;
+		import std.array : array;
+
+		return SrvResolver(
+			(string name) @safe => lookupSRV(name).map!(r => MongoHost(r.target, r.port)).array,
+			(string host) @safe => lookupTXT(host)
+		);
+	}
+	else
+		throw new Exception("mongodb+srv:// requires a vibe-core version with vibe.core.dns (SRV/TXT) support");
+}
 
 /**
 	Represents a connection to a MongoDB server.
@@ -72,6 +95,9 @@ final class MongoClient {
 
 	package this(MongoClientSettings settings)
 	{
+		if (settings.srv)
+			applySrvSeedlist(settings, liveSrvResolver());
+
 		m_settings = settings;
 		m_topologyChanged = createManualEvent();
 
