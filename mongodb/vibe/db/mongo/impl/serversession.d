@@ -11,11 +11,18 @@ module vibe.db.mongo.impl.serversession;
 import vibe.data.bson;
 import vibe.db.mongo.impl.transaction : Transaction, TransactionState, withTransactionRetry;
 import core.time : MonoTime, Duration, minutes;
+import std.algorithm : map;
+import std.algorithm.mutation : remove, SwapStrategy;
+import std.array : array;
+import std.typecons : Nullable;
 
 @safe:
 
 /// MongoDB's default deadline for the whole transaction-with-retry loop (120 seconds).
 enum defaultTransactionTimeout = 2.minutes;
+
+/// MongoDB's safety margin: treat a session as about to expire one minute before its timeout.
+enum sessionSafetyMargin = 1.minutes;
 
 /// Builds a fresh logical session id document `{ id: <UUID binary subtype 0x04, 16 bytes> }`.
 Bson logicalSessionId()
@@ -123,12 +130,10 @@ struct ServerSession
 	/// Records the time the session was last used.
 	void touch(MonoTime now) @safe { m_lastUse = now; }
 
-	/// True when the session is within MongoDB's one-minute safety margin of `timeout`.
+	/// True when the session is within MongoDB's safety margin of `timeout`.
 	bool isAboutToExpire(MonoTime now, Duration timeout) @safe const
 	{
-		// TODO(B-sess9): lift the 1.minutes safety margin to a named
-		// `enum sessionSafetyMargin = 1.minutes;` so the magic constant has one home.
-		return now - m_lastUse >= timeout - 1.minutes;
+		return now - m_lastUse >= timeout - sessionSafetyMargin;
 	}
 }
 
@@ -143,6 +148,21 @@ unittest
 
 	assert(!session.isAboutToExpire(t0 + 5.minutes, 30.minutes),
 		"touch records last-use so the session is fresh");
+}
+
+/// At the safety-margin boundary the session is about to expire; just under it, it is still fresh.
+unittest
+{
+	import core.time : MonoTime, minutes, seconds;
+
+	auto session = ServerSession.create();
+	auto t0 = MonoTime.currTime;
+	session.touch(t0);
+
+	assert(session.isAboutToExpire(t0 + (30.minutes - sessionSafetyMargin), 30.minutes),
+		"a session idle for timeout minus the safety margin is about to expire");
+	assert(!session.isAboutToExpire(t0 + (30.minutes - sessionSafetyMargin) - 1.seconds, 30.minutes),
+		"just under the safety-margin boundary the session is still fresh");
 }
 
 /// The first transaction number on a fresh session is 1.
@@ -167,9 +187,8 @@ unittest
 struct ServerSessionPool
 {
 	private ServerSession[] m_available;
-	// TODO(B-sess2): the 30-minute default is a guess. Wire the server-advertised
-	// logicalSessionTimeoutMinutes (parsed in serverdescription.d) into this pool,
-	// using the MIN across data-bearing servers, and refresh it on topology changes.
+	/// Idle-session timeout, seeded from MongoDB's 30-minute default and refreshed
+	/// via `updateTimeout` from the topology-advertised logicalSessionTimeoutMinutes.
 	private Duration m_timeout = 30.minutes;
 
 	/// Returns a session ready for use, reusing a released one when available.
@@ -189,23 +208,23 @@ struct ServerSessionPool
 	/// Returns a session to the pool for later reuse.
 	void release(ServerSession session, MonoTime now = MonoTime.currTime) @safe
 	{
-		import std.algorithm : filter;
-		import std.array : array;
-
-		// TODO(B-sess7): this reallocates the whole pool on every release. Prune in
-		// place, or only when the pool length crosses a threshold, to amortize it.
-		m_available = m_available.filter!(s => !s.isAboutToExpire(now, m_timeout)).array;
+		m_available = m_available.remove!(s => s.isAboutToExpire(now, m_timeout), SwapStrategy.unstable);
 		session.touch(now);
 		m_available ~= session;
+	}
+
+	/// Updates the idle-session timeout from the topology-advertised logical session
+	/// timeout; a null value (none advertised) leaves the current timeout unchanged.
+	void updateTimeout(Nullable!Duration timeout) @safe
+	{
+		if (!timeout.isNull)
+			m_timeout = timeout.get;
 	}
 
 	/// Empties the pool, returning the lsids of every pooled session so they can
 	/// be ended on the server (the `endSessions` command on client shutdown).
 	Bson[] takeAllLsids() @safe
 	{
-		import std.algorithm : map;
-		import std.array : array;
-
 		auto lsids = m_available.map!(s => s.lsid).array;
 		m_available = null;
 		return lsids;
@@ -275,6 +294,23 @@ unittest
 
 	assert(soon.lsid == first.lsid,
 		"a session still within the timeout must be reused, not discarded");
+}
+
+/// updateTimeout shortens the idle window so a once-reusable session expires.
+unittest
+{
+	import core.time : MonoTime, minutes;
+	import std.typecons : Nullable;
+
+	ServerSessionPool pool;
+	pool.updateTimeout(Nullable!Duration(10.minutes));
+	auto t0 = MonoTime.currTime;
+	auto first = pool.acquire(t0);
+	pool.release(first, t0);
+	auto later = pool.acquire(t0 + 15.minutes);
+
+	assert(later.lsid != first.lsid,
+		"after updateTimeout(10m) a session idle 15m is discarded, not reused");
 }
 
 /// Releasing a session prunes pooled sessions already expired at that time.

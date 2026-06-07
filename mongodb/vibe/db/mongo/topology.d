@@ -20,6 +20,7 @@ import vibe.core.log;
 import std.random : uniform;
 import std.range : chain;
 import std.typecons : Nullable;
+import core.time : Duration;
 
 @safe:
 
@@ -2189,4 +2190,91 @@ unittest
 {
 	assert(supportsRetryableWrites(TopologyType.single) == false,
 		"standalone mongod rejects lsid/txnNumber, so retryable writes are unsupported on TopologyType.single");
+}
+
+/// The topology-wide logical session timeout: the MIN advertised logicalSessionTimeoutMinutes
+/// across data-bearing servers, or null when it cannot be determined.
+Nullable!Duration logicalSessionTimeout(const ServerDescription[] servers) @safe
+{
+	import core.time : minutes;
+	Nullable!int min;
+	foreach (s; servers)
+	{
+		if (!s.isDataBearing)
+			continue;
+		if (s.logicalSessionTimeoutMinutes.isNull)
+			return Nullable!Duration.init;
+		if (min.isNull || s.logicalSessionTimeoutMinutes.get < min.get)
+			min = s.logicalSessionTimeoutMinutes.get;
+	}
+	return min.isNull ? Nullable!Duration.init : Nullable!Duration(min.get.minutes);
+}
+
+/// logicalSessionTimeout returns 30.minutes for a single server advertising 30
+unittest
+{
+	import core.time : minutes;
+
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.logicalSessionTimeoutMinutes = 30;
+
+	auto timeout = logicalSessionTimeout([primary]);
+
+	assert(!timeout.isNull && timeout.get == 30.minutes,
+		"single server advertises a 30 minute session timeout");
+}
+
+/// logicalSessionTimeout returns the minimum advertised timeout across servers
+unittest
+{
+	import core.time : minutes;
+
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.logicalSessionTimeoutMinutes = 30;
+
+	ServerDescription secondary;
+	secondary.secondary = true;
+	secondary.logicalSessionTimeoutMinutes = 10;
+
+	auto timeout = logicalSessionTimeout([primary, secondary]);
+
+	assert(!timeout.isNull && timeout.get == 10.minutes,
+		"the topology timeout is the minimum advertised across servers");
+}
+
+/// logicalSessionTimeout returns null when a data-bearing server advertises no timeout
+unittest
+{
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.logicalSessionTimeoutMinutes = 30;
+
+	ServerDescription secondary;
+	secondary.secondary = true;
+
+	auto timeout = logicalSessionTimeout([primary, secondary]);
+
+	assert(timeout.isNull,
+		"a data-bearing server that does not advertise a session timeout disables sessions topology-wide");
+}
+
+/// logicalSessionTimeout excludes arbiters from the minimum computation
+unittest
+{
+	import core.time : minutes;
+
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.logicalSessionTimeoutMinutes = 30;
+
+	ServerDescription arbiter;
+	arbiter.arbiterOnly = true;
+	arbiter.logicalSessionTimeoutMinutes = 10;
+
+	auto timeout = logicalSessionTimeout([primary, arbiter]);
+
+	assert(!timeout.isNull && timeout.get == 30.minutes,
+		"arbiters are excluded from the session timeout computation");
 }

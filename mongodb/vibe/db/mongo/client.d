@@ -422,6 +422,17 @@ final class MongoClient {
 
 		m_topology.publish(newTopology);
 		m_topologyChanged.emit();
+		refreshSessionTimeout();
+	}
+
+	/// Recomputes the session pool's idle timeout from the topology-advertised
+	/// logical session timeout (the MIN across data-bearing servers).
+	private void refreshSessionTimeout()
+	{
+		import std.algorithm : map;
+		import std.array : array;
+		auto servers = m_topology.load().servers.map!(r => r.description).array;
+		m_sessionPool.updateTimeout(logicalSessionTimeout(servers));
 	}
 
 	private void probeAndUpdate(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
@@ -454,6 +465,7 @@ final class MongoClient {
 		auto current = m_topology.load();
 		m_topology.publish(desc.isNull ? applyFailed(current, host) : applyDescription(current, host, desc.get));
 		m_topologyChanged.emit();
+		refreshSessionTimeout();
 
 		m_monitors.reconcileWith(m_topology.load().allKnownHosts());
 	}

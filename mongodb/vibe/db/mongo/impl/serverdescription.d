@@ -98,6 +98,13 @@ struct ServerDescription
 		return setName.length > 0;
 	}
 
+	/// A data-bearing server holds data clients can read or write: a primary or
+	/// secondary, never an arbiter. Used to scope topology-wide logical session timeouts.
+	bool isDataBearing() @safe const @nogc pure nothrow
+	{
+		return (isPrimary || isSecondaryNode) && !arbiterOnly;
+	}
+
 	ServerType classifiedType() @safe const @nogc pure nothrow
 	{
 		if (msg == "isdbgrid")
@@ -275,6 +282,38 @@ struct ServerDescription
 	assert(!desc.isPrimary);
 	assert(!desc.isSecondaryNode);
 	assert(!desc.isReplicaSetMember);
+}
+
+/// isDataBearing returns true for a primary
+@safe unittest
+{
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	assert(desc.isDataBearing);
+}
+
+/// isDataBearing returns true for a secondary
+@safe unittest
+{
+	ServerDescription desc;
+	desc.secondary = true;
+	assert(desc.isDataBearing);
+}
+
+/// isDataBearing returns false for an arbiter
+@safe unittest
+{
+	ServerDescription desc;
+	desc.setName = "rs0";
+	desc.arbiterOnly = true;
+	assert(!desc.isDataBearing);
+}
+
+/// isDataBearing returns false for a default (unknown) description
+@safe unittest
+{
+	ServerDescription desc;
+	assert(!desc.isDataBearing);
 }
 
 /// classifiedType returns mongos when msg is isdbgrid

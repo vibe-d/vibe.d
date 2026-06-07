@@ -1,0 +1,7 @@
+{
+    "name": "session-timeout-test",
+    "description": "MongoDB server-advertised logical session timeout integration test",
+    "dependencies": {
+        "vibe-d:mongodb": {"path": "../../../"}
+    }
+}
