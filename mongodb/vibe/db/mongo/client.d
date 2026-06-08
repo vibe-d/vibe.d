@@ -18,9 +18,13 @@ import vibe.db.mongo.connection;
 import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.db.mongo.monitor;
+import vibe.db.mongo.impl.crud;
+import vibe.db.mongo.impl.bulkwrite;
 import vibe.db.mongo.impl.serversession : ServerSession, ServerSessionPool, MongoClientSession, endSessionsCommand;
 import vibe.db.mongo.impl.srv : SrvResolver, applySrvSeedlist;
 import vibe.db.mongo.impl.changestream;
+import vibe.db.mongo.impl.wireversion : WireVersion;
+import vibe.data.bson;
 
 import core.time : Duration, seconds, msecs, MonoTime;
 import std.conv;
@@ -241,6 +245,78 @@ final class MongoClient {
 	MongoDatabase getDatabase(string dbName)
 	{
 		return MongoDatabase(this, dbName);
+	}
+
+	/**
+		Performs a server-level bulk write (MongoDB 8.0+) across one or more
+		collections and databases in a single command.
+
+		Each `ClientBulkWriteModel` describes one insert/update/replace/delete
+		operation targeting a `db.collection` namespace; build them with the
+		`ClientBulkWriteModel.insertOne`/`updateOne`/... factories. The command runs
+		on the `admin` database against the primary, and its result cursor is fully
+		drained (via `getMore`) before parsing.
+
+		Params:
+			models = the write operations to perform (must be non-empty)
+			options = command-level options (ordered, verboseResults, writeConcern, ...)
+
+		Returns:
+			A `ClientBulkWriteResult` summarizing the writes. When
+			`options.verboseResults` is set, the per-operation result maps are
+			populated, keyed by operation index.
+
+		Throws:
+			$(D MongoException) if the server does not support the `bulkWrite`
+			command (MongoDB < 8.0). $(D MongoClientBulkWriteException) if individual
+			operations fail or a write-concern error occurs; its `partialResult`
+			carries the summary counts for the writes that did apply.
+	*/
+	ClientBulkWriteResult bulkWrite(ClientBulkWriteModel[] models,
+		ClientBulkWriteOptions options = ClientBulkWriteOptions.init)
+	{
+		import std.string : indexOf;
+
+		models = ensureInsertIds(models);
+		const verbose = !options.verboseResults.isNull && options.verboseResults.get;
+		Bson cmd = buildClientBulkWriteCommand(models, options);
+
+		{
+			auto conn = lockConnection();
+			enforce(conn.description.maxWireVersion >= WireVersion.v80,
+				"bulkWrite requires a MongoDB 8.0+ server");
+		}
+
+		auto admin = getDatabase("admin");
+		Bson response = admin.runWriteCommandChecked(cmd);
+
+		Bson cursor = response["cursor"];
+		Bson[] entries = cursor["firstBatch"].get!(Bson[]);
+		long cursorId = cursor["id"].get!long;
+
+		if (cursorId != 0) {
+			string ns = cursor["ns"].get!string;
+			string collection = ns[ns.indexOf('.') + 1 .. $];
+
+			while (cursorId != 0) {
+				Bson getMoreCmd = Bson([
+					"getMore": Bson(cursorId),
+					"collection": Bson(collection),
+				]);
+				Bson more = admin.runCommandChecked(getMoreCmd, __FUNCTION__, __FILE__, __LINE__, true);
+				Bson moreCursor = more["cursor"];
+				entries ~= moreCursor["nextBatch"].get!(Bson[]);
+				cursorId = moreCursor["id"].get!long;
+			}
+
+			Bson[string] drainedCursor;
+			foreach (string key, value; cursor.byKeyValue)
+				drainedCursor[key] = value;
+			drainedCursor["firstBatch"] = Bson(entries);
+			response["cursor"] = Bson(drainedCursor);
+		}
+
+		return parseClientBulkWriteResult(response, models, verbose);
 	}
 
 

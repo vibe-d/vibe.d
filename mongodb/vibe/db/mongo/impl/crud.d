@@ -15,6 +15,7 @@ import vibe.db.mongo.settings : ReadPreference;
 import vibe.data.bson;
 
 import std.typecons;
+import std.exception : enforce;
 
 @safe:
 
@@ -575,6 +576,18 @@ struct AggregateOptions
 	@ignore Nullable!ReadPreference readPreference;
 }
 
+/// Mixes in the standard optional `writeConcern` field shared by the write-option structs.
+mixin template WriteConcernOption()
+{
+	/**
+		A document that expresses the
+		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
+		of the insert command. Omit to use the default write concern.
+	*/
+	@embedNullable
+	Nullable!WriteConcern writeConcern;
+}
+
 /**
 	Standards: $(LINK https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#insert-update-replace-delete-and-bulk-writes)
 */
@@ -602,13 +615,7 @@ struct BulkWriteOptions {
 	@embedNullable
 	Nullable!bool bypassDocumentValidation;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -633,13 +640,7 @@ struct InsertOneOptions {
 	@embedNullable
 	Nullable!bool bypassDocumentValidation;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -674,13 +675,7 @@ struct InsertManyOptions {
 	@embedNullable
 	Nullable!bool ordered;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -735,13 +730,7 @@ struct UpdateOptions {
 	@embedNullable
 	Nullable!bool upsert;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -789,13 +778,7 @@ struct ReplaceOptions {
 	@embedNullable
 	Nullable!bool upsert;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -828,13 +811,7 @@ struct DeleteOptions {
 	@embedNullable
 	Nullable!Bson hint;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
