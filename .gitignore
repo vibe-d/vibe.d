@@ -53,3 +53,4 @@ tests/mongodb/_replica-set/log*
 tests/mongodb/readconcern/readconcern-test
 tests/mongodb/dead-connections/dead-connections-test
 tests/mongodb/_health-monitor/health-monitor-test
+tests/mongodb/change-stream/change-stream-test

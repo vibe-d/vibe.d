@@ -15,6 +15,7 @@ import vibe.db.mongo.collection;
 import vibe.db.mongo.settings : ReadConcern, ReadPreference, readPreferenceBson;
 import vibe.db.mongo.impl.retryablewrites : isRetryableWriteCommand, applyRetryableWrite;
 import vibe.db.mongo.impl.serversession : ServerSession;
+import vibe.db.mongo.impl.changestream;
 import vibe.data.bson;
 
 import core.time;
@@ -281,6 +282,37 @@ struct MongoDatabase
 			cmd["$readPreference"] = readPreferenceBson(pref, m_client.readPreferenceTags);
 
 		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTime, Nullable!ReadPreference(pref));
+	}
+
+	/** Opens a change stream over all collections in this database.
+
+		Returns a ChangeStream input range that tracks resume tokens and resumes on
+		transient errors. Requires a replica set or sharded cluster.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/changeStreams/)
+	*/
+	ChangeStream!R watch(R = Bson, S = Bson)(S[] pipeline = null, ChangeStreamOptions options = ChangeStreamOptions.init) @safe
+	{
+		auto client = m_client;
+		auto dbName = m_name;
+
+		static if (is(S == Bson))
+			Bson[] userPipeline = pipeline;
+		else {
+			import std.algorithm : map;
+			import std.array : array;
+			Bson[] userPipeline = pipeline.map!(stage => serializeToBson(stage)).array;
+		}
+
+		auto open = (ChangeStreamOptions opts) @safe {
+			auto db = MongoDatabase(client, dbName);
+			Bson command = Bson.emptyObject;
+			command["aggregate"] = Bson(1);
+			command["pipeline"] = serializeToBson(buildChangeStreamPipeline(opts, userPipeline));
+			command["cursor"] = Bson.emptyObject;
+			return db.runListCommand!R(command);
+		};
+		return ChangeStream!R(open, options);
 	}
 
 	/// Normalizes a command argument into its Bson wire form: Bson passes through,
