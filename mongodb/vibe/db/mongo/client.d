@@ -106,15 +106,44 @@ final class MongoClient {
 		m_settings = settings;
 		m_topologyChanged = createManualEvent();
 
-		discoverTopology();
+		// discoverTopology()/lockConnection() throw on an unreachable or invalid
+		// deployment. The throw must propagate, but destroying a live
+		// m_topologyChanged (LocalManualEvent) during the unwind segfaults in
+		// vibe-core (releaseRef -> disposeGCSafe outside an event-loop context).
+		// LocalManualEvent.init's destructor is a no-op (m_waiter is null), so we
+		// move it back to .init before rethrowing: the field dtor that then runs
+		// during unwind is harmless. The freshly-allocated waiter is leaked, but
+		// only on the failure path where the process is throwing out of the ctor.
+		try
+		{
+			// In load-balancer mode discoverTopology() fixes the topology to the single
+			// configured host without probing; otherwise it runs full SDAM discovery.
+			discoverTopology();
 
-		// force a connection to cause an exception for wrong URLs
-		lockConnection();
+			// force a connection to cause an exception for wrong URLs (and, in
+			// load-balancer mode, to run the serviceId-required handshake check)
+			lockConnection();
 
-		ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
-		m_monitors = new MonitorRegistry(prober, &onMonitorResult,
-			m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
-		m_monitors.reconcileWith(m_topology.load().allKnownHosts());
+			// Load-balancer mode runs no monitoring. The load balancer owns server
+			// health, so there is no SDAM monitor registry to set up.
+			if (!m_settings.loadBalanced)
+			{
+				ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
+				m_monitors = new MonitorRegistry(prober, &onMonitorResult,
+					m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
+				m_monitors.reconcileWith(m_topology.load().allKnownHosts());
+			}
+		}
+		catch (Exception e)
+		{
+			import std.algorithm.mutation : moveEmplace;
+			// moveEmplace overwrites the live m_topologyChanged with .init WITHOUT
+			// running its (crashing) destructor first, so the field dtor that runs
+			// during the rethrow unwind sees a null waiter and is a no-op.
+			LocalManualEvent harmless;
+			() @trusted { moveEmplace(harmless, m_topologyChanged); }();
+			throw e;
+		}
 	}
 
 	/// Returns the read preference configured for this client.
@@ -504,6 +533,15 @@ final class MongoClient {
 		scope (exit)
 			m_discoveryInProgress = false;
 
+		// Load-balancer mode runs no SDAM because the topology is fixed to the single
+		// configured host and the load balancer fronts the real backends, so there
+		// is nothing to probe or monitor. The serviceId check fires on first connect.
+		if (m_settings.loadBalanced)
+		{
+			publishTopology(loadBalancedTopology(m_settings.hosts[0]));
+			return;
+		}
+
 		TopologyDescription newTopology;
 		newTopology.type = initialTopologyType();
 		newTopology.seedCount = cast(uint) m_settings.hosts.length;
@@ -537,7 +575,14 @@ final class MongoClient {
 				: new MongoDriverException("No suitable server found during topology discovery");
 		}
 
-		m_topology.publish(newTopology);
+		publishTopology(newTopology);
+	}
+
+	/// Publishes a new topology snapshot and notifies waiters, then recomputes
+	/// the session timeout from the snapshot.
+	private void publishTopology(TopologyDescription topology)
+	{
+		m_topology.publish(topology);
 		m_topologyChanged.emit();
 		refreshSessionTimeout();
 	}
@@ -580,9 +625,7 @@ final class MongoClient {
 	private void onMonitorResult(MongoHost host, Nullable!ServerDescription desc, Duration rtt)
 	{
 		auto current = m_topology.load();
-		m_topology.publish(desc.isNull ? applyFailed(current, host) : applyDescription(current, host, desc.get));
-		m_topologyChanged.emit();
-		refreshSessionTimeout();
+		publishTopology(desc.isNull ? applyFailed(current, host) : applyDescription(current, host, desc.get));
 
 		m_monitors.reconcileWith(m_topology.load().allKnownHosts());
 	}

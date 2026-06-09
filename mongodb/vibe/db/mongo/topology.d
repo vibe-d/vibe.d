@@ -36,7 +36,8 @@ enum TopologyType
 	single,
 	replicaSetWithPrimary,
 	replicaSetNoPrimary,
-	sharded
+	sharded,
+	loadBalanced
 }
 
 bool supportsRetryableWrites(TopologyType type)
@@ -224,7 +225,8 @@ struct TopologyDescription
 
 	private void transitionType(ServerDescription.ServerType serverType)
 	{
-		if (type == TopologyType.single)
+		// single and loadBalanced are fixed by configuration; they bypass SDAM transitions.
+		if (type == TopologyType.single || type == TopologyType.loadBalanced)
 			return;
 
 		final switch (serverType) with (ServerDescription.ServerType)
@@ -487,6 +489,17 @@ struct ServerRecord
 	ServerDescription description;
 }
 
+/// Builds the fixed topology for load-balancer mode: a single load-balancer host,
+/// no discovery or monitoring (the load balancer fronts the real backends).
+TopologyDescription loadBalancedTopology(MongoHost host)
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.loadBalanced;
+	topo.servers = [ServerRecord(host, ServerDescription.init)];
+	topo.seedCount = 1;
+	return topo;
+}
+
 /// Default heartbeat frequency (10 seconds) used for staleness calculation.
 private enum long HEARTBEAT_FREQUENCY_USECS = 10_000_000;
 
@@ -601,8 +614,10 @@ unittest
 Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPreference pref,
 	long localThresholdMS = 15, long maxStalenessSeconds = -1, string[string][] tagSets = null)
 {
-	// Single topology: return the one server regardless of read preference
-	if (topology.type == TopologyType.single && topology.servers.length > 0)
+	// Single and load-balanced topologies are fixed to one host, returned regardless of
+	// read preference (the load balancer fronts the backends; pinning is per cursor via serviceId).
+	if ((topology.type == TopologyType.single || topology.type == TopologyType.loadBalanced)
+		&& topology.servers.length > 0)
 		return Nullable!MongoHost(topology.servers[0].host);
 
 	// For sharded topologies return a random mongos (read preference forwarded to mongos)
@@ -690,6 +705,33 @@ unittest
 	topo.type = TopologyType.single;
 
 	auto target = writeTarget(topo);
+	assert(!target.isNull);
+	assert(target.get == host);
+}
+
+/// selectServer returns the load-balancer host regardless of read preference
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("loadbalancer", 27017);
+	ServerDescription desc;
+	topo.update(host, desc);
+	topo.type = TopologyType.loadBalanced;
+
+	auto target = selectServer(topo, ReadPreference.secondary);
+	assert(!target.isNull);
+	assert(target.get == host);
+}
+
+/// loadBalancedTopology builds a loadBalanced topology with the configured host selectable
+unittest
+{
+	auto host = MongoHost("loadbalancer", 27017);
+	auto topo = loadBalancedTopology(host);
+
+	assert(topo.type == TopologyType.loadBalanced);
+
+	auto target = selectServer(topo, ReadPreference.primary);
 	assert(!target.isNull);
 	assert(target.get == host);
 }
@@ -1499,6 +1541,52 @@ unittest
 	assert(topo.type == TopologyType.replicaSetNoPrimary);
 }
 
+/// loadBalanced topology stays loadBalanced when an RSPrimary description arrives
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.loadBalanced;
+	auto host = MongoHost("lb-backend", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+	assert(primaryDesc.classifiedType() == ServerDescription.ServerType.RSPrimary);
+
+	topo.update(host, primaryDesc);
+	assert(topo.type == TopologyType.loadBalanced,
+		"a load-balanced topology must not transition based on SDAM");
+}
+
+/// loadBalanced topology stays loadBalanced for mongos, standalone and RSSecondary descriptions
+unittest
+{
+	auto host = MongoHost("lb-backend", 27017);
+
+	ServerDescription mongosDesc;
+	mongosDesc.msg = "isdbgrid";
+	assert(mongosDesc.classifiedType() == ServerDescription.ServerType.mongos);
+
+	ServerDescription standaloneDesc;
+	standaloneDesc.isWritablePrimary = true;
+	assert(standaloneDesc.classifiedType() == ServerDescription.ServerType.standalone);
+
+	ServerDescription secondaryDesc;
+	secondaryDesc.secondary = true;
+	secondaryDesc.setName = "rs0";
+	assert(secondaryDesc.classifiedType() == ServerDescription.ServerType.RSSecondary);
+
+	foreach (desc; [mongosDesc, standaloneDesc, secondaryDesc])
+	{
+		TopologyDescription topo;
+		topo.type = TopologyType.loadBalanced;
+
+		topo.update(host, desc);
+		assert(topo.type == TopologyType.loadBalanced,
+			"a load-balanced topology must not transition based on SDAM");
+	}
+}
+
 /// sharded topology only keeps mongos servers
 unittest
 {
@@ -2190,6 +2278,13 @@ unittest
 {
 	assert(supportsRetryableWrites(TopologyType.single) == false,
 		"standalone mongod rejects lsid/txnNumber, so retryable writes are unsupported on TopologyType.single");
+}
+
+/// supportsRetryableWrites returns true for a load-balanced topology
+unittest
+{
+	assert(supportsRetryableWrites(TopologyType.loadBalanced),
+		"a load-balanced deployment fronts a mongos, which supports retryable writes");
 }
 
 /// The topology-wide logical session timeout: the MIN advertised logicalSessionTimeoutMinutes

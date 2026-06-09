@@ -466,6 +466,7 @@ final class MongoConnection {
 
 		auto reply = runCommand!(Bson, MongoAuthException)("admin", handshake);
 		m_description = deserializeBson!ServerDescription(reply);
+		enforceLoadBalancedServiceId(m_settings.loadBalanced, m_description);
 
 		if (m_description.satisfiesVersion(WireVersion.v36))
 			m_supportsOpMsg = true;

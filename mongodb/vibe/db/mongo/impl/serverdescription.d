@@ -50,6 +50,9 @@ struct ServerDescription
 	float roundTripTime = 0;
 	LastWrite lastWrite;
 	Nullable!BsonObjectID opTime;
+	/// The backend service id returned by a load-balanced server's `hello` reply,
+	/// used to pin cursors/transactions to the same backend. Absent for non-LB servers.
+	Nullable!BsonObjectID serviceId;
 	ServerType type = ServerType.unknown;
 	int minWireVersion, maxWireVersion;
 	string me;
@@ -129,6 +132,21 @@ struct ServerDescription
 
 		return ServerType.unknown;
 	}
+}
+
+/// deserializes the load-balancer serviceId BsonObjectID from a hello reply
+unittest
+{
+	auto id = BsonObjectID.generate();
+	auto reply = Bson([
+		"ok": Bson(1.0),
+		"isWritablePrimary": Bson(true),
+		"maxWireVersion": Bson(21),
+		"serviceId": Bson(id),
+	]);
+	auto desc = deserializeBson!ServerDescription(reply);
+	assert(!desc.serviceId.isNull);
+	assert(desc.serviceId.get == id);
 }
 
 /// satisfiesVersion returns true for versions up to maxWireVersion v36
@@ -387,6 +405,17 @@ package(vibe.db.mongo) bool matchesReplicaSet(string expectedSet, ref const Serv
 	return desc.setName == expectedSet;
 }
 
+/// Enforces the load-balancer requirement that a `loadBalanced=true` connection's
+/// hello reply includes a `serviceId`; throws if the server is not behind a load balancer.
+package(vibe.db.mongo) void enforceLoadBalancedServiceId(bool loadBalanced, in ServerDescription desc) @safe
+{
+	import std.exception : enforce;
+	if (!loadBalanced)
+		return;
+	enforce(!desc.serviceId.isNull,
+		"loadBalanced=true but the server did not return a serviceId — it is not behind a load balancer");
+}
+
 /// matchesReplicaSet returns true when no replica set is configured
 @safe @nogc pure nothrow unittest
 {
@@ -423,4 +452,29 @@ package(vibe.db.mongo) bool matchesReplicaSet(string expectedSet, ref const Serv
 {
 	ServerDescription desc;
 	assert(matchesReplicaSet("", desc));
+}
+
+/// enforceLoadBalancedServiceId throws when loadBalanced but the hello reply has no serviceId
+unittest
+{
+	import std.exception : assertThrown;
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.maxWireVersion = 21;
+	assertThrown(enforceLoadBalancedServiceId(true, desc));
+}
+
+/// enforceLoadBalancedServiceId does nothing when loadBalanced is false even without a serviceId
+@safe unittest
+{
+	ServerDescription desc;
+	enforceLoadBalancedServiceId(false, desc);
+}
+
+/// enforceLoadBalancedServiceId does nothing when loadBalanced and a serviceId is present
+@safe unittest
+{
+	ServerDescription desc;
+	desc.serviceId = BsonObjectID.generate();
+	enforceLoadBalancedServiceId(true, desc);
 }

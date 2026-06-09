@@ -35,6 +35,25 @@ import std.typecons : Nullable, nullable;
  * If the URL is not successfully parsed the information in the MongoClientSettings instance may be
  * incomplete and should not be used.
  */
+/// Validates load-balancer mode constraints: it is incompatible with a replica
+/// set and requires a single host. Logs and returns false on violation.
+private bool isValidLoadBalancedConfig(in MongoClientSettings cfg) @safe
+{
+	if (!cfg.loadBalanced)
+		return true;
+	if (cfg.replicaSet.length)
+	{
+		logError("loadBalanced=true is incompatible with replicaSet");
+		return false;
+	}
+	if (cfg.hosts.length > 1)
+	{
+		logError("loadBalanced=true requires a single host");
+		return false;
+	}
+	return true;
+}
+
 bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 @safe {
 	import std.exception : enforce;
@@ -266,6 +285,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 		if (!buildServerApi(sawApiVersion, apiVersionValue, apiStrictValue, apiDeprecationValue, cfg.serverApi))
 			return false;
 	}
+
+	if (!isValidLoadBalancedConfig(cfg))
+		return false;
 
 	return true;
 }
@@ -668,6 +690,51 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=true"));
 	assert(cfg.loadBalanced);
+}
+
+/// parseMongoDBUrl rejects loadBalanced combined with replicaSet
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=true&replicaSet=rs0"),
+		"loadBalanced=true is incompatible with replicaSet and must be rejected");
+}
+
+/// parseMongoDBUrl rejects loadBalanced with replicaSet regardless of option order
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0&loadBalanced=true"),
+		"loadBalanced=true is incompatible with replicaSet and must be rejected");
+}
+
+/// parseMongoDBUrl accepts loadBalanced=false alongside replicaSet
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=false&replicaSet=rs0"));
+	assert(cfg.replicaSet == "rs0");
+}
+
+/// parseMongoDBUrl rejects loadBalanced with more than one seed host
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://host1:27017,host2:27017/?loadBalanced=true"),
+		"loadBalanced=true requires a single host");
+}
+
+/// parseMongoDBUrl accepts a multi-host URL when loadBalanced is off
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://h1:27017,h2:27017/"));
+	assert(cfg.hosts.length == 2);
 }
 
 /// parseMongoDBUrl parses localThresholdMS option

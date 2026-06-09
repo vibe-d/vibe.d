@@ -313,6 +313,10 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 		if( m_cursor == 0 )
 			return true;
 
+		// TODO(loadBalanced): in load-balancer mode the cursor must be PINNED to the
+		// connection (serviceId) that opened it. getMore and killCursors must reuse
+		// that exact connection, not a fresh lockConnection(). Capture the connection
+		// at find()/first-batch time and reuse it here and in killCursors().
 		auto conn = m_client.lockConnection();
 		conn.getMore!DocType(m_collection, m_nret, m_cursor, &handleReply, &handleDocument);
 		return m_currentDoc >= m_documents.length;
