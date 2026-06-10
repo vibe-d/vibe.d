@@ -55,3 +55,6 @@ tests/mongodb/dead-connections/dead-connections-test
 tests/mongodb/_health-monitor/health-monitor-test
 tests/mongodb/change-stream/change-stream-test
 tests/mongodb/loadbalanced/lb-cluster
+tests/mongodb/stable-api/stable-api-test
+tests/mongodb/session-timeout/session-timeout-test
+tests/mongodb/dead-connections/ready
