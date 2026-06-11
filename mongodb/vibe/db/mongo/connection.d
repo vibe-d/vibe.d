@@ -236,14 +236,19 @@ unittest
 /// Builds the exception for a non-ok command response: a `MongoStepDownException` for
 /// stale-topology codes, otherwise the generic `FallbackException`. In both cases the
 /// returned exception carries the server `code`.
-Exception commandFailureException(FallbackException = MongoDriverException)(string message, MongoServerErrorCode code) @safe
+Exception commandFailureException(FallbackException = MongoDriverException)(
+	string message, MongoServerErrorCode code, string[] errorLabels = null) @safe
 {
 	import vibe.db.mongo.monitor : isStaleTopologyError;
 
+	MongoException e;
 	if (isStaleTopologyError(code))
-		return new MongoStepDownException(message, code);
+		e = new MongoStepDownException(message, code);
+	else
+		e = new FallbackException(message, code);
 
-	return new FallbackException(message, code);
+	e.errorLabels = errorLabels;
+	return e;
 }
 
 unittest
@@ -270,6 +275,84 @@ unittest
 	auto e = commandFailureException("network timeout", MongoServerErrorCode.networkTimeout);
 	assert((cast(MongoException) e).code == MongoServerErrorCode.networkTimeout,
 		"a non-stale command failure must carry its server error code");
+}
+
+/// commandFailureException attaches the server-reported error labels to the exception
+unittest
+{
+	auto e = commandFailureException("transient failure", MongoServerErrorCode.duplicateKey,
+		["TransientTransactionError"]);
+	assert((cast(MongoException) e).hasErrorLabel("TransientTransactionError"),
+		"commandFailureException must attach the reply's error labels so hasErrorLabel works");
+}
+
+/// Extracts the server-reported `errorLabels` array from a command reply
+/// (e.g. ["TransientTransactionError"]); an empty array when none are present.
+string[] parseErrorLabels(Bson reply) @safe
+{
+	return reply["errorLabels"].opt!(Bson[]).map!(b => b.get!string).array;
+}
+
+/// parseErrorLabels extracts the errorLabels array from a command reply
+unittest
+{
+	auto reply = Bson(["errorLabels": Bson([Bson("TransientTransactionError"), Bson("RetryableWriteError")])]);
+	assert(parseErrorLabels(reply) == ["TransientTransactionError", "RetryableWriteError"],
+		"parseErrorLabels returns the reply's errorLabels in order");
+}
+
+/// parseErrorLabels yields an empty array for replies without a proper errorLabels array
+unittest
+{
+	// absent field (a normal successful reply)
+	assert(parseErrorLabels(Bson(["ok": Bson(1.0)])) == [],
+		"a reply without errorLabels yields no labels");
+	// present but not an array (malformed/hostile reply) must not throw
+	assert(parseErrorLabels(Bson(["errorLabels": Bson("oops")])) == [],
+		"a non-array errorLabels yields no labels rather than throwing");
+}
+
+/// Reads the server-reported error `code` from a command reply, defaulting to 0
+/// (unknown) when the reply omits it.
+MongoServerErrorCode serverErrorCode(Bson reply) @safe
+{
+	return cast(MongoServerErrorCode) reply["code"].opt!int(0);
+}
+
+/// serverErrorCode reads the reply's code, falling back to 0 when absent
+unittest
+{
+	assert(serverErrorCode(Bson(["code": Bson(112)])) == cast(MongoServerErrorCode) 112,
+		"serverErrorCode returns the reply's code");
+	assert(serverErrorCode(Bson(["ok": Bson(1.0)])) == cast(MongoServerErrorCode) 0,
+		"a reply without a code yields 0");
+}
+
+/// Builds the command-failure exception from a non-ok reply: message from `errmsg`,
+/// the server `code`, and the reply's `errorLabels` (so `hasErrorLabel` works).
+Exception commandFailureFromReply(FallbackException = MongoDriverException)(
+	Bson reply, string errorInfo, string errorFile, size_t errorLine) @safe
+{
+	return commandFailureException!FallbackException(
+		formatCommandError("command failed: " ~ reply["errmsg"].opt!string("(no message)"), errorInfo, errorFile, errorLine),
+		serverErrorCode(reply), parseErrorLabels(reply));
+}
+
+/// commandFailureFromReply builds the failure exception from a reply, carrying its error labels and code
+unittest
+{
+	auto reply = Bson([
+		"ok": Bson(0.0),
+		"code": Bson(112),
+		"errmsg": Bson("WriteConflict"),
+		"errorLabels": Bson([Bson("TransientTransactionError")]),
+	]);
+
+	auto e = cast(MongoException) commandFailureFromReply(reply, "ctx", "file.d", 1);
+	assert(e.hasErrorLabel("TransientTransactionError"),
+		"the exception built from a failing reply carries the reply's error labels");
+	assert(e.code == cast(MongoServerErrorCode) 112,
+		"the exception built from a failing reply carries the server code");
 }
 
 /// Classifies a thrown exception from the wire exchange: a MongoException passes through
@@ -766,13 +849,11 @@ final class MongoConnection {
 
 		if (testOk && ret["ok"].get!double != 1.0)
 		{
-			auto code = cast(MongoServerErrorCode) ret["code"].opt!int(0);
+			auto code = serverErrorCode(ret);
 			if (m_onCommandError !is null)
 				m_onCommandError(m_connectedHost, code);
 
-			throw commandFailureException!CommandFailException(
-				formatCommandError("command failed: " ~ ret["errmsg"].opt!string("(no message)"), errorInfo, errorFile, errorLine),
-				code);
+			throw commandFailureFromReply!CommandFailException(ret, errorInfo, errorFile, errorLine);
 		}
 
 		return ret;
@@ -897,8 +978,13 @@ final class MongoConnection {
 		auto id = sendMsg(-1, 0, command);
 		recvMsg!needsDup(id, (flags, scope root) @safe {
 			if (root["ok"].get!double != 1.0)
-				throw new MongoDriverException(formatCommandError("error response: "
-					~ root["errmsg"].opt!string("(no message)"), errorInfo, errorFile, errorLine));
+			{
+				auto failure = new MongoDriverException(
+					formatCommandError("error response: " ~ root["errmsg"].opt!string("(no message)"), errorInfo, errorFile, errorLine),
+					serverErrorCode(root));
+				failure.errorLabels = parseErrorLabels(root);
+				throw failure;
+			}
 
 			auto cursor = root["cursor"];
 			if (cursor.type == Bson.Type.null_)
