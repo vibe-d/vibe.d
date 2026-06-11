@@ -60,12 +60,17 @@ void testApiVersionAccepted(ushort port)
 
 /// apiStrict makes the server reject a command outside Stable API v1, proving the
 /// driver actually transmits apiVersion+apiStrict (the control run, without them,
-/// shows the same command normally succeeds).
+/// shows the same command normally succeeds). Servers before 5.0 predate the
+/// Stable API and silently ignore the fields, so the enforcement check is skipped.
 void testApiStrictEnforced(ushort port)
 {
 	auto control = connectMongoDB("mongodb://127.0.0.1:" ~ port.to!string ~ "/");
 	auto controlReply = control.getDatabase("admin").runCommandChecked(Bson(["serverStatus": Bson(1)]));
 	assert(controlReply["ok"].get!double == 1.0, "serverStatus succeeds without apiStrict");
+
+	auto buildInfo = control.getDatabase("admin").runCommandChecked(Bson(["buildInfo": Bson(1)]));
+	if (buildInfo["versionArray"][0].get!int < 5)
+		return;
 
 	auto strict = connectMongoDB("mongodb://127.0.0.1:" ~ port.to!string ~ "/?apiVersion=1&apiStrict=true");
 	bool rejected = false;
