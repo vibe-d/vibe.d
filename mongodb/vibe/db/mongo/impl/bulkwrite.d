@@ -751,6 +751,29 @@ unittest {
 	assert(result.deletedCount == 1);
 }
 
+// reads counts and verbose idx/n when the server returns them as int32 (MongoDB 8.0 wire form)
+unittest {
+	auto response = Bson([
+		"ok": Bson(1.0),
+		"nInserted": Bson(0), "nMatched": Bson(1), "nModified": Bson(1),
+		"nUpserted": Bson(0), "nDeleted": Bson(0),
+		"cursor": Bson([
+			"id": Bson(0L),
+			"firstBatch": Bson([
+				Bson(["ok": Bson(1.0), "idx": Bson(0), "n": Bson(1), "nModified": Bson(1)]),
+			]),
+		]),
+	]);
+	auto models = [ ClientBulkWriteModel.updateOne("test.pizzas",
+		Bson(["size": Bson("medium")]), Bson(["$set": Bson(["price": Bson(15)])])) ];
+
+	auto result = parseClientBulkWriteResult(response, models, true);
+
+	assert(result.matchedCount == 1);
+	assert(result.modifiedCount == 1);
+	assert(result.updateResults[0] == UpdateResult(1, 1));
+}
+
 // leaves per-op result maps empty and hasVerboseResults false when verbose is false
 unittest {
 	auto response = Bson([
