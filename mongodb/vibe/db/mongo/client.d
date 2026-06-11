@@ -328,10 +328,9 @@ final class MongoClient {
 			string collection = ns[ns.indexOf('.') + 1 .. $];
 
 			while (cursorId != 0) {
-				Bson getMoreCmd = Bson([
-					"getMore": Bson(cursorId),
-					"collection": Bson(collection),
-				]);
+				Bson getMoreCmd = Bson.emptyObject; // order matters: getMore must be the first field
+				getMoreCmd["getMore"] = Bson(cursorId);
+				getMoreCmd["collection"] = Bson(collection);
 				Bson more = admin.runCommandChecked(getMoreCmd, __FUNCTION__, __FILE__, __LINE__, true);
 				Bson moreCursor = more["cursor"];
 				entries ~= moreCursor["nextBatch"].get!(Bson[]);

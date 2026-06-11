@@ -478,19 +478,42 @@ private bool isUpdateDocument(Bson update) @safe {
 */
 private Bson buildClientBulkWriteOp(ClientBulkWriteModel model, size_t nsIndex) @safe {
 	auto nsRef = Bson(cast(int) nsIndex);
+	// empty object because order is important: the operation discriminator
+	// (insert/update/delete) must be the first field so the server identifies the op type.
+	Bson op = Bson.emptyObject;
 	final switch (model.type) {
 		case ClientBulkWriteType.insertOne:
-			return Bson(["insert": nsRef, "document": model.document]);
+			op["insert"] = nsRef;
+			op["document"] = model.document;
+			return op;
 		case ClientBulkWriteType.updateOne:
-			return Bson(["update": nsRef, "filter": model.filter, "updateMods": model.update, "multi": Bson(false)]);
+			op["update"] = nsRef;
+			op["filter"] = model.filter;
+			op["updateMods"] = model.update;
+			op["multi"] = Bson(false);
+			return op;
 		case ClientBulkWriteType.updateMany:
-			return Bson(["update": nsRef, "filter": model.filter, "updateMods": model.update, "multi": Bson(true)]);
+			op["update"] = nsRef;
+			op["filter"] = model.filter;
+			op["updateMods"] = model.update;
+			op["multi"] = Bson(true);
+			return op;
 		case ClientBulkWriteType.deleteOne:
-			return Bson(["delete": nsRef, "filter": model.filter, "multi": Bson(false)]);
+			op["delete"] = nsRef;
+			op["filter"] = model.filter;
+			op["multi"] = Bson(false);
+			return op;
 		case ClientBulkWriteType.deleteMany:
-			return Bson(["delete": nsRef, "filter": model.filter, "multi": Bson(true)]);
+			op["delete"] = nsRef;
+			op["filter"] = model.filter;
+			op["multi"] = Bson(true);
+			return op;
 		case ClientBulkWriteType.replaceOne:
-			return Bson(["update": nsRef, "filter": model.filter, "updateMods": model.document, "multi": Bson(false)]);
+			op["update"] = nsRef;
+			op["filter"] = model.filter;
+			op["updateMods"] = model.document;
+			op["multi"] = Bson(false);
+			return op;
 	}
 }
 
@@ -999,6 +1022,11 @@ unittest {
 
 	auto ops = cmd["ops"].get!(Bson[]);
 	assert(ops.length == 2);
+
+	string firstField;
+	foreach (string key, value; ops[0].byKeyValue) { firstField = key; break; }
+	assert(firstField == "update", "the operation discriminator must be the first field so the server identifies the op type");
+
 	assert(ops[0]["update"].get!int == 0);
 	assert(ops[0]["filter"] == filter);
 	assert(ops[0]["updateMods"] == mods);
