@@ -166,7 +166,13 @@ final class MongoClient {
 	*/
 	MongoClientSession startSession()
 	{
-		return MongoClientSession(m_sessionPool.acquire(), &releaseServerSession);
+		return MongoClientSession(m_sessionPool.acquire(), &releaseServerSession, &runSessionCommand);
+	}
+
+	/// Runs a session control command (commitTransaction/abortTransaction) on the primary.
+	private Bson runSessionCommand(Bson command) @safe
+	{
+		return lockConnectionToPrimary().runCommand("admin", command);
 	}
 
 	/// Checks out a server session for an implicit session on a single operation.

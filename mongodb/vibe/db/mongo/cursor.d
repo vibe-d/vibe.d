@@ -16,6 +16,7 @@ import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
 import vibe.db.mongo.impl.commands : buildFindCommand, collectionFromNamespace, reduceLimit;
 import vibe.db.mongo.settings : ReadPreference, MongoHost;
+import vibe.db.mongo.impl.serversession : MongoClientSession, inActiveTransaction;
 
 import core.time;
 import std.array : array;
@@ -49,7 +50,7 @@ struct MongoCursor(DocType = Bson) {
 		m_data = new MongoGenericCursor!DocType(client, collection, cursor, existing_documents);
 	}
 
-	this(Q)(MongoClient client, string database, string collection, Q query, FindOptions options)
+	this(Q)(MongoClient client, string database, string collection, Q query, FindOptions options, MongoClientSession* session = null)
 	{
 		Bson command = Bson.emptyObject;
 		command["find"] = Bson(collection);
@@ -65,14 +66,14 @@ struct MongoCursor(DocType = Bson) {
 		auto pref = options.readPreference.isNull ? client.readPreference : options.readPreference.get;
 		auto result = buildFindCommand(command, options, pref);
 
-		this(client, result.command, result.batchSize, result.getMoreMaxTime, Nullable!ReadPreference(pref));
+		this(client, result.command, result.batchSize, result.getMoreMaxTime, Nullable!ReadPreference(pref), session);
 	}
 
 	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max,
-		Nullable!ReadPreference pref = Nullable!ReadPreference.init)
+		Nullable!ReadPreference pref = Nullable!ReadPreference.init, MongoClientSession* session = null)
 	{
 		// TODO: avoid memory allocation, if possible
-		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTime, pref);
+		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTime, pref, session);
 	}
 
 	this(this)
@@ -414,10 +415,11 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		long m_queryLimit;
 		ReadPreference m_readPreference;
 		MongoHost m_pinnedHost;
+		MongoClientSession* m_session;
 	}
 
 	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max,
-		Nullable!ReadPreference pref = Nullable!ReadPreference.init)
+		Nullable!ReadPreference pref = Nullable!ReadPreference.init, MongoClientSession* session = null)
 	{
 		m_client = client;
 		m_findQuery = command;
@@ -425,6 +427,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		m_maxTime = getMoreMaxTime;
 		m_database = command["$db"].opt!string;
 		m_readPreference = pref.isNull ? client.readPreference : pref.get;
+		m_session = session;
 	}
 
 	@property bool alive() @safe nothrow { return m_cursor != 0; }
@@ -441,9 +444,13 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		if( m_cursor == 0 )
 			return true;
 
+		Bson sessionContext = m_session is null
+			? Bson.emptyObject
+			: m_session.transactionContext();
+
 		auto conn = m_client.lockConnectionToHost(m_pinnedHost);
 		conn.getMore!DocType(m_cursor, m_database, m_collection, m_batchSize,
-			&handleReply, &handleDocument, m_maxTime, Nullable!ReadPreference(m_readPreference));
+			&handleReply, &handleDocument, m_maxTime, Nullable!ReadPreference(m_readPreference), sessionContext);
 		return m_readDoc >= m_documents.length;
 	}
 
@@ -488,8 +495,14 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 	private void startIterating()
 	@safe {
 		// A cursor id is only valid on the server that created it, so pin one host
-		// and reuse it for getMore/killCursors.
-		m_pinnedHost = m_client.resolveHostForRead(m_readPreference);
+		// and reuse it for getMore/killCursors. Transaction reads must hit the
+		// primary and carry the session so they see their own uncommitted writes.
+		const inTransaction = inActiveTransaction(m_session);
+		if (inTransaction)
+			m_findQuery = m_session.applyToCommand(m_findQuery);
+		m_pinnedHost = inTransaction
+			? m_client.resolveHostForRead(ReadPreference.primary)
+			: m_client.resolveHostForRead(m_readPreference);
 		auto conn = m_client.lockConnectionToHost(m_pinnedHost);
 		m_totalReceived = 0;
 		m_queryLimit = m_findQuery["limit"].opt!long(0);

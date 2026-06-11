@@ -22,6 +22,7 @@ import vibe.db.mongo.impl.changestream;
 
 import vibe.core.log;
 import vibe.db.mongo.client;
+import vibe.db.mongo.impl.serversession : MongoClientSession;
 import vibe.db.mongo.impl.commands : splitNamespace, buildDeleteCommand, buildUpdateCommand, buildCountPipeline, buildAggregateCommand;
 import vibe.db.mongo.settings : ReadPreference;
 
@@ -153,7 +154,7 @@ struct MongoCollection {
 
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/insert/)
 	*/
-	InsertOneResult insertOne(T)(T document, InsertOneOptions options = InsertOneOptions.init)
+	InsertOneResult insertOne(T)(T document, InsertOneOptions options = InsertOneOptions.init, MongoClientSession* session = null)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
@@ -172,12 +173,12 @@ struct MongoCollection {
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
 
-		database.runWriteCommandChecked(cmd).handleWriteResult(res);
+		database.runWriteCommandChecked(cmd, session).handleWriteResult(res);
 		return res;
 	}
 
 	/// ditto
-	InsertManyResult insertMany(T)(T[] documents, InsertManyOptions options = InsertManyOptions.init)
+	InsertManyResult insertMany(T)(T[] documents, InsertManyOptions options = InsertManyOptions.init, MongoClientSession* session = null)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
@@ -202,7 +203,7 @@ struct MongoCollection {
 			cmd[k] = v;
 
 		auto res = InsertManyResult(insertedIds);
-		database.runWriteCommandChecked(cmd).handleWriteResult!"insertedCount"(res);
+		database.runWriteCommandChecked(cmd, session).handleWriteResult!"insertedCount"(res);
 		return res;
 	}
 
@@ -214,10 +215,10 @@ struct MongoCollection {
 
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
 	*/
-	DeleteResult deleteOne(T)(T filter, DeleteOptions options = DeleteOptions.init)
+	DeleteResult deleteOne(T)(T filter, DeleteOptions options = DeleteOptions.init, MongoClientSession* session = null)
 	@trusted {
 		int limit = 1;
-		return deleteImpl([filter], options, (&limit)[0 .. 1]);
+		return deleteImpl([filter], options, (&limit)[0 .. 1], session);
 	}
 
 	/**
@@ -228,11 +229,11 @@ struct MongoCollection {
 
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
 	*/
-	DeleteResult deleteMany(T)(T filter, DeleteOptions options = DeleteOptions.init)
+	DeleteResult deleteMany(T)(T filter, DeleteOptions options = DeleteOptions.init, MongoClientSession* session = null)
 	@safe
 	if (!is(T == DeleteOptions))
 	{
-		return deleteImpl([filter], options);
+		return deleteImpl([filter], options, null, session);
 	}
 
 	/**
@@ -243,14 +244,14 @@ struct MongoCollection {
 
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/delete/)
 	*/
-	DeleteResult deleteAll(DeleteOptions options = DeleteOptions.init)
+	DeleteResult deleteAll(DeleteOptions options = DeleteOptions.init, MongoClientSession* session = null)
 	@safe {
-		return deleteImpl([Bson.emptyObject], options);
+		return deleteImpl([Bson.emptyObject], options, null, session);
 	}
 
 	/// Implementation helper. It's possible to set custom delete limits with
 	/// this method, otherwise it's identical to `deleteOne` and `deleteMany`.
-	DeleteResult deleteImpl(T)(T[] queries, DeleteOptions options = DeleteOptions.init, scope int[] limits = null)
+	DeleteResult deleteImpl(T)(T[] queries, DeleteOptions options = DeleteOptions.init, scope int[] limits = null, MongoClientSession* session = null)
 	@safe {
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
@@ -264,7 +265,7 @@ struct MongoCollection {
 		Bson cmd = buildDeleteCommand(m_name, queryBsons, serializeToBson(options), limits);
 
 		DeleteResult res;
-		database.runWriteCommandChecked(cmd).handleWriteResult!"deletedCount"(res);
+		database.runWriteCommandChecked(cmd, session).handleWriteResult!"deletedCount"(res);
 		return res;
 	}
 
@@ -281,22 +282,22 @@ struct MongoCollection {
 
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
 	*/
-	UpdateResult replaceOne(T, U)(T filter, U replacement, ReplaceOptions options)
+	UpdateResult replaceOne(T, U)(T filter, U replacement, ReplaceOptions options, MongoClientSession* session = null)
 	@safe {
 		UpdateOptions uoptions;
 		static foreach (f; FieldNameTuple!ReplaceOptions)
 			__traits(getMember, uoptions, f) = __traits(getMember, options, f);
 		Bson opts = Bson.emptyObject;
 		opts["multi"] = Bson(false);
-		return updateImpl([filter], [replacement], [opts], uoptions, true, false);
+		return updateImpl([filter], [replacement], [opts], uoptions, true, false, session);
 	}
 
 	/// ditto
-	UpdateResult replaceOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	UpdateResult replaceOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init, MongoClientSession* session = null)
 	@safe {
 		Bson opts = Bson.emptyObject;
 		opts["multi"] = Bson(false);
-		return updateImpl([filter], [replacement], [opts], options, true, false);
+		return updateImpl([filter], [replacement], [opts], options, true, false, session);
 	}
 
 	///
@@ -329,11 +330,11 @@ struct MongoCollection {
 
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
 	*/
-	UpdateResult updateOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	UpdateResult updateOne(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init, MongoClientSession* session = null)
 	@safe {
 		Bson opts = Bson.emptyObject;
 		opts["multi"] = Bson(false);
-		return updateImpl([filter], [replacement], [opts], options, false, true);
+		return updateImpl([filter], [replacement], [opts], options, false, true, session);
 	}
 
 	/**
@@ -343,18 +344,18 @@ struct MongoCollection {
 
 		Standards: $(LINK https://www.mongodb.com/docs/manual/reference/command/update/)
 	*/
-	UpdateResult updateMany(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init)
+	UpdateResult updateMany(T, U)(T filter, U replacement, UpdateOptions options = UpdateOptions.init, MongoClientSession* session = null)
 	@safe {
 		Bson opts = Bson.emptyObject;
 		opts["multi"] = Bson(true);
-		return updateImpl([filter], [replacement], [opts], options, false, true);
+		return updateImpl([filter], [replacement], [opts], options, false, true, session);
 	}
 
 	/// Implementation helper. It's possible to set custom per-update object
 	/// options with this method, otherwise it's identical to `replaceOne`,
 	/// `updateOne` and `updateMany`.
 	UpdateResult updateImpl(T, U, O)(T[] queries, U[] documents, O[] perUpdateOptions, UpdateOptions options = UpdateOptions.init,
-		bool mustBeDocument = false, bool mustBeModification = false)
+		bool mustBeDocument = false, bool mustBeModification = false, MongoClientSession* session = null)
 	@safe
 	in(queries.length == documents.length && documents.length == perUpdateOptions.length,
 		"queries, documents and perUpdateOptions must have same length")
@@ -413,7 +414,7 @@ struct MongoCollection {
 
 		Bson cmd = buildUpdateCommand(m_name, queryBsons, documentBsons, perUpdateOptionBsons, serializeToBson(options));
 
-		auto res = database.runWriteCommandChecked(cmd);
+		auto res = database.runWriteCommandChecked(cmd, session);
 		auto ret = UpdateResult(
 			res["n"].to!long,
 			res["nModified"].to!long,
@@ -491,10 +492,10 @@ struct MongoCollection {
 	  - $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	  - $(LREF findOne)
 	 */
-	MongoCursor!R find(R = Bson, Q)(Q query, FindOptions options = FindOptions.init)
+	MongoCursor!R find(R = Bson, Q)(Q query, FindOptions options = FindOptions.init, MongoClientSession* session = null)
 	{
 		applyDefaultReadConcern(options);
-		return MongoCursor!R(m_client, m_db.name, m_name, query, options);
+		return MongoCursor!R(m_client, m_db.name, m_name, query, options, session);
 	}
 
 	///
@@ -604,13 +605,13 @@ struct MongoCollection {
 		- $(LINK http://www.mongodb.org/display/DOCS/Querying)
 		- $(LREF find)
 	 */
-	auto findOne(R = Bson, T)(T query, FindOptions options = FindOptions.init)
+	auto findOne(R = Bson, T)(T query, FindOptions options = FindOptions.init, MongoClientSession* session = null)
 	{
 		import std.traits;
 		import std.typecons;
 
 		options.limit = 1;
-		auto c = find!R(query, options);
+		auto c = find!R(query, options, session);
 		static if (is(R == Bson)) {
 			foreach (doc; c) return doc;
 			return Bson(null);
@@ -660,7 +661,7 @@ struct MongoCollection {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
 	 */
-	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
+	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector, MongoClientSession* session = null)
 	{
 		static struct CMD {
 			string findAndModify;
@@ -673,7 +674,7 @@ struct MongoCollection {
 		cmd.query = query;
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
-		auto ret = database.runWriteCommandChecked(cmd);
+		auto ret = database.runWriteCommandChecked(cmd, session);
 		return ret["value"];
 	}
 
@@ -698,7 +699,7 @@ struct MongoCollection {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
 	 */
-	Bson findAndModifyExt(T, U, V)(T query, U update, V options)
+	Bson findAndModifyExt(T, U, V)(T query, U update, V options, MongoClientSession* session = null)
 	{
 		auto bopt = serializeToBson(options);
 		assert(bopt.type == Bson.Type.object,
@@ -712,7 +713,7 @@ struct MongoCollection {
 			cmd[key] = value;
 			return 0;
 		});
-		auto ret = database.runWriteCommandChecked(cmd);
+		auto ret = database.runWriteCommandChecked(cmd, session);
 		return ret["value"];
 	}
 

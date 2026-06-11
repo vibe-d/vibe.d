@@ -14,7 +14,7 @@ import vibe.db.mongo.client;
 import vibe.db.mongo.collection;
 import vibe.db.mongo.settings : ReadConcern, ReadPreference, readPreferenceBson;
 import vibe.db.mongo.impl.retryablewrites : isRetryableWriteCommand, applyRetryableWrite;
-import vibe.db.mongo.impl.serversession : ServerSession;
+import vibe.db.mongo.impl.serversession : ServerSession, MongoClientSession, inActiveTransaction;
 import vibe.db.mongo.impl.changestream;
 import vibe.data.bson;
 
@@ -184,19 +184,22 @@ struct MongoDatabase
 	{
 		Bson cmd = toCommandBson(command_and_options);
 		auto conn = resolveCommandConnection(toPrimary, cmd, readPreference);
-		return conn.runCommand!(Bson, ExceptionT)(
+		return conn.runCommand!ExceptionT(
 			m_name, cmd, errorInfo, errorFile, errorLine);
 	}
 
 	/// ditto, but always sends to the primary (for write operations).
 	Bson runWriteCommandChecked(T, ExceptionT = MongoDriverException)(
 		T command_and_options,
+		MongoClientSession* session = null,
 		string errorInfo = __FUNCTION__,
 		string errorFile = __FILE__,
 		size_t errorLine = __LINE__
 	)
 	{
 		Bson cmd = toCommandBson(command_and_options);
+		if (inActiveTransaction(session))
+			return runSessionWrite!ExceptionT(cmd, *session, errorInfo, errorFile, errorLine, true);
 		return runWriteWithRetry!ExceptionT(cmd, errorInfo, errorFile, errorLine, true);
 	}
 
@@ -212,7 +215,7 @@ struct MongoDatabase
 	{
 		Bson cmd = toCommandBson(command_and_options);
 		auto conn = resolveCommandConnection(toPrimary, cmd, readPreference);
-		return conn.runCommandUnchecked!(Bson, ExceptionT)(
+		return conn.runCommandUnchecked!ExceptionT(
 			m_name, cmd, errorInfo, errorFile, errorLine);
 	}
 
@@ -228,6 +231,19 @@ struct MongoDatabase
 		return runWriteWithRetry!ExceptionT(cmd, errorInfo, errorFile, errorLine, false);
 	}
 
+	/// Runs a write that belongs to an explicit session's active transaction: stamps the
+	/// session's transaction context onto the command and sends it to the primary once,
+	/// bypassing the implicit retryable-write path.
+	private Bson runSessionWrite(ExceptionT)(
+		Bson cmd, ref MongoClientSession session, string errorInfo, string errorFile, size_t errorLine, bool checked)
+	{
+		Bson prepared = session.applyToCommand(cmd);
+		auto conn = m_client.lockConnectionToPrimary();
+		return checked
+			? conn.runCommand!ExceptionT(m_name, prepared, errorInfo, errorFile, errorLine)
+			: conn.runCommandUnchecked!ExceptionT(m_name, prepared, errorInfo, errorFile, errorLine);
+	}
+
 	/// Runs a write command on the primary, retrying once after a primary
 	/// step-down. Retryable writes (per `isRetryableWriteCommand`, when
 	/// `retryWrites` is enabled) carry an `lsid`/`txnNumber` so the server
@@ -241,8 +257,8 @@ struct MongoDatabase
 				() @safe {
 					auto conn = m_client.lockConnectionToPrimary();
 					return checked
-						? conn.runCommand!(Bson, ExceptionT)(m_name, preparedCmd, errorInfo, errorFile, errorLine)
-						: conn.runCommandUnchecked!(Bson, ExceptionT)(m_name, preparedCmd, errorInfo, errorFile, errorLine);
+						? conn.runCommand!ExceptionT(m_name, preparedCmd, errorInfo, errorFile, errorLine)
+						: conn.runCommandUnchecked!ExceptionT(m_name, preparedCmd, errorInfo, errorFile, errorLine);
 				},
 				RetryPolicy(false, sessionSupport),
 				() @safe { m_client.refreshTopology(); });
@@ -326,11 +342,11 @@ struct MongoDatabase
 	}
 
 	/// Writes lock the primary; reads lock by effective preference and inject `$readPreference`.
-	// TODO(implicit-sessions): only retryable writes currently carry an lsid. Attach an
-	// implicit session here (applySession from impl.serversession) to EVERY command,
-	// reads and non-retryable writes alike, checking one out of the pool and returning it after.
-	// Cursors must reuse the same lsid across getMore (pin the session for the cursor's
-	// lifetime). This is the large piece that unblocks transactions/causal consistency.
+	// TODO(causal-consistency): explicit sessions and retryable writes already carry an lsid,
+	// and multi-document transactions are fully wired (cursors pin the session across getMore).
+	// What remains is IMPLICIT sessions: attaching an lsid (applySession from impl.serversession)
+	// to EVERY command automatically — reads and non-retryable writes alike — for causal
+	// consistency, checking one out of the pool and returning it after.
 	private auto resolveCommandConnection(bool toPrimary, ref Bson cmd, Nullable!ReadPreference readPreference)
 	{
 		if (toPrimary)

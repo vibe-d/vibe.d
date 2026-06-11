@@ -58,3 +58,5 @@ tests/mongodb/loadbalanced/lb-cluster
 tests/mongodb/stable-api/stable-api-test
 tests/mongodb/session-timeout/session-timeout-test
 tests/mongodb/dead-connections/ready
+tests/mongodb/transactions/transactions-test
+tests/mongodb/connection-quarantine/connection-quarantine-test

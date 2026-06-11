@@ -281,6 +281,13 @@ Exception asNetworkError(Exception e) @safe
 	return new MongoNetworkException(e.msg, __FILE__, __LINE__, e);
 }
 
+/// Appends the originating command's call-site context to an error message so a
+/// failure points back at the caller rather than this protocol module.
+private string formatCommandError(string msg, string errorInfo, string errorFile, size_t errorLine) @safe
+{
+	return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
+}
+
 /**
   [internal] Provides low-level mongodb protocol access.
 
@@ -464,7 +471,7 @@ final class MongoConnection {
 			handshake["compression"] = Bson(compressorNames);
 		}
 
-		auto reply = runCommand!(Bson, MongoAuthException)("admin", handshake);
+		auto reply = runCommand!MongoAuthException("admin", handshake);
 		m_description = deserializeBson!ServerDescription(reply);
 		enforceLoadBalancedServiceId(m_settings.loadBalanced, m_description);
 
@@ -655,7 +662,7 @@ final class MongoConnection {
 				`runCommand` overload, when the command response is not ok.
 			- `MongoDriverException` when internal protocol errors occur.
 	*/
-	Bson runCommand(T, CommandFailException = MongoDriverException)(
+	Bson runCommand(CommandFailException = MongoDriverException)(
 		string database,
 		Bson command,
 		string errorInfo = __FUNCTION__,
@@ -664,11 +671,11 @@ final class MongoConnection {
 	)
 	in(database.length, "runCommand requires a database argument")
 	{
-		return runCommandImpl!(T, CommandFailException)(
+		return runCommandImpl!CommandFailException(
 			database, command, true, errorInfo, errorFile, errorLine);
 	}
 
-	Bson runCommandUnchecked(T, CommandFailException = MongoDriverException)(
+	Bson runCommandUnchecked(CommandFailException = MongoDriverException)(
 		string database,
 		Bson command,
 		string errorInfo = __FUNCTION__,
@@ -677,11 +684,11 @@ final class MongoConnection {
 	)
 	in(database.length, "runCommand requires a database argument")
 	{
-		return runCommandImpl!(T, CommandFailException)(
+		return runCommandImpl!CommandFailException(
 			database, command, false, errorInfo, errorFile, errorLine);
 	}
 
-	private Bson runCommandImpl(T, CommandFailException)(
+	private Bson runCommandImpl(CommandFailException)(
 		string database,
 		Bson command,
 		bool testOk = true,
@@ -691,14 +698,13 @@ final class MongoConnection {
 	)
 	in(database.length, "runCommand requires a database argument")
 	{
-		import std.array;
-
-		string formatErrorInfo(string msg) @safe
-		{
-			return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
-		}
-
 		Bson ret;
+
+		// Unlike the sibling cursor methods, disconnect() lives inside the send/recv
+		// catch blocks rather than a method-top `scope (failure) disconnect();`. A wire
+		// error desyncs the connection and must quarantine it, but the clean `ok != 1.0`
+		// command-failure path below fully reads a healthy connection and must keep it.
+		// A method-scoped guard would wrongly disconnect on that logical failure too.
 
 		// When the Stable API (Versioned API) is configured, every command, including
 		// the handshake hello, carries apiVersion (+ apiStrict / apiDeprecationErrors).
@@ -721,7 +727,7 @@ final class MongoConnection {
 					docs[ident.idup] = appender!(Bson[]);
 				}, (scope ident, push) @safe {
 					auto pd = ident in docs;
-					assert(!!pd, "Received data for unexpected identifier");
+					enforce!MongoDriverException(!!pd, formatCommandError("Received data for unexpected identifier", errorInfo, errorFile, errorLine));
 					pd.put(push);
 				});
 
@@ -730,6 +736,7 @@ final class MongoConnection {
 			}
 			catch (Exception e)
 			{
+				disconnect();
 				throw asNetworkError(e);
 			}
 		}
@@ -740,11 +747,11 @@ final class MongoConnection {
 			try
 			{
 				auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
-				recvReply!T(id,
+				recvReply!Bson(id,
 					(cursor, flags, first_doc, num_docs) {
 						logTrace("runCommand(%s) flags: %s, cursor: %s, documents: %s", database, flags, cursor, num_docs);
-						enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), formatErrorInfo("command query failed"));
-						enforce!MongoDriverException(num_docs == 1, formatErrorInfo("received more than one document in command response"));
+						enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), formatCommandError("command query failed", errorInfo, errorFile, errorLine));
+						enforce!MongoDriverException(num_docs == 1, formatCommandError("received more than one document in command response", errorInfo, errorFile, errorLine));
 					},
 					(idx, ref doc) {
 						ret = doc;
@@ -752,6 +759,7 @@ final class MongoConnection {
 			}
 			catch (Exception e)
 			{
+				disconnect();
 				throw asNetworkError(e);
 			}
 		}
@@ -763,15 +771,11 @@ final class MongoConnection {
 				m_onCommandError(m_connectedHost, code);
 
 			throw commandFailureException!CommandFailException(
-				formatErrorInfo("command failed: " ~ ret["errmsg"].opt!string("(no message)")),
+				formatCommandError("command failed: " ~ ret["errmsg"].opt!string("(no message)"), errorInfo, errorFile, errorLine),
 				code);
 		}
 
-		static if (is(T == Bson)) return ret;
-		else {
-			T doc = deserializeBson!T(bson);
-			return doc;
-		}
+		return ret;
 	}
 
 	template getMore(T)
@@ -803,6 +807,7 @@ final class MongoConnection {
 			scope GetMoreDocumentDelegate!T on_doc,
 			Duration timeout = Duration.max,
 			Nullable!ReadPreference pref = Nullable!ReadPreference.init,
+			Bson sessionContext = Bson.emptyObject,
 			string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 		{
 			Bson command = Bson.emptyObject;
@@ -818,10 +823,8 @@ final class MongoConnection {
 			if (!pref.isNull && pref.get != ReadPreference.primary)
 				command["$readPreference"] = readPreferenceBson(pref.get);
 
-			string formatErrorInfo(string msg) @safe
-			{
-				return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
-			}
+			foreach (string key, value; sessionContext.byKeyValue)
+				command[key] = value;
 
 			scope (failure) disconnect();
 
@@ -844,9 +847,9 @@ final class MongoConnection {
 				recvReply!T(id, (long cursor, ReplyFlags flags, int first_doc, int num_docs)
 				{
 					enforce!MongoDriverException(!(flags & ReplyFlags.CursorNotFound),
-						formatErrorInfo("Invalid cursor handle."));
+						formatCommandError("Invalid cursor handle.", errorInfo, errorFile, errorLine));
 					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure),
-						formatErrorInfo("Query failed. Does the database exist?"));
+						formatCommandError("Query failed. Does the database exist?", errorInfo, errorFile, errorLine));
 
 					on_header(cursor, full_name, num_docs);
 				}, (size_t idx, ref T doc) {
@@ -856,9 +859,9 @@ final class MongoConnection {
 						brokenId = nextId;
 					} else {
 						enforce!MongoDriverException(idx >= brokenId,
-							formatErrorInfo("Got legacy document with same id after having already processed it!"));
+							formatCommandError("Got legacy document with same id after having already processed it!", errorInfo, errorFile, errorLine));
 						enforce!MongoDriverException(idx < num_docs,
-							formatErrorInfo("Received more documents than the database reported to us"));
+							formatCommandError("Received more documents than the database reported to us", errorInfo, errorFile, errorLine));
 
 						size_t arrayIndex = cast(int)idx - brokenId;
 						if (!compatibilitySort.length)
@@ -882,14 +885,9 @@ final class MongoConnection {
 		string batchKey = "firstBatch",
 		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 	{
-		string formatErrorInfo(string msg) @safe
-		{
-			return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
-		}
-
 		scope (failure) disconnect();
 
-		enforce!MongoDriverException(m_supportsOpMsg, formatErrorInfo("Database does not support required OP_MSG for new style queries"));
+		enforce!MongoDriverException(m_supportsOpMsg, formatCommandError("Database does not support required OP_MSG for new style queries", errorInfo, errorFile, errorLine));
 
 		enum needsDup = hasIndirections!T || is(T == Bson);
 
@@ -899,13 +897,13 @@ final class MongoConnection {
 		auto id = sendMsg(-1, 0, command);
 		recvMsg!needsDup(id, (flags, scope root) @safe {
 			if (root["ok"].get!double != 1.0)
-				throw new MongoDriverException(formatErrorInfo("error response: "
-					~ root["errmsg"].opt!string("(no message)")));
+				throw new MongoDriverException(formatCommandError("error response: "
+					~ root["errmsg"].opt!string("(no message)"), errorInfo, errorFile, errorLine));
 
 			auto cursor = root["cursor"];
 			if (cursor.type == Bson.Type.null_)
-				throw new MongoDriverException(formatErrorInfo("no cursor in response: "
-					~ root["errmsg"].opt!string("(no error message)")));
+				throw new MongoDriverException(formatCommandError("no cursor in response: "
+					~ root["errmsg"].opt!string("(no error message)"), errorInfo, errorFile, errorLine));
 			auto batch = cursor[batchKey].get!(Bson[]);
 			on_header(cursor["id"].get!long, cursor["ns"].get!string, batch.length);
 
@@ -915,7 +913,7 @@ final class MongoConnection {
 				on_doc(doc);
 			}
 		}, (scope ident, size) @safe {}, (scope ident, scope push) @safe {
-			throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in response"));
+			throw new MongoDriverException(formatCommandError("unexpected section type 1 in response", errorInfo, errorFile, errorLine));
 		});
 	}
 
@@ -949,7 +947,7 @@ final class MongoConnection {
 			command["cursors"] = () @trusted { return cursors; } ().serializeToBson; // NOTE: "escaping" scope here
 			if (!pref.isNull && pref.get != ReadPreference.primary)
 				command["$readPreference"] = readPreferenceBson(pref.get);
-			runCommand!Bson(parts[0], command);
+			runCommand(parts[0], command);
 		}
 		else
 		{
@@ -977,7 +975,7 @@ final class MongoConnection {
 
 		_MongoErrorDescription ret;
 
-		auto error = runCommandUnchecked!Bson(db, command_and_options);
+		auto error = runCommandUnchecked(db, command_and_options);
 
 		try {
 			ret = MongoErrorDescription(
@@ -1014,7 +1012,7 @@ final class MongoConnection {
 			);
 		}
 
-		auto result = runCommand!Bson(cn, cmd)["databases"];
+		auto result = runCommand(cn, cmd)["databases"];
 
 		return result.byValue.map!toInfo;
 	}
@@ -1358,7 +1356,7 @@ final class MongoConnection {
 
 			cmd["user"] = Bson(m_settings.username);
 		}
-		runCommand!(Bson, MongoAuthException)(m_settings.getAuthDatabase, cmd);
+		runCommand!MongoAuthException(m_settings.getAuthDatabase, cmd);
 	}
 
 	private void authenticate()
@@ -1368,7 +1366,7 @@ final class MongoConnection {
 		string cn = m_settings.getAuthDatabase;
 
 		auto cmd = Bson(["getnonce": Bson(1)]);
-		auto result = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		auto result = runCommand!MongoAuthException(cn, cmd);
 		string nonce = result["nonce"].get!string;
 		string key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
 
@@ -1378,7 +1376,7 @@ final class MongoConnection {
 		cmd["nonce"] = Bson(nonce);
 		cmd["user"] = Bson(m_settings.username);
 		cmd["key"] = Bson(key);
-		runCommand!(Bson, MongoAuthException)(cn, cmd);
+		runCommand!MongoAuthException(cn, cmd);
 	}
 
 	private void scramAuthenticate()
@@ -1409,7 +1407,7 @@ final class MongoConnection {
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 		cmd["options"] = Bson(["skipEmptyExchange": Bson(true)]);
 
-		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		auto doc = runCommand!MongoAuthException(cn, cmd);
 		scramFinishAuth(state, credential, doc, cn);
 	}
 
@@ -1430,7 +1428,7 @@ final class MongoConnection {
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 
-		doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		doc = runCommand!MongoAuthException(cn, cmd);
 		response = cast(string)doc["payload"].get!BsonBinData().rawData;
 
 		payload = state.finalize(response);
@@ -1443,7 +1441,7 @@ final class MongoConnection {
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		runCommand!(Bson, MongoAuthException)(cn, cmd);
+		runCommand!MongoAuthException(cn, cmd);
 	}
 }
 
@@ -1524,3 +1522,4 @@ private string getHostArchitecture()
 }
 
 private static immutable hostArchitecture = getHostArchitecture;
+

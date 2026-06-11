@@ -38,6 +38,12 @@ struct Transaction
 		return m_state == TransactionState.starting || m_state == TransactionState.inProgress;
 	}
 
+	/// Whether the next command is the transaction's first (which carries `startTransaction`).
+	bool isFirstCommand() @safe const { return m_state == TransactionState.starting; }
+
+	/// Whether the transaction has dispatched its first command and is now running on the server.
+	bool isInProgress() @safe const { return m_state == TransactionState.inProgress; }
+
 	/// Begins a transaction, moving it into the starting state.
 	void start() @safe
 	{
@@ -138,6 +144,30 @@ unittest
 	assert(txn.state == TransactionState.inProgress, "the first command marks the transaction in progress");
 }
 
+/// isFirstCommand() is true while starting and false once in progress.
+unittest
+{
+	Transaction txn;
+	assert(!txn.isFirstCommand, "a fresh transaction has no first command pending");
+	txn.start();
+	assert(txn.isFirstCommand, "the first command of a started transaction carries startTransaction");
+	txn.markInProgress();
+	assert(!txn.isFirstCommand, "subsequent commands no longer carry startTransaction");
+}
+
+/// isInProgress() is true only once the first command has marked the transaction running.
+unittest
+{
+	Transaction txn;
+	assert(!txn.isInProgress, "a fresh transaction is not in progress");
+	txn.start();
+	assert(!txn.isInProgress, "a started transaction is not yet in progress");
+	txn.markInProgress();
+	assert(txn.isInProgress, "marking the first command puts the transaction in progress");
+	txn.commit();
+	assert(!txn.isInProgress, "a committed transaction is no longer in progress");
+}
+
 /// pinServer() records the server a transaction runs on.
 unittest
 {
@@ -208,14 +238,25 @@ unittest
 	assert(cmd["autocommit"].get!bool == false, "abort command sets autocommit false");
 }
 
+/// The command name must be the first wire field; MongoDB rejects it otherwise.
+unittest
+{
+	import vibe.db.mongo.impl.retryablewrites : commandName;
+
+	assert(commandName(commitTransactionCommand(7)) == "commitTransaction",
+		"the commit command name is the first wire field");
+	assert(commandName(abortTransactionCommand(3)) == "abortTransaction",
+		"the abort command name is the first wire field");
+}
+
 /// Builds a transaction-control admin command (commit/abort) for the given number.
 private Bson transactionControlCommand(string name, long txnNumber) @safe
 {
-	return Bson([
-		name: Bson(1),
-		"txnNumber": Bson(txnNumber),
-		"autocommit": Bson(false),
-	]);
+	Bson cmd = Bson.emptyObject; // ordered: the command name must be the first field on the wire
+	cmd[name] = Bson(1);
+	cmd["txnNumber"] = Bson(txnNumber);
+	cmd["autocommit"] = Bson(false);
+	return cmd;
 }
 
 /// Attaches transaction fields to a command. The first command of a transaction

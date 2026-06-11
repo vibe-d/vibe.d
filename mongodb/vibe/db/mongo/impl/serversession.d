@@ -9,7 +9,7 @@
 module vibe.db.mongo.impl.serversession;
 
 import vibe.data.bson;
-import vibe.db.mongo.impl.transaction : Transaction, TransactionState, withTransactionRetry;
+import vibe.db.mongo.impl.transaction : Transaction, TransactionState, withTransactionRetry, applyTransaction, commitTransactionCommand, abortTransactionCommand;
 import core.time : MonoTime, Duration, minutes;
 import std.algorithm : map;
 import std.algorithm.mutation : remove, SwapStrategy;
@@ -376,14 +376,17 @@ struct MongoClientSession
 	private ServerSession m_session;
 	private void delegate(ServerSession) @safe m_release;
 	private Transaction m_transaction;
+	private long m_txnNumber;
+	private Bson delegate(Bson) @safe m_runCommand;
 
 	@disable this(this);
 
 	/// Wraps a checked-out server session with the delegate that returns it to its pool.
-	this(ServerSession session, void delegate(ServerSession) @safe release) @safe
+	this(ServerSession session, void delegate(ServerSession) @safe release, Bson delegate(Bson command) @safe runCommand = null) @safe
 	{
 		m_session = session;
 		m_release = release;
+		m_runCommand = runCommand;
 	}
 
 	/// The logical session id document for this session.
@@ -393,7 +396,7 @@ struct MongoClientSession
 	void endSession() @safe
 	{
 		if (m_transaction.isActive())
-			m_transaction.abort();
+			abortTransaction();
 
 		if (m_release !is null)
 		{
@@ -403,13 +406,76 @@ struct MongoClientSession
 	}
 
 	/// Begins a multi-document transaction on this session.
-	void startTransaction() @safe { m_transaction.start(); }
+	void startTransaction() @safe
+	{
+		m_transaction.start();
+		m_txnNumber = m_session.nextTransactionNumber();
+	}
+
+	/// Decorates an operation command with this session's transaction context.
+	private Bson prepareCommand(Bson command) @safe
+	{
+		const firstCommand = m_transaction.isFirstCommand();
+		m_transaction.markInProgress();
+		return applyTransaction(applySession(command, lsid), m_txnNumber, firstCommand);
+	}
+
+	/// Decorates an outgoing operation command for this session.
+	Bson applyToCommand(Bson command) @safe
+	{
+		if (m_transaction.isActive())
+			return prepareCommand(command);
+		return applySession(command, lsid);
+	}
+
+	/// The continuation fields a follow-up command (e.g. a getMore) must carry to stay
+	/// inside this session's active transaction: `{lsid, txnNumber, autocommit: false}`,
+	/// never `startTransaction` since a continuation is never the transaction's first command.
+	/// Returns an empty object when no transaction is active.
+	Bson transactionContext() @safe const
+	{
+		if (!m_transaction.isActive())
+			return Bson.emptyObject;
+		return applyTransaction(applySession(Bson.emptyObject, lsid), m_txnNumber, false);
+	}
 
 	/// Commits the active transaction on this session.
-	void commitTransaction() @safe { m_transaction.commit(); }
+	void commitTransaction() @safe
+	{
+		dispatchTransactionControl(commitTransactionCommand(m_txnNumber));
+		m_transaction.commit();
+	}
 
 	/// Aborts the active transaction on this session.
-	void abortTransaction() @safe { m_transaction.abort(); }
+	void abortTransaction() @safe
+	{
+		// abortTransaction is best-effort per the transactions spec: a failure to tell
+		// the server (rejected, network error during cleanup) must not raise to the caller.
+		try
+			dispatchTransactionControl(abortTransactionCommand(m_txnNumber));
+		catch (Exception)
+		{
+		}
+		m_transaction.abort();
+	}
+
+	/// Sends a transaction-control command (commit/abort) to the server when the
+	/// transaction has reached it and a runner is wired up.
+	private void dispatchTransactionControl(Bson controlCommand) @safe
+	{
+		if (!shouldDispatchControl())
+			return;
+		auto command = applySession(controlCommand, lsid);
+		command["$db"] = Bson("admin");
+		m_runCommand(command);
+	}
+
+	/// True when a transaction-control command must reach the server: the transaction has
+	/// dispatched a command (so the server knows about it) and a server-command runner is wired up.
+	private bool shouldDispatchControl() @safe const
+	{
+		return m_transaction.isInProgress() && m_runCommand !is null;
+	}
 
 	/// Runs `body` inside a transaction, retrying transient failures until the default deadline.
 	T withTransaction(T)(scope T delegate() @safe body, Duration timeout = defaultTransactionTimeout)
@@ -434,6 +500,42 @@ struct MongoClientSession
 
 	/// Whether a transaction is currently active on this session.
 	bool inTransaction() @safe const { return m_transaction.isActive(); }
+
+	/// The transaction number allocated for the active transaction on this session.
+	long transactionNumber() @safe const { return m_txnNumber; }
+}
+
+/// True when the pointer refers to a session currently inside an active transaction.
+bool inActiveTransaction(scope const(MongoClientSession)* session) @safe
+{
+	return session !is null && session.inTransaction;
+}
+
+/// A null session pointer is never in an active transaction.
+unittest
+{
+	assert(!inActiveTransaction(null),
+		"a null session pointer is not in an active transaction");
+}
+
+/// A fresh session with no transaction started is not in an active transaction.
+unittest
+{
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {});
+
+	assert(!(() @trusted => inActiveTransaction(&session))(),
+		"a session with no transaction started is not in an active transaction");
+}
+
+/// A session reports an active transaction once one is started.
+unittest
+{
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {});
+
+	session.startTransaction();
+
+	assert((() @trusted => inActiveTransaction(&session))(),
+		"a session is in an active transaction after startTransaction");
 }
 
 /// A client session cannot be copied, preventing double-release of its server session.
@@ -496,6 +598,144 @@ unittest
 		"startTransaction must move the session into the starting state");
 }
 
+/// The first transaction started on a fresh session has transaction number 1.
+unittest
+{
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {});
+
+	session.startTransaction();
+
+	assert(session.transactionNumber() == 1,
+		"the first transaction on a fresh session must have transaction number 1");
+}
+
+/// The first command prepared inside a transaction carries lsid, txnNumber, autocommit and startTransaction.
+unittest
+{
+	auto server = ServerSession.create();
+	auto session = MongoClientSession(server, (ServerSession s) @safe {});
+
+	session.startTransaction();
+	auto cmd = Bson.emptyObject;
+	cmd["insert"] = Bson("people");
+	auto decorated = session.prepareCommand(cmd);
+
+	assert(decorated["insert"] == Bson("people"),
+		"prepareCommand preserves the original command");
+	assert(decorated["lsid"] == server.lsid,
+		"the first command carries the session's logical session id");
+	assert(decorated["txnNumber"].get!long == session.transactionNumber(),
+		"the first command carries the allocated transaction number");
+	assert(decorated["autocommit"].get!bool == false,
+		"a command inside a transaction sets autocommit false");
+	assert(decorated["startTransaction"].get!bool == true,
+		"the first command of a transaction starts it");
+}
+
+/// applyToCommand decorates a command with the full transaction context while a transaction is active.
+unittest
+{
+	auto server = ServerSession.create();
+	auto session = MongoClientSession(server, (ServerSession s) @safe {});
+
+	session.startTransaction();
+	auto cmd = Bson.emptyObject;
+	cmd["insert"] = Bson("people");
+	auto decorated = session.applyToCommand(cmd);
+
+	assert(decorated["insert"] == Bson("people"),
+		"applyToCommand preserves the original command");
+	assert(decorated["lsid"] == server.lsid,
+		"applyToCommand carries the session's logical session id inside a transaction");
+	assert(decorated["txnNumber"].get!long == session.transactionNumber(),
+		"applyToCommand carries the allocated transaction number inside a transaction");
+	assert(decorated["autocommit"].get!bool == false,
+		"applyToCommand sets autocommit false inside a transaction");
+	assert(decorated["startTransaction"].get!bool == true,
+		"applyToCommand starts the transaction on the first command");
+}
+
+/// transactionContext yields the getMore continuation fields inside a transaction: lsid, txnNumber and autocommit false, never startTransaction.
+unittest
+{
+	auto server = ServerSession.create();
+	auto session = MongoClientSession(server, (ServerSession s) @safe {});
+
+	session.startTransaction();
+	auto context = session.transactionContext();
+
+	assert(context["lsid"] == server.lsid,
+		"transactionContext carries the session's logical session id");
+	assert(context["txnNumber"].get!long == session.transactionNumber(),
+		"transactionContext carries the active transaction number");
+	assert(context["autocommit"].get!bool == false,
+		"transactionContext sets autocommit false");
+	assert(context["startTransaction"].type == Bson.Type.null_,
+		"transactionContext never starts the transaction: a continuation is not the first command");
+}
+
+/// Outside a transaction transactionContext yields an empty object, attaching nothing to a continuation.
+unittest
+{
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {});
+
+	assert(session.transactionContext() == Bson.emptyObject,
+		"transactionContext is empty when no transaction is active");
+}
+
+/// transactionContext does not consume the first-command flag: a later prepared command still carries startTransaction.
+unittest
+{
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {});
+
+	session.startTransaction();
+	session.transactionContext();
+	auto first = session.prepareCommand(Bson(["insert": Bson("people")]));
+
+	assert(first["startTransaction"].get!bool == true,
+		"transactionContext must not mark the transaction in-progress, so the first command still starts it");
+}
+
+/// Outside a transaction applyToCommand attaches only the lsid, never the transaction fields.
+unittest
+{
+	auto server = ServerSession.create();
+	auto session = MongoClientSession(server, (ServerSession s) @safe {});
+
+	auto cmd = Bson.emptyObject;
+	cmd["find"] = Bson("people");
+	auto decorated = session.applyToCommand(cmd);
+
+	assert(decorated["lsid"] == server.lsid,
+		"a session command carries the lsid");
+	assert(decorated["find"] == Bson("people"),
+		"applyToCommand preserves the original command outside a transaction");
+	assert(decorated["txnNumber"].type == Bson.Type.null_,
+		"no txnNumber outside a transaction");
+	assert(decorated["autocommit"].type == Bson.Type.null_,
+		"no autocommit outside a transaction");
+	assert(decorated["startTransaction"].type == Bson.Type.null_,
+		"no startTransaction outside a transaction");
+}
+
+/// The second command prepared inside a transaction omits startTransaction but keeps the transaction context.
+unittest
+{
+	auto server = ServerSession.create();
+	auto session = MongoClientSession(server, (ServerSession s) @safe {});
+
+	session.startTransaction();
+	auto first = session.prepareCommand(Bson(["insert": Bson("people")]));
+	auto second = session.prepareCommand(Bson(["update": Bson("people")]));
+
+	assert(second["startTransaction"].type == Bson.Type.null_,
+		"only the first command of a transaction carries startTransaction");
+	assert(second["txnNumber"].get!long == session.transactionNumber(),
+		"a subsequent command still carries the transaction number");
+	assert(second["autocommit"].get!bool == false,
+		"a subsequent command stays inside the transaction with autocommit false");
+}
+
 /// Committing an active transaction moves the session into the committed transaction state.
 unittest
 {
@@ -509,6 +749,59 @@ unittest
 		"commitTransaction must move the session into the committed state");
 }
 
+/// Committing an in-progress transaction dispatches a command through the injected runner.
+unittest
+{
+	int runnerCalls;
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { runnerCalls++; return Bson.emptyObject; };
+
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {}, runner);
+
+	session.startTransaction();
+	session.prepareCommand(Bson(["insert": Bson("people")]));
+	session.commitTransaction();
+
+	assert(runnerCalls == 1,
+		"committing an in-progress transaction sends a command to the server");
+}
+
+/// The dispatched commit command carries the session's lsid so the server can find the transaction.
+unittest
+{
+	Bson captured;
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { captured = cmd; return Bson.emptyObject; };
+
+	auto server = ServerSession.create();
+	auto session = MongoClientSession(server, (ServerSession s) @safe {}, runner);
+
+	session.startTransaction();
+	session.prepareCommand(Bson(["insert": Bson("people")]));
+	session.commitTransaction();
+
+	assert(captured["lsid"] == server.lsid,
+		"the commit command identifies the session via lsid");
+	assert(captured["commitTransaction"].get!int == 1,
+		"the commit command names the operation");
+	assert(captured["txnNumber"].get!long == session.transactionNumber(),
+		"the commit command carries the transaction number");
+}
+
+/// The dispatched commit command targets the admin database via $db, as the spec requires.
+unittest
+{
+	Bson captured;
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { captured = cmd; return Bson.emptyObject; };
+
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {}, runner);
+
+	session.startTransaction();
+	session.prepareCommand(Bson(["insert": Bson("people")]));
+	session.commitTransaction();
+
+	assert(captured["$db"] == Bson("admin"),
+		"transaction-control commands run against the admin database");
+}
+
 /// Aborting an active transaction moves the session into the aborted transaction state.
 unittest
 {
@@ -520,6 +813,72 @@ unittest
 
 	assert(session.transactionState() == TransactionState.aborted,
 		"abortTransaction must move the session into the aborted state");
+}
+
+/// Aborting an in-progress transaction dispatches an abortTransaction command identifying the session.
+unittest
+{
+	Bson captured;
+	bool called;
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { called = true; captured = cmd; return Bson.emptyObject; };
+
+	auto server = ServerSession.create();
+	auto session = MongoClientSession(server, (ServerSession s) @safe {}, runner);
+
+	session.startTransaction();
+	session.prepareCommand(Bson(["insert": Bson("people")]));
+	session.abortTransaction();
+
+	assert(called, "aborting an in-progress transaction sends an abortTransaction command");
+	assert(captured["abortTransaction"].get!int == 1,
+		"aborting an in-progress transaction sends an abortTransaction command");
+	assert(captured["lsid"] == server.lsid,
+		"the abort command identifies the session");
+}
+
+/// Committing or aborting a never-ran transaction is a client-side no-op that never contacts the server.
+unittest
+{
+	int runnerCalls;
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { runnerCalls++; return Bson.emptyObject; };
+
+	{
+		auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {}, runner);
+		session.startTransaction();
+		session.commitTransaction();
+
+		assert(runnerCalls == 0,
+			"committing a never-ran transaction does not contact the server");
+	}
+
+	runnerCalls = 0;
+
+	{
+		auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {}, runner);
+		session.startTransaction();
+		session.abortTransaction();
+
+		assert(runnerCalls == 0,
+			"aborting a never-ran transaction does not contact the server");
+	}
+}
+
+/// Aborting an in-progress transaction swallows a runner error and still reaches the aborted state, as abort is best-effort.
+unittest
+{
+	import std.exception : assertNotThrown;
+
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { throw new Exception("server rejected abort"); };
+
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {}, runner);
+
+	session.startTransaction();
+	session.prepareCommand(Bson(["insert": Bson("people")]));
+
+	assertNotThrown(session.abortTransaction(),
+		"abortTransaction must swallow runner errors (best-effort per spec)");
+	assert(session.transactionState() == TransactionState.aborted,
+		"the transaction still reaches the aborted state after a swallowed runner error");
 }
 
 /// inTransaction reports true while a transaction is active and false once it is committed.
@@ -551,6 +910,28 @@ unittest
 		"ending a session aborts an in-progress transaction");
 	assert(released == true,
 		"ending a session still releases the server session");
+}
+
+/// Ending a session with a genuinely in-progress transaction dispatches abortTransaction to the server.
+unittest
+{
+	Bson captured;
+	bool aborted;
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { aborted = true; captured = cmd; return Bson.emptyObject; };
+
+	bool released;
+	auto release = (ServerSession s) @safe { released = true; };
+	auto session = MongoClientSession(ServerSession.create(), release, runner);
+
+	session.startTransaction();
+	session.prepareCommand(Bson(["insert": Bson("people")]));
+	session.endSession();
+
+	assert(aborted, "ending a session with an in-progress transaction aborts it on the server");
+	assert(captured["abortTransaction"].get!int == 1,
+		"ending a session with an in-progress transaction sends an abortTransaction command");
+	assert(released == true,
+		"endSession still releases the server session");
 }
 
 /// withTransaction runs the body, commits, and returns the body result.
@@ -640,4 +1021,80 @@ unittest
 		"the body is retried exactly once");
 	assert(session.transactionState() == TransactionState.committed,
 		"the retried transaction commits");
+}
+
+/// withTransaction threads the runner end-to-end: a body that runs an operation commits on the server.
+unittest
+{
+	Bson captured;
+	bool committed;
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { committed = true; captured = cmd; return Bson.emptyObject; };
+
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {}, runner);
+
+	auto t0 = MonoTime.currTime;
+	auto clock = () @safe => t0;
+	auto result = session.withTransaction!int(() @safe {
+		session.prepareCommand(Bson(["insert": Bson("people")]));
+		return 99;
+	}, 1.minutes, clock);
+
+	assert(result == 99,
+		"withTransaction returns the body result");
+	assert(committed && captured["commitTransaction"].get!int == 1,
+		"a transaction with operations is committed on the server");
+	assert(session.transactionState() == TransactionState.committed,
+		"withTransaction commits the transaction");
+}
+
+/// The transaction number advances across successive transactions on the same session.
+unittest
+{
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {});
+
+	session.startTransaction();
+	assert(session.transactionNumber() == 1,
+		"the first transaction is number 1");
+
+	session.commitTransaction();
+
+	session.startTransaction();
+	assert(session.transactionNumber() == 2,
+		"a second transaction gets the next number");
+}
+
+/// commitTransaction propagates a runner error, unlike best-effort abort which swallows it.
+unittest
+{
+	import std.exception : assertThrown;
+
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { throw new Exception("commit failed on server"); };
+
+	auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe {}, runner);
+
+	session.startTransaction();
+	session.prepareCommand(Bson(["insert": Bson("c")]));
+
+	assertThrown!Exception(session.commitTransaction(),
+		"commitTransaction must propagate a runner error (unlike best-effort abort)");
+}
+
+/// endSession releases the server session even when the abort runner throws, as abort is best-effort.
+unittest
+{
+	import std.exception : assertNotThrown;
+
+	Bson delegate(Bson) @safe runner = (Bson cmd) @safe { throw new Exception("abort rejected"); };
+
+	bool released;
+	auto release = (ServerSession s) @safe { released = true; };
+	auto session = MongoClientSession(ServerSession.create(), release, runner);
+
+	session.startTransaction();
+	session.prepareCommand(Bson(["insert": Bson("c")]));
+
+	assertNotThrown(session.endSession(),
+		"endSession must not propagate the abort runner error (abort is best-effort)");
+	assert(released,
+		"endSession releases the server session even when the abort runner throws");
 }
