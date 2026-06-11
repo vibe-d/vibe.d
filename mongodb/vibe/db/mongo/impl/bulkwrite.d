@@ -436,7 +436,11 @@ Bson buildClientBulkWriteCommand(ClientBulkWriteModel[] models, ClientBulkWriteO
 
 	bool errorsOnly = options.verboseResults.isNull ? true : !options.verboseResults.get;
 
-	Bson cmd = Bson(["bulkWrite": Bson(1), "ops": Bson(ops), "nsInfo": Bson(nsInfo), "errorsOnly": Bson(errorsOnly)]);
+	Bson cmd = Bson.emptyObject; // empty object because order is important: bulkWrite must be the first field
+	cmd["bulkWrite"] = Bson(1);
+	cmd["ops"] = Bson(ops);
+	cmd["nsInfo"] = Bson(nsInfo);
+	cmd["errorsOnly"] = Bson(errorsOnly);
 
 	// verboseResults is transformed into errorsOnly above; it carries @ignore so it
 	// is never serialized and cannot reach the wire. Every other set option field
@@ -583,6 +587,10 @@ unittest {
 	auto cmd = buildClientBulkWriteCommand(models);
 
 	assert(cmd["bulkWrite"].get!int == 1);
+
+	string firstField;
+	foreach (string key, value; cmd.byKeyValue) { firstField = key; break; }
+	assert(firstField == "bulkWrite", "bulkWrite must be the first field so the server reads it as the command name");
 
 	auto ops = cmd["ops"].get!(Bson[]);
 	assert(ops.length == 1);
