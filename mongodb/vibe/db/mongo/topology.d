@@ -286,14 +286,17 @@ struct TopologyDescription
 
 		MongoHost[] result;
 
+		void addHost(MongoHost h)
+		{
+			if (h != MongoHost.init && !result.canFind(h))
+				result ~= h;
+		}
+
 		foreach (ref s; servers)
 		{
+			addHost(s.host);
 			foreach (hostStr; chain(s.description.hosts, s.description.passives))
-			{
-				auto h = parseHostPort(hostStr);
-				if (h != MongoHost.init && !result.canFind(h))
-					result ~= h;
-			}
+				addHost(parseHostPort(hostStr));
 		}
 
 		return result;
@@ -1201,6 +1204,39 @@ unittest
 
 	auto known = topo.allKnownHosts();
 	assert(known.length == 3);
+}
+
+/// allKnownHosts includes a server's own host even when its description carries no member list (standalone/sharded)
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("standalone", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+
+	topo.update(host, desc);
+
+	assert(topo.allKnownHosts() == [host],
+		"allKnownHosts must include the server's own host even without a description hosts array");
+}
+
+/// a markFailed-cleared server's host stays in allKnownHosts so monitoring can recover after a full outage
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.setName = "rs0";
+	desc.hosts = ["host1:27017"];
+	topo.update(host, desc);
+
+	topo.markFailed(host); // simulate an outage: the server's description is cleared
+
+	assert(topo.allKnownHosts() == [host],
+		"a failed server's host stays known so reconcileWith does not stop its monitor (monitoring can recover)");
 }
 
 /// update with higher topology version counter overwrites
