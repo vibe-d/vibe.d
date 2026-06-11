@@ -808,6 +808,7 @@ struct MongoCollection {
 				auto reply = aggregate(pipeline, aggOptions).front;
 				return reply["n"].to!long;
 			} catch (MongoDriverException) {
+				// $collStats fails when the collection does not exist.
 				// Match the behavior of the mongo shell which returns 0.
 				return 0;
 			}
