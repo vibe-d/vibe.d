@@ -16,6 +16,7 @@ import vibe.db.mongo.settings : ReadConcern, ReadPreference, readPreferenceBson;
 import vibe.db.mongo.impl.retryablewrites : isRetryableWriteCommand, applyRetryableWrite;
 import vibe.db.mongo.impl.serversession : ServerSession, MongoClientSession, inActiveTransaction;
 import vibe.db.mongo.impl.changestream;
+import vibe.db.mongo.connection : MongoNetworkException;
 import vibe.data.bson;
 
 import core.time;
@@ -282,7 +283,17 @@ struct MongoDatabase
 			if (retryable)
 				m_client.releaseServerSession(session);
 
-		return body(cmd, retryable);
+		try
+			return body(cmd, retryable);
+		catch (MongoNetworkException e)
+		{
+			// A network error tainted the session (the txnNumber may have reached the
+			// server); mark it dirty so release discards it rather than recycling its
+			// lsid for the next operation. Per the Driver Sessions spec.
+			if (retryable)
+				session.markDirty();
+			throw e;
+		}
 	}
 
 	/// ditto

@@ -319,6 +319,11 @@ T withTransactionRetry(T)(
 {
 	import vibe.db.mongo.connection : MongoException;
 
+	// Per the transactions spec, abort is best-effort: the body may have already ended
+	// the transaction (e.g. committed it), so abort() can fail — that failure must never
+	// mask the body's original error.
+	void safeAbort() @safe { try abort(); catch (Exception) {} }
+
 	outer: while (true)
 	{
 		start();
@@ -327,14 +332,14 @@ T withTransactionRetry(T)(
 			result = body();
 		catch (MongoException e)
 		{
-			abort();
+			safeAbort();
 			if (e.hasErrorLabel(transientTransactionErrorLabel) && !expired())
 				continue;
 			throw e;
 		}
 		catch (Exception e)
 		{
-			abort();
+			safeAbort();
 			throw e;
 		}
 
@@ -527,4 +532,27 @@ unittest
 	assert(bodyCalls == 1, "a non-Mongo body exception is not retried");
 	assert(aborts == 1, "a non-Mongo body exception still aborts the transaction");
 	assert(commits == 0, "a body that throws is never committed");
+}
+
+/// withTransactionRetry() rethrows the body's error even when abort() itself fails (it must not mask the original).
+unittest
+{
+	import vibe.db.mongo.connection : MongoException;
+
+	auto bodyError = new MongoException("body failed");
+	bool aborted;
+	Exception caught;
+	try
+		withTransactionRetry!int(
+			delegate int() @safe { throw bodyError; },
+			() @safe {},
+			() @safe {},
+			() @safe { aborted = true; throw new Exception("no transaction in progress to abort"); },
+			() @safe => false);
+	catch (Exception e)
+		caught = e;
+
+	assert(aborted, "abort is still attempted");
+	assert(caught is bodyError,
+		"withTransactionRetry must rethrow the body's error, not the abort failure that masks it");
 }

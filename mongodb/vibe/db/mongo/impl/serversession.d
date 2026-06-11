@@ -115,6 +115,7 @@ struct ServerSession
 	private long m_txnNumber;
 	private Bson m_lsid;
 	private MonoTime m_lastUse;
+	private bool m_dirty;
 
 	/// Returns the next monotonic transaction number, starting at 1.
 	// TODO(sessions): causal consistency builds on this session. Add an
@@ -135,6 +136,13 @@ struct ServerSession
 	{
 		return now - m_lastUse >= timeout - sessionSafetyMargin;
 	}
+
+	/// Marks the session dirty: a network error occurred while using it, so its
+	/// server-side state is unknown and it must NOT be returned to the pool.
+	void markDirty() @safe { m_dirty = true; }
+
+	/// Whether the session has been marked dirty (must be discarded, not pooled).
+	bool isDirty() @safe const { return m_dirty; }
 }
 
 /// touch records last-use so the session is fresh just after.
@@ -183,6 +191,15 @@ unittest
 		"server session carries a logical session id");
 }
 
+/// a session is not dirty until marked, and markDirty makes it dirty
+unittest
+{
+	auto session = ServerSession.create();
+	assert(!session.isDirty(), "a fresh server session is not dirty");
+	session.markDirty();
+	assert(session.isDirty(), "markDirty marks the session dirty (its server-side state is unknown)");
+}
+
 /// Hands out server sessions, reusing released ones.
 struct ServerSessionPool
 {
@@ -209,6 +226,10 @@ struct ServerSessionPool
 	void release(ServerSession session, MonoTime now = MonoTime.currTime) @safe
 	{
 		m_available = m_available.remove!(s => s.isAboutToExpire(now, m_timeout), SwapStrategy.unstable);
+		// A dirty session was tainted by a network error: its server-side state is
+		// unknown, so discard it rather than recycling its lsid.
+		if (session.isDirty())
+			return;
 		session.touch(now);
 		m_available ~= session;
 	}
@@ -351,6 +372,22 @@ unittest
 
 	assert(pool.takeAllLsids().length == 3,
 		"sessions still within the timeout must not be pruned");
+}
+
+/// release discards a dirty session instead of returning it to the pool
+unittest
+{
+	ServerSessionPool pool;
+	auto clean = pool.acquire();
+	auto dirty = pool.acquire();
+	dirty.markDirty();
+
+	pool.release(clean);
+	pool.release(dirty);
+
+	auto lsids = pool.takeAllLsids();
+	assert(lsids.length == 1, "a dirty session is not returned to the pool");
+	assert(lsids[0] == clean.lsid, "only the clean session remains poolable");
 }
 
 /// takeAllLsids drains the pool and returns each pooled session's lsid.

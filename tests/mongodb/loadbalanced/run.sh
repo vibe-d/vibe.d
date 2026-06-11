@@ -74,7 +74,12 @@ start_mongod() { # name dbpath port extra-args...
 }
 
 do_start() {
-	have_tooling || exit 0
+	# The negative path (loadBalanced against a non-LB server must be rejected) only
+	# needs a plain standalone mongod, so it ALWAYS runs — including in CI where mongos
+	# and haproxy are not installed. Only the cursor-pinning (positive) path needs the
+	# full sharded cluster behind a PROXY-protocol load balancer; without that tooling it
+	# self-skips (MONGODB_LB_URI is left unset and the harness skips path B).
+	need mongod || { echo "[loadbalanced] mongod is required even for the negative path. Skipping."; exit 0; }
 	if [ -f "$envfile" ]; then
 		echo "[loadbalanced] cluster already started (see $envfile). Run './run.sh stop' first."
 		return 0
@@ -83,6 +88,13 @@ do_start() {
 
 	echo "[loadbalanced] standalone mongod (negative path) :$STANDALONE_PORT"
 	start_mongod standalone "$work/standalone" "$STANDALONE_PORT"
+	wait_for 127.0.0.1 "$STANDALONE_PORT" || { do_stop; exit 1; }
+
+	if ! have_tooling; then
+		echo "[loadbalanced] mongos/haproxy unavailable: running the negative path only (cursor-pinning path skipped)."
+		echo "STANDALONE_PORT=$STANDALONE_PORT" > "$envfile"
+		return 0
+	fi
 
 	echo "[loadbalanced] config-server RS :$CFG_PORT"
 	start_mongod cfg "$work/cfg" "$CFG_PORT" --configsvr --replSet cfgrs
@@ -168,14 +180,25 @@ do_status() {
 	fi
 }
 
-do_run() {   # full cycle for run-ci.sh: start -> build + run harness -> stop
-	have_tooling || exit 0
+do_run() {   # full cycle for run-ci.sh: build -> start -> run harness -> stop
+	# Build the harness BEFORE bringing up any servers, so the heavy compile doesn't
+	# compete with the just-started cluster for resources (which can leave the
+	# standalone briefly unreachable when the harness then connects).
+	#
+	# The `build` subcommand must come BEFORE the options: $DUB expands to
+	# `dub --compiler=... <args>`, and the old `$DUB build` put `build` after the
+	# options, where dub treats it as a package name. `${DUB#dub}` strips the leading
+	# `dub` so we can re-prepend `dub build`, giving `dub build --compiler=... <args>`.
+	eval "dub build${DUB#dub}" || exit 1
+
+	# do_start always brings up at least the standalone (negative path); the LB cluster
+	# and MONGODB_LB_URI come up only when mongos/haproxy exist.
 	do_start
 	trap do_stop EXIT
 	# shellcheck disable=SC1090
 	source "$envfile"
-	$DUB build || exit 1
-	MONGODB_LB_URI="$MONGODB_LB_URI" ./tests "$STANDALONE_PORT"
+	export MONGODB_LB_URI="${MONGODB_LB_URI:-}"
+	./tests "$STANDALONE_PORT"
 	local rc=$?
 	echo "[loadbalanced] harness exit: $rc"
 	exit "$rc"
