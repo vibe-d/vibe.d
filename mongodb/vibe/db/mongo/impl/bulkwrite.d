@@ -63,11 +63,11 @@ private bool isAcknowledged(Bson response) @safe {
 ClientBulkWriteResult parseClientBulkWriteResult(Bson response, ClientBulkWriteModel[] models = null, bool verbose = false) @safe {
 	ClientBulkWriteResult result;
 	result.acknowledged   = isAcknowledged(response);
-	result.insertedCount  = response["nInserted"].get!long;
-	result.matchedCount   = response["nMatched"].get!long;
-	result.modifiedCount  = response["nModified"].get!long;
-	result.upsertedCount  = response["nUpserted"].get!long;
-	result.deletedCount   = response["nDeleted"].get!long;
+	result.insertedCount  = response["nInserted"].to!long;
+	result.matchedCount   = response["nMatched"].to!long;
+	result.modifiedCount  = response["nModified"].to!long;
+	result.upsertedCount  = response["nUpserted"].to!long;
+	result.deletedCount   = response["nDeleted"].to!long;
 
 	if (verbose)
 		collectVerboseResults(response, models, result);
@@ -123,19 +123,19 @@ private void collectVerboseResults(Bson response, ClientBulkWriteModel[] models,
 		if (entry["ok"].get!double != 1.0)
 			continue;
 
-		size_t idx = cast(size_t) entry["idx"].get!long;
+		size_t idx = cast(size_t) entry["idx"].to!long;
 		if (idx >= models.length)
 			continue;
 
 		final switch (models[idx].type) {
 			case ClientBulkWriteType.deleteOne:
 			case ClientBulkWriteType.deleteMany:
-				result.deleteResults[idx] = DeleteResult(entry["n"].get!long);
+				result.deleteResults[idx] = DeleteResult(entry["n"].to!long);
 				break;
 			case ClientBulkWriteType.updateOne:
 			case ClientBulkWriteType.updateMany:
 			case ClientBulkWriteType.replaceOne:
-				result.updateResults[idx] = UpdateResult(entry["n"].get!long, entry["nModified"].get!long);
+				result.updateResults[idx] = UpdateResult(entry["n"].to!long, entry["nModified"].to!long);
 				break;
 			case ClientBulkWriteType.insertOne:
 				result.insertResults[idx] = InsertOneResult(models[idx].document["_id"].get!BsonObjectID);
@@ -158,7 +158,7 @@ private BulkWriteError[size_t] collectClientBulkWriteErrors(Bson response) @safe
 		if (entry["ok"].get!double == 1.0)
 			continue;
 
-		size_t idx = cast(size_t) entry["idx"].get!long;
+		size_t idx = cast(size_t) entry["idx"].to!long;
 		BulkWriteError err;
 		err.code = entry["code"].get!int;
 		err.index = cast(int) idx;
