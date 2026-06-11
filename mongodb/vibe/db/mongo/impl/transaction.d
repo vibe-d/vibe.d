@@ -332,6 +332,11 @@ T withTransactionRetry(T)(
 				continue;
 			throw e;
 		}
+		catch (Exception e)
+		{
+			abort();
+			throw e;
+		}
 
 		while (true)
 		{
@@ -500,4 +505,26 @@ unittest
 	assert(bodyCalls == 2, "a transient commit failure re-runs the body");
 	assert(commits == 2, "the commit runs again after the restart");
 	assert(aborts == 0, "the transient commit path does not abort");
+}
+
+/// withTransactionRetry() aborts and rethrows a plain (non-Mongo) body exception without retrying.
+unittest
+{
+	import std.exception : assertThrown;
+
+	int starts;
+	int commits;
+	int aborts;
+	int bodyCalls;
+
+	assertThrown!Exception(withTransactionRetry!int(
+		delegate int() @safe { bodyCalls++; throw new Exception("plain body failure"); },
+		() @safe { starts++; },
+		() @safe { commits++; },
+		() @safe { aborts++; },
+		() @safe => false));
+
+	assert(bodyCalls == 1, "a non-Mongo body exception is not retried");
+	assert(aborts == 1, "a non-Mongo body exception still aborts the transaction");
+	assert(commits == 0, "a body that throws is never committed");
 }
