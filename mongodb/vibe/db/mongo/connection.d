@@ -546,13 +546,9 @@ final class MongoConnection {
 			}
 		}
 
-		if (m_settings.compressors.length > 0) {
-			Bson[] compressorNames;
-			foreach (c; m_settings.compressors) {
-				compressorNames ~= Bson(compressorName(c));
-			}
-			handshake["compression"] = Bson(compressorNames);
-		}
+		auto advertised = advertisedCompressorNames(m_settings.compressors);
+		if (advertised.length > 0)
+			handshake["compression"] = Bson(advertised.map!(name => Bson(name)).array);
 
 		auto reply = runCommand!MongoAuthException("admin", handshake);
 		m_description = deserializeBson!ServerDescription(reply);

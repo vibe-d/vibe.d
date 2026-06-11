@@ -779,9 +779,11 @@ unittest
 /**
  * Returns true if `incoming` is stale relative to `existing`.
  *
- * Per the SDAM spec, a server description with the same processId but
- * a lower or equal counter is stale. A different processId means the
- * server restarted, so the update is always fresh.
+ * Monitor checks are sequential per host, so only a STRICTLY-LOWER counter
+ * (an out-of-order delivery) is stale and dropped. An equal counter is a
+ * steady-state heartbeat that must refresh the description's volatile
+ * metadata (roundTripTime/lastWrite/lastUpdateTimeUsecs), so it is NOT stale.
+ * A different processId means the server restarted, so the update is fresh.
  */
 private bool isStaleUpdate(ref const ServerDescription existing, ref const ServerDescription incoming)
 	pure nothrow @nogc
@@ -795,7 +797,7 @@ private bool isStaleUpdate(ref const ServerDescription existing, ref const Serve
 	if (oldTV.processId != newTV.processId)
 		return false;
 
-	return newTV.counter <= oldTV.counter;
+	return newTV.counter < oldTV.counter;
 }
 
 /// selectServer returns primary for ReadPreference.primary
@@ -1249,7 +1251,7 @@ unittest
 	assert(topo.servers[0].description.isPrimary);
 }
 
-/// update with equal topology version counter is rejected
+/// update with equal topology version counter is accepted (heartbeats refresh the description)
 unittest
 {
 	TopologyDescription topo;
@@ -1269,7 +1271,32 @@ unittest
 	desc2.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
 
 	topo.update(host, desc2);
-	assert(topo.servers[0].description.isPrimary);
+	assert(topo.servers[0].description.isSecondaryNode);
+}
+
+/// update with an equal topology version counter still refreshes volatile metadata (roundTripTime)
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+	auto pid = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
+
+	ServerDescription first;
+	first.isWritablePrimary = true;
+	first.setName = "rs0";
+	first.roundTripTime = 10;
+	first.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
+	topo.update(host, first);
+
+	ServerDescription heartbeat;
+	heartbeat.isWritablePrimary = true;
+	heartbeat.setName = "rs0";
+	heartbeat.roundTripTime = 25;
+	heartbeat.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
+	topo.update(host, heartbeat);
+
+	assert(topo.servers[0].description.roundTripTime == 25,
+		"an equal-counter heartbeat must refresh roundTripTime, not freeze it at the first-probe value");
 }
 
 /// update with different processId always overwrites (server restarted)
