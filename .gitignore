@@ -60,3 +60,4 @@ tests/mongodb/session-timeout/session-timeout-test
 tests/mongodb/dead-connections/ready
 tests/mongodb/transactions/transactions-test
 tests/mongodb/connection-quarantine/connection-quarantine-test
+tests/mongodb/compression-reconnect/compression-reconnect-test

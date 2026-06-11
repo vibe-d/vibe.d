@@ -480,6 +480,10 @@ final class MongoConnection {
 	}
 
 	void connectToHost(MongoHost host, bool doAuthenticate = true) {
+		// Reset before the handshake so a reconnect's hello/speculative-auth is
+		// never sent OP_COMPRESSED with the previous connection's stale codec;
+		// compression only applies once it's re-negotiated below.
+		m_negotiatedCompressor = Compressor.noop;
 		bool isTLS;
 
 		/*
