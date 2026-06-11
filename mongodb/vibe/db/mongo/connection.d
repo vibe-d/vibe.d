@@ -328,6 +328,63 @@ unittest
 		"a reply without a code yields 0");
 }
 
+/// Whether to auto-infer MONGODB-X509 auth from the TLS/credential shape: a client
+/// certificate (PEM key file) is configured but NO password (a password means SCRAM
+/// was intended). Server-version capability is checked separately at the call site.
+bool inferX509(MongoClientSettings settings) @safe
+{
+	return settings.sslPEMKeyFile != null
+		&& settings.username.length > 0
+		&& settings.password.length == 0
+		&& settings.digest.length == 0;
+}
+
+/// inferX509 does not infer MONGODB-X509 when a password is present (SCRAM was intended)
+unittest
+{
+	auto settings = new MongoClientSettings();
+	settings.sslPEMKeyFile = "/etc/ssl/client.pem";
+	settings.username = "appuser";
+	settings.password = "s3cret";
+
+	assert(!inferX509(settings),
+		"X509 must not be inferred when a password is present — SCRAM was intended");
+}
+
+/// inferX509 does not infer MONGODB-X509 for a PEM-only TLS connection with no username (no auth)
+unittest
+{
+	auto settings = new MongoClientSettings();
+	settings.sslPEMKeyFile = "/etc/ssl/client.pem";
+	// no username, no password — TLS client cert only
+
+	assert(!inferX509(settings),
+		"X509 must not be inferred from a PEM file alone (no username) — that's TLS-only, no auth");
+}
+
+/// inferX509 does not infer MONGODB-X509 when a SCRAM digest is present (SCRAM was intended)
+unittest
+{
+	auto settings = new MongoClientSettings();
+	settings.sslPEMKeyFile = "/etc/ssl/client.pem";
+	settings.username = "appuser";
+	settings.digest = "0123456789abcdef0123456789abcdef"; // pre-hashed SCRAM-SHA-1 credential, no plaintext password
+
+	assert(!inferX509(settings),
+		"X509 must not be inferred when a SCRAM digest is present — SCRAM was intended");
+}
+
+/// inferX509 infers MONGODB-X509 for the genuine cert-auth shape: PEM cert + username, no password/digest
+unittest
+{
+	auto settings = new MongoClientSettings();
+	settings.sslPEMKeyFile = "/etc/ssl/client.pem";
+	settings.username = "CN=appuser,OU=clients"; // the certificate subject DN
+
+	assert(inferX509(settings),
+		"X509 is inferred for a PEM client cert plus a username with no password or digest");
+}
+
 /// Builds the command-failure exception from a non-ok reply: message from `errmsg`,
 /// the server `code`, and the reply's `errorLabels` (so `hasErrorLabel` works).
 Exception commandFailureFromReply(FallbackException = MongoDriverException)(
@@ -584,7 +641,7 @@ final class MongoConnection {
 		if (doAuthenticate) {
 			auto authMechanism = m_settings.authMechanism;
 
-			if (authMechanism == MongoAuthMechanism.none && m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
+			if (authMechanism == MongoAuthMechanism.none && inferX509(m_settings) && m_description.satisfiesVersion(WireVersion.v26))
 				authMechanism = MongoAuthMechanism.mongoDBX509;
 
 			if (authMechanism == MongoAuthMechanism.none && (m_settings.digest.length || m_settings.password.length))
@@ -1438,7 +1495,9 @@ final class MongoConnection {
 
 			cmd["user"] = Bson(m_settings.username);
 		}
-		runCommand!MongoAuthException(m_settings.getAuthDatabase, cmd);
+		// MONGODB-X509 authenticates against the "$external" database per the spec,
+		// not the configured auth database (the identity lives in the certificate).
+		runCommand!MongoAuthException("$external", cmd);
 	}
 
 	private void authenticate()

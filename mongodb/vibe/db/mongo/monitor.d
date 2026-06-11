@@ -660,6 +660,18 @@ unittest
 	assert(registry.length == 0, "stopAll empties the registry");
 }
 
+/// an inert registry (constructed but never reconciled, as in load-balanced mode) answers every query safely
+unittest
+{
+	auto registry = idleRegistry(); // never ensure/reconcileWith -> empty, exactly the LB-mode state
+
+	assert(registry.length == 0, "an inert registry has no monitors");
+	registry.requestCheck(MongoHost("anyhost", 27017)); // unknown host -> must be a no-op, not a crash
+	registry.requestAllChecks();                        // no monitors -> no-op
+	registry.stopAll();                                 // no monitors -> no-op
+	assert(registry.length == 0, "still no monitors after the no-op calls");
+}
+
 /// requestCheck for an unmonitored host is a no-op
 unittest
 {

@@ -124,15 +124,16 @@ final class MongoClient {
 			// load-balancer mode, to run the serviceId-required handshake check)
 			lockConnection();
 
-			// Load-balancer mode runs no monitoring. The load balancer owns server
-			// health, so there is no SDAM monitor registry to set up.
+			// The monitor registry is always constructed so its call sites
+			// (handleStaleCommandError / stopMonitoring / activeMonitorCount) operate
+			// on a real object, never a null. In load-balancer mode the LB owns server
+			// health, so the registry is left empty (no reconcile = no monitors started),
+			// an inert no-op rather than a null dereference.
+			ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
+			m_monitors = new MonitorRegistry(prober, &onMonitorResult,
+				m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
 			if (!m_settings.loadBalanced)
-			{
-				ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
-				m_monitors = new MonitorRegistry(prober, &onMonitorResult,
-					m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
 				m_monitors.reconcileWith(m_topology.load().allKnownHosts());
-			}
 		}
 		catch (Exception e)
 		{
