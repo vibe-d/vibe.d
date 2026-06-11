@@ -328,7 +328,7 @@ import vibe.inet.message : InetHeaderMap;
 import vibe.web.internal.rest.common : RestInterface, Route, SubInterfaceType;
 import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAuthenticated;
 
-import std.algorithm : count, startsWith, endsWith, sort, splitter;
+import std.algorithm : count, startsWith, endsWith, sort, splitter, any;
 import std.array : appender, split;
 import std.meta : AliasSeq;
 import std.range : isOutputRange;
@@ -829,7 +829,7 @@ class RestInterfaceClient(I) : I
 
 			auto http_resp = .request(URL(m_intf.baseURL), m_requestFilter,
 				m_requestBodyFilter, verb, path,
-				hdrs, query, body_, reqReturnHdrs, optReturnHdrs, httpsettings);
+				hdrs, query, body_, reqReturnHdrs, optReturnHdrs, httpsettings, true);
 			scope(exit) http_resp.dropBody();
 
 			return http_resp.readJson();
@@ -1978,7 +1978,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 
 	auto ret = request(URL(intf.baseURL), request_filter, request_body_filter,
 		sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs,
-		intf.settings.httpClientSettings);
+		intf.settings.httpClientSettings, !sroute.parameters.any!(p => p.kind == ParameterKind.status));
 	status_code = cast(HTTPStatus)ret.statusCode;
 	status_phrase = ret.statusPhrase;
 
@@ -2045,7 +2045,7 @@ private HTTPClientResponse request(URL base_url,
 	scope void delegate(HTTPClientRequest, scope InputStream) @safe request_body_filter,
 	HTTPMethod verb, string path, const scope ref InetHeaderMap hdrs, string query,
 	string body_, ref InetHeaderMap reqReturnHdrs,
-	ref InetHeaderMap optReturnHdrs, in HTTPClientSettings http_settings)
+	ref InetHeaderMap optReturnHdrs, in HTTPClientSettings http_settings, bool throwOnFailure)
 @safe {
 	import std.uni : sicmp;
 	import vibe.http.client : requestHTTP;
@@ -2112,7 +2112,9 @@ private HTTPClientResponse request(URL base_url,
 		Json msg;
 		auto ctypeR = client_res.contentType.splitter(";");
 		const ctype = ctypeR.empty ? string.init : ctypeR.front.strip;
-		if (ctype.sicmp("application/json") == 0)
+		if (verb == HTTPMethod.HEAD)
+			msg = Json(["statusMessage": Json(client_res.statusPhrase)]);
+		else if (ctype.sicmp("application/json") == 0)
 			msg = client_res.readJson();
 		else if (ctype.sicmp("text/plain") == 0)
 			msg = Json(["statusMessage": Json(client_res.bodyReader.readAllUTF8())]);
@@ -2124,7 +2126,8 @@ private HTTPClientResponse request(URL base_url,
 			if (data.length)
 				msg["data"] = Base64.encode(data);
 		}
-		throw new RestException(client_res.statusCode, msg);
+		if (throwOnFailure)
+			throw new RestException(client_res.statusCode, msg);
 	}
 
 	return client_res;
@@ -2626,7 +2629,7 @@ unittest {
 }
 
 // Reject unattributed / @queryParam or @bodyParam ref / out parameters
-unittest {
+deprecated unittest {
 	interface QueryRef {
 		@queryParam("auth", "auth")
 		string getData(ref string auth);

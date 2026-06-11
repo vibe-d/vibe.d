@@ -707,7 +707,7 @@ public struct WebParamAttribute {
  * `viaBody` should be applied to the parameter itself, while `bodyParam`
  * is applied to the function.
  * `bodyParam` was introduced long before the D language for UDAs on parameters
- * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ * (introduced in DMD v2.082.0), and is deprecated.
  *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
@@ -727,6 +727,7 @@ WebParamAttribute viaBody(string field = null)
 }
 
 /// Ditto
+deprecated("Use `viaBody` directly on the parameter instead")
 WebParamAttribute bodyParam(string identifier, string field) @safe
 in {
 	assert(field.length > 0, "fieldname can't be empty.");
@@ -739,6 +740,7 @@ do
 }
 
 /// ditto
+deprecated("Use `viaBody` directly on the parameter instead")
 WebParamAttribute bodyParam(string identifier)
 @safe {
 	if (!__ctfe)
@@ -757,7 +759,7 @@ WebParamAttribute bodyParam(string identifier)
  * `viaHeader` should be applied to the parameter itself, while `headerParam`
  * is applied to the function.
  * `headerParam` was introduced long before the D language for UDAs on parameters
- * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ * (introduced in DMD v2.082.0), and is deprecated.
  *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
@@ -776,6 +778,7 @@ WebParamAttribute viaHeader(string field)
 }
 
 /// Ditto
+deprecated("Use `viaHeader` directly on the parameter instead")
 WebParamAttribute headerParam(string identifier, string field)
 @safe {
 	if (!__ctfe)
@@ -793,7 +796,7 @@ WebParamAttribute headerParam(string identifier, string field)
  * `viaQuery` should be applied to the parameter itself, while `queryParam`
  * is applied to the function.
  * `queryParam` was introduced long before the D language for UDAs on parameters
- * (introduced in DMD v2.082.0), and will be deprecated in a future release.
+ * (introduced in DMD v2.082.0), and is deprecated.
  *
  * Params:
  *   identifier = The name of the parameter to customize. A compiler error will be issued on mismatch.
@@ -813,6 +816,7 @@ WebParamAttribute viaQuery(string field)
 }
 
 /// Ditto
+deprecated("Use `viaQuery` directly on the parameter instead")
 WebParamAttribute queryParam(string identifier, string field)
 @safe {
 	if (!__ctfe)
