@@ -58,11 +58,21 @@ have_tooling() {
 }
 
 wait_for() { # host port
+	local h="$1" p="$2"
 	for _ in $(seq 1 60); do
-		mongosh --quiet --host "$1" --port "$2" --eval 'db.runCommand({ping:1})' >/dev/null 2>&1 && return 0
+		# Prefer mongosh (6.0+); fall back to the legacy `mongo` shell (the 3.6-5.0 CI
+		# images ship only that). With no shell at all, a TCP connect is enough — mongod
+		# --fork only starts listening once it is ready to serve.
+		if need mongosh; then
+			mongosh --quiet --host "$h" --port "$p" --eval 'db.runCommand({ping:1})' >/dev/null 2>&1 && return 0
+		elif need mongo; then
+			mongo --quiet --host "$h" --port "$p" --eval 'db.runCommand({ping:1})' >/dev/null 2>&1 && return 0
+		elif (exec 3<>"/dev/tcp/$h/$p") 2>/dev/null; then
+			return 0
+		fi
 		sleep 1
 	done
-	echo "[loadbalanced] timed out waiting for $1:$2" >&2
+	echo "[loadbalanced] timed out waiting for $h:$p" >&2
 	return 1
 }
 
@@ -88,7 +98,12 @@ do_start() {
 
 	echo "[loadbalanced] standalone mongod (negative path) :$STANDALONE_PORT"
 	start_mongod standalone "$work/standalone" "$STANDALONE_PORT"
-	wait_for 127.0.0.1 "$STANDALONE_PORT" || { do_stop; exit 1; }
+	wait_for 127.0.0.1 "$STANDALONE_PORT" || {
+		echo "[loadbalanced] standalone mongod did not become ready; its log:" >&2
+		[ -f "$work/logs/standalone.log" ] && tail -n 40 "$work/logs/standalone.log" >&2
+		do_stop
+		exit 1
+	}
 
 	if ! have_tooling; then
 		echo "[loadbalanced] mongos/haproxy unavailable: running the negative path only (cursor-pinning path skipped)."
