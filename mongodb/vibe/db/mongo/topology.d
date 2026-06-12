@@ -88,6 +88,14 @@ struct TopologyDescription
 			return;
 		}
 
+		// SDAM: a server reporting a different replica-set name belongs to another set;
+		// remove it before it can demote the real primary or contribute foreign members.
+		if (setName.length && desc.setName.length && desc.setName != setName)
+		{
+			removeHost(host);
+			return;
+		}
+
 		if (!setName.length && desc.setName.length)
 			setName = desc.setName;
 
@@ -1718,6 +1726,32 @@ unittest
 	assert(topo.type == TopologyType.sharded, "a non-mongos must not flip a sharded topology's type");
 	assert(topo.servers.length == 1, "the rogue RS server is removed and the mongos retained");
 	assert(topo.servers[0].host == mongos, "the mongos survives the rogue primary");
+}
+
+/// an RS server whose setName differs from the topology's is rejected, not allowed to demote the primary
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetWithPrimary;
+	topo.setName = "rs0";
+	auto good = MongoHost("good", 27017);
+	auto wrong = MongoHost("wrong", 27017);
+
+	ServerDescription goodPrimary;
+	goodPrimary.isWritablePrimary = true;
+	goodPrimary.setName = "rs0";
+	topo.update(good, goodPrimary);
+
+	// A host re-provisioned into a DIFFERENT replica set now reports setName "other".
+	ServerDescription wrongPrimary;
+	wrongPrimary.isWritablePrimary = true;
+	wrongPrimary.setName = "other";
+	topo.update(wrong, wrongPrimary);
+
+	assert(topo.servers.length == 1, "the wrong-set server is rejected");
+	assert(topo.servers[0].host == good, "only the matching-set host remains");
+	assert(topo.findPrimaryIdx() != -1 && topo.servers[topo.findPrimaryIdx()].host == good,
+		"the wrong-set primary did not take over the topology");
 }
 
 /// server type classification from hello response fields

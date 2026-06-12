@@ -550,6 +550,9 @@ final class MongoClient {
 
 		TopologyDescription newTopology;
 		newTopology.type = initialTopologyType();
+		// Seed the configured replica-set name so update()'s setName guard enforces it on
+		// every probe — including the monitor path, which does not call matchesReplicaSet.
+		newTopology.setName = m_settings.replicaSet;
 		newTopology.seedCount = cast(uint) m_settings.hosts.length;
 		Exception lastException;
 
