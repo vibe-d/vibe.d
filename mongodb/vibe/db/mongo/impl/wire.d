@@ -154,7 +154,7 @@ package(vibe.db.mongo) void parseOpMsgBody(bool dupBson)(
 				int size = readVal!int();
 
 				auto identStart = pos;
-				while (pos < data.length && data[pos] != 0) {
+				while (pos < endPos && data[pos] != 0) {
 					pos++;
 				}
 				auto identifier = cast(const(char)[]) data[identStart .. pos];
@@ -165,6 +165,7 @@ package(vibe.db.mongo) void parseOpMsgBody(bool dupBson)(
 				while (pos - sectionStart < size) {
 					int docLen = readVal!int();
 					enforce!MongoDriverException(docLen >= 5, "Invalid BSON document length in decompressed OP_MSG section 1");
+					enforce!MongoDriverException(pos + docLen - 4 <= data.length, "BSON overflows decompressed buffer in OP_MSG section 1");
 
 					auto bsonData = new ubyte[docLen];
 					bsonData[0 .. 4] = toBsonData(docLen)[];
@@ -203,6 +204,39 @@ unittest
 
 	assert(parsedFlags == 0);
 	assert(parsed["ok"].get!double == 1.0);
+}
+
+/// parseOpMsgBody throws a catchable MongoDriverException (not RangeError) on a truncated section-1 document
+unittest
+{
+	import std.exception : assertThrown;
+
+	auto sec0Doc = Bson(["ok": Bson(1.0)]);
+	auto sec0Bytes = () @trusted { return cast(const(ubyte)[]) sec0Doc.data; }();
+
+	ubyte[] body_;
+	body_ ~= toBsonData(cast(uint) 0)[];
+
+	body_ ~= cast(ubyte) 0;
+	body_ ~= sec0Bytes;
+
+	body_ ~= cast(ubyte) 1;
+	body_ ~= toBsonData(cast(uint) 64)[];
+	body_ ~= cast(ubyte) 'd';
+	body_ ~= cast(ubyte) 'o';
+	body_ ~= cast(ubyte) 'c';
+	body_ ~= cast(ubyte) 's';
+	body_ ~= cast(ubyte) 0;
+	body_ ~= toBsonData(cast(uint) 64)[];
+	body_ ~= cast(ubyte) 0;
+	body_ ~= cast(ubyte) 0;
+
+	assertThrown!MongoDriverException(
+		parseOpMsgBody!true(body_,
+			(flags, document) {},
+			(scope ident, size) {},
+			(scope ident, document) {}),
+		"a truncated section-1 document must throw a catchable MongoDriverException, not an uncatchable RangeError");
 }
 
 /// parseOpMsgBody treats checksumPresent (flag bit 0) as a CRC trailer, not as a section
