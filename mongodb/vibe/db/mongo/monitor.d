@@ -86,11 +86,12 @@ final class ServerMonitor {
 		m_running = false;
 	}
 
-	/// Requests an immediate check, throttled by minHeartbeat.
+	/// Requests a check. Always wakes the loop; the loop honors the minHeartbeat
+	/// floor so a request inside the cooldown runs at lastCheck + minHeartbeat
+	/// rather than being dropped until the next full heartbeat.
 	void requestCheck() @safe
 	{
-		if (shouldCheckNow(m_lastCheck, MonoTime.currTime, m_minHeartbeat))
-			m_wake.emit();
+		m_wake.emit();
 	}
 
 	/// Runs the heartbeat loop until `stop()`; returns false if an exception escaped.
@@ -104,6 +105,12 @@ final class ServerMonitor {
 				checkOnce();
 				m_lastCheck = MonoTime.currTime;
 				m_wake.wait(m_heartbeat, ec);
+
+				// A request that woke us inside the cooldown is honored at the floor,
+				// not the full heartbeat: wait out the rest of minHeartbeat first.
+				auto now = MonoTime.currTime;
+				if (m_running && !shouldCheckNow(m_lastCheck, now, m_minHeartbeat))
+					sleep(m_minHeartbeat - (now - m_lastCheck));
 			}
 			return true;
 		}
@@ -568,6 +575,32 @@ unittest
 	monitor.stop();
 
 	assert(checks > before, "requestCheck causes an immediate re-check instead of waiting the full heartbeat");
+}
+
+/// requestCheck during the minHeartbeat cooldown still schedules a check at the floor, not after the full heartbeat
+unittest
+{
+	import vibe.core.core : sleep;
+	import core.time : msecs, seconds;
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
+	import vibe.db.mongo.settings : MongoHost;
+
+	auto host = MongoHost("primary", 27017);
+	ServerDescription prober(MongoHost h) @safe { ServerDescription d; d.isWritablePrimary = true; d.setName = "rs0"; return d; }
+
+	int checks;
+	void onResult(MongoHost h, Nullable!ServerDescription desc, Duration rtt) @safe { checks++; }
+
+	auto monitor = new ServerMonitor(host, &prober, &onResult, 10.seconds, 50.msecs);
+
+	monitor.start();
+	sleep(20.msecs);
+	auto before = checks;
+	monitor.requestCheck();
+	sleep(250.msecs);
+	monitor.stop();
+
+	assert(checks > before, "a check requested during the minHeartbeat cooldown still runs at the floor, not after the full heartbeat");
 }
 
 version (unittest)
