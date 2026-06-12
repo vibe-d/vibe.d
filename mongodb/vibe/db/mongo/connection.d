@@ -20,6 +20,7 @@ import vibe.core.net;
 import vibe.data.bson;
 import vibe.db.mongo.flags;
 import vibe.db.mongo.impl.compression;
+import vibe.db.mongo.impl.clustertime;
 import vibe.db.mongo.impl.wire;
 import vibe.db.mongo.monitor : MongoServerErrorCode;
 import vibe.db.mongo.impl.serverapi : applyServerApi;
@@ -457,6 +458,9 @@ final class MongoConnection {
 		bool m_isAuthenticating;
 		bool m_supportsOpMsg;
 		Compressor m_negotiatedCompressor = Compressor.noop;
+		/// Highest `$clusterTime` observed on a reply; gossiped back on every command
+		/// for causal consistency. Null until the first cluster-time-bearing reply.
+		Bson m_clusterTime = Bson(null);
 	}
 
 	enum ushort defaultPort = MongoClientSettings.defaultPort;
@@ -850,6 +854,10 @@ final class MongoConnection {
 		// the handshake hello, carries apiVersion (+ apiStrict / apiDeprecationErrors).
 		command = applyServerApi(command, m_settings.serverApi);
 
+		// Gossip the highest cluster time we've seen so the server advances causally.
+		// No-op until the first reply carries a $clusterTime (e.g. on a standalone).
+		command = gossipClusterTime(command, m_clusterTime);
+
 		if (m_supportsOpMsg)
 		{
 			debug (VibeVerboseMongo)
@@ -903,6 +911,10 @@ final class MongoConnection {
 				throw asNetworkError(e);
 			}
 		}
+
+		// Observe the reply's $clusterTime even on command failure: a failed command
+		// still gossips a valid cluster time the driver must track.
+		m_clusterTime = laterClusterTime(m_clusterTime, ret["$clusterTime"]);
 
 		if (testOk && ret["ok"].get!double != 1.0)
 		{
