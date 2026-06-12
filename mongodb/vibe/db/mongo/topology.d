@@ -75,6 +75,19 @@ struct TopologyDescription
 		if (!found)
 			servers ~= ServerRecord(host, desc);
 
+		auto serverType = desc.classifiedType();
+
+		// SDAM: in a Sharded topology a server reporting as anything other than a mongos
+		// is simply removed — it must not adopt its setName, prune the mongos list via the
+		// primary path, or flip the topology type to replicaSetWithPrimary.
+		if (type == TopologyType.sharded
+			&& serverType != ServerDescription.ServerType.mongos
+			&& serverType != ServerDescription.ServerType.unknown)
+		{
+			removeHost(host);
+			return;
+		}
+
 		if (!setName.length && desc.setName.length)
 			setName = desc.setName;
 
@@ -86,9 +99,17 @@ struct TopologyDescription
 				return;
 		}
 
-		auto serverType = desc.classifiedType();
 		removeIncompatible(serverType);
 		transitionType(serverType);
+	}
+
+	private void removeHost(MongoHost host)
+	{
+		ServerRecord[] kept;
+		foreach (ref s; servers)
+			if (s.host != host)
+				kept ~= s;
+		servers = kept;
 	}
 
 	/**
@@ -1671,6 +1692,32 @@ unittest
 	// RS server should be removed as incompatible with sharded topology
 	assert(topo.servers.length == 1);
 	assert(topo.servers[0].host == mongos);
+}
+
+/// a rogue RSPrimary in a sharded topology is removed without wiping the mongos list or flipping the type
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.sharded;
+	auto mongos = MongoHost("mongos", 27017);
+	auto rogue = MongoHost("rogue", 27017);
+
+	ServerDescription mongosDesc;
+	mongosDesc.msg = "isdbgrid";
+	topo.update(mongos, mongosDesc);
+
+	// A host thought to be a mongos now reports as an RS primary advertising its own
+	// replica-set members (which do NOT include the mongos). The primary-handling block
+	// would prune the mongos to those members, then flip the topology type.
+	ServerDescription rogueDesc;
+	rogueDesc.isWritablePrimary = true;
+	rogueDesc.setName = "rs0";
+	rogueDesc.hosts = ["rogue:27017", "other:27017"];
+	topo.update(rogue, rogueDesc);
+
+	assert(topo.type == TopologyType.sharded, "a non-mongos must not flip a sharded topology's type");
+	assert(topo.servers.length == 1, "the rogue RS server is removed and the mongos retained");
+	assert(topo.servers[0].host == mongos, "the mongos survives the rogue primary");
 }
 
 /// server type classification from hello response fields
