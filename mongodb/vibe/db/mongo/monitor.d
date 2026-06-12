@@ -30,6 +30,7 @@ final class ServerMonitor {
 		Duration m_heartbeat;
 		Duration m_minHeartbeat;
 		bool m_running;
+		bool m_stopped;
 		Task m_loop;
 		LocalManualEvent m_wake;
 		MonoTime m_lastCheck;
@@ -55,7 +56,10 @@ final class ServerMonitor {
 		catch (Exception)
 			result = Nullable!ServerDescription.init;
 
-		m_onResult(m_host, result, MonoTime.currTime - started);
+		// A probe that completes after stop() (the host was removed mid-flight) must not
+		// report: update() would re-append the just-pruned host, resurrecting it.
+		if (!m_stopped)
+			m_onResult(m_host, result, MonoTime.currTime - started);
 	}
 
 	/// Starts the background heartbeat loop that probes the host periodically.
@@ -80,10 +84,13 @@ final class ServerMonitor {
 		}
 	}
 
-	/// Stops the background heartbeat loop.
+	/// Stops the background heartbeat loop. Wakes the loop's wait so the task exits
+	/// promptly instead of lingering blocked until the next full heartbeat.
 	void stop() @safe
 	{
 		m_running = false;
+		m_stopped = true;
+		m_wake.emit();
 	}
 
 	/// Requests a check. Always wakes the loop; the loop honors the minHeartbeat
@@ -108,9 +115,9 @@ final class ServerMonitor {
 
 				// A request that woke us inside the cooldown is honored at the floor,
 				// not the full heartbeat: wait out the rest of minHeartbeat first.
-				auto now = MonoTime.currTime;
-				if (m_running && !shouldCheckNow(m_lastCheck, now, m_minHeartbeat))
-					sleep(m_minHeartbeat - (now - m_lastCheck));
+				auto wait = cooldownRemaining(m_lastCheck, MonoTime.currTime, m_minHeartbeat);
+				if (m_running && wait > Duration.zero)
+					sleep(wait);
 			}
 			return true;
 		}
@@ -218,25 +225,28 @@ final class MonitorRegistry {
 	}
 }
 
-/// Returns true once at least `minInterval` has elapsed since the last check.
-bool shouldCheckNow(MonoTime last, MonoTime now, Duration minInterval) @safe pure nothrow @nogc
+/// Time still to wait before the next check is allowed: zero once `minInterval` has
+/// elapsed since the last check, otherwise the exact remaining cooldown.
+Duration cooldownRemaining(MonoTime last, MonoTime now, Duration minInterval) @safe pure nothrow @nogc
 {
-	return now - last >= minInterval;
+	auto elapsed = now - last;
+	return elapsed >= minInterval ? Duration.zero : minInterval - elapsed;
 }
 
-/// shouldCheckNow allows a check once the minHeartbeatFrequencyMS floor has elapsed
+/// cooldownRemaining is zero past the minHeartbeatFrequencyMS floor and the exact remainder within it
 unittest
 {
 	auto now = MonoTime.currTime;
 	auto minInterval = 500.msecs;
 
-	auto elapsed = now - 600.msecs;
-	auto tooSoon = now - 400.msecs;
-
-	assert(shouldCheckNow(elapsed, now, minInterval),
-		"a check is allowed once the floor has elapsed");
-	assert(!shouldCheckNow(tooSoon, now, minInterval),
-		"a check is blocked before the floor has elapsed");
+	assert(cooldownRemaining(now - 600.msecs, now, minInterval) == Duration.zero,
+		"no wait once the floor has elapsed");
+	assert(cooldownRemaining(now - 500.msecs, now, minInterval) == Duration.zero,
+		"no wait exactly at the floor");
+	assert(cooldownRemaining(now, now, minInterval) == minInterval,
+		"the full floor remains when no time has passed since the last check");
+	assert(cooldownRemaining(now - 200.msecs, now, minInterval) == 300.msecs,
+		"the exact remaining cooldown is returned within the floor");
 }
 
 /// MongoDB server error codes the driver classifies for retry decisions.
@@ -469,6 +479,25 @@ unittest
 	assert(reportedDesc.isNull, "a failed probe reports a null description");
 }
 
+/// checkOnce does not report a result after stop() (an in-flight probe during removal must not resurrect the host)
+unittest
+{
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
+	import vibe.db.mongo.settings : MongoHost;
+
+	auto host = MongoHost("primary", 27017);
+	ServerDescription prober(MongoHost h) @safe { ServerDescription d; d.isWritablePrimary = true; d.setName = "rs0"; return d; }
+
+	bool wasCalled;
+	void onResult(MongoHost h, Nullable!ServerDescription desc, Duration rtt) @safe { wasCalled = true; }
+
+	auto monitor = new ServerMonitor(host, &prober, &onResult, 10.seconds, 1.msecs);
+	monitor.stop();          // the host was removed / the monitor stopped while a probe was in flight
+	monitor.checkOnce();     // the in-flight probe now completes
+
+	assert(!wasCalled, "a stopped monitor must not deliver its in-flight probe result (it would resurrect a pruned host)");
+}
+
 /// start() runs periodic checks until stop()
 unittest
 {
@@ -601,6 +630,28 @@ unittest
 	monitor.stop();
 
 	assert(checks > before, "a check requested during the minHeartbeat cooldown still runs at the floor, not after the full heartbeat");
+}
+
+/// stop() wakes the heartbeat loop immediately instead of leaving the task blocked until the next heartbeat
+unittest
+{
+	import vibe.core.core : sleep;
+	import core.time : msecs, seconds;
+	import vibe.db.mongo.impl.serverdescription : ServerDescription;
+	import vibe.db.mongo.settings : MongoHost;
+
+	auto host = MongoHost("primary", 27017);
+	ServerDescription prober(MongoHost h) @safe { ServerDescription d; d.isWritablePrimary = true; d.setName = "rs0"; return d; }
+	void onResult(MongoHost h, Nullable!ServerDescription desc, Duration rtt) @safe {}
+
+	auto monitor = new ServerMonitor(host, &prober, &onResult, 10.seconds, 1.msecs); // 10s heartbeat: a non-woken loop stays blocked ~10s
+	monitor.start();
+	sleep(30.msecs);                 // first check ran; the loop is now blocked in m_wake.wait(10s)
+	monitor.stop();
+	sleep(80.msecs);                 // far below the 10s heartbeat
+
+	assert(!monitor.m_loop.running,
+		"stop() must wake the loop so the task exits promptly, not linger blocked for a full heartbeat");
 }
 
 version (unittest)
