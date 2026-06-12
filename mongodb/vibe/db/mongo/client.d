@@ -706,6 +706,40 @@ unittest
 	assert(!isRetryableError(duplicateKey, RetryPolicy(true, true)), "a non-retryable error code is never retried");
 }
 
+/// Surfaces a retryable writeConcernError as a throw so the write-retry path re-sends the
+/// (txnNumber-deduplicated) write. A no-op for a clean reply, a non-retryable code, or a
+/// write without session support (which cannot be retried anyway).
+void enforceWriteConcernRetry(Bson reply, bool sessionSupport) @safe
+{
+	auto code = writeConcernErrorCode(reply);
+	if (!shouldRetryWrite(code, sessionSupport))
+		return;
+	auto e = new MongoDriverException("retryable writeConcernError");
+	e.code = code;
+	throw e;
+}
+
+/// enforceWriteConcernRetry surfaces a retryable writeConcernError so the write is retried
+unittest
+{
+	import std.exception : assertThrown, assertNotThrown;
+
+	auto shutdownReply = Bson([
+		"ok": Bson(1.0),
+		"writeConcernError": Bson(["code": Bson(91), "errmsg": Bson("ShutdownInProgress")])
+	]);
+
+	assertThrown!MongoDriverException(enforceWriteConcernRetry(shutdownReply, true),
+		"a retryable writeConcernError on a session-supported write is surfaced for retry");
+	assertNotThrown(enforceWriteConcernRetry(shutdownReply, false),
+		"without session support the write cannot be retried, so it is not converted to a throw");
+	assertNotThrown(enforceWriteConcernRetry(Bson(["ok": Bson(1.0)]), true),
+		"a clean reply does not throw");
+	assertNotThrown(enforceWriteConcernRetry(Bson(["ok": Bson(1.0),
+		"writeConcernError": Bson(["code": Bson(11000)])]), true),
+		"a non-retryable writeConcernError code is not retried");
+}
+
 /// retries the op once, after refreshing topology, when the first call fails with a
 /// retryable error, meaning a raw network failure, a step-down/stale-topology error, or a
 /// retryable-write error.

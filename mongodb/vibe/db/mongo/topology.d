@@ -706,7 +706,7 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 		auto primary = topology.primaryHost;
 		if (!primary.isNull)
 			return primary;
-		return topology.randomSecondaryHost(maxStalenessSeconds);
+		return topology.randomSecondaryHost(maxStalenessSeconds, tagSets);
 
 	case ReadPreference.secondary:
 		return topology.randomSecondaryHost(maxStalenessSeconds, tagSets);
@@ -984,6 +984,37 @@ unittest
 	auto result = selectServer(topo, ReadPreference.primaryPreferred);
 	assert(!result.isNull);
 	assert(result.get == sec);
+}
+
+/// selectServer primaryPreferred honors tagSets when falling back to a secondary
+unittest
+{
+	TopologyDescription topo;
+	auto east = MongoHost("east-sec", 27017);
+	auto west = MongoHost("west-sec", 27017);
+
+	ServerDescription eastDesc;
+	eastDesc.secondary = true;
+	eastDesc.setName = "rs0";
+	eastDesc.tags = ["dc": "east"];
+
+	ServerDescription westDesc;
+	westDesc.secondary = true;
+	westDesc.setName = "rs0";
+	westDesc.tags = ["dc": "west"];
+
+	topo.update(east, eastDesc);
+	topo.update(west, westDesc);
+
+	string[string][] tagSets = [["dc": "east"]];
+
+	// With no primary, primaryPreferred must still respect the tag set and never pick west.
+	foreach (_; 0 .. 100)
+	{
+		auto result = selectServer(topo, ReadPreference.primaryPreferred, 15, -1, tagSets);
+		assert(!result.isNull, "a tag-matching secondary is selected");
+		assert(result.get == east, "primaryPreferred must not select a tag-excluded secondary");
+	}
 }
 
 /// selectServer primaryPreferred prefers primary when available

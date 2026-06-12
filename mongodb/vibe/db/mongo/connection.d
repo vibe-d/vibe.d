@@ -320,6 +320,30 @@ MongoServerErrorCode serverErrorCode(Bson reply) @safe
 	return cast(MongoServerErrorCode) reply["code"].opt!int(0);
 }
 
+/// Reads the `writeConcernError.code` from a write reply, or `none` when absent. An ok:1
+/// reply can still carry a transient writeConcernError (e.g. 91 ShutdownInProgress) that a
+/// retryable write must retry, so this is inspected separately from the top-level code.
+MongoServerErrorCode writeConcernErrorCode(Bson reply) @safe
+{
+	auto wce = reply["writeConcernError"];
+	if (wce.type != Bson.Type.object)
+		return MongoServerErrorCode.none;
+	return cast(MongoServerErrorCode) wce["code"].opt!int(0);
+}
+
+/// writeConcernErrorCode reads a transient writeConcernError code from an ok:1 reply
+unittest
+{
+	auto reply = Bson([
+		"ok": Bson(1.0),
+		"writeConcernError": Bson(["code": Bson(91), "errmsg": Bson("ShutdownInProgress")])
+	]);
+	assert(writeConcernErrorCode(reply) == MongoServerErrorCode.shutdownInProgress,
+		"the writeConcernError code is read from an ok:1 reply");
+	assert(writeConcernErrorCode(Bson(["ok": Bson(1.0)])) == MongoServerErrorCode.none,
+		"a reply without a writeConcernError yields none");
+}
+
 /// serverErrorCode reads the reply's code, falling back to 0 when absent
 unittest
 {

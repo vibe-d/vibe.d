@@ -257,9 +257,13 @@ struct MongoDatabase
 			return retryOnceOnRetryableError!Bson(
 				() @safe {
 					auto conn = m_client.lockConnectionToPrimary();
-					return checked
+					auto reply = checked
 						? conn.runCommand!ExceptionT(m_name, preparedCmd, errorInfo, errorFile, errorLine)
 						: conn.runCommandUnchecked!ExceptionT(m_name, preparedCmd, errorInfo, errorFile, errorLine);
+					// An ok:1 reply can still carry a transient writeConcernError; surface a
+					// retryable one as a throw so the retry path re-sends the deduplicated write.
+					enforceWriteConcernRetry(reply, sessionSupport);
+					return reply;
 				},
 				RetryPolicy(false, sessionSupport),
 				() @safe { m_client.refreshTopology(); });
