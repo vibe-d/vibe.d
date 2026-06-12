@@ -32,6 +32,14 @@ package(vibe.db.mongo) enum OpCode : int {
 	Msg          = 2013,
 }
 
+/// Whether an OP_MSG flagBits field has checksumPresent (bit 0) set — a 4-byte CRC32C
+/// trailer follows the sections. Bit 16 is exhaustAllowed, not the checksum bit;
+/// confusing the two parses the CRC as a section or truncates real data (review M13).
+package(vibe.db.mongo) bool checksumPresent(uint flagBits) @safe
+{
+	return (flagBits & 1) != 0;
+}
+
 package(vibe.db.mongo) alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs) @safe;
 package(vibe.db.mongo) template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc) @safe; }
 
@@ -114,7 +122,7 @@ package(vibe.db.mongo) void parseOpMsgBody(bool dupBson)(
 	}
 
 	uint flagBits = readVal!uint();
-	const bool hasCRC = (flagBits & (1 << 16)) != 0;
+	const bool hasCRC = checksumPresent(flagBits);
 	const size_t endPos = data.length - (hasCRC ? uint.sizeof : 0);
 
 	bool gotSec0;
@@ -195,6 +203,32 @@ unittest
 
 	assert(parsedFlags == 0);
 	assert(parsed["ok"].get!double == 1.0);
+}
+
+/// parseOpMsgBody treats checksumPresent (flag bit 0) as a CRC trailer, not as a section
+unittest
+{
+	auto doc = Bson(["ok": Bson(1.0)]);
+	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
+
+	ubyte[] body_;
+	body_ ~= toBsonData(cast(uint) 1)[];
+	body_ ~= cast(ubyte) 0;
+	body_ ~= docBytes;
+	body_ ~= toBsonData(cast(uint) 0xDEADBEEF)[];
+
+	Bson parsed;
+	uint parsedFlags;
+	bool gotSection0;
+
+	parseOpMsgBody!true(body_,
+		(flags, document) { gotSection0 = true; parsedFlags = flags; parsed = document; },
+		(scope ident, size) {},
+		(scope ident, document) {});
+
+	assert(gotSection0, "section 0 callback did not fire");
+	assert(parsedFlags == 1u, "checksumPresent flag bit not preserved");
+	assert(parsed["ok"].get!double == 1.0, "section 0 document did not round-trip");
 }
 
 /// parseOpMsgBody correctly parses a compressed and decompressed OP_MSG body

@@ -1195,14 +1195,14 @@ final class MongoConnection {
 		enforce!MongoDriverException(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG or OP_COMPRESSED)");
 
 		uint flagBits = recvUInt();
-		const bool hasCRC = (flagBits & (1 << 16)) != 0;
+		const bool hasCRC = checksumPresent(flagBits);
 
-		int sectionLength = cast(int)(msglen - 4 * int.sizeof - flagBits.sizeof);
-		if (hasCRC)
-			sectionLength -= uint.sizeof; // CRC present
+		// Sections occupy everything but the optional trailing CRC; stop before it so the
+		// CRC's bytes are not read as a bogus payload-section type.
+		const ulong sectionEnd = msglen - (hasCRC ? uint.sizeof : 0);
 
 		bool gotSec0;
-		while (m_bytesRead - packet_start_index < msglen) {
+		while (m_bytesRead - packet_start_index < sectionEnd) {
 			// TODO: directly deserialize from the wire
 			static if (!dupBson) {
 				ubyte[256] buf = void;
@@ -1361,7 +1361,7 @@ final class MongoConnection {
 	{
 		ensureConnected();
 		int id = nextMessageId();
-		const bool hasCRC = (flagBits & (1 << 16)) != 0;
+		const bool hasCRC = checksumPresent(flagBits);
 		assert(!hasCRC, "sending with CRC bits not yet implemented");
 
 		bool shouldCompress = m_negotiatedCompressor != Compressor.noop
