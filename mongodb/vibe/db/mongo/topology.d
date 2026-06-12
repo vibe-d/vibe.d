@@ -129,36 +129,18 @@ struct TopologyDescription
 	 */
 	private bool handleNewPrimary(MongoHost host, ref const ServerDescription desc)
 	{
-		if (!desc.electionId.isNull && !maxElectionId.isNull)
+		if (isStalePrimary(desc.electionId, desc.setVersion, maxElectionId, maxSetVersion))
 		{
-			bool newIsStale = false;
-
-			if (!desc.setVersion.isNull && !maxSetVersion.isNull)
+			foreach (ref s; servers)
 			{
-				if (desc.setVersion.get < maxSetVersion.get)
-					newIsStale = true;
-				else if (desc.setVersion.get == maxSetVersion.get
-					&& desc.electionId.get < maxElectionId.get)
-					newIsStale = true;
-			}
-			else if (desc.electionId.get < maxElectionId.get)
-			{
-				newIsStale = true;
-			}
-
-			if (newIsStale)
-			{
-				foreach (ref s; servers)
+				if (s.host == host)
 				{
-					if (s.host == host)
-					{
-						s.description = ServerDescription.init;
-						break;
-					}
+					s.description = ServerDescription.init;
+					break;
 				}
-				transitionType(ServerDescription.ServerType.unknown);
-				return false;
 			}
+			transitionType(ServerDescription.ServerType.unknown);
+			return false;
 		}
 
 		// Demote old primary if different from the new one
@@ -519,6 +501,64 @@ struct ServerRecord
 {
 	MongoHost host;
 	ServerDescription description;
+}
+
+/// SDAM stale-primary test: a reported primary is stale when its (electionId, setVersion)
+/// tuple is strictly less than the topology's max watermark, comparing electionId FIRST
+/// (it advances on every election; setVersion can regress across terms). A null component
+/// sorts below any present one, so a primary omitting electionId loses to one that has it.
+/// With no watermark yet (both max values null) nothing is stale.
+bool isStalePrimary(Nullable!BsonObjectID electionId, Nullable!int setVersion,
+	Nullable!BsonObjectID maxElectionId, Nullable!int maxSetVersion) @safe
+{
+	if (maxElectionId.isNull && maxSetVersion.isNull)
+		return false;
+
+	auto byElection = compareNullable(electionId, maxElectionId);
+	if (byElection != 0)
+		return byElection < 0;
+
+	return compareNullable(setVersion, maxSetVersion) < 0;
+}
+
+/// Three-way compare of two Nullables, treating null as smaller than any present value.
+private int compareNullable(T)(Nullable!T a, Nullable!T b) @safe
+{
+	if (a.isNull)
+		return b.isNull ? 0 : -1;
+	if (b.isNull)
+		return 1;
+	if (a.get < b.get)
+		return -1;
+	if (b.get < a.get)
+		return 1;
+	return 0;
+}
+
+/// isStalePrimary compares electionId first, then setVersion, with null sorting lowest
+unittest
+{
+	import vibe.data.bson : BsonObjectID;
+
+	auto eidLow  = Nullable!BsonObjectID(BsonObjectID.fromHexString("aabbccddeeff00112233aa01"));
+	auto eidHigh = Nullable!BsonObjectID(BsonObjectID.fromHexString("aabbccddeeff00112233aa02"));
+	auto noEid = Nullable!BsonObjectID.init;
+	auto v1 = Nullable!int(1);
+	auto v2 = Nullable!int(2);
+	auto noV = Nullable!int.init;
+
+	assert(!isStalePrimary(eidLow, v1, noEid, noV), "the first primary (no watermark yet) is accepted");
+
+	// electionId decides before setVersion: a higher setVersion does not rescue a lower electionId.
+	assert(isStalePrimary(eidLow, v2, eidHigh, v1), "a lower electionId is stale even with a higher setVersion");
+	assert(!isStalePrimary(eidHigh, v1, eidLow, v2), "a higher electionId wins even with a lower setVersion");
+
+	// Equal electionId: setVersion breaks the tie.
+	assert(isStalePrimary(eidHigh, v1, eidHigh, v2), "equal electionId, lower setVersion is stale");
+	assert(!isStalePrimary(eidHigh, v2, eidHigh, v1), "equal electionId, higher setVersion wins");
+
+	// A primary omitting electionId loses to an established electionId watermark.
+	assert(isStalePrimary(noEid, v2, eidHigh, v1), "a missing electionId sorts below a present one");
 }
 
 /// Builds the fixed topology for load-balancer mode: a single load-balancer host,
@@ -2199,6 +2239,45 @@ unittest
 	}
 	assert(host1Primary);
 	assert(!host2Primary);
+}
+
+/// a primary with a higher setVersion but lower electionId is stale (electionId is compared first)
+unittest
+{
+	import vibe.data.bson : BsonObjectID;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto host1 = MongoHost("host1", 27017);
+	auto host2 = MongoHost("host2", 27017);
+
+	auto eidHigh = BsonObjectID.fromHexString("aabbccddeeff00112233aa02");
+	auto eidLow  = BsonObjectID.fromHexString("aabbccddeeff00112233aa01");
+
+	// Real current primary: highest electionId, a modest setVersion.
+	ServerDescription current;
+	current.isWritablePrimary = true;
+	current.setName = "rs0";
+	current.setVersion = Nullable!int(1);
+	current.electionId = Nullable!BsonObjectID(eidHigh);
+	topo.update(host1, current);
+
+	// Stale primary from a previous term: it bumped its setVersion but has a LOWER electionId.
+	ServerDescription stale;
+	stale.isWritablePrimary = true;
+	stale.setName = "rs0";
+	stale.setVersion = Nullable!int(2);
+	stale.electionId = Nullable!BsonObjectID(eidLow);
+	topo.update(host2, stale);
+
+	bool host1Primary, host2Primary;
+	foreach (ref s; topo.servers)
+	{
+		if (s.host == host1 && s.description.isPrimary) host1Primary = true;
+		if (s.host == host2 && s.description.isPrimary) host2Primary = true;
+	}
+	assert(host1Primary, "the real primary (higher electionId) keeps the role");
+	assert(!host2Primary, "the stale primary (higher setVersion, lower electionId) is rejected");
 }
 
 /// sharded selectServer applies latency window to mongos selection
