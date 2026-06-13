@@ -330,29 +330,34 @@ final class MongoClient {
 		auto admin = getDatabase("admin");
 		Bson response = admin.runWriteCommandChecked(cmd);
 
-		Bson cursor = response["cursor"];
-		Bson[] entries = cursor["firstBatch"].get!(Bson[]);
-		long cursorId = cursor["id"].get!long;
+		// A w:0 (unacknowledged) bulkWrite returns ok:1 with no cursor; skip cursor
+		// draining and let parseClientBulkWriteResult report acknowledged=false.
+		if (!response.tryIndex("cursor").isNull)
+		{
+			Bson cursor = response["cursor"];
+			Bson[] entries = cursor["firstBatch"].get!(Bson[]);
+			long cursorId = cursor["id"].get!long;
 
-		if (cursorId != 0) {
-			string ns = cursor["ns"].get!string;
-			string collection = ns[ns.indexOf('.') + 1 .. $];
+			if (cursorId != 0) {
+				string ns = cursor["ns"].get!string;
+				string collection = ns[ns.indexOf('.') + 1 .. $];
 
-			while (cursorId != 0) {
-				Bson getMoreCmd = Bson.emptyObject; // order matters: getMore must be the first field
-				getMoreCmd["getMore"] = Bson(cursorId);
-				getMoreCmd["collection"] = Bson(collection);
-				Bson more = admin.runCommandChecked(getMoreCmd, __FUNCTION__, __FILE__, __LINE__, true);
-				Bson moreCursor = more["cursor"];
-				entries ~= moreCursor["nextBatch"].get!(Bson[]);
-				cursorId = moreCursor["id"].get!long;
+				while (cursorId != 0) {
+					Bson getMoreCmd = Bson.emptyObject; // order matters: getMore must be the first field
+					getMoreCmd["getMore"] = Bson(cursorId);
+					getMoreCmd["collection"] = Bson(collection);
+					Bson more = admin.runCommandChecked(getMoreCmd, __FUNCTION__, __FILE__, __LINE__, true);
+					Bson moreCursor = more["cursor"];
+					entries ~= moreCursor["nextBatch"].get!(Bson[]);
+					cursorId = moreCursor["id"].get!long;
+				}
+
+				Bson[string] drainedCursor;
+				foreach (string key, value; cursor.byKeyValue)
+					drainedCursor[key] = value;
+				drainedCursor["firstBatch"] = Bson(entries);
+				response["cursor"] = Bson(drainedCursor);
 			}
-
-			Bson[string] drainedCursor;
-			foreach (string key, value; cursor.byKeyValue)
-				drainedCursor[key] = value;
-			drainedCursor["firstBatch"] = Bson(entries);
-			response["cursor"] = Bson(drainedCursor);
 		}
 
 		return parseClientBulkWriteResult(response, models, verbose);

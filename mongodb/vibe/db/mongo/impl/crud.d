@@ -834,9 +834,11 @@ struct DeleteOptions {
 
 struct InsertOneResult {
 	/**
-		The identifier that was automatically generated, if not set.
+		The identifier of the inserted document. Generated when the document had no
+		`_id`; otherwise the client-supplied id verbatim, which may be any BSON type
+		(int, string, UUID, …), not only an ObjectID.
 	*/
-	BsonObjectID insertedId;
+	Bson insertedId;
 }
 
 struct InsertManyResult {
@@ -869,11 +871,11 @@ struct UpdateResult {
 	long modifiedCount;
 
 	/**
-		The identifier of the inserted document if an upsert took place. Can be
-		none if no upserts took place, can be multiple if using the updateImpl
-		helper.
+		The identifiers of the documents inserted by an upsert. Empty when no upsert
+		took place; can be multiple via the updateImpl helper. Each id may be any BSON
+		type (int, string, UUID, …), not only an ObjectID.
 	*/
-	BsonObjectID[] upsertedIds;
+	Bson[] upsertedIds;
 }
 
 /**

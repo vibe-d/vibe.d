@@ -62,6 +62,14 @@ private bool isAcknowledged(Bson response) @safe {
 
 ClientBulkWriteResult parseClientBulkWriteResult(Bson response, ClientBulkWriteModel[] models = null, bool verbose = false) @safe {
 	ClientBulkWriteResult result;
+
+	// An unacknowledged (w:0) write returns ok:1 but no result counts or cursor. Report
+	// acknowledged=false with zero counts instead of throwing on the missing fields.
+	if (response.tryIndex("nInserted").isNull) {
+		result.acknowledged = false;
+		return result;
+	}
+
 	result.acknowledged   = isAcknowledged(response);
 	result.insertedCount  = response["nInserted"].to!long;
 	result.matchedCount   = response["nMatched"].to!long;
@@ -135,10 +143,21 @@ private void collectVerboseResults(Bson response, ClientBulkWriteModel[] models,
 			case ClientBulkWriteType.updateOne:
 			case ClientBulkWriteType.updateMany:
 			case ClientBulkWriteType.replaceOne:
-				result.updateResults[idx] = UpdateResult(entry["n"].to!long, entry["nModified"].to!long);
+				UpdateResult ur;
+				ur.modifiedCount = entry["nModified"].to!long;
+				auto upserted = entry.tryIndex("upserted");
+				// An upsert is reported in `upserted`/nUpserted, not as a match: exclude it
+				// from matchedCount (n - 1) and record its id (any BSON type).
+				if (!upserted.isNull) {
+					ur.matchedCount = entry["n"].to!long - 1;
+					ur.upsertedIds = [upserted.get["_id"]];
+				} else {
+					ur.matchedCount = entry["n"].to!long;
+				}
+				result.updateResults[idx] = ur;
 				break;
 			case ClientBulkWriteType.insertOne:
-				result.insertResults[idx] = InsertOneResult(models[idx].document["_id"].get!BsonObjectID);
+				result.insertResults[idx] = InsertOneResult(models[idx].document["_id"]);
 				break;
 		}
 	}
@@ -751,6 +770,19 @@ unittest {
 	assert(result.deletedCount == 1);
 }
 
+// an unacknowledged (w:0) reply carries ok:1 but no counts: report acknowledged=false, not a crash
+unittest {
+	import std.exception : assertNotThrown;
+
+	ClientBulkWriteResult result;
+	assertNotThrown(result = parseClientBulkWriteResult(Bson(["ok": Bson(1.0)])),
+		"a w:0 reply without result counts must not throw on the missing fields");
+
+	assert(result.acknowledged == false, "a reply with no counts is unacknowledged");
+	assert(result.insertedCount == 0);
+	assert(result.deletedCount == 0);
+}
+
 // reads counts and verbose idx/n when the server returns them as int32 (MongoDB 8.0 wire form)
 unittest {
 	auto response = Bson([
@@ -839,6 +871,28 @@ unittest {
 	assert(result.updateResults[0].modifiedCount == 1);
 }
 
+// a verbose update result for an upsert records the upsertedId and excludes the upsert from matchedCount
+unittest {
+	auto upsertId = BsonObjectID.generate();
+	auto response = Bson([
+		"ok": Bson(1.0),
+		"nInserted": Bson(0L), "nMatched": Bson(0L), "nModified": Bson(0L),
+		"nUpserted": Bson(1L), "nDeleted": Bson(0L),
+		"cursor": Bson(["id": Bson(0L), "firstBatch": Bson([
+			Bson(["ok": Bson(1.0), "idx": Bson(0L), "n": Bson(1L), "nModified": Bson(0L),
+				"upserted": Bson(["_id": Bson(upsertId)])]),
+		])]),
+	]);
+	auto models = [ ClientBulkWriteModel.updateOne("test.pizzas",
+		Bson(["size": Bson("L")]), Bson(["$set": Bson(["price": Bson(9)])])) ];
+
+	auto result = parseClientBulkWriteResult(response, models, true);
+
+	assert(result.updateResults[0].matchedCount == 0, "an upsert is counted under nUpserted, not as a match (n - 1)");
+	assert(result.updateResults[0].modifiedCount == 0);
+	assert(result.updateResults[0].upsertedIds == [Bson(upsertId)], "the upserted id is recorded");
+}
+
 // populates insertResults[idx].insertedId from the model document _id when verbose and an insert success entry is in cursor.firstBatch
 unittest {
 	auto id = BsonObjectID.generate();
@@ -861,7 +915,25 @@ unittest {
 
 	assert(result.hasVerboseResults == true);
 	assert(0 in result.insertResults);
-	assert(result.insertResults[0].insertedId == id);
+	assert(result.insertResults[0].insertedId == Bson(id));
+}
+
+// reports a non-ObjectID insert _id (e.g. an int) verbatim instead of crashing
+unittest {
+	auto response = Bson([
+		"ok": Bson(1.0),
+		"nInserted": Bson(1L), "nMatched": Bson(0L), "nModified": Bson(0L),
+		"nUpserted": Bson(0L), "nDeleted": Bson(0L),
+		"cursor": Bson(["id": Bson(0L), "firstBatch": Bson([
+			Bson(["ok": Bson(1.0), "idx": Bson(0L), "n": Bson(1L)]),
+		])]),
+	]);
+	auto models = [ ClientBulkWriteModel.insertOne("test.pizzas", Bson(["_id": Bson(4), "type": Bson("sausage")])) ];
+
+	auto result = parseClientBulkWriteResult(response, models, true);
+
+	assert(result.insertResults[0].insertedId == Bson(4),
+		"a non-ObjectID _id is reported verbatim, not coerced through BsonObjectID");
 }
 
 // routes a mixed insert+update+delete firstBatch to all three per-op maps by idx simultaneously
@@ -891,7 +963,7 @@ unittest {
 	assert(result.insertResults.length == 1);
 	assert(result.updateResults.length == 1);
 	assert(result.deleteResults.length == 1);
-	assert(result.insertResults[0].insertedId == id);
+	assert(result.insertResults[0].insertedId == Bson(id));
 	assert(result.updateResults[1].matchedCount == 1);
 	assert(result.updateResults[1].modifiedCount == 1);
 	assert(result.deleteResults[2].deletedCount == 1);

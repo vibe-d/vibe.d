@@ -283,6 +283,17 @@ struct ChangeStream(DocType = Bson) {
 
 		On a resumable server error the stream re-opens from the cached token and
 		retries before reporting emptiness.
+
+		$(B Tailable semantics — important): a change stream is a tailable cursor, so
+		`empty` reflects only whether an event is available $(I right now). On an idle but
+		live stream the underlying getMore returns an empty batch and `empty` is `true`,
+		even though more events may still arrive — so `empty` is $(B non-monotonic): it can
+		return `true` now and `false` later. A plain `foreach (event; stream) {}` therefore
+		stops at the first idle moment rather than blocking for the next event.
+
+		To follow a live stream, re-poll in a loop, e.g.
+		`while (true) { if (!stream.empty) { use(stream.front); stream.popFront(); } }`.
+		(A blocking `tryNext`/awaitData primitive is not yet provided.)
 	*/
 	@property bool empty()
 	{

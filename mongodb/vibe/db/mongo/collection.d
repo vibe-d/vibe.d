@@ -165,7 +165,8 @@ struct MongoCollection {
 		InsertOneResult res;
 		if ("_id" !in doc.get!(Bson[string]))
 		{
-			doc["_id"] = Bson(res.insertedId = BsonObjectID.generate);
+			res.insertedId = Bson(BsonObjectID.generate);
+			doc["_id"] = res.insertedId;
 		}
 		cmd["documents"] = Bson([doc]);
 		MongoConnection conn = m_client.lockConnectionToPrimary();
@@ -426,7 +427,7 @@ struct MongoCollection {
 			ret.upsertedIds.length = upserted.length;
 			foreach (i, upsert; upserted)
 			{
-				ret.upsertedIds[i] = upsert["_id"].get!BsonObjectID;
+				ret.upsertedIds[i] = upsert["_id"];
 			}
 		}
 		return ret;
