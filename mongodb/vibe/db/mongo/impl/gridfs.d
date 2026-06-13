@@ -84,6 +84,15 @@ unittest
 	assertThrown!Exception(gridfsChunkDocuments(filesId, [ubyte(1), ubyte(2), ubyte(3)], 0));
 }
 
+/// chunking empty data yields zero chunks (an empty file is a files document with no chunks)
+unittest
+{
+	const(ubyte)[] empty;
+	auto chunks = gridfsChunkDocuments(BsonObjectID.generate(), empty, 255);
+
+	assert(chunks.length == 0, "empty data produces no chunk documents");
+}
+
 /// chunking bytes shorter than the chunk size yields one chunk at index zero
 unittest
 {
@@ -172,6 +181,19 @@ ubyte[] gridfsAssembleChunks(scope Bson[] chunks)
 	return data;
 }
 
+/// concatenates GridFS chunks and validates the total against the files document's `length`,
+/// catching missing trailing chunks (the interior-gap check alone would silently truncate).
+ubyte[] gridfsAssembleChunks(scope Bson[] chunks, long expectedLength)
+{
+	import std.conv : to;
+
+	auto data = gridfsAssembleChunks(chunks);
+	enforce(cast(long) data.length == expectedLength,
+		"GridFS file is truncated: assembled " ~ data.length.to!string
+			~ " bytes but the files document declares " ~ expectedLength.to!string);
+	return data;
+}
+
 /// assembling chunk documents reconstructs the original bytes
 unittest
 {
@@ -215,6 +237,32 @@ unittest
 	assert(assembled == data);
 }
 
+/// assembling all chunks whose total matches the files length returns the bytes
+unittest
+{
+	auto filesId = BsonObjectID.generate();
+	ubyte[] data = [1, 2, 3, 4, 5, 6];
+
+	auto chunks = gridfsChunkDocuments(filesId, data, 2);
+
+	assert(gridfsAssembleChunks(chunks, cast(long) data.length) == data);
+}
+
+/// assembling chunks shorter than the files length throws (missing trailing chunks, not just interior gaps)
+unittest
+{
+	import std.exception : assertThrown;
+
+	auto filesId = BsonObjectID.generate();
+	ubyte[] data = [1, 2, 3, 4, 5, 6];
+
+	auto chunks = gridfsChunkDocuments(filesId, data, 2); // 3 chunks of 2 bytes
+	auto missingTrailing = chunks[0 .. 2];                // drop the LAST chunk: 4 bytes, no interior gap
+
+	assertThrown(gridfsAssembleChunks(missingTrailing, cast(long) data.length),
+		"a file missing its trailing chunk is rejected, not silently truncated");
+}
+
 import vibe.db.mongo.database : MongoDatabase;
 import vibe.db.mongo.collection : MongoCollection;
 
@@ -236,17 +284,28 @@ struct GridFSBucket
 	BsonObjectID uploadFromBuffer(string filename, scope const(ubyte)[] data)
 	{
 		auto filesId = BsonObjectID.generate();
-		m_chunks.insertMany(gridfsChunkDocuments(filesId, data, m_options.chunkSizeBytes));
+		auto chunks = gridfsChunkDocuments(filesId, data, m_options.chunkSizeBytes);
+
+		// If the files document is never written, drop any chunks already inserted so the
+		// bucket is not left with invisible orphans.
+		scope (failure)
+			m_chunks.deleteMany(["files_id": Bson(filesId)]);
+
+		// An empty file is valid (files document with length 0 and zero chunks); insertMany
+		// rejects an empty array, so skip the chunk insert entirely.
+		if (chunks.length)
+			m_chunks.insertMany(chunks);
 		m_files.insertOne(gridfsFilesDocument(filesId, filename, cast(long) data.length, m_options.chunkSizeBytes));
 		return filesId;
 	}
 
-	/// Loads all chunks for `id` and reassembles the original bytes.
+	/// Loads all chunks for `id` and reassembles the original bytes, validating the total
+	/// length against the files document so a missing trailing chunk is not silently dropped.
 	ubyte[] downloadToBuffer(BsonObjectID id)
 	{
 		auto fileDoc = m_files.findOne(["_id": Bson(id)]);
 		enforce(!fileDoc.isNull, "GridFS file " ~ id.toString ~ " not found");
 		auto chunks = m_chunks.find(["files_id": Bson(id)]).array;
-		return gridfsAssembleChunks(chunks);
+		return gridfsAssembleChunks(chunks, fileDoc["length"].get!long);
 	}
 }
