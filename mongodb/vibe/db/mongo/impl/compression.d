@@ -147,3 +147,32 @@ unittest
 	assertThrown!MongoDriverException(compressData(Compressor.snappy, data, 6),
 		"compressData(snappy) must throw a recoverable MongoDriverException, not assert(false)");
 }
+
+/// MongoDB's default maxMessageSizeBytes (48 MB): the largest single wire message a server sends.
+package(vibe.db.mongo) enum int defaultMaxMessageSizeBytes = 48_000_000;
+
+/// Validates OP_COMPRESSED wire-supplied sizes before allocating or decompressing. A negative
+/// size would allocate a huge buffer (fatal OutOfMemoryError); an over-large uncompressedSize is
+/// a decompression bomb. Both must be in `[0, maxMessageSizeBytes]`.
+package(vibe.db.mongo) void enforceCompressedSizes(int compressedSize, int uncompressedSize, int maxMessageSizeBytes) @safe
+{
+	import std.exception : enforce;
+	enforce!MongoDriverException(compressedSize >= 0 && compressedSize <= maxMessageSizeBytes,
+		"OP_COMPRESSED compressed size out of range: " ~ compressedSize.to!string);
+	enforce!MongoDriverException(uncompressedSize >= 0 && uncompressedSize <= maxMessageSizeBytes,
+		"OP_COMPRESSED uncompressed size out of range: " ~ uncompressedSize.to!string);
+}
+
+/// enforceCompressedSizes rejects negative or over-large OP_COMPRESSED wire sizes
+unittest
+{
+	import std.exception : assertThrown, assertNotThrown;
+	enum int max = defaultMaxMessageSizeBytes;
+
+	assertNotThrown(enforceCompressedSizes(100, 500, max), "in-range sizes pass");
+	assertNotThrown(enforceCompressedSizes(0, 0, max), "zero sizes pass (an empty message)");
+	assertThrown!MongoDriverException(enforceCompressedSizes(-1, 500, max), "a negative compressed size is rejected");
+	assertThrown!MongoDriverException(enforceCompressedSizes(100, -1, max), "a negative uncompressed size is rejected");
+	assertThrown!MongoDriverException(enforceCompressedSizes(max + 1, 500, max), "an over-large compressed size is rejected");
+	assertThrown!MongoDriverException(enforceCompressedSizes(100, max + 1, max), "a decompression-bomb uncompressed size is rejected");
+}

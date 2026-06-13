@@ -376,11 +376,13 @@ ClientBulkWriteModel[] ensureInsertIds(ClientBulkWriteModel[] models) @safe {
 			continue;
 		if (!model.document.tryIndex("_id").isNull)
 			continue;
-		Bson[string] fields;
+		// Append _id to an ordered copy (Bson.emptyObject) rather than rebuilding through a
+		// Bson[string] AA, which would silently reorder the user's fields.
+		Bson doc = Bson.emptyObject;
 		foreach (string key, value; model.document.byKeyValue)
-			fields[key] = value;
-		fields["_id"] = Bson(BsonObjectID.generate());
-		model.document = Bson(fields);
+			doc[key] = value;
+		doc["_id"] = Bson(BsonObjectID.generate());
+		model.document = doc;
 	}
 	return result;
 }
@@ -480,9 +482,12 @@ Bson buildClientBulkWriteCommand(ClientBulkWriteModel[] models, ClientBulkWriteO
 private bool isUpdateDocument(Bson update) @safe {
 	if (update.type == Bson.Type.array) return true;
 	if (update.type != Bson.Type.object) return false;
-	foreach (string key, value; update.byKeyValue)
+	bool hasOperator = false;
+	foreach (string key, value; update.byKeyValue) {
 		if (key.length == 0 || key[0] != '$') return false;
-	return true;
+		hasOperator = true;
+	}
+	return hasOperator; // an empty {} has no update operators and is not a valid update
 }
 
 /**
@@ -571,6 +576,14 @@ unittest {
 	auto badUpdate = Bson(["price": Bson(15)]);
 
 	assertThrown(ClientBulkWriteModel.updateOne("test.pizzas", filter, badUpdate));
+}
+
+// updateOne rejects an empty update document (no update operators at all)
+unittest {
+	import std.exception : assertThrown;
+
+	assertThrown(ClientBulkWriteModel.updateOne("test.pizzas", Bson(["_id": Bson(4)]), Bson.emptyObject),
+		"an empty {} update has no operators and must be rejected");
 }
 
 // updateMany rejects a non-$ update document (a replacement-style doc)
@@ -1177,6 +1190,20 @@ unittest {
 	assert(!idField.isNull);
 	assert(idField.get.type == Bson.Type.objectID);
 	assert(prepared[0].document["type"].get!string == "sausage");
+}
+
+// ensureInsertIds preserves the original field order and appends the generated _id last
+unittest {
+	auto models = [ ClientBulkWriteModel.insertOne("test.pizzas",
+		Bson(["type": Bson("sausage"), "size": Bson("large"), "veg": Bson(false)])) ];
+
+	auto prepared = ensureInsertIds(models);
+
+	string[] keys;
+	foreach (string key, value; prepared[0].document.byKeyValue)
+		keys ~= key;
+	assert(keys == ["type", "size", "veg", "_id"],
+		"the user's field order is preserved and the generated _id is appended last");
 }
 
 // ensureInsertIds leaves an insertOne document that already has an _id unchanged

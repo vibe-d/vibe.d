@@ -1299,6 +1299,10 @@ final class MongoConnection {
 		ubyte compressorId = recvUByte();
 
 		int compressedSize = cast(int)(msglen - (m_bytesRead - packet_start_index));
+		// Reject corrupt/malicious wire sizes before allocating: a negative size would
+		// allocate a huge buffer (fatal), and an unbounded uncompressedSize is a
+		// decompression bomb.
+		enforceCompressedSizes(compressedSize, uncompressedSize, defaultMaxMessageSizeBytes);
 		ubyte[] compressedPayload = new ubyte[compressedSize];
 		recv(compressedPayload);
 
