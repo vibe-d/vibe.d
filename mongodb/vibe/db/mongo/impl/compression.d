@@ -163,6 +163,35 @@ package(vibe.db.mongo) void enforceCompressedSizes(int compressedSize, int uncom
 		"OP_COMPRESSED uncompressed size out of range: " ~ uncompressedSize.to!string);
 }
 
+/// Whether a command must never be compressed because it carries credentials or is part of
+/// the authentication handshake. Per the OP_COMPRESSED spec these are exempt regardless of
+/// the negotiated compressor, not only during the initial connect-time auth window.
+package(vibe.db.mongo) bool isCompressionExempt(string commandName) @safe
+{
+	switch (commandName)
+	{
+		case "hello", "isMaster", "ismaster",
+			"saslStart", "saslContinue", "authenticate", "getnonce",
+			"createUser", "updateUser",
+			"copydbsaslstart", "copydbgetnonce", "copydb":
+			return true;
+		default:
+			return false;
+	}
+}
+
+/// isCompressionExempt flags the credential/handshake commands the spec forbids compressing
+unittest
+{
+	assert(isCompressionExempt("saslStart"), "saslStart carries auth data and must not be compressed");
+	assert(isCompressionExempt("saslContinue"), "saslContinue carries auth data and must not be compressed");
+	assert(isCompressionExempt("createUser"), "createUser carries a password and must not be compressed");
+	assert(isCompressionExempt("updateUser"), "updateUser may carry a password and must not be compressed");
+	assert(isCompressionExempt("hello"), "the handshake hello is exempt");
+	assert(!isCompressionExempt("insert"), "ordinary commands may be compressed");
+	assert(!isCompressionExempt("find"), "ordinary commands may be compressed");
+}
+
 /// enforceCompressedSizes rejects negative or over-large OP_COMPRESSED wire sizes
 unittest
 {

@@ -1392,8 +1392,15 @@ final class MongoConnection {
 		const bool hasCRC = checksumPresent(flagBits);
 		assert(!hasCRC, "sending with CRC bits not yet implemented");
 
+		// The command name is the first field of the document.
+		string cmdName;
+		foreach (string key, value; document.byKeyValue) { cmdName = key; break; }
+
+		// Never compress credential-carrying or handshake commands, even when they are issued
+		// after the connect-time auth window (e.g. createUser / a later saslStart via runCommand).
 		bool shouldCompress = m_negotiatedCompressor != Compressor.noop
-			&& !m_isAuthenticating;
+			&& !m_isAuthenticating
+			&& !isCompressionExempt(cmdName);
 
 		if (!shouldCompress) {
 			sendHeader(21 + sendLength(document), id, response_to, OpCode.Msg);

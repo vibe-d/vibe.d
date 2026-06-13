@@ -57,11 +57,38 @@ unittest {
 		"a non-array must yield false");
 }
 
+/// Whether a Bson value coerces to a non-zero number — `true`, `1`, `1L`, `1.0`. A
+/// user-built command may express boolean options numerically, so coerce rather than
+/// require an exact bool type.
+private bool isTruthyNumber(Bson b) @safe
+{
+	switch (b.type)
+	{
+		case Bson.Type.bool_:   return b.get!bool;
+		case Bson.Type.int_:    return b.get!int != 0;
+		case Bson.Type.long_:   return b.get!long != 0;
+		case Bson.Type.double_: return b.get!double != 0;
+		default:                return false;
+	}
+}
+
+/// Whether a Bson value coerces to numeric zero — `0`, `0L`, `0.0`, `false`.
+private bool isZeroNumber(Bson b) @safe
+{
+	switch (b.type)
+	{
+		case Bson.Type.bool_:   return !b.get!bool;
+		case Bson.Type.int_:    return b.get!int == 0;
+		case Bson.Type.long_:   return b.get!long == 0;
+		case Bson.Type.double_: return b.get!double == 0;
+		default:                return false;
+	}
+}
+
 /// Whether any statement in an `updates` array is a multi-document update.
 bool hasMultiStatement(Bson updates)
 {
-	return anyStatement(updates,
-		entry => entry["multi"].type == Bson.Type.bool_ && entry["multi"].get!bool);
+	return anyStatement(updates, entry => isTruthyNumber(entry["multi"]));
 }
 
 /// hasMultiStatement flags an updates array containing a multi:true entry
@@ -75,11 +102,34 @@ unittest {
 		"an update statement without multi:true must not be flagged");
 }
 
+/// hasMultiStatement detects multi expressed as a number (multi: 1), not only bool true
+unittest {
+	Bson upd = Bson.emptyObject;
+	upd["multi"] = Bson(1); // numeric, as a user-built command may carry it
+
+	assert(hasMultiStatement(Bson([upd])) == true,
+		"multi:1 (numeric) is a multi-update and must not be classified retryable");
+}
+
 /// Whether any statement in a `deletes` array is a multi-document delete (limit:0).
 bool hasUnlimitedDelete(Bson deletes)
 {
-	return anyStatement(deletes,
-		entry => entry["limit"].type == Bson.Type.int_ && entry["limit"].get!int == 0);
+	return anyStatement(deletes, entry => isZeroNumber(entry["limit"]));
+}
+
+/// hasUnlimitedDelete detects limit:0 expressed as int64 or double, not only int32
+unittest {
+	Bson delLong = Bson.emptyObject;
+	delLong["limit"] = Bson(0L);
+	assert(hasUnlimitedDelete(Bson([delLong])) == true, "limit:0 (int64) is an unlimited delete");
+
+	Bson delDouble = Bson.emptyObject;
+	delDouble["limit"] = Bson(0.0);
+	assert(hasUnlimitedDelete(Bson([delDouble])) == true, "limit:0.0 (double) is an unlimited delete");
+
+	Bson delOne = Bson.emptyObject;
+	delOne["limit"] = Bson(1);
+	assert(hasUnlimitedDelete(Bson([delOne])) == false, "limit:1 is a single delete (retryable)");
 }
 
 /// classifies a command as a retryable write
