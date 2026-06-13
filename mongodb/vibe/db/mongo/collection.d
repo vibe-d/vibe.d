@@ -860,7 +860,7 @@ struct MongoCollection {
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 
 		auto pref = options.readPreference.isNull ? m_client.readPreference : options.readPreference.get;
-		auto result = buildAggregateCommand(m_name, m_db.name, serializeToBson(pipeline), options, pref);
+		auto result = buildAggregateCommand(m_name, m_db.name, serializeToBson(pipeline), options, pref, m_client.readPreferenceTags);
 
 		return MongoCursor!R(m_client, result.command, result.batchSize, result.getMoreMaxTime, Nullable!ReadPreference(pref));
 	}

@@ -37,7 +37,7 @@ import std.typecons : Nullable, nullable;
  */
 /// Validates load-balancer mode constraints: it is incompatible with a replica
 /// set and requires a single host. Logs and returns false on violation.
-private bool isValidLoadBalancedConfig(in MongoClientSettings cfg) @safe
+package(vibe.db.mongo) bool isValidLoadBalancedConfig(in MongoClientSettings cfg) @safe
 {
 	if (!cfg.loadBalanced)
 		return true;
@@ -246,7 +246,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "sockettimeoutms": setMsecs(cfg.socketTimeout); break;
 				case "tls":
 				case "ssl": setBool(cfg.ssl); break;
-				case "loadbalanced": setBool(cfg.loadBalanced); break;
+				case "loadbalanced": setBool(cfg.loadBalanced); cfg.loadBalancedSpecified = true; break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
 				case "authmechanism": cfg.authMechanism = parseAuthMechanism(value); break;
 				case "authmechanismproperties": cfg.authMechanismProperties = value.split(","); warnNotImplemented(); break;
@@ -1615,6 +1615,10 @@ class MongoClientSettings
 	/// Enables load-balanced mode, where the driver connects through a MongoDB load
 	/// balancer and advertises `loadBalanced: true` in the connection handshake.
 	bool loadBalanced;
+
+	/// True when the connection string explicitly set `loadBalanced`, so a mongodb+srv
+	/// TXT record's `loadBalanced` option must not override it (the URI takes precedence).
+	bool loadBalancedSpecified;
 
 	/**
 	 * Can be set to false to disable TLS peer validation to allow self signed

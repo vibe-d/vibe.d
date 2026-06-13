@@ -79,7 +79,7 @@ struct CursorCommand
 
 	See_Also: $(LINK https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst)
 */
-CursorCommand buildFindCommand(Bson command, FindOptions options, ReadPreference pref = ReadPreference.primary)
+CursorCommand buildFindCommand(Bson command, FindOptions options, ReadPreference pref = ReadPreference.primary, string[string][] tagSets = null)
 {
 	bool singleBatch;
 	if (!options.limit.isNull && options.limit.get < 0)
@@ -119,7 +119,7 @@ CursorCommand buildFindCommand(Bson command, FindOptions options, ReadPreference
 		command[key] = value;
 
 	if (pref != ReadPreference.primary)
-		command["$readPreference"] = readPreferenceBson(pref);
+		command["$readPreference"] = readPreferenceBson(pref, tagSets);
 
 	return CursorCommand(
 		command,
@@ -197,6 +197,13 @@ unittest {
 	assert(primaryRead.command["$readPreference"].isNull);
 	auto defaultedRead = buildFindCommand(base(), FindOptions.init);
 	assert(defaultedRead.command["$readPreference"].isNull);
+
+	// the configured readPreferenceTags are emitted alongside the mode (host selection
+	// uses them, so the $readPreference sent to mongos must carry them too)
+	string[string][] tags = [["dc": "east"]];
+	auto taggedRead = buildFindCommand(base(), FindOptions.init, ReadPreference.secondary, tags);
+	assert(taggedRead.command["$readPreference"] == readPreferenceBson(ReadPreference.secondary, tags),
+		"the cursor $readPreference carries the configured readPreferenceTags");
 }
 
 /** Assembles a `delete` command from serialized queries and options.
@@ -345,7 +352,7 @@ unittest {
 
 	When `explain` is set, the spec recommends omitting the `cursor` field.
 */
-CursorCommand buildAggregateCommand(string collection, string database, Bson pipeline, AggregateOptions options, ReadPreference pref = ReadPreference.primary)
+CursorCommand buildAggregateCommand(string collection, string database, Bson pipeline, AggregateOptions options, ReadPreference pref = ReadPreference.primary, string[string][] tagSets = null)
 {
 	Bson cmd = Bson.emptyObject;
 	cmd["aggregate"] = Bson(collection);
@@ -359,7 +366,7 @@ CursorCommand buildAggregateCommand(string collection, string database, Bson pip
 	}
 
 	if (pref != ReadPreference.primary)
-		cmd["$readPreference"] = readPreferenceBson(pref);
+		cmd["$readPreference"] = readPreferenceBson(pref, tagSets);
 
 	return CursorCommand(cmd,
 		!options.batchSize.isNull ? options.batchSize.get : 0,
@@ -406,6 +413,12 @@ unittest {
 	assert(primaryRead.command["$readPreference"].isNull);
 	auto defaultedRead = buildAggregateCommand("coll", "db", pipeline, AggregateOptions.init);
 	assert(defaultedRead.command["$readPreference"].isNull);
+
+	// the configured readPreferenceTags reach the aggregate $readPreference too
+	string[string][] tags = [["dc": "east"]];
+	auto taggedRead = buildAggregateCommand("coll", "db", pipeline, AggregateOptions.init, ReadPreference.secondary, tags);
+	assert(taggedRead.command["$readPreference"] == readPreferenceBson(ReadPreference.secondary, tags),
+		"the aggregate $readPreference carries the configured readPreferenceTags");
 }
 
 /// The reduced limit/batch state for a legacy cursor.

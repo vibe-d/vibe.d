@@ -7,7 +7,7 @@
 */
 module vibe.db.mongo.impl.srv;
 
-import vibe.db.mongo.settings : MongoClientSettings, MongoHost;
+import vibe.db.mongo.settings : MongoClientSettings, MongoHost, isValidLoadBalancedConfig;
 
 @safe:
 
@@ -140,7 +140,6 @@ private void applyTxtOption(ref string field, string key, in string[string] opts
 void applySrvSeedlist(MongoClientSettings cfg, scope SrvResolver resolver) @safe
 {
 	import std.exception : enforce;
-	import std.array : join;
 
 	auto queryHost = cfg.hosts[0].name;
 
@@ -155,13 +154,25 @@ void applySrvSeedlist(MongoClientSettings cfg, scope SrvResolver resolver) @safe
 	if (txtChunks.length == 0)
 		return;
 
-	auto opts = parseSrvTxtOptions(txtChunks.join);
+	// The seedlist spec permits at most one TXT record; multiple records (each a separate
+	// resource record) must be rejected rather than concatenated into a bogus option string.
+	enforce(txtChunks.length == 1,
+		"more than one TXT record found for " ~ queryHost ~ " (mongodb+srv permits at most one)");
+
+	auto opts = parseSrvTxtOptions(txtChunks[0]);
 	applyTxtOption(cfg.replicaSet, "replicaSet", opts);
 	applyTxtOption(cfg.authSource, "authSource", opts);
 
+	// The URI takes precedence over the TXT record: only adopt the TXT loadBalanced when
+	// the connection string did not specify it.
 	auto loadBalanced = "loadBalanced" in opts;
-	if (loadBalanced && !cfg.loadBalanced)
+	if (loadBalanced && !cfg.loadBalancedSpecified)
 		cfg.loadBalanced = *loadBalanced == "true";
+
+	// loadBalanced requires a single host and no replicaSet; re-validate now that SRV has
+	// expanded the seed into the resolved hosts (parseMongoDBUrl validated only the seed).
+	enforce(isValidLoadBalancedConfig(cfg),
+		"loadBalanced=true is invalid after SRV resolution (it requires a single host and no replicaSet)");
 }
 
 /// applySrvSeedlist replaces the seed host with the resolved SRV hosts
@@ -253,6 +264,26 @@ unittest
 		"the TXT replicaSet option is copied into cfg.replicaSet");
 }
 
+/// applySrvSeedlist rejects more than one TXT record instead of concatenating them
+unittest
+{
+	import vibe.db.mongo.settings : MongoClientSettings, MongoHost;
+	import std.exception : assertThrown;
+
+	auto cfg = new MongoClientSettings();
+	cfg.srv = true;
+	cfg.hosts = [MongoHost("test.mongodb.net", 27017)];
+
+	// Two separate TXT records on the seed host: the seedlist spec requires an error,
+	// not a silent join into "replicaSet=rs0authSource=admin".
+	auto resolver = SrvResolver(
+		(string n) => [MongoHost("a.mongodb.net", 27017)],
+		(string h) => ["replicaSet=rs0", "authSource=admin"]);
+
+	assertThrown(applySrvSeedlist(cfg, resolver),
+		"more than one TXT record is rejected");
+}
+
 /// applySrvSeedlist keeps a URI-set replicaSet over the TXT option
 unittest
 {
@@ -271,6 +302,47 @@ unittest
 
 	assert(cfg.replicaSet == "fromUri",
 		"a replicaSet already set from the URI is not overwritten by the TXT option");
+}
+
+/// applySrvSeedlist rejects TXT loadBalanced=true when SRV resolves to multiple hosts
+unittest
+{
+	import vibe.db.mongo.settings : MongoClientSettings, MongoHost;
+	import std.exception : assertThrown;
+
+	auto cfg = new MongoClientSettings();
+	cfg.srv = true;
+	cfg.hosts = [MongoHost("test.mongodb.net", 27017)];
+
+	// loadBalanced=true requires a single host, but SRV resolved to two — this must error
+	// instead of silently treating hosts[0] as the load balancer.
+	auto resolver = SrvResolver(
+		(string n) => [MongoHost("a.mongodb.net", 27017), MongoHost("b.mongodb.net", 27017)],
+		(string h) => ["loadBalanced=true"]);
+
+	assertThrown(applySrvSeedlist(cfg, resolver),
+		"TXT loadBalanced=true with multiple resolved hosts is rejected");
+}
+
+/// applySrvSeedlist keeps a URI-set loadBalanced=false over the TXT loadBalanced=true
+unittest
+{
+	import vibe.db.mongo.settings : MongoClientSettings, MongoHost;
+
+	auto cfg = new MongoClientSettings();
+	cfg.srv = true;
+	cfg.hosts = [MongoHost("test.mongodb.net", 27017)];
+	cfg.loadBalanced = false;
+	cfg.loadBalancedSpecified = true; // the URI explicitly set loadBalanced=false
+
+	auto resolver = SrvResolver(
+		(string n) => [MongoHost("a.mongodb.net", 27017)],
+		(string h) => ["loadBalanced=true"]);
+
+	applySrvSeedlist(cfg, resolver);
+
+	assert(!cfg.loadBalanced,
+		"an explicit URI loadBalanced=false is not overridden by the TXT loadBalanced=true");
 }
 
 /// applySrvSeedlist applies the TXT authSource option when the URI did not set one

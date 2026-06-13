@@ -120,18 +120,22 @@ final class MongoClient {
 			// configured host without probing; otherwise it runs full SDAM discovery.
 			discoverTopology();
 
+			// The monitor registry is always constructed so its call sites
+			// (handleStaleCommandError / stopMonitoring / activeMonitorCount, and
+			// resolveHost's requestAllChecks) operate on a real object, never a null. It
+			// is built BEFORE lockConnection() so server selection during that connect
+			// cannot dereference a null registry. In load-balancer mode the LB owns server
+			// health, so the registry is left empty (no reconcile = no monitors started).
+			ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
+			m_monitors = new MonitorRegistry(prober, &onMonitorResult,
+				m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
+
 			// force a connection to cause an exception for wrong URLs (and, in
 			// load-balancer mode, to run the serviceId-required handshake check)
 			lockConnection();
 
-			// The monitor registry is always constructed so its call sites
-			// (handleStaleCommandError / stopMonitoring / activeMonitorCount) operate
-			// on a real object, never a null. In load-balancer mode the LB owns server
-			// health, so the registry is left empty (no reconcile = no monitors started),
-			// an inert no-op rather than a null dereference.
-			ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
-			m_monitors = new MonitorRegistry(prober, &onMonitorResult,
-				m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
+			// Start the monitors only after the connection succeeds, so a ctor failure
+			// does not leak background monitor tasks.
 			if (!m_settings.loadBalanced)
 				m_monitors.reconcileWith(m_topology.load().allKnownHosts());
 		}
@@ -576,7 +580,11 @@ final class MongoClient {
 			}
 		}
 
-		auto selected = selectServer(newTopology, m_settings.readPreference, m_settings.localThresholdMS, m_settings.maxStalenessSeconds);
+		// Select with the configured readPreferenceTags so discovery's suitability check
+		// matches runtime selection (resolveHost). Otherwise a tag set matching no server
+		// passes discovery, then fails (or null-derefs) later in lockConnection().
+		auto selected = selectServer(newTopology, m_settings.readPreference, m_settings.localThresholdMS,
+			m_settings.maxStalenessSeconds, m_settings.readPreferenceTags);
 
 		if (selected.isNull) {
 			throw lastException !is null

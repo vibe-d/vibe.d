@@ -64,7 +64,7 @@ struct MongoCursor(DocType = Bson) {
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 
 		auto pref = options.readPreference.isNull ? client.readPreference : options.readPreference.get;
-		auto result = buildFindCommand(command, options, pref);
+		auto result = buildFindCommand(command, options, pref, client.readPreferenceTags);
 
 		this(client, result.command, result.batchSize, result.getMoreMaxTime, Nullable!ReadPreference(pref), session);
 	}
