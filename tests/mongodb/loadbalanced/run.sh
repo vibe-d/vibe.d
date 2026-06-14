@@ -76,6 +76,16 @@ wait_for() { # host port
 	return 1
 }
 
+wait_for_tcp() { # host port — bounded readiness via a plain TCP connect
+	local h="$1" p="$2"
+	for _ in $(seq 1 60); do
+		(exec 3<>"/dev/tcp/$h/$p") 2>/dev/null && return 0
+		sleep 1
+	done
+	echo "[loadbalanced] timed out waiting for tcp $h:$p" >&2
+	return 1
+}
+
 start_mongod() { # name dbpath port extra-args...
 	local name="$1" dbpath="$2" port="$3"; shift 3
 	mkdir -p "$dbpath"
@@ -91,8 +101,14 @@ do_start() {
 	# self-skips (MONGODB_LB_URI is left unset and the harness skips path B).
 	need mongod || { echo "[loadbalanced] mongod is required even for the negative path. Skipping."; exit 0; }
 	if [ -f "$envfile" ]; then
-		echo "[loadbalanced] cluster already started (see $envfile). Run './run.sh stop' first."
-		return 0
+		# Trust the env file only if the cluster it describes is actually reachable;
+		# a stale lb.env (left by a crashed/killed run) must not block a fresh start.
+		if (exec 3<>"/dev/tcp/127.0.0.1/$STANDALONE_PORT") 2>/dev/null; then
+			echo "[loadbalanced] cluster already started (see $envfile). Run './run.sh stop' first."
+			return 0
+		fi
+		echo "[loadbalanced] stale $envfile (cluster not reachable); rebuilding."
+		do_stop
 	fi
 	rm -rf "$work"; mkdir -p "$work/logs"
 
@@ -162,7 +178,12 @@ EOF
 	echo "[loadbalanced] haproxy LB front :$LB_FRONT_PORT -> mongos LB :$MONGOS_LB_PORT (send-proxy-v2)"
 	haproxy -f "$work/haproxy.cfg" -D -p "$work/haproxy.pid" \
 		|| { echo "[loadbalanced] haproxy failed to start" >&2; do_stop; exit 1; }
-	sleep 1
+	# Poll the front for readiness with a plain TCP connect: the LB front demands the
+	# PROXY protocol header, so a mongosh ping (as wait_for does) would be rejected — a
+	# successful accept is the right readiness signal that haproxy is bound and listening.
+	wait_for_tcp 127.0.0.1 "$LB_FRONT_PORT" || {
+		echo "[loadbalanced] haproxy LB front never became reachable" >&2; do_stop; exit 1;
+	}
 	local lb_target="$LB_FRONT_PORT"
 
 	{

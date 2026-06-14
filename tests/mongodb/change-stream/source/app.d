@@ -105,10 +105,10 @@ void runReplicaSetTest(MongoClient client)
 
 	auto stream = coll.watch();
 
-	// watch() opens the underlying cursor lazily on first use, and a change stream only
-	// reports events after its cursor's start point. Prime the stream with an initial
-	// (empty) read so its start point precedes the insert below; otherwise the cursor
-	// would open after the write and never observe it.
+	// The change stream does not capture the aggregate's start point (postBatchResumeToken
+	// is untracked — see L14(B)), so a priming read is required to anchor the watch point
+	// before the write; otherwise the cursor effectively starts at the first getMore and
+	// never observes an insert that happened before it.
 	assert(stream.empty, "a freshly opened change stream has no buffered events yet");
 
 	coll.insertOne(["greeting": "hello change streams"]);

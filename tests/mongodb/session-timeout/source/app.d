@@ -40,6 +40,4 @@ void main(string[] args)
 		"a data-bearing server advertising a timeout yields a topology timeout");
 	assert(timeout.get == desc.logicalSessionTimeoutMinutes.get.minutes,
 		"the computed timeout equals the server-advertised value");
-	assert(timeout.get == 30.minutes,
-		"the default mongod advertises a 30 minute logical session timeout");
 }

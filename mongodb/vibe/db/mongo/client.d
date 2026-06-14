@@ -63,6 +63,16 @@ private SrvResolver liveSrvResolver() @safe
 final class MongoClient {
 @safe:
 
+	// Concurrency contract (HARD): a MongoClient is single-thread / single-event-loop.
+	// It is safe to share across fibers of ONE thread, but it must NOT be shared across
+	// OS threads. The connection pools, the session pool, m_topologyChanged
+	// (a LocalManualEvent), and the bool flags below are all thread-local and
+	// unsynchronised; only an event loop on the owning thread may touch them. The
+	// AtomicTopology wrapper exists solely to give a consistent intra-thread snapshot
+	// of the topology across a yield point (publish/load is one atomic swap); it is NOT
+	// a license for cross-thread sharing and does not make the rest of this state safe
+	// to mutate from another thread. For one client per thread, use a thread-local
+	// instance (e.g. scopedMongoDB) rather than passing one client between threads.
 	private {
 		ConnectionPool!MongoConnection[string] m_connectionPools;
 		MongoClientSettings m_settings;
@@ -319,14 +329,36 @@ final class MongoClient {
 
 		models = ensureInsertIds(models);
 		const verbose = !options.verboseResults.isNull && options.verboseResults.get;
+		// TODO(L16.1 — batch splitting): the spec requires splitting into multiple commands
+		// when the op count exceeds maxWriteBatchSize or the encoded command exceeds
+		// maxMessageSizeBytes. The pure partitioner (partitionBulkWriteOps in impl.bulkwrite,
+		// fully unit-tested) is landed and ready; wiring it in needs three connection-bound
+		// pieces that are deferred to keep the suite green: (1) capturing the server's real
+		// maxWriteBatchSize/maxMessageSizeBytes (ServerDescription does not yet deserialize them
+		// from the hello reply — partitionBulkWriteOps currently has defaultMax* fallbacks);
+		// (2) offsetting each batch response's per-op `idx`/error indices by the batch start so
+		// the merged verbose/error maps stay globally indexed; (3) honoring ordered=true by
+		// stopping after the first batch that reports a write error. Until then a single command
+		// is sent, which is correct for every write within the protocol default limits.
 		Bson cmd = buildClientBulkWriteCommand(models, options);
 
+		// The command runs on the primary (runWriteCommandChecked), so the 8.0 wire-version
+		// gate must be evaluated against the primary too — a read-preference-selected secondary
+		// may advertise a different version than the host the write actually reaches.
 		{
-			auto conn = lockConnection();
-			enforce(conn.description.maxWireVersion >= WireVersion.v80,
+			auto primary = lockConnectionToPrimary();
+			enforce(primary.description.maxWireVersion >= WireVersion.v80,
 				"bulkWrite requires a MongoDB 8.0+ server");
 		}
 
+		// TODO(L13.3 — bulkWrite getMore primary pinning): the result cursor is created on the
+		// primary by runWriteCommandChecked, but the getMore loop below re-resolves the primary
+		// through admin.runCommandChecked(toPrimary=true) on each call. After a step-down between
+		// batches, getMore targets the NEW primary and fails with CursorNotFound, whereas
+		// MongoFindCursor pins the cursor to its creating host (captured m_pinnedHost, reused via
+		// lockConnectionToHost). Fixing this requires runWriteCommandChecked to surface the
+		// LockedConnection/host it used so the same connection can be re-locked for getMore and
+		// the failure-path killCursors; that plumbing is connection-bound and deferred.
 		auto admin = getDatabase("admin");
 		Bson response = admin.runWriteCommandChecked(cmd);
 
@@ -341,6 +373,12 @@ final class MongoClient {
 			if (cursorId != 0) {
 				string ns = cursor["ns"].get!string;
 				string collection = ns[ns.indexOf('.') + 1 .. $];
+
+				// A throw mid-drain (e.g. a getMore network error) must not orphan the open
+				// server-side cursor: kill it on the way out. Mirrors MongoCursor's destructor,
+				// which calls killCursors when an unconsumed cursor is dropped.
+				scope(failure)
+					killBulkWriteCursor(admin, collection, cursorId);
 
 				while (cursorId != 0) {
 					Bson getMoreCmd = Bson.emptyObject; // order matters: getMore must be the first field
@@ -361,6 +399,24 @@ final class MongoClient {
 		}
 
 		return parseClientBulkWriteResult(response, models, verbose);
+	}
+
+	/// Best-effort kill of an open server-level bulkWrite result cursor on the admin db, used
+	/// when draining the cursor throws so the server is not left holding an orphaned cursor.
+	/// Swallows errors from the kill itself: the original drain failure is the one worth surfacing.
+	private void killBulkWriteCursor(MongoDatabase admin, string collection, long cursorId) @safe nothrow
+	{
+		if (cursorId == 0)
+			return;
+
+		try {
+			Bson kill = Bson.emptyObject; // order matters: killCursors must be the first field
+			kill["killCursors"] = Bson(collection);
+			kill["cursors"] = Bson([Bson(cursorId)]);
+			admin.runCommandUnchecked(kill, __FUNCTION__, __FILE__, __LINE__, true);
+		} catch (Exception e) {
+			logWarn("Failed to kill orphaned bulkWrite cursor %s: %s", cursorId, e.msg);
+		}
 	}
 
 
@@ -506,6 +562,31 @@ final class MongoClient {
 		throw new MongoDriverException("Failed to acquire a live connection after evicting 100 dead connections");
 	}
 
+	/// Drops the connection pools for hosts no longer in `desiredHosts`, disconnecting
+	/// their idle connections first. Without this, a host that leaves the replica set
+	/// keeps its pool (and idle sockets) forever, and maxConnections becomes a per-host
+	/// rather than a global bound. Connections still checked out are closed when the
+	/// in-flight operation returns them to the (now unreferenced) pool.
+	private void pruneStalePools(MongoHost[] desiredHosts) @safe
+	{
+		import std.algorithm : map;
+		import std.array : array;
+
+		auto desiredKeys = desiredHosts.map!(h => hostKey(h)).array;
+		foreach (key; poolKeysToPrune(m_connectionPools.keys, desiredKeys))
+		{
+			m_connectionPools[key].removeUnused((conn) nothrow @safe {
+				try conn.disconnect();
+				catch (Exception e) {
+					logWarn("Error closing MongoDB connection for pruned host %s: %s", key, e.msg);
+					try () @trusted { logDebug("Full error: %s", e.toString()); } ();
+					catch (Exception e) {}
+				}
+			});
+			m_connectionPools.remove(key);
+		}
+	}
+
 	private ConnectionPool!MongoConnection poolFor(MongoHost host)
 	{
 		auto key = hostKey(host);
@@ -618,7 +699,7 @@ final class MongoClient {
 		import std.algorithm : map;
 		import std.array : array;
 		auto servers = m_topology.load().servers.map!(r => r.description).array;
-		m_sessionPool.updateTimeout(logicalSessionTimeout(servers));
+		m_sessionPool.updateTimeout(sessionPoolTimeout(logicalSessionTimeout(servers)));
 	}
 
 	private void probeAndUpdate(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
@@ -649,9 +730,35 @@ final class MongoClient {
 	private void onMonitorResult(MongoHost host, Nullable!ServerDescription desc, Duration rtt)
 	{
 		auto current = m_topology.load();
-		publishTopology(desc.isNull ? applyFailed(current, host) : applyDescription(current, host, desc.get));
 
-		m_monitors.reconcileWith(m_topology.load().allKnownHosts());
+		TopologyDescription next;
+		if (desc.isNull)
+			next = applyFailed(current, host);
+		else
+		{
+			auto folded = desc.get;
+			folded.roundTripTime = cast(float) foldRtt(current, host, rtt);
+			next = applyDescription(current, host, folded);
+		}
+		publishTopology(next);
+
+		auto knownHosts = m_topology.load().allKnownHosts();
+		m_monitors.reconcileWith(knownHosts);
+		pruneStalePools(knownHosts);
+	}
+
+	/// Folds this probe's measured `rtt` into the host's running RTT average (EWMA). The
+	/// first sample for a host (no prior probed average) seeds the average with the raw
+	/// measurement; later samples decay the old average per the SDAM alpha=0.2 formula.
+	private double foldRtt(ref const TopologyDescription current, MongoHost host, Duration rtt) @safe
+	{
+		auto sample = rtt.total!"usecs" / 1_000_000.0;
+		foreach (ref s; current.servers)
+		{
+			if (s.host == host && s.description.roundTripTime > 0)
+				return ewmaRtt(s.description.roundTripTime, sample, false);
+		}
+		return ewmaRtt(0.0, sample, true);
 	}
 
 	/// Stops all background server monitors. Call before discarding the client.
@@ -765,6 +872,90 @@ struct MongoClientHandle {
 		m_client = null;
 		return c;
 	}
+}
+
+/// SDAM exponentially-weighted moving average of a server's round-trip time.
+///
+/// `sample` is the latest measured RTT, `prev` the running average; `first` seeds the
+/// average with the raw sample on the very first measurement. Subsequent samples fold in
+/// with alpha=0.2 per the SDAM spec: newAvg = alpha*sample + (1-alpha)*prev.
+double ewmaRtt(double prev, double sample, bool first) @safe pure nothrow @nogc
+{
+	enum double alpha = 0.2;
+	return first ? sample : alpha * sample + (1.0 - alpha) * prev;
+}
+
+/// ewmaRtt seeds on the first sample and folds later samples with alpha 0.2
+unittest
+{
+	import std.math : isClose;
+
+	// the first measurement seeds the average with the raw sample (prev is ignored)
+	assert(ewmaRtt(0.0, 0.040, true) == 0.040,
+		"the first RTT sample seeds the moving average");
+
+	// a later sample folds in: 0.2*0.020 + 0.8*0.040 = 0.036
+	assert(isClose(ewmaRtt(0.040, 0.020, false), 0.036),
+		"a later sample is weighted 0.2 against the 0.8-weighted running average");
+
+	// a steady sample equal to the average leaves it unchanged
+	assert(isClose(ewmaRtt(0.030, 0.030, false), 0.030),
+		"a sample equal to the running average leaves it unchanged");
+}
+
+/// The pool keys to prune: every currently-pooled host key absent from the desired set.
+///
+/// `desiredKeys` is the host-key set of the current topology; `pooledKeys` is the set of
+/// per-host connection pools the client holds. A key in `pooledKeys` but not in
+/// `desiredKeys` belongs to a host that left the deployment, so its pool (and its idle
+/// sockets) must be dropped.
+string[] poolKeysToPrune(string[] pooledKeys, string[] desiredKeys) @safe pure nothrow
+{
+	import std.algorithm : canFind, filter;
+	import std.array : array;
+	return pooledKeys.filter!(k => !desiredKeys.canFind(k)).array;
+}
+
+/// poolKeysToPrune drops pools for hosts no longer in the topology and keeps the rest
+unittest
+{
+	// a removed host's pool key is pruned; a still-present one is kept; no spurious keys are invented
+	auto toPrune = poolKeysToPrune(["a:27017", "b:27017", "c:27017"], ["a:27017", "c:27017"]);
+	assert(toPrune == ["b:27017"], "only the pool whose host left the topology is pruned");
+
+	assert(poolKeysToPrune(["a:27017"], ["a:27017"]).length == 0,
+		"a host still in the topology keeps its pool");
+	assert(poolKeysToPrune([], ["a:27017"]).length == 0,
+		"a newly-desired host with no pool yet produces nothing to prune");
+}
+
+/// Maps a topology-advertised logical session timeout to the session pool's idle window.
+///
+/// A null `advertised` means at least one data-bearing server does not advertise a
+/// logicalSessionTimeout (e.g. a pre-3.6 member) — the sessions spec treats sessions as
+/// unsupported in that case. Rather than silently keeping a previously-known (now stale)
+/// timeout, we collapse the window to zero so every pooled session expires immediately and
+/// no stale lsid is reused once session support is lost.
+Nullable!Duration sessionPoolTimeout(Nullable!Duration advertised) @safe pure nothrow
+{
+	import core.time : Duration;
+	return advertised.isNull ? Nullable!Duration(Duration.zero) : advertised;
+}
+
+/// sessionPoolTimeout passes a present timeout through and collapses a null one to zero
+unittest
+{
+	import core.time : minutes, Duration;
+
+	// a server-advertised timeout is used as-is for the idle window
+	auto present = sessionPoolTimeout(Nullable!Duration(30.minutes));
+	assert(!present.isNull && present.get == 30.minutes,
+		"an advertised session timeout is passed through unchanged");
+
+	// no advertised timeout (sessions unsupported) collapses the window so pooled sessions expire at once
+	auto absent = sessionPoolTimeout(Nullable!Duration.init);
+	assert(!absent.isNull && absent.get == Duration.zero,
+		"a null advertised timeout marks sessions unsupported by expiring pooled sessions immediately");
 }
 
 /// Whether a failed op may be retried: idempotent reads and/or session-supported writes.

@@ -478,6 +478,124 @@ Bson buildClientBulkWriteCommand(ClientBulkWriteModel[] models, ClientBulkWriteO
 }
 
 /**
+	The MongoDB 8.0 server-level `bulkWrite` write-batch limits, as advertised by
+	the server's `hello` reply. Until the driver captures these from the connection
+	(`ServerDescription` does not yet deserialize them), `bulkWrite` falls back to
+	these protocol defaults: a single command may carry at most `maxWriteBatchSize`
+	operations and the encoded command may not exceed `maxMessageSizeBytes`.
+
+	See_Also: $(LINK https://github.com/mongodb/specifications/blob/master/source/crud/bulk-write.md)
+*/
+enum int defaultMaxWriteBatchSize = 100_000;
+/// ditto
+enum int defaultMaxMessageSizeBytes = 48 * 1024 * 1024;
+
+/**
+	Partitions client bulk-write ops into batches that each respect the server's
+	`maxWriteBatchSize` (op count) and `maxMessageSizeBytes` (encoded byte size)
+	limits, so `bulkWrite` can split one logical write into several commands as the
+	spec requires.
+
+	`opSizes[i]` is the encoded BSON byte size of op `i`. Each returned `[start, end)`
+	range covers a contiguous run of ops to send as one command; the ranges tile the
+	whole input in order with no gaps or overlaps. An op larger than
+	`maxMessageSizeBytes` on its own still occupies a batch by itself rather than
+	being dropped or producing an empty batch. Returns an empty array for zero ops.
+
+	Pure value-in, value-out so the IO/command-send stays at the call site.
+
+	See_Also: $(LINK https://github.com/mongodb/specifications/blob/master/source/crud/bulk-write.md)
+*/
+size_t[2][] partitionBulkWriteOps(const(size_t)[] opSizes, int maxWriteBatchSize, int maxMessageSizeBytes) @safe pure {
+	enforce(maxWriteBatchSize > 0, "maxWriteBatchSize must be positive");
+	enforce(maxMessageSizeBytes > 0, "maxMessageSizeBytes must be positive");
+
+	size_t[2][] batches;
+	size_t start = 0;
+	size_t bytesInBatch = 0;
+
+	foreach (i, opSize; opSizes) {
+		bool batchIsEmpty = i == start;
+		bool exceedsCount = (i - start) >= cast(size_t) maxWriteBatchSize;
+		bool exceedsBytes = bytesInBatch + opSize > cast(size_t) maxMessageSizeBytes;
+
+		// Never emit an empty batch: an op that overflows on its own (e.g. larger than the
+		// whole message limit) still opens a fresh batch only when the current one already
+		// holds at least one op.
+		if (!batchIsEmpty && (exceedsCount || exceedsBytes)) {
+			batches ~= [start, i];
+			start = i;
+			bytesInBatch = 0;
+		}
+
+		bytesInBatch += opSize;
+	}
+
+	if (start < opSizes.length)
+		batches ~= [start, opSizes.length];
+
+	return batches;
+}
+
+// zero ops yields no batches
+unittest {
+	assert(partitionBulkWriteOps([], 100_000, 48 * 1024 * 1024) == []);
+}
+
+// a single op yields one batch covering it
+unittest {
+	assert(partitionBulkWriteOps([10UL], 100_000, 48 * 1024 * 1024) == [[0UL, 1UL]]);
+}
+
+// ops exactly at the count limit stay in one batch; one more op splits into two
+unittest {
+	// maxWriteBatchSize 2: two ops fit one batch, three ops split 2 + 1
+	assert(partitionBulkWriteOps([1UL, 1UL], 2, 1_000) == [[0UL, 2UL]]);
+	assert(partitionBulkWriteOps([1UL, 1UL, 1UL], 2, 1_000) == [[0UL, 2UL], [2UL, 3UL]]);
+}
+
+// the byte budget splits a batch before the count limit is reached
+unittest {
+	// maxMessageSizeBytes 100: 60 + 60 overflows, so each 60-byte op gets its own batch
+	assert(partitionBulkWriteOps([60UL, 60UL], 100_000, 100) == [[0UL, 1UL], [1UL, 2UL]]);
+	// 40 + 40 fits (80 <= 100), the third 40 overflows into a second batch
+	assert(partitionBulkWriteOps([40UL, 40UL, 40UL], 100_000, 100) == [[0UL, 2UL], [2UL, 3UL]]);
+}
+
+// ops summing exactly to the byte limit stay together; exceeding by one byte splits
+unittest {
+	assert(partitionBulkWriteOps([50UL, 50UL], 100_000, 100) == [[0UL, 2UL]]);
+	assert(partitionBulkWriteOps([50UL, 51UL], 100_000, 100) == [[0UL, 1UL], [1UL, 2UL]]);
+}
+
+// an op larger than the whole message limit still occupies a batch by itself, never an empty batch
+unittest {
+	auto batches = partitionBulkWriteOps([10UL, 500UL, 10UL], 100_000, 100);
+	assert(batches == [[0UL, 1UL], [1UL, 2UL], [2UL, 3UL]],
+		"an oversized op is isolated in its own batch and never produces an empty batch");
+}
+
+// the partition tiles the whole input in order with no gaps or overlaps
+unittest {
+	auto batches = partitionBulkWriteOps([30UL, 30UL, 30UL, 30UL, 30UL], 2, 1_000);
+	assert(batches == [[0UL, 2UL], [2UL, 4UL], [4UL, 5UL]]);
+	// contiguity: each batch starts where the previous ended, covering [0, 5)
+	size_t cursor = 0;
+	foreach (b; batches) {
+		assert(b[0] == cursor);
+		cursor = b[1];
+	}
+	assert(cursor == 5);
+}
+
+// rejects non-positive limits rather than looping forever on a zero budget
+unittest {
+	import std.exception : assertThrown;
+	assertThrown(partitionBulkWriteOps([1UL], 0, 100));
+	assertThrown(partitionBulkWriteOps([1UL], 100, 0));
+}
+
+/**
 	Returns `true` when `update` is a valid update specification: an array is
 	treated as an aggregation pipeline, and an object qualifies only when every
 	top-level key starts with `$` (an update operator). Anything else, including

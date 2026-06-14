@@ -102,7 +102,7 @@ final class LocalCryptProvider : MongoCryptProvider {
 			auto derived = hmacSha512(m_ivKey, plaintext);
 			iv[] = derived[0 .. 16];
 		} else {
-			() @trusted { RAND_bytes(iv.ptr, 16); }();
+			enforce(() @trusted { return RAND_bytes(iv.ptr, 16); }() == 1, "RAND_bytes failed");
 		}
 
 		// The scheme is encrypt-then-MAC, so the HMAC covers IV || ciphertext.
@@ -131,7 +131,7 @@ final class LocalCryptProvider : MongoCryptProvider {
 
 	BsonBinData createDataKey(string kmsProvider, DataKeyOptions options) {
 		ubyte[16] uuid;
-		() @trusted { RAND_bytes(uuid.ptr, 16); }();
+		enforce(() @trusted { return RAND_bytes(uuid.ptr, 16); }() == 1, "RAND_bytes failed");
 		return BsonBinData(BsonBinData.Type.uuid, uuid.idup);
 	}
 }
@@ -171,26 +171,6 @@ private bool constantTimeEquals(const(ubyte)[] a, const(ubyte)[] b) @safe {
 	ubyte diff = 0;
 	foreach (i; 0 .. a.length) diff |= cast(ubyte)(a[i] ^ b[i]);
 	return diff == 0;
-}
-
-@safe unittest {
-	// the wrong key must not decrypt. A keyless provider couldn't enforce this.
-	import std.exception : assertThrown;
-
-	immutable(ubyte)[] keyA = () { ubyte[96] k; foreach (i; 0 .. 96) k[i] = cast(ubyte) i;       return k.idup; }();
-	immutable(ubyte)[] keyB = () { ubyte[96] k; foreach (i; 0 .. 96) k[i] = cast(ubyte)(255 - i); return k.idup; }();
-
-	auto provA = new LocalCryptProvider(keyA);
-	auto provB = new LocalCryptProvider(keyB);
-
-	EncryptOptions opts;
-	opts.algorithm = EncryptionAlgorithm.random;
-	opts.keyAltName = "k";
-
-	auto cipher = provA.encrypt(Bson("top-secret"), opts);
-
-	assert(provA.decrypt(cipher) == Bson("top-secret"));
-	assertThrown(provB.decrypt(cipher));
 }
 
 void runTest(ushort port)

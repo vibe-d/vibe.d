@@ -110,7 +110,7 @@ struct TopologyDescription
 				return;
 		}
 
-		removeIncompatible(serverType);
+		removeIncompatible();
 		transitionType(serverType);
 	}
 
@@ -197,7 +197,11 @@ struct TopologyDescription
 		return result;
 	}
 
-	private void removeIncompatible(ServerDescription.ServerType serverType)
+	// Removes servers whose type is incompatible with the current topology type
+	// (e.g. a mongos or standalone showing up in a replica set). Decided entirely from
+	// the topology `type` and each server's own classifiedType(); the just-probed
+	// server's type is irrelevant here, which is why this takes no parameter.
+	private void removeIncompatible()
 	{
 		if (type == TopologyType.single)
 			return;

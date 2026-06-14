@@ -16,9 +16,11 @@ cleanup() {
 	done
 	for pid in "${PIDS[@]}"; do
 		if [ "$pid" != "0" ] && [ -n "$pid" ]; then
-			while kill -0 "$pid" 2>/dev/null; do
+			for _ in $(seq 1 30); do
+				kill -0 "$pid" 2>/dev/null || break
 				sleep 1
 			done
+			kill -9 "$pid" 2>/dev/null || true
 		fi
 	done
 	rm -rf db

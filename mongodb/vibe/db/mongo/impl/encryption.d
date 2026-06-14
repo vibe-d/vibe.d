@@ -42,11 +42,17 @@ struct AutoEncryptionOptions {
 	/// Validates the configuration by checking that `keyVaultNamespace` is a well-formed `db.collection` namespace and that KMS provider credentials carry their required fields.
 	void validate() const @safe {
 		import std.exception : enforce;
+		enum localMasterKeyLength = 96;
 		enforce(isValidNamespace(keyVaultNamespace),
 			"keyVaultNamespace must be a 'db.collection' namespace, got: " ~ keyVaultNamespace);
-		if (auto local = "local" in kmsProviders)
-			enforce(!local.tryIndex("key").isNull,
-				"kmsProviders['local'] requires a 'key' field");
+		auto local = "local" in kmsProviders;
+		if (!local)
+			return;
+		auto key = local.tryIndex("key");
+		enforce(!key.isNull,
+			"kmsProviders['local'] requires a 'key' field");
+		enforce(key.get.type == Bson.Type.binData && key.get.get!BsonBinData.rawData.length == localMasterKeyLength,
+			"kmsProviders['local']['key'] must be 96 bytes of binary key material");
 	}
 }
 
@@ -143,12 +149,23 @@ unittest {
 	assertThrown(options.validate());
 }
 
-// validate() accepts a "local" KMS provider carrying its required "key" field
+// validate() accepts a "local" KMS provider carrying a 96-byte "key" field
 unittest {
+	auto key96 = BsonBinData(BsonBinData.Type.generic, cast(immutable(ubyte)[]) "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
 	AutoEncryptionOptions options;
 	options.keyVaultNamespace = "encryption.__keyVault";
-	options.kmsProviders["local"] = Bson(["key": Bson("base64-96-byte-master-key")]);
+	options.kmsProviders["local"] = Bson(["key": Bson(key96)]);
 	options.validate();
+}
+
+// validate() rejects a "local" KMS provider whose "key" is shorter than 96 bytes
+unittest {
+	import std.exception : assertThrown;
+	auto shortKey = BsonBinData(BsonBinData.Type.generic, cast(immutable(ubyte)[]) "too-short-key");
+	AutoEncryptionOptions options;
+	options.keyVaultNamespace = "encryption.__keyVault";
+	options.kmsProviders["local"] = Bson(["key": Bson(shortKey)]);
+	assertThrown(options.validate());
 }
 
 /**
@@ -193,11 +210,15 @@ struct EncryptOptions {
 	/// The contention factor applied to randomized encryption, when set.
 	Nullable!long contentionFactor;
 
-	/// Validates that exactly one of `keyId` or `keyAltName` is set.
+	/// Validates that exactly one of `keyId` or `keyAltName` is set and that `rangeOptions` and `contentionFactor` are only used with their permitted algorithms.
 	void validate() const @safe {
 		import std.exception : enforce;
 		enforce(keyId.isNull != keyAltName.isNull,
 			"EncryptOptions requires exactly one of keyId or keyAltName");
+		enforce(rangeOptions.isNull || algorithm == EncryptionAlgorithm.range,
+			"rangeOptions is only valid with the 'range' algorithm");
+		enforce(contentionFactor.isNull || algorithm == EncryptionAlgorithm.indexed || algorithm == EncryptionAlgorithm.range,
+			"contentionFactor is only valid with the 'indexed' or 'range' algorithm");
 	}
 }
 
@@ -298,6 +319,40 @@ unittest {
 	opts.rangeOptions = range;
 	assert(!opts.rangeOptions.isNull);
 	assert(opts.rangeOptions.get.max.get == Bson(200));
+}
+
+// validate() rejects rangeOptions paired with a non-range algorithm and accepts it with range
+unittest {
+	import std.exception : assertThrown;
+
+	EncryptOptions wrongAlgorithm;
+	wrongAlgorithm.algorithm = EncryptionAlgorithm.deterministic;
+	wrongAlgorithm.keyAltName = "age-key";
+	wrongAlgorithm.rangeOptions = RangeOptions.init;
+	assertThrown(wrongAlgorithm.validate());
+
+	EncryptOptions rangeAlgorithm;
+	rangeAlgorithm.algorithm = EncryptionAlgorithm.range;
+	rangeAlgorithm.keyAltName = "age-key";
+	rangeAlgorithm.rangeOptions = RangeOptions.init;
+	rangeAlgorithm.validate();
+}
+
+// validate() rejects contentionFactor with a deterministic algorithm and accepts it with indexed
+unittest {
+	import std.exception : assertThrown;
+
+	EncryptOptions deterministic;
+	deterministic.algorithm = EncryptionAlgorithm.deterministic;
+	deterministic.keyAltName = "ssn-key";
+	deterministic.contentionFactor = 8L;
+	assertThrown(deterministic.validate());
+
+	EncryptOptions indexed;
+	indexed.algorithm = EncryptionAlgorithm.indexed;
+	indexed.keyAltName = "ssn-key";
+	indexed.contentionFactor = 8L;
+	indexed.validate();
 }
 
 // DataKeyOptions carries masterKey, keyAltNames and optional keyMaterial

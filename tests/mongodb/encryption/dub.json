@@ -3,6 +3,6 @@
     "description": "CSFLE ClientEncryption + MongoCryptProvider dependency-injection seam integration test for vibe.d (no live server required)",
     "dependencies": {
         "vibe-d:mongodb": {"path": "../../../"},
-        "openssl": "*"
+        "openssl": "~>3.4"
     }
 }

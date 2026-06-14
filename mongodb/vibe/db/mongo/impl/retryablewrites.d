@@ -132,6 +132,30 @@ unittest {
 	assert(hasUnlimitedDelete(Bson([delOne])) == false, "limit:1 is a single delete (retryable)");
 }
 
+/// Whether any op in a client `bulkWrite` `ops` array is a multi-document write
+/// (`multi:true`), which makes the whole bulkWrite ineligible for retry.
+/// `updateMany`/`deleteMany` ops carry `multi:true`; inserts have no `multi` field.
+bool hasMultiOp(Bson ops)
+{
+	return anyStatement(ops, entry => isTruthyNumber(entry["multi"]));
+}
+
+/// hasMultiOp flags an ops array containing a multi:true write
+unittest {
+	Bson multiUpdate = Bson.emptyObject;
+	multiUpdate["update"] = Bson(0);
+	multiUpdate["multi"] = Bson(true);
+
+	assert(hasMultiOp(Bson([multiUpdate])) == true,
+		"a multi:true op must be detected");
+
+	Bson singleInsert = Bson.emptyObject;
+	singleInsert["insert"] = Bson(0);
+
+	assert(hasMultiOp(Bson([singleInsert])) == false,
+		"an insert op carries no multi field and must not be flagged");
+}
+
 /// classifies a command as a retryable write
 bool isRetryableWriteCommand(Bson command)
 {
@@ -139,10 +163,15 @@ bool isRetryableWriteCommand(Bson command)
 
 	string name = commandName(command);
 
-	if (!name.among("insert", "update", "delete", "findAndModify"))
+	if (!name.among("insert", "update", "delete", "findAndModify", "bulkWrite"))
 		return false;
 
 	if (name == "update" && hasMultiStatement(command["updates"]))
+		return false;
+
+	// A client bulkWrite is retryable only when none of its ops is a multi-document
+	// write, mirroring the multi/limit gating of the per-collection write commands.
+	if (name == "bulkWrite" && hasMultiOp(command["ops"]))
 		return false;
 
 	return !(name == "delete" && hasUnlimitedDelete(command["deletes"]));
@@ -208,6 +237,34 @@ unittest {
 
 	assert(isRetryableWriteCommand(cmd) == false,
 		"limit:0 delete must not be classified as a retryable write command");
+}
+
+/// a single-document bulkWrite command is a retryable write
+unittest {
+	Bson op = Bson.emptyObject;
+	op["insert"] = Bson(0);
+	op["document"] = Bson(["_id": Bson(1)]);
+
+	Bson cmd = Bson.emptyObject;
+	cmd["bulkWrite"] = Bson(1);
+	cmd["ops"] = Bson([op]);
+
+	assert(isRetryableWriteCommand(cmd) == true,
+		"a bulkWrite with only single-document ops must be classified as a retryable write command");
+}
+
+/// a bulkWrite containing a multi:true op is not a retryable write
+unittest {
+	Bson op = Bson.emptyObject;
+	op["update"] = Bson(0);
+	op["multi"] = Bson(true);
+
+	Bson cmd = Bson.emptyObject;
+	cmd["bulkWrite"] = Bson(1);
+	cmd["ops"] = Bson([op]);
+
+	assert(isRetryableWriteCommand(cmd) == false,
+		"a bulkWrite with a multi-document op must not be classified as a retryable write command");
 }
 
 /// Stamps a write command with the session id and retryable txnNumber.

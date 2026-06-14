@@ -173,6 +173,40 @@ unittest
 	assert(resumeToken(event).isNull);
 }
 
+/** Whether a change event terminates the stream.
+
+	An `invalidate` event (collection dropped/renamed, database dropped) is the
+	final event a change stream emits. The server rejects `resumeAfter` carrying an
+	invalidate token (only `startAfter` is legal there) and the spec forbids
+	auto-resuming past an invalidate, so the stream must end on it.
+
+	Params:
+		event = a change event document as returned by the server.
+
+	Returns: true when the event's `operationType` is `invalidate`.
+*/
+bool isInvalidateEvent(Bson event)
+{
+	return event["operationType"].opt!string == "invalidate";
+}
+
+/// isInvalidateEvent is true for an invalidate event
+unittest
+{
+	auto event = Bson([
+		"_id": Bson(["_data": Bson("826...")]),
+		"operationType": Bson("invalidate")
+	]);
+	assert(isInvalidateEvent(event));
+}
+
+/// isInvalidateEvent is false for non-invalidate events and missing operationType
+unittest
+{
+	assert(!isInvalidateEvent(Bson(["operationType": Bson("insert")])));
+	assert(!isInvalidateEvent(Bson(["_id": Bson(["_data": Bson("x")])])));
+}
+
 /** Whether a server error is a resumable change-stream error.
 
 	Such errors carry the `ResumableChangeStreamError` label, meaning the stream
@@ -243,6 +277,74 @@ unittest
 	assert(resumed.startAfter.isNull);
 }
 
+/// The next resume point after consuming a change event.
+struct ResumePoint {
+	/// The resume token to use on the next resume, or null to keep the previous one.
+	Nullable!Bson token;
+	/// Whether the consumed event ends the stream (an `invalidate`).
+	bool invalidated;
+}
+
+/** Advances the resume point given the event about to be consumed.
+
+	A normal event contributes its `_id` as the new resume token. An `invalidate`
+	event instead ends the stream and is deliberately NOT cached as the resume
+	token: a later resume would send `resumeAfter` with it, which the server
+	rejects (only `startAfter` is legal there) and the spec forbids anyway.
+
+	Params:
+		previous = the resume token cached so far, or null if none yet.
+		event = the change event about to be consumed.
+
+	Returns: the resume token to cache and whether the stream is now finished.
+*/
+ResumePoint advanceResumePoint(Nullable!Bson previous, Bson event)
+{
+	if (isInvalidateEvent(event))
+		return ResumePoint(previous, true);
+	auto token = resumeToken(event);
+	return ResumePoint(token.isNull ? previous : token, false);
+}
+
+/// advanceResumePoint caches a normal event's token and stays live
+unittest
+{
+	import std.typecons : nullable;
+	auto event = Bson([
+		"_id": Bson(["_data": Bson("t1")]),
+		"operationType": Bson("insert")
+	]);
+	auto point = advanceResumePoint(Nullable!Bson.init, event);
+	assert(point.token == Bson(["_data": Bson("t1")]).nullable);
+	assert(!point.invalidated);
+}
+
+/// advanceResumePoint keeps the previous token for a tokenless event
+unittest
+{
+	import std.typecons : nullable;
+	auto previous = Bson(["_data": Bson("prev")]).nullable;
+	auto point = advanceResumePoint(previous, Bson(["operationType": Bson("insert")]));
+	assert(point.token == previous);
+	assert(!point.invalidated);
+}
+
+/// advanceResumePoint marks an invalidate event as finishing without caching its token
+unittest
+{
+	import std.typecons : nullable;
+	auto previous = Bson(["_data": Bson("prev")]).nullable;
+	auto invalidate = Bson([
+		"_id": Bson(["_data": Bson("inv")]),
+		"operationType": Bson("invalidate")
+	]);
+	auto point = advanceResumePoint(previous, invalidate);
+	assert(point.invalidated);
+	// The invalidate token is NOT adopted as the resume point.
+	assert(point.token == previous);
+	assert(point.token != Bson(["_data": Bson("inv")]).nullable);
+}
+
 /** An auto-resuming input range over a MongoDB change stream.
 
 	It iterates change events like a normal cursor, but caches the latest resume
@@ -257,6 +359,7 @@ struct ChangeStream(DocType = Bson) {
 		MongoCursor!DocType m_cursor;
 		Nullable!Bson m_resumeToken;
 		bool m_started;
+		bool m_invalidated;
 	}
 
 	/** Constructs a change stream from an opener delegate.
@@ -297,6 +400,10 @@ struct ChangeStream(DocType = Bson) {
 	*/
 	@property bool empty()
 	{
+		// An invalidate event ends the stream; never auto-resume past it (the server
+		// rejects resumeAfter with an invalidate token and the spec forbids it).
+		if (m_invalidated)
+			return true;
 		ensureStarted();
 		try
 			return m_cursor.empty;
@@ -333,9 +440,9 @@ struct ChangeStream(DocType = Bson) {
 			auto eventBson = m_cursor.front;
 		else
 			auto eventBson = () @safe { return serializeToBson(m_cursor.front); }();
-		auto token = .resumeToken(eventBson);
-		if (!token.isNull)
-			m_resumeToken = token;
+		auto point = advanceResumePoint(m_resumeToken, eventBson);
+		m_resumeToken = point.token;
+		m_invalidated = point.invalidated;
 	}
 }
 
