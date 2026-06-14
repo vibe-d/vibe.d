@@ -309,7 +309,7 @@ struct TopologyDescription
 		foreach (ref s; servers)
 		{
 			addHost(s.host);
-			foreach (hostStr; chain(s.description.hosts, s.description.passives))
+			foreach (hostStr; chain(s.description.hosts, s.description.passives, s.description.arbiters))
 				addHost(parseHostPort(hostStr));
 		}
 
@@ -1304,6 +1304,27 @@ unittest
 
 	auto known = topo.allKnownHosts();
 	assert(known.length == 3);
+}
+
+/// allKnownHosts includes arbiters so they are monitored as replica-set members
+unittest
+{
+	import std.algorithm : canFind;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto primary = MongoHost("primary", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.setName = "rs0";
+	desc.hosts = ["primary:27017", "sec:27017"];
+	desc.arbiters = ["arb:27017"];
+
+	topo.update(primary, desc);
+
+	assert(topo.allKnownHosts().canFind(MongoHost("arb", 27017)),
+		"an arbiter advertised in the member list must be monitored");
 }
 
 /// allKnownHosts includes a server's own host even when its description carries no member list (standalone/sharded)
