@@ -338,6 +338,17 @@ interface MongoCryptProvider {
 }
 
 /**
+	Seam to the key-vault collection that stores the data encryption keys. A real
+	implementation wraps the `keyVaultNamespace` collection; inject one into
+	`ClientEncryption` to have `createDataKey` write each new key through it.
+*/
+interface KeyVault {
+@safe:
+	void insertDataKey(Bson keyDocument);
+	Nullable!Bson findDataKeyByAltName(string altName);
+}
+
+/**
 	Explicit client-side field level encryption entry point.
 
 	The crypto methods delegate to the injected `MongoCryptProvider`; if none was
@@ -348,16 +359,19 @@ class ClientEncryption {
 	private string m_keyVaultNamespace;
 	private Bson[string] m_kmsProviders;
 	private MongoCryptProvider m_provider;
+	private KeyVault m_keyVault;
 
-	this(string keyVaultNamespace, Bson[string] kmsProviders, MongoCryptProvider provider = null) {
+	this(string keyVaultNamespace, Bson[string] kmsProviders, MongoCryptProvider provider = null, KeyVault keyVault = null) {
 		m_keyVaultNamespace = keyVaultNamespace;
 		m_kmsProviders = kmsProviders;
 		m_provider = provider;
+		m_keyVault = keyVault;
 	}
 
 	/// Encrypts a single value. Delegates to the injected provider, or throws if none is set.
 	BsonBinData encrypt(Bson value, EncryptOptions options) {
 		options.validate();
+		resolveKeyAltName(options);
 		requireProvider("encrypt");
 		return m_provider.encrypt(value, options);
 	}
@@ -370,14 +384,40 @@ class ClientEncryption {
 
 	/// Creates a new data encryption key and returns its id. Delegates to the injected provider, or throws if none is set.
 	BsonBinData createDataKey(string kmsProvider, DataKeyOptions options = DataKeyOptions.init) {
+		import std.exception : enforce;
+		enforce(kmsProvider in m_kmsProviders,
+			"createDataKey: KMS provider '" ~ kmsProvider ~ "' is not configured");
 		requireProvider("createDataKey");
-		return m_provider.createDataKey(kmsProvider, options);
+		auto keyId = m_provider.createDataKey(kmsProvider, options);
+		if (m_keyVault !is null)
+			m_keyVault.insertDataKey(buildDataKeyDocument(keyId, options));
+		return keyId;
 	}
 
 	private void requireProvider(string op) @safe {
 		if (m_provider is null)
 			throw libmongocryptRequired(op);
 	}
+
+	/// Resolves a keyAltName selector to its keyId via the key vault, leaving keyId-based options untouched.
+	private void resolveKeyAltName(ref EncryptOptions options) @safe {
+		if (options.keyAltName.isNull || m_keyVault is null)
+			return;
+		auto keyDoc = m_keyVault.findDataKeyByAltName(options.keyAltName.get);
+		if (keyDoc.isNull)
+			return;
+		options.keyId = keyDoc.get["_id"].get!BsonBinData;
+		options.keyAltName = Nullable!string.init;
+	}
+}
+
+private Bson buildDataKeyDocument(BsonBinData keyId, DataKeyOptions options) @safe {
+	import std.algorithm : map;
+	import std.array : array;
+	return Bson([
+		"_id": Bson(keyId),
+		"keyAltNames": Bson(options.keyAltNames.map!(name => Bson(name)).array)
+	]);
 }
 
 private Exception libmongocryptRequired(string op) @safe {
@@ -517,4 +557,153 @@ unittest {
 	dko.masterKey = Bson(["provider": Bson("local")]);
 	auto keyId = ce.createDataKey("local", dko);
 	assert(keyId.type == BsonBinData.Type.uuid);
+}
+
+// ClientEncryption.createDataKey inserts the generated data-key document into the injected key vault
+unittest {
+	static class FakeCryptProvider : MongoCryptProvider {
+	@safe:
+		BsonBinData encrypt(Bson value, EncryptOptions options) {
+			immutable(ubyte)[] cipher = ['E', 'N', 'C'];
+			return BsonBinData(encryptedBinarySubtype, cipher);
+		}
+		Bson decrypt(BsonBinData value) { return Bson("plain"); }
+		BsonBinData createDataKey(string kmsProvider, DataKeyOptions options) {
+			immutable(ubyte)[] keyId = cast(immutable(ubyte)[]) "0123456789abcdef";
+			return BsonBinData(BsonBinData.Type.uuid, keyId);
+		}
+	}
+
+	static class FakeKeyVault : KeyVault {
+	@safe:
+		Bson[] insertedKeys;
+		void insertDataKey(Bson keyDocument) {
+			insertedKeys ~= keyDocument;
+		}
+		Nullable!Bson findDataKeyByAltName(string altName) { return typeof(return).init; }
+	}
+
+	auto keyVault = new FakeKeyVault();
+	auto ce = new ClientEncryption("encryption.__keyVault",
+		["local": Bson(["key": Bson("k")])], new FakeCryptProvider(), keyVault);
+
+	ce.createDataKey("local");
+	assert(keyVault.insertedKeys.length == 1, "createDataKey should insert exactly one data-key document into the key vault");
+}
+
+// ClientEncryption.createDataKey records DataKeyOptions.keyAltNames in the inserted key-vault document
+unittest {
+	import std.algorithm : map;
+	import std.array : array;
+
+	static class FakeCryptProvider : MongoCryptProvider {
+	@safe:
+		BsonBinData encrypt(Bson value, EncryptOptions options) {
+			immutable(ubyte)[] cipher = ['E', 'N', 'C'];
+			return BsonBinData(encryptedBinarySubtype, cipher);
+		}
+		Bson decrypt(BsonBinData value) { return Bson("plain"); }
+		BsonBinData createDataKey(string kmsProvider, DataKeyOptions options) {
+			immutable(ubyte)[] keyId = cast(immutable(ubyte)[]) "0123456789abcdef";
+			return BsonBinData(BsonBinData.Type.uuid, keyId);
+		}
+	}
+
+	static class FakeKeyVault : KeyVault {
+	@safe:
+		Bson[] insertedKeys;
+		void insertDataKey(Bson keyDocument) {
+			insertedKeys ~= keyDocument;
+		}
+		Nullable!Bson findDataKeyByAltName(string altName) { return typeof(return).init; }
+	}
+
+	auto keyVault = new FakeKeyVault();
+	auto ce = new ClientEncryption("encryption.__keyVault",
+		["local": Bson(["key": Bson("k")])], new FakeCryptProvider(), keyVault);
+
+	DataKeyOptions options;
+	options.keyAltNames = ["ssn-key"];
+	ce.createDataKey("local", options);
+
+	auto altNames = keyVault.insertedKeys[0]["keyAltNames"].get!(Bson[]).map!(name => name.get!string).array;
+	assert(altNames == ["ssn-key"], "inserted key document should carry keyAltNames");
+}
+
+// ClientEncryption.createDataKey rejects a kmsProvider name not in the configured kmsProviders
+unittest {
+	import std.exception : assertThrown;
+
+	static class FakeCryptProvider : MongoCryptProvider {
+	@safe:
+		BsonBinData encrypt(Bson value, EncryptOptions options) {
+			immutable(ubyte)[] cipher = ['E', 'N', 'C'];
+			return BsonBinData(encryptedBinarySubtype, cipher);
+		}
+		Bson decrypt(BsonBinData value) { return Bson("plain"); }
+		BsonBinData createDataKey(string kmsProvider, DataKeyOptions options) {
+			immutable(ubyte)[] keyId = cast(immutable(ubyte)[]) "0123456789abcdef";
+			return BsonBinData(BsonBinData.Type.uuid, keyId);
+		}
+	}
+
+	static class FakeKeyVault : KeyVault {
+	@safe:
+		Bson[] insertedKeys;
+		void insertDataKey(Bson keyDocument) {
+			insertedKeys ~= keyDocument;
+		}
+		Nullable!Bson findDataKeyByAltName(string altName) { return typeof(return).init; }
+	}
+
+	auto keyVault = new FakeKeyVault();
+	auto ce = new ClientEncryption("encryption.__keyVault",
+		["local": Bson(["key": Bson("k")])], new FakeCryptProvider(), keyVault);
+
+	assertThrown(ce.createDataKey("aws"));
+}
+
+// ClientEncryption.encrypt resolves keyAltName to the key vault's keyId before delegating to the provider
+unittest {
+	immutable(ubyte)[] uuidBytes = cast(immutable(ubyte)[]) "fedcba9876543210";
+	auto resolvedKeyId = BsonBinData(BsonBinData.Type.uuid, uuidBytes);
+
+	static class LookupKeyVault : KeyVault {
+	@safe:
+		Nullable!Bson findDataKeyByAltName(string altName) {
+			immutable(ubyte)[] keyBytes = cast(immutable(ubyte)[]) "fedcba9876543210";
+			if (altName == "ssn-key")
+				return Nullable!Bson(Bson(["_id": Bson(BsonBinData(BsonBinData.Type.uuid, keyBytes))]));
+			return Nullable!Bson.init;
+		}
+		void insertDataKey(Bson keyDocument) {}
+	}
+
+	static class RecordingProvider : MongoCryptProvider {
+	@safe:
+		EncryptOptions lastOptions;
+		BsonBinData encrypt(Bson value, EncryptOptions options) {
+			lastOptions = options;
+			immutable(ubyte)[] cipher = ['E', 'N', 'C'];
+			return BsonBinData(encryptedBinarySubtype, cipher);
+		}
+		Bson decrypt(BsonBinData value) { return Bson("plain"); }
+		BsonBinData createDataKey(string kmsProvider, DataKeyOptions options) {
+			immutable(ubyte)[] keyId = cast(immutable(ubyte)[]) "0123456789abcdef";
+			return BsonBinData(BsonBinData.Type.uuid, keyId);
+		}
+	}
+
+	auto provider = new RecordingProvider();
+	auto ce = new ClientEncryption("encryption.__keyVault",
+		["local": Bson(["key": Bson("k")])], provider, new LookupKeyVault());
+
+	EncryptOptions opts;
+	opts.algorithm = EncryptionAlgorithm.deterministic;
+	opts.keyAltName = "ssn-key";
+
+	ce.encrypt(Bson("secret"), opts);
+
+	assert(!provider.lastOptions.keyId.isNull, "encrypt should resolve keyAltName to a keyId via the key vault");
+	assert(provider.lastOptions.keyId.get == resolvedKeyId, "encrypt should pass the vault-resolved keyId to the provider");
 }
