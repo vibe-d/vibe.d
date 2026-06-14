@@ -19,7 +19,9 @@ import vibe.db.mongo.mongo;
 import vibe.db.mongo.impl.changestream : ChangeStreamOptions, ChangeStreamFullDocument;
 
 import vibe.core.log;
+import vibe.core.core : sleep;
 
+import core.time : MonoTime, seconds, msecs;
 import std.algorithm : canFind;
 import std.conv : to;
 
@@ -102,16 +104,35 @@ void runReplicaSetTest(MongoClient client)
 	coll.drop();
 
 	auto stream = coll.watch();
+
+	// watch() opens the underlying cursor lazily on first use, and a change stream only
+	// reports events after its cursor's start point. Prime the stream with an initial
+	// (empty) read so its start point precedes the insert below; otherwise the cursor
+	// would open after the write and never observe it.
+	assert(stream.empty, "a freshly opened change stream has no buffered events yet");
+
 	coll.insertOne(["greeting": "hello change streams"]);
 
-	assert(!stream.empty, "the change stream must observe the inserted document");
+	// A change stream is a non-blocking tailable cursor: `empty` is non-monotonic and
+	// a getMore can return an empty batch before the event is visible. Poll until the
+	// insert is observed, per the documented usage pattern, rather than checking once.
+	auto deadline = MonoTime.currTime + 10.seconds;
+	while (stream.empty) {
+		assert(MonoTime.currTime < deadline,
+			"the change stream must observe the inserted document within the deadline");
+		sleep(100.msecs);
+	}
+
 	auto event = stream.front;
 	assert(event["operationType"].get!string == "insert",
 		"the observed change event must be an insert");
+
+	// The resume token is cached from the consumed event, so it is only available
+	// after popFront advances past it.
+	stream.popFront();
 	assert(!stream.resumeToken.isNull,
 		"consuming an event must cache a resume token");
 
-	stream.popFront();
 	coll.drop();
 	logInfo("Replica-set change-stream test OK: insert observed with resume token %s.", stream.resumeToken.get);
 }

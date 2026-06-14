@@ -6,8 +6,11 @@
 	    envelope and tags it subtype 0x06. Reversible by anyone; only shows the
 	    data flow through the seam.
 	  - LocalCryptProvider: real AES-256-CBC + HMAC-SHA-512 (encrypt-then-MAC)
-	    keyed by a 96-byte master key, via OpenSSL. Same scheme as the CSFLE
-	    "local" KMS provider. runTest() uses this one.
+	    keyed by a 96-byte master key, via OpenSSL. A test-only AEAD construction
+	    modeled on, but NOT wire-compatible with, CSFLE's "local" KMS provider: its
+	    blob is IV || ciphertext || HMAC and omits the key id, BSON type byte, and
+	    associated-data binding that libmongocrypt's subtype-6 format requires, so
+	    other drivers cannot read the subtype-6 values it writes. runTest() uses this one.
 
 	The driver itself does no crypto: ClientEncryption (impl/encryption.d) just
 	delegates to whichever provider is injected, and throws if none is. A real
@@ -70,7 +73,9 @@ final class ReferenceCryptProvider : MongoCryptProvider {
 
 /// Real AES-256-CBC + HMAC-SHA-512 (encrypt-then-MAC), keyed by a 96-byte master
 /// key split into encrypt / mac / iv-derivation parts. decrypt() checks the HMAC
-/// before decrypting, so the wrong key fails. Matches CSFLE's "local" KMS scheme.
+/// before decrypting, so the wrong key fails. Test-only AEAD layout (IV || ciphertext
+/// || HMAC) modeled on CSFLE's "local" KMS scheme but not libmongocrypt-wire-compatible:
+/// it binds no key id or BSON type byte, so other drivers cannot read its subtype-6 blobs.
 final class LocalCryptProvider : MongoCryptProvider {
 @safe:
 	private immutable(ubyte)[] m_encKey;
