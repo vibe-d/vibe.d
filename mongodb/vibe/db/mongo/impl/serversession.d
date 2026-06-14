@@ -448,6 +448,19 @@ struct MongoClientSession
 		m_runCommand = runCommand;
 	}
 
+	/// Best-effort cleanup when `endSession` was not called: returns the underlying server
+	/// session to its pool so its lsid is ended on client shutdown rather than leaking. Only
+	/// the pool return is done here (no network I/O), so it is safe even from the GC finalizer;
+	/// aborting an in-progress transaction still requires an explicit `endSession()`.
+	~this() @safe
+	{
+		if (m_release !is null)
+		{
+			m_release(m_session);
+			m_release = null;
+		}
+	}
+
 	/// The logical session id document for this session.
 	Bson lsid() @safe const { return m_session.lsid; }
 
@@ -643,6 +656,34 @@ unittest
 
 	assert(releases == 1,
 		"a second endSession must not release the server session again");
+}
+
+/// Dropping a session without endSession still returns it to the pool (the destructor cleans up).
+unittest
+{
+	bool released;
+
+	{
+		auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe { released = true; });
+		// intentionally never call endSession()
+	} // ~this runs here
+
+	assert(released,
+		"a session dropped without endSession is returned to its pool by the destructor, not leaked");
+}
+
+/// A destructor on an explicitly-ended session does not release the server session a second time.
+unittest
+{
+	int releases = 0;
+
+	{
+		auto session = MongoClientSession(ServerSession.create(), (ServerSession s) @safe { releases++; });
+		session.endSession();
+	} // ~this runs here; m_release is already null
+
+	assert(releases == 1,
+		"the destructor must not double-release a session that was already ended");
 }
 
 /// Starting a transaction moves the session into the starting transaction state.

@@ -184,6 +184,10 @@ private BulkWriteError[size_t] collectClientBulkWriteErrors(Bson response) @safe
 		auto errmsg = entry.tryIndex("errmsg");
 		if (!errmsg.isNull)
 			err.message = errmsg.get.get!string;
+		// Preserve errInfo (e.g. document-validation details) as BulkWriteError.details.
+		auto errInfo = entry.tryIndex("errInfo");
+		if (!errInfo.isNull)
+			err.details = errInfo.get;
 		writeErrors[idx] = err;
 	}
 
@@ -1011,6 +1015,32 @@ unittest {
 	assert(ex !is null);
 	assert(1 in ex.writeErrors);
 	assert(ex.writeErrors[1].code == 11000);
+}
+
+// a per-op write error preserves errInfo as BulkWriteError.details (document-validation info)
+unittest {
+	import std.exception : collectException;
+
+	auto response = Bson([
+		"ok": Bson(1.0), "nErrors": Bson(1L),
+		"nInserted": Bson(0L), "nMatched": Bson(0L), "nModified": Bson(0L),
+		"nUpserted": Bson(0L), "nDeleted": Bson(0L),
+		"cursor": Bson([
+			"id": Bson(0L),
+			"firstBatch": Bson([
+				Bson([
+					"ok": Bson(0.0), "idx": Bson(0L), "code": Bson(121),
+					"errmsg": Bson("Document failed validation"),
+					"errInfo": Bson(["failingDocumentId": Bson(4)]),
+				]),
+			]),
+		]),
+	]);
+
+	auto ex = collectException!MongoClientBulkWriteException(parseClientBulkWriteResult(response));
+	assert(ex !is null);
+	assert(ex.writeErrors[0].details == Bson(["failingDocumentId": Bson(4)]),
+		"errInfo (document-validation details) is preserved as BulkWriteError.details");
 }
 
 // partialResult carries the top-level counts when a per-op write error is thrown
