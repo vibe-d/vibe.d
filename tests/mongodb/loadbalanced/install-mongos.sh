@@ -9,7 +9,7 @@
 #
 # Run as   sudo ./install-mongos.sh
 #
-# Targets the el9 MongoDB packages (what mongodb-org-server is built from on this host).
+# Installs from the GPG-checked MongoDB yum repo, detecting the RHEL major version and arch.
 
 set -euo pipefail
 
@@ -21,10 +21,26 @@ if command -v mongod >/dev/null 2>&1; then
 		ver="$(mongod --version | sed -n 's/.*v\([0-9][0-9.]*\).*/\1/p' | head -1)"
 		[ -n "$ver" ] || { echo "could not determine mongod version" >&2; exit 1; }
 		series="$(echo "$ver" | cut -d. -f1-2)"   # e.g. 7.0
-		rpm="https://repo.mongodb.org/yum/redhat/9/mongodb-org/${series}/x86_64/RPMS/mongodb-org-mongos-${ver}-1.el9.x86_64.rpm"
-		echo "Installing mongos ${ver} (to match mongod ${ver}):"
-		echo "  ${rpm}"
-		dnf install -y "$rpm"
+
+		# Detect arch and the RHEL major version rather than hardcoding x86_64/el9.
+		arch="$(uname -m)"
+		case "$arch" in x86_64|aarch64) ;; *) echo "unsupported arch: $arch" >&2; exit 1;; esac
+		elver="$( . /etc/os-release 2>/dev/null; echo "${VERSION_ID%%.*}" )"
+		[ -n "$elver" ] || elver=9
+
+		# Install from the MongoDB yum repo with gpgcheck=1 so dnf verifies the package
+		# signature, instead of fetching an unverified URL RPM (dnf does not GPG-check a
+		# package passed by URL).
+		echo "Installing mongos ${ver} (to match mongod ${ver}) from the GPG-checked MongoDB repo:"
+		cat > "/etc/yum.repos.d/mongodb-org-${series}.repo" <<EOF
+[mongodb-org-${series}]
+name=MongoDB ${series} Repository
+baseurl=https://repo.mongodb.org/yum/redhat/${elver}/mongodb-org/${series}/${arch}/
+gpgcheck=1
+enabled=1
+gpgkey=https://pgp.mongodb.com/server-${series}.asc
+EOF
+		dnf install -y "mongodb-org-mongos-${ver}"
 		mongos --version | head -1
 	fi
 else

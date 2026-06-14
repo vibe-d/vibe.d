@@ -115,20 +115,24 @@ do_start() {
 	start_mongod cfg "$work/cfg" "$CFG_PORT" --configsvr --replSet cfgrs
 	wait_for 127.0.0.1 "$CFG_PORT" || { do_stop; exit 1; }
 	mongosh --quiet --port "$CFG_PORT" --eval \
-		"rs.initiate({_id:'cfgrs', configsvr:true, members:[{_id:0, host:'127.0.0.1:$CFG_PORT'}]})" >/dev/null
+		"quit(rs.initiate({_id:'cfgrs', configsvr:true, members:[{_id:0, host:'127.0.0.1:$CFG_PORT'}]}).ok ? 0 : 1)" \
+		|| { echo "[loadbalanced] config-server rs.initiate failed" >&2; do_stop; exit 1; }
 
 	echo "[loadbalanced] shard RS :$SHARD_PORT"
 	start_mongod shard "$work/shard" "$SHARD_PORT" --shardsvr --replSet shardrs
 	wait_for 127.0.0.1 "$SHARD_PORT" || { do_stop; exit 1; }
 	mongosh --quiet --port "$SHARD_PORT" --eval \
-		"rs.initiate({_id:'shardrs', members:[{_id:0, host:'127.0.0.1:$SHARD_PORT'}]})" >/dev/null
+		"quit(rs.initiate({_id:'shardrs', members:[{_id:0, host:'127.0.0.1:$SHARD_PORT'}]}).ok ? 0 : 1)" \
+		|| { echo "[loadbalanced] shard rs.initiate failed" >&2; do_stop; exit 1; }
 
-	# wait for the single-node replica sets to elect their primary
+	# wait for the single-node replica sets to elect their primary; fail loudly on timeout
 	for p in "$CFG_PORT" "$SHARD_PORT"; do
+		elected=
 		for _ in $(seq 1 30); do
-			mongosh --quiet --port "$p" --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)' >/dev/null 2>&1 && break
+			mongosh --quiet --port "$p" --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)' >/dev/null 2>&1 && { elected=1; break; }
 			sleep 1
 		done
+		[ -n "$elected" ] || { echo "[loadbalanced] replica set on :$p never elected a primary" >&2; do_stop; exit 1; }
 	done
 
 	echo "[loadbalanced] mongos :$MONGOS_PORT (loadBalancerPort=$MONGOS_LB_PORT)"
@@ -136,7 +140,8 @@ do_start() {
 		--pidfilepath "$work/mongos.pid" --bind_ip 127.0.0.1 --port "$MONGOS_PORT" \
 		--setParameter "loadBalancerPort=$MONGOS_LB_PORT" --fork >/dev/null
 	wait_for 127.0.0.1 "$MONGOS_PORT" || { do_stop; exit 1; }
-	mongosh --quiet --port "$MONGOS_PORT" --eval "sh.addShard('shardrs/127.0.0.1:$SHARD_PORT')" >/dev/null
+	mongosh --quiet --port "$MONGOS_PORT" --eval "quit(sh.addShard('shardrs/127.0.0.1:$SHARD_PORT').ok ? 0 : 1)" \
+		|| { echo "[loadbalanced] sh.addShard failed" >&2; do_stop; exit 1; }
 
 	# Load-balancer front. mongos's loadBalancerPort REQUIRES the PROXY protocol
 	# header on every connection (it uses it to learn the real client address), so a
@@ -155,7 +160,8 @@ backend mongos
   server m1 127.0.0.1:$MONGOS_LB_PORT send-proxy-v2
 EOF
 	echo "[loadbalanced] haproxy LB front :$LB_FRONT_PORT -> mongos LB :$MONGOS_LB_PORT (send-proxy-v2)"
-	haproxy -f "$work/haproxy.cfg" -D -p "$work/haproxy.pid"
+	haproxy -f "$work/haproxy.cfg" -D -p "$work/haproxy.pid" \
+		|| { echo "[loadbalanced] haproxy failed to start" >&2; do_stop; exit 1; }
 	sleep 1
 	local lb_target="$LB_FRONT_PORT"
 
