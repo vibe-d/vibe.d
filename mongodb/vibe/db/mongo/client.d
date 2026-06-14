@@ -661,6 +661,19 @@ final class MongoClient {
 		m_monitors.stopAll();
 	}
 
+	/// Tears the client all the way down: ends pooled sessions, stops the background
+	/// monitors, disconnects the idle pooled connections, and drops every connection
+	/// pool. Call before discarding a client to release its background tasks and
+	/// sockets. endPooledSessions and cleanupConnections both need a live pool, so they
+	/// run before the pools are dropped. Connections still checked out by an in-flight
+	/// operation are closed when that operation returns them.
+	void close()
+	{
+		stopMonitoring();
+		cleanupConnections();
+		m_connectionPools = null;
+	}
+
 	/// Asks the server, on a best-effort basis, to free this client's pooled logical sessions.
 	private void endPooledSessions()
 	{
@@ -678,6 +691,79 @@ final class MongoClient {
 	size_t activeMonitorCount() const @property
 	{
 		return m_monitors.length;
+	}
+
+	/// Number of per-host connection pools the client currently holds.
+	size_t connectionPoolCount() const @property
+	{
+		return m_connectionPools.length;
+	}
+}
+
+/**
+	Owns a MongoClient and closes it when it leaves scope.
+
+	`scopedMongoDB` returns this handle so a client created in a local or thread-local
+	scope is cleaned up deterministically: the destructor calls `MongoClient.close`,
+	which stops the background monitors (breaking the monitor-task -> client reference
+	cycle that would otherwise keep the client reachable for the lifetime of the
+	process), ends pooled sessions, and drains the connection pools.
+
+	The handle is move-only and forwards every `MongoClient` member through `alias this`:
+	---
+	auto client = scopedMongoDB("127.0.0.1");
+	auto users = client.getCollection("myapp.users");
+	---
+
+	To keep a raw, manually-managed `MongoClient` alive beyond the handle's scope (for
+	example to store it in a long-lived object), call `release()` to take ownership; you
+	are then responsible for calling `close()` before discarding it.
+*/
+struct MongoClientHandle {
+@safe:
+	private MongoClient m_client;
+	private void delegate() @safe m_stop;
+
+	@disable this(this);
+
+	/// Wraps `client`, closing it (stop monitors, end sessions, drain pools) when the
+	/// handle is destroyed.
+	package this(MongoClient client)
+	{
+		m_client = client;
+		m_stop = &client.close;
+	}
+
+	/// Test seam: wraps `client` with an explicit cleanup action run on destruction.
+	package this(MongoClient client, void delegate() @safe stop)
+	{
+		m_client = client;
+		m_stop = stop;
+	}
+
+	/// Closes the owned client unless ownership was released or moved away.
+	~this()
+	{
+		if (m_stop is null)
+			return;
+
+		auto stop = m_stop;
+		m_stop = null;
+		stop();
+	}
+
+	/// The owned client. Every `MongoClient` member is also reachable directly on the handle.
+	@property inout(MongoClient) client() inout { return m_client; }
+	alias client this;
+
+	/// Relinquishes ownership without closing the client; the caller takes over the client's
+	/// lifetime and must call `close()` before discarding it.
+	MongoClient release()
+	{
+		m_stop = null;
+		auto c = m_client;
+		m_client = null;
+		return c;
 	}
 }
 
@@ -931,4 +1017,48 @@ unittest {
 
 	assert(opCalls == 1, "a network failure without session support or idempotence is not retried");
 	assert(refreshCalls == 0, "no refresh when the error is not retried");
+}
+
+/// MongoClientHandle runs its stop action exactly once when it leaves scope.
+unittest
+{
+	int stops;
+	{
+		auto handle = MongoClientHandle(null, () @safe { stops++; });
+	} // ~this runs here
+
+	assert(stops == 1, "leaving scope runs the stop action exactly once");
+}
+
+/// release() relinquishes ownership so the destructor does not stop monitoring.
+unittest
+{
+	int stops;
+	MongoClient raw;
+	{
+		auto handle = MongoClientHandle(null, () @safe { stops++; });
+		raw = handle.release();
+	} // ~this runs here, but ownership was released
+
+	assert(stops == 0, "release suppresses the stop action");
+	assert(raw is null, "release hands back the owned client");
+}
+
+/// Moving a handle transfers ownership: the stop action runs once, from the destination only.
+unittest
+{
+	import std.algorithm.mutation : move;
+
+	int stops;
+	{
+		auto src = MongoClientHandle(null, () @safe { stops++; });
+		{
+			auto dst = move(src);
+			assert(stops == 0, "moving the handle does not run the stop action");
+		} // dst ~this runs here
+
+		assert(stops == 1, "the move destination runs the stop action exactly once");
+	} // src ~this runs here on the moved-from handle
+
+	assert(stops == 1, "the moved-from source does not run the stop action again");
 }
