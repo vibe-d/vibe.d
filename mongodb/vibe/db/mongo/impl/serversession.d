@@ -216,13 +216,20 @@ struct ServerSessionPool
 			auto reused = m_available[$ - 1];
 			m_available = m_available[0 .. $ - 1];
 			if (!reused.isAboutToExpire(now, m_timeout))
+			{
+				// Last-use is the time the session is handed out for a command, not the
+				// time it is later released (the spec defines last-use as command time).
+				reused.touch(now);
 				return reused;
+			}
 		}
 
-		return ServerSession.create();
+		auto fresh = ServerSession.create();
+		fresh.touch(now);
+		return fresh;
 	}
 
-	/// Returns a session to the pool for later reuse.
+	/// Returns a session to the pool for later reuse, preserving its last-use (command) time.
 	void release(ServerSession session, MonoTime now = MonoTime.currTime) @safe
 	{
 		m_available = m_available.remove!(s => s.isAboutToExpire(now, m_timeout), SwapStrategy.unstable);
@@ -230,7 +237,6 @@ struct ServerSessionPool
 		// unknown, so discard it rather than recycling its lsid.
 		if (session.isDirty())
 			return;
-		session.touch(now);
 		m_available ~= session;
 	}
 
@@ -315,6 +321,22 @@ unittest
 
 	assert(soon.lsid == first.lsid,
 		"a session still within the timeout must be reused, not discarded");
+}
+
+/// Last-use is the acquire/command time, not the release time: a session held idle past the
+/// timeout before release is not pooled as fresh.
+unittest
+{
+	import core.time : MonoTime, minutes;
+
+	ServerSessionPool pool;
+	auto t0 = MonoTime.currTime;
+	auto first = pool.acquire(t0);              // last use ≈ command time = t0
+	pool.release(first, t0 + 40.minutes);       // the app held it idle 40m before releasing
+	auto later = pool.acquire(t0 + 41.minutes); // the server expired the lsid ~t0+30m
+
+	assert(later.lsid != first.lsid,
+		"a session idle since its last use is discarded, not refreshed to the release time");
 }
 
 /// updateTimeout shortens the idle window so a once-reusable session expires.

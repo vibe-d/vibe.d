@@ -53,6 +53,9 @@ struct TopologyDescription
 	string setName;
 	TopologyType type = TopologyType.unknown;
 	uint seedCount;
+	/// Configured heartbeat interval, fed into the maxStaleness formula. Defaults to the
+	/// spec default (10s) so an unseeded topology matches the historical hardcoded value.
+	long heartbeatFrequencyMS = 10_000;
 	Nullable!BsonObjectID maxElectionId;
 	Nullable!int maxSetVersion;
 
@@ -463,7 +466,7 @@ struct TopologyDescription
 		auto sLag = sec.lastUpdateTimeUsecs - sec.lastWrite.lastWriteDate.get.value * 1000;
 		auto pLag = pri.lastUpdateTimeUsecs - pri.lastWrite.lastWriteDate.get.value * 1000;
 
-		return sLag - pLag + HEARTBEAT_FREQUENCY_USECS;
+		return sLag - pLag + heartbeatFrequencyMS * 1000;
 	}
 
 	private long stalenessWithoutPrimary(ref const ServerDescription desc) const
@@ -483,7 +486,7 @@ struct TopologyDescription
 			return -1;
 
 		auto sWriteDate = desc.lastWrite.lastWriteDate.get.value * 1000;
-		return maxWriteDate - sWriteDate + HEARTBEAT_FREQUENCY_USECS;
+		return maxWriteDate - sWriteDate + heartbeatFrequencyMS * 1000;
 	}
 
 	private long findPrimaryIdx() const
@@ -571,9 +574,6 @@ TopologyDescription loadBalancedTopology(MongoHost host)
 	topo.seedCount = 1;
 	return topo;
 }
-
-/// Default heartbeat frequency (10 seconds) used for staleness calculation.
-private enum long HEARTBEAT_FREQUENCY_USECS = 10_000_000;
 
 /// Returns a new topology with `desc` applied for `host`, leaving `current` unchanged.
 TopologyDescription applyDescription(TopologyDescription current, MongoHost host, ServerDescription desc)

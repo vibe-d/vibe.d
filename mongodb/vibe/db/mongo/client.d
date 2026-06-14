@@ -563,6 +563,8 @@ final class MongoClient {
 		// every probe — including the monitor path, which does not call matchesReplicaSet.
 		newTopology.setName = m_settings.replicaSet;
 		newTopology.seedCount = cast(uint) m_settings.hosts.length;
+		// Feed the configured heartbeat into the maxStaleness formula (was hardcoded to 10s).
+		newTopology.heartbeatFrequencyMS = m_settings.heartbeatFrequencyMS;
 		Exception lastException;
 
 		MongoHost[] attempted = m_settings.hosts.dup;

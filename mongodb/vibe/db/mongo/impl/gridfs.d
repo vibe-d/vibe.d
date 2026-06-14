@@ -265,6 +265,47 @@ unittest
 
 import vibe.db.mongo.database : MongoDatabase;
 import vibe.db.mongo.collection : MongoCollection;
+import vibe.db.mongo.impl.index : IndexModel;
+
+/// The unique `{files_id: 1, n: 1}` index the GridFS spec requires on the chunks collection.
+IndexModel gridfsChunksIndex() @safe
+{
+	IndexModel m;
+	m.add("files_id", 1).add("n", 1);
+	m.options.unique = true;
+	return m;
+}
+
+/// The `{filename: 1, uploadDate: 1}` index the GridFS spec requires on the files collection.
+IndexModel gridfsFilesIndex() @safe
+{
+	IndexModel m;
+	m.add("filename", 1).add("uploadDate", 1);
+	return m;
+}
+
+/// the GridFS chunks index is a unique compound index on (files_id, n) in that order
+unittest
+{
+	auto idx = gridfsChunksIndex();
+
+	string[] keys;
+	foreach (string key, value; idx.keys.byKeyValue)
+		keys ~= key;
+	assert(keys == ["files_id", "n"], "the chunks index key order is files_id then n");
+	assert(!idx.options.unique.isNull && idx.options.unique.get, "the chunks index is unique");
+}
+
+/// the GridFS files index is a compound index on (filename, uploadDate) in that order
+unittest
+{
+	auto idx = gridfsFilesIndex();
+
+	string[] keys;
+	foreach (string key, value; idx.keys.byKeyValue)
+		keys ~= key;
+	assert(keys == ["filename", "uploadDate"], "the files index key order is filename then uploadDate");
+}
 
 /// Node-driver-style GridFS bucket. Stores and reads files split across <bucket>.files and <bucket>.chunks.
 struct GridFSBucket
@@ -280,9 +321,21 @@ struct GridFSBucket
 		m_chunks = db[chunksCollectionName(options)];
 	}
 
+	/// Creates the GridFS-required indexes before the first write, but only when the files
+	/// collection is empty — so an established bucket is not re-indexed on every upload.
+	private void ensureIndexes()
+	{
+		if (!m_files.findOne(Bson.emptyObject).isNull)
+			return;
+		m_chunks.createIndex(gridfsChunksIndex());
+		m_files.createIndex(gridfsFilesIndex());
+	}
+
 	/// Splits `data` into chunks, stores them, then writes the files metadata doc. Returns the file id.
 	BsonObjectID uploadFromBuffer(string filename, scope const(ubyte)[] data)
 	{
+		ensureIndexes();
+
 		auto filesId = BsonObjectID.generate();
 		auto chunks = gridfsChunkDocuments(filesId, data, m_options.chunkSizeBytes);
 

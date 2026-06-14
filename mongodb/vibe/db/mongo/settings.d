@@ -54,6 +54,29 @@ package(vibe.db.mongo) bool isValidLoadBalancedConfig(in MongoClientSettings cfg
 	return true;
 }
 
+/// Whether a `maxStalenessSeconds` value is valid for the configured heartbeat. `-1`
+/// (disabled) is always valid; otherwise the spec requires it to be at least
+/// `max(90, heartbeatFrequencyMS/1000 + 10)`.
+package(vibe.db.mongo) bool isValidMaxStaleness(long maxStalenessSeconds, long heartbeatFrequencyMS) @safe
+{
+	import std.algorithm : max;
+	if (maxStalenessSeconds < 0)
+		return true;
+	return maxStalenessSeconds >= max(90L, heartbeatFrequencyMS / 1000 + 10);
+}
+
+/// isValidMaxStaleness enforces the spec floor of max(90, heartbeat/1000 + 10)
+unittest
+{
+	assert(isValidMaxStaleness(-1, 10_000), "-1 disables the staleness check and is always valid");
+	assert(isValidMaxStaleness(90, 10_000), "90s meets the floor for the default 10s heartbeat");
+	assert(!isValidMaxStaleness(89, 10_000), "below 90s is rejected for the default heartbeat");
+	assert(!isValidMaxStaleness(50, 10_000), "well below the floor is rejected");
+	// with a large heartbeat the floor is heartbeat/1000 + 10, above 90
+	assert(!isValidMaxStaleness(100, 120_000), "a 120s heartbeat raises the floor to 130s, so 100 is rejected");
+	assert(isValidMaxStaleness(130, 120_000), "130s meets the floor for a 120s heartbeat");
+}
+
 bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 @safe {
 	import std.exception : enforce;
@@ -288,6 +311,13 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 	if (!isValidLoadBalancedConfig(cfg))
 		return false;
+
+	if (!isValidMaxStaleness(cfg.maxStalenessSeconds, cfg.heartbeatFrequencyMS))
+	{
+		logError("maxStalenessSeconds=%s is below the spec floor of max(90, heartbeatFrequencyMS/1000 + 10)",
+			cfg.maxStalenessSeconds);
+		return false;
+	}
 
 	return true;
 }
