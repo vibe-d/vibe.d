@@ -65,7 +65,7 @@ void runTest(ushort port)
 	assert(result.modifiedCount == 1, "modifiedCount=" ~ result.modifiedCount.to!string);
 	assert(result.hasVerboseResults, "expected verbose results");
 	assert(0 in result.insertResults, "no insert result for op 0");
-	assert(result.insertResults[0].insertedId == pizzaId, "insert result id mismatch");
+	assert(result.insertResults[0].insertedId == Bson(pizzaId), "insert result id mismatch");
 	assert(2 in result.updateResults, "no update result for op 2");
 	assert(result.updateResults[2].modifiedCount == 1, "update result modifiedCount mismatch");
 
