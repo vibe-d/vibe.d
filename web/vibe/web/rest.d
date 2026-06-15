@@ -1648,10 +1648,15 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				static assert(false, "REST interface method `" ~ fullyQualifiedName!T ~ "." ~ Method ~ "` must be marked `@safe`.");
 
 			static if (is(RT == void)) {
+				// Set the default status to 204 (no content)
+				// https://github.com/vibe-d/vibe.d/issues/2831
+				// Note that `@viaBody out` parameters are forbidden. If they
+				// were allowed, we'd need to check for them as well.
+				res.statusCode = HTTPStatus.noContent;
 				// TODO: remove after deprecation period
 				__traits(getMember, inst, Method)(params);
 				returnHeaders();
-				res.writeBody(cast(ubyte[])null);
+				res.writeVoidBody();
 			} else static if (isInputStream!RT) {
 				auto ret = evaluateOutputModifiers!CFunc(
 						__traits(getMember, inst, Method)(params), req, res);

@@ -37,6 +37,7 @@ vibe-d-test*
 vibe-d-*-test*
 tests/mongodb/**/tests
 tests/mongodb/insert-remove-aggregate/tests
+tests/vibe.web.rest.post-void-return/post-void-return
 mongodb/mongodb-test-library
 
 # Examples
