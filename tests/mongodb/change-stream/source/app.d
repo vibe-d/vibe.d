@@ -103,6 +103,10 @@ void runReplicaSetTest(MongoClient client)
 	auto coll = client.getCollection("test.changestream");
 	coll.drop();
 
+	// MongoDB 3.6 rejects opening a $changeStream on a non-existent database (newer servers
+	// tolerate a missing collection); create the collection explicitly before watching.
+	client.getDatabase("test").runCommandChecked(Bson(["create": Bson("changestream")]));
+
 	auto stream = coll.watch();
 
 	// The change stream does not capture the aggregate's start point (postBatchResumeToken
