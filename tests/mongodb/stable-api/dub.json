@@ -1,0 +1,7 @@
+{
+    "name": "stable-api-test",
+    "description": "MongoDB Stable API (Versioned API) integration tests",
+    "dependencies": {
+        "vibe-d:mongodb": {"path": "../../../"}
+    }
+}

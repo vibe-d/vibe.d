@@ -10,6 +10,7 @@ module vibe.db.mongo.settings;
 import vibe.core.log;
 import vibe.data.bson;
 deprecated import vibe.db.mongo.flags : QueryFlags;
+import vibe.db.mongo.impl.serverapi : ServerApi, ServerApiVersion, buildServerApi;
 import vibe.db.mongo.impl.encryption : AutoEncryptionOptions;
 import vibe.inet.webform;
 
@@ -152,6 +153,10 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	{
 		FormFields options;
 		parseURLEncodedForm(tmpUrl[queryIndex+1 .. $], options);
+		bool sawApiVersion;
+		string apiVersionValue;
+		Nullable!bool apiStrictValue;
+		Nullable!bool apiDeprecationValue;
 		foreach (option, value; options.byKeyValue) {
 			bool setBool(ref bool dst)
 			{
@@ -195,6 +200,13 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				}
 			}
 
+			void setNullableBool(ref Nullable!bool dst)
+			{
+				bool b;
+				if (setBool(b))
+					dst = b;
+			}
+
 			void warnNotImplemented()
 			{
 				logDiagnostic("MongoDB option %s not yet implemented.", option);
@@ -205,6 +217,12 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 				default: logWarn("Unknown MongoDB option %s", option); break;
 				case "appname": cfg.appName = value; break;
+			case "apiversion":
+				sawApiVersion = true;
+				apiVersionValue = value;
+				break;
+				case "apistrict": setNullableBool(apiStrictValue); break;
+				case "apideprecationerrors": setNullableBool(apiDeprecationValue); break;
 				case "replicaset": cfg.replicaSet = value; break;
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
 				case "readpreferencetags": cfg.readPreferenceTags ~= parseTagSet(value); break;
@@ -256,6 +274,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 		if (writeOptionsImplySafe())
 			cfg.safe = true;
+
+		if (!buildServerApi(sawApiVersion, apiVersionValue, apiStrictValue, apiDeprecationValue, cfg.serverApi))
+			return false;
 	}
 
 	if (!isValidMaxStaleness(cfg.maxStalenessSeconds, cfg.heartbeatFrequencyMS))
@@ -458,6 +479,77 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?appName=myApp"));
 	assert(cfg.appName == "myApp");
+}
+
+/// parseMongoDBUrl parses apiVersion option into the server API config
+unittest
+{
+	import vibe.db.mongo.impl.serverapi : ServerApiVersion;
+
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?apiVersion=1"));
+	assert(!cfg.serverApi.isNull, "apiVersion option populates the server API config");
+	assert(cfg.serverApi.get.apiVersion == ServerApiVersion.v1, "apiVersion=1 selects ServerApiVersion.v1");
+}
+
+/// parseMongoDBUrl rejects an unsupported apiVersion value
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?apiVersion=2"),
+		"an unsupported apiVersion value must be rejected");
+}
+
+/// parseMongoDBUrl parses apiStrict option into the server API config
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?apiVersion=1&apiStrict=true"));
+	assert(!cfg.serverApi.isNull, "apiVersion present so server API config exists");
+	assert(!cfg.serverApi.get.strict.isNull && cfg.serverApi.get.strict.get == true, "apiStrict=true sets the strict flag");
+}
+
+/// parseMongoDBUrl applies apiStrict when it precedes apiVersion in the URL
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?apiStrict=true&apiVersion=1"),
+		"apiStrict before apiVersion is a valid URL");
+	assert(!cfg.serverApi.isNull, "apiVersion present so the config exists");
+	assert(!cfg.serverApi.get.strict.isNull && cfg.serverApi.get.strict.get == true,
+		"apiStrict applies regardless of option order");
+}
+
+/// parseMongoDBUrl rejects apiStrict without apiVersion
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?apiStrict=true"),
+		"apiStrict without apiVersion must be rejected");
+}
+
+/// parseMongoDBUrl rejects apiDeprecationErrors without apiVersion
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?apiDeprecationErrors=true"),
+		"apiDeprecationErrors without apiVersion must be rejected");
+}
+
+/// parseMongoDBUrl parses apiDeprecationErrors option into the server API config
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?apiVersion=1&apiDeprecationErrors=true"));
+	assert(!cfg.serverApi.get.deprecationErrors.isNull && cfg.serverApi.get.deprecationErrors.get == true,
+		"apiDeprecationErrors=true sets the deprecationErrors flag");
 }
 
 /// parseMongoDBUrl parses replicaSet option
@@ -1486,6 +1578,9 @@ class MongoClientSettings
 	 * collections.
 	 */
 	string appName;
+
+	/// Stable API (Versioned API) configuration, when an apiVersion is requested.
+	Nullable!ServerApi serverApi;
 
 	/// Optional client-side field level encryption (auto-encryption) configuration.
 	Nullable!AutoEncryptionOptions autoEncryption;

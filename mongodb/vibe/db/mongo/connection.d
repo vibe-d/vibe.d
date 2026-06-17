@@ -23,6 +23,7 @@ import vibe.db.mongo.impl.compression;
 import vibe.db.mongo.impl.clustertime;
 import vibe.db.mongo.impl.wire;
 import vibe.db.mongo.monitor : MongoServerErrorCode;
+import vibe.db.mongo.impl.serverapi : applyServerApi;
 import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.inet.webform;
@@ -808,6 +809,10 @@ final class MongoConnection {
 		// error desyncs the connection and must quarantine it, but the clean `ok != 1.0`
 		// command-failure path below fully reads a healthy connection and must keep it.
 		// A method-scoped guard would wrongly disconnect on that logical failure too.
+
+		// When the Stable API (Versioned API) is configured, every command, including
+		// the handshake hello, carries apiVersion (+ apiStrict / apiDeprecationErrors).
+		command = applyServerApi(command, m_settings.serverApi);
 
 		// Gossip the highest cluster time we've seen so the server advances causally.
 		// No-op until the first reply carries a $clusterTime (e.g. on a standalone).
