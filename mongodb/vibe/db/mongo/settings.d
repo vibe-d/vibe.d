@@ -10,6 +10,7 @@ module vibe.db.mongo.settings;
 import vibe.core.log;
 import vibe.data.bson;
 deprecated import vibe.db.mongo.flags : QueryFlags;
+import vibe.db.mongo.impl.encryption : AutoEncryptionOptions;
 import vibe.inet.webform;
 
 import core.time;
@@ -1127,6 +1128,25 @@ unittest {
 		"an empty tag set is still emitted as {} so the server treats it as catch-all");
 }
 
+/// stores an optional autoEncryption config that round-trips through the field
+unittest {
+	import vibe.db.mongo.impl.encryption : AutoEncryptionOptions;
+
+	auto settings = new MongoClientSettings();
+	AutoEncryptionOptions ae;
+	ae.keyVaultNamespace = "encryption.__keyVault";
+	settings.autoEncryption = ae;
+
+	assert(!settings.autoEncryption.isNull);
+	assert(settings.autoEncryption.get.keyVaultNamespace == "encryption.__keyVault");
+}
+
+/// a freshly-constructed MongoClientSettings has autoEncryption off by default
+unittest {
+	auto settings = new MongoClientSettings();
+	assert(settings.autoEncryption.isNull);
+}
+
 private ReadConcern parseReadConcern(string str)
 @safe {
 	import std.traits : EnumMembers;
@@ -1466,6 +1486,9 @@ class MongoClientSettings
 	 * collections.
 	 */
 	string appName;
+
+	/// Optional client-side field level encryption (auto-encryption) configuration.
+	Nullable!AutoEncryptionOptions autoEncryption;
 
 	/**
 	 * Ordered list of compression algorithms the client is willing to use.
