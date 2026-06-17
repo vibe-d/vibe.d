@@ -21,6 +21,7 @@ import vibe.db.mongo.monitor;
 import vibe.db.mongo.impl.crud;
 import vibe.db.mongo.impl.serversession : ServerSession, ServerSessionPool, MongoClientSession, endSessionsCommand;
 import vibe.db.mongo.impl.wireversion : WireVersion;
+import vibe.db.mongo.impl.changestream;
 import vibe.data.bson;
 
 import core.time : Duration, seconds, msecs, MonoTime;
@@ -263,6 +264,19 @@ final class MongoClient {
 	MongoDatabase getDatabase(string dbName)
 	{
 		return MongoDatabase(this, dbName);
+	}
+
+	/** Opens a change stream over the entire deployment (all databases).
+
+		Returns a ChangeStream input range that tracks resume tokens and resumes on
+		transient errors. Requires a replica set or sharded cluster.
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/changeStreams/)
+	*/
+	ChangeStream!R watch(R = Bson, S = Bson)(S[] pipeline = null, ChangeStreamOptions options = ChangeStreamOptions.init) @safe
+	{
+		options.allChangesForCluster = true;
+		return getDatabase("admin").watch!(R, S)(pipeline, options);
 	}
 
 	/**

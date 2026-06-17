@@ -18,6 +18,7 @@ public import vibe.db.mongo.impl.wireversion;
 import vibe.core.log;
 import vibe.db.mongo.client;
 import vibe.db.mongo.impl.serversession : MongoClientSession;
+import vibe.db.mongo.impl.changestream;
 import vibe.db.mongo.impl.commands : splitNamespace, buildDeleteCommand, buildUpdateCommand, buildCountPipeline, buildAggregateCommand;
 import vibe.db.mongo.settings : ReadPreference;
 
@@ -892,6 +893,39 @@ struct MongoCollection {
 			options.cursor.batchSize = 10; // pre-fetch the first 10 results
 			auto results = db["coll"].aggregate(args, options);
 		}
+	}
+
+	/** Opens a change stream on this collection.
+
+		Returns a ChangeStream input range of change event documents. The stream
+		tracks resume tokens and automatically resumes on transient/resumable
+		server errors. Requires a replica set or sharded cluster (change streams
+		are unavailable on standalone servers).
+
+		Params:
+			pipeline = optional user aggregation stages applied after $changeStream
+			options = change stream options (fullDocument, resumeAfter, startAfter)
+
+		See_Also: $(LINK https://www.mongodb.com/docs/manual/changeStreams/)
+	*/
+	ChangeStream!R watch(R = Bson, S = Bson)(S[] pipeline = null, ChangeStreamOptions options = ChangeStreamOptions.init) @safe
+	{
+		auto client = m_client;
+		auto fullPath = m_fullPath;
+
+		static if (is(S == Bson))
+			Bson[] userPipeline = pipeline;
+		else {
+			import std.algorithm : map;
+			import std.array : array;
+			Bson[] userPipeline = pipeline.map!(stage => serializeToBson(stage)).array;
+		}
+
+		auto open = (ChangeStreamOptions opts) @safe {
+			auto coll = MongoCollection(client, fullPath);
+			return coll.aggregate!R(buildChangeStreamPipeline(opts, userPipeline), AggregateOptions.init);
+		};
+		return ChangeStream!R(open, options);
 	}
 
 	/**
