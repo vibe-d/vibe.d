@@ -13,9 +13,12 @@ public import vibe.db.mongo.flags;
 
 public import vibe.db.mongo.impl.index;
 public import vibe.db.mongo.impl.crud;
+public import vibe.db.mongo.impl.wireversion;
 
 import vibe.core.log;
 import vibe.db.mongo.client;
+import vibe.db.mongo.impl.commands : splitNamespace, buildDeleteCommand, buildUpdateCommand, buildCountPipeline, buildAggregateCommand;
+import vibe.db.mongo.settings : ReadPreference;
 
 import core.time;
 import std.algorithm : among, countUntil, find, findSplit;
@@ -52,9 +55,10 @@ struct MongoCollection {
 		auto dotidx = fullPath.indexOf('.');
 		assert(dotidx > 0, "The collection name passed to MongoCollection must be of the form \"dbname.collectionname\".");
 
+		auto ns = splitNamespace(fullPath);
 		m_fullPath = fullPath;
-		m_db = m_client.getDatabase(fullPath[0 .. dotidx]);
-		m_name = fullPath[dotidx+1 .. $];
+		m_db = m_client.getDatabase(ns.database);
+		m_name = ns.collection;
 		m_readConcern = m_db.readConcern;
 	}
 
@@ -108,7 +112,7 @@ struct MongoCollection {
 	void update(T, U)(T selector, U update, UpdateFlags flags = UpdateFlags.None)
 	{
 		assert(m_client !is null, "Updating uninitialized MongoCollection.");
-		auto conn = m_client.lockConnection();
+		auto conn = m_client.lockConnectionToPrimary();
 		ubyte[256] selector_buf = void, update_buf = void;
 		conn.update(m_fullPath, flags, serializeToBson(selector, selector_buf), serializeToBson(update, update_buf));
 	}
@@ -128,7 +132,7 @@ struct MongoCollection {
 	void insert(T)(T document_or_documents, InsertFlags flags = InsertFlags.None)
 	{
 		assert(m_client !is null, "Inserting into uninitialized MongoCollection.");
-		auto conn = m_client.lockConnection();
+		auto conn = m_client.lockConnectionToPrimary();
 		Bson[] docs;
 		Bson bdocs = () @trusted { return serializeToBson(document_or_documents); } ();
 		if( bdocs.type == Bson.Type.Array ) docs = cast(Bson[])bdocs;
@@ -155,15 +159,16 @@ struct MongoCollection {
 		InsertOneResult res;
 		if ("_id" !in doc.get!(Bson[string]))
 		{
-			doc["_id"] = Bson(res.insertedId = BsonObjectID.generate);
+			res.insertedId = Bson(BsonObjectID.generate);
+			doc["_id"] = res.insertedId;
 		}
 		cmd["documents"] = Bson([doc]);
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
 
-		database.runCommandChecked(cmd).handleWriteResult(res);
+		database.runWriteCommandChecked(cmd).handleWriteResult(res);
 		return res;
 	}
 
@@ -187,13 +192,13 @@ struct MongoCollection {
 			}
 		}
 		cmd["documents"] = Bson(arr);
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 		foreach (string k, v; serializeToBson(options).byKeyValue)
 			cmd[k] = v;
 
 		auto res = InsertManyResult(insertedIds);
-		database.runCommandChecked(cmd).handleWriteResult!"insertedCount"(res);
+		database.runWriteCommandChecked(cmd).handleWriteResult!"insertedCount"(res);
 		return res;
 	}
 
@@ -223,7 +228,7 @@ struct MongoCollection {
 	@safe
 	if (!is(T == DeleteOptions))
 	{
-		return deleteImpl([filter], options);
+		return deleteImpl([filter], options, null);
 	}
 
 	/**
@@ -236,7 +241,7 @@ struct MongoCollection {
 	*/
 	DeleteResult deleteAll(DeleteOptions options = DeleteOptions.init)
 	@safe {
-		return deleteImpl([Bson.emptyObject], options);
+		return deleteImpl([Bson.emptyObject], options, null);
 	}
 
 	/// Implementation helper. It's possible to set custom delete limits with
@@ -245,36 +250,17 @@ struct MongoCollection {
 	@safe {
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
-		alias FieldsMovedIntoChildren = AliasSeq!("limit", "collation", "hint");
-
-		Bson cmd = Bson.emptyObject; // empty object because order is important
-		cmd["delete"] = Bson(m_name);
-
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
-		auto optionsBson = serializeToBson(options);
-		foreach (string k, v; optionsBson.byKeyValue)
-			if (!k.among!FieldsMovedIntoChildren)
-				cmd[k] = v;
 
-		Bson[] deletesBson = new Bson[queries.length];
+		Bson[] queryBsons = new Bson[queries.length];
 		foreach (i, q; queries)
-		{
-			auto deleteBson = Bson.emptyObject;
-			deleteBson["q"] = serializeToBson(q);
-			foreach (string k, v; optionsBson.byKeyValue)
-				if (k.among!FieldsMovedIntoChildren)
-					deleteBson[k] = v;
-			if (i < limits.length)
-				deleteBson["limit"] = Bson(limits[i]);
-			else
-				deleteBson["limit"] = Bson(0);
-			deletesBson[i] = deleteBson;
-		}
-		cmd["deletes"] = Bson(deletesBson);
+			queryBsons[i] = serializeToBson(q);
+
+		Bson cmd = buildDeleteCommand(m_name, queryBsons, serializeToBson(options), limits);
 
 		DeleteResult res;
-		database.runCommandChecked(cmd).handleWriteResult!"deletedCount"(res);
+		database.runWriteCommandChecked(cmd).handleWriteResult!"deletedCount"(res);
 		return res;
 	}
 
@@ -371,27 +357,15 @@ struct MongoCollection {
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 
-		alias FieldsMovedIntoChildren = AliasSeq!("arrayFilters",
-			"collation",
-			"hint",
-			"upsert");
-
-		Bson cmd = Bson.emptyObject; // empty object because order is important
-		cmd["update"] = Bson(m_name);
-
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
-		auto optionsBson = serializeToBson(options);
-		foreach (string k, v; optionsBson.byKeyValue)
-			if (!k.among!FieldsMovedIntoChildren)
-				cmd[k] = v;
 
-		Bson[] updatesBson = new Bson[queries.length];
+		Bson[] queryBsons = new Bson[queries.length];
+		Bson[] documentBsons = new Bson[queries.length];
+		Bson[] perUpdateOptionBsons = new Bson[queries.length];
 		foreach (i, q; queries)
 		{
-			auto updateBson = Bson.emptyObject;
-			auto qbson = serializeToBson(q);
-			updateBson["q"] = qbson;
+			queryBsons[i] = serializeToBson(q);
 			auto ubson = serializeToBson(documents[i]);
 			if (mustBeDocument)
 			{
@@ -429,17 +403,13 @@ struct MongoCollection {
 							~ "(this update call would otherwise replace the entire matched object with the passed in update object)");
 				}
 			}
-			updateBson["u"] = ubson;
-			foreach (string k, v; optionsBson.byKeyValue)
-				if (k.among!FieldsMovedIntoChildren)
-					updateBson[k] = v;
-			foreach (string k, v; perUpdateOptions[i].byKeyValue)
-				updateBson[k] = v;
-			updatesBson[i] = updateBson;
+			documentBsons[i] = ubson;
+			perUpdateOptionBsons[i] = serializeToBson(perUpdateOptions[i]);
 		}
-		cmd["updates"] = Bson(updatesBson);
 
-		auto res = database.runCommandChecked(cmd);
+		Bson cmd = buildUpdateCommand(m_name, queryBsons, documentBsons, perUpdateOptionBsons, serializeToBson(options));
+
+		auto res = database.runWriteCommandChecked(cmd);
 		auto ret = UpdateResult(
 			res["n"].to!long,
 			res["nModified"].to!long,
@@ -451,7 +421,7 @@ struct MongoCollection {
 			ret.upsertedIds.length = upserted.length;
 			foreach (i, upsert; upserted)
 			{
-				ret.upsertedIds[i] = upsert["_id"].get!BsonObjectID;
+				ret.upsertedIds[i] = upsert["_id"];
 			}
 		}
 		return ret;
@@ -663,7 +633,7 @@ struct MongoCollection {
 	void remove(T)(T selector, DeleteFlags flags = DeleteFlags.None)
 	{
 		assert(m_client !is null, "Removing from uninitialized MongoCollection.");
-		auto conn = m_client.lockConnection();
+		auto conn = m_client.lockConnectionToPrimary();
 		ubyte[256] selector_buf = void;
 		conn.delete_(m_fullPath, flags, serializeToBson(selector, selector_buf));
 	}
@@ -699,7 +669,7 @@ struct MongoCollection {
 		cmd.query = query;
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
-		auto ret = database.runCommandChecked(cmd);
+		auto ret = database.runWriteCommandChecked(cmd);
 		return ret["value"];
 	}
 
@@ -738,7 +708,7 @@ struct MongoCollection {
 			cmd[key] = value;
 			return 0;
 		});
-		auto ret = database.runCommandChecked(cmd);
+		auto ret = database.runWriteCommandChecked(cmd);
 		return ret["value"];
 	}
 
@@ -759,7 +729,8 @@ struct MongoCollection {
 		return countImpl!T(query);
 	}
 
-	private ulong countImpl(T)(T query, Nullable!ReadConcern readConcern = Nullable!ReadConcern.init)
+	private ulong countImpl(T)(T query, Nullable!ReadConcern readConcern = Nullable!ReadConcern.init,
+		Nullable!ReadPreference readPreference = Nullable!ReadPreference.init)
 	{
 		Bson cmd = Bson.emptyObject;
 		cmd["count"] = m_name;
@@ -771,7 +742,7 @@ struct MongoCollection {
 			cmd["readConcern"] = serializeToBson(m_readConcern);
 		}
 
-		auto reply = database.runCommandChecked(cmd);
+		auto reply = database.runCommandChecked(cmd, __FUNCTION__, __FILE__, __LINE__, false, readPreference);
 		switch (reply["n"].type) with (Bson.Type) {
 			default: assert(false, "Unsupported data type in BSON reply for COUNT");
 			case double_: return cast(ulong)reply["n"].get!double; // v2.x
@@ -793,16 +764,7 @@ struct MongoCollection {
 	*/
 	ulong countDocuments(T)(T filter, CountOptions options = CountOptions.init)
 	{
-		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/crud/crud.rst#count-api-details
-		Bson[] pipeline = [Bson(["$match": serializeToBson(filter)])];
-		if (!options.skip.isNull)
-			pipeline ~= Bson(["$skip": Bson(options.skip.get)]);
-		if (!options.limit.isNull)
-			pipeline ~= Bson(["$limit": Bson(options.limit.get)]);
-		pipeline ~= Bson(["$group": Bson([
-			"_id": Bson(1),
-			"n": Bson(["$sum": Bson(1)])
-		])]);
+		Bson[] pipeline = buildCountPipeline(serializeToBson(filter), options);
 		AggregateOptions aggOptions;
 		foreach (i, field; options.tupleof)
 		{
@@ -836,6 +798,7 @@ struct MongoCollection {
 			AggregateOptions aggOptions;
 			aggOptions.maxTimeMS = options.maxTimeMS;
 			aggOptions.readConcern = options.readConcern;
+			aggOptions.readPreference = options.readPreference;
 
 			try {
 				auto reply = aggregate(pipeline, aggOptions).front;
@@ -846,7 +809,7 @@ struct MongoCollection {
 				return 0;
 			}
 		} else {
-			return countImpl(null, options.readConcern);
+			return countImpl(null, options.readConcern, options.readPreference);
 		}
 	}
 
@@ -888,24 +851,13 @@ struct MongoCollection {
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 		applyDefaultReadConcern(options);
 
-		Bson cmd = Bson.emptyObject; // empty object because order is important
-		cmd["aggregate"] = Bson(m_name);
-		cmd["$db"] = Bson(m_db.name);
-		cmd["pipeline"] = serializeToBson(pipeline);
 		MongoConnection conn = m_client.lockConnection();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
-		foreach (string k, v; serializeToBson(options).byKeyValue)
-		{
-			// spec recommends to omit cursor field when explain is true
-			if (!options.explain.isNull && options.explain.get && k == "cursor")
-				continue;
-			cmd[k] = v;
-		}
-		return MongoCursor!R(m_client, cmd,
-			!options.batchSize.isNull ? options.batchSize.get : 0,
-			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get.msecs
-				: !options.maxTimeMS.isNull ? options.maxTimeMS.get.msecs
-				: Duration.max);
+
+		auto pref = options.readPreference.isNull ? m_client.readPreference : options.readPreference.get;
+		auto result = buildAggregateCommand(m_name, m_db.name, serializeToBson(pipeline), options, pref, m_client.readPreferenceTags);
+
+		return MongoCursor!R(m_client, result.command, result.batchSize, result.getMoreMaxTime, Nullable!ReadPreference(pref));
 	}
 
 	/// Example taken from the MongoDB documentation
@@ -970,7 +922,7 @@ struct MongoCollection {
 
 		import std.algorithm : map;
 
-		auto res = m_db.runCommandChecked(cmd);
+		auto res = m_db.runCommandChecked(cmd, __FUNCTION__, __FILE__, __LINE__, false, options.readPreference);
 		static if (is(R == Bson)) return res["values"].byValue;
 		else return res["values"].byValue.map!(b => deserializeBson!R(b));
 	}
@@ -1050,7 +1002,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = name;
-		database.runCommandChecked(cmd);
+		database.runWriteCommandChecked(cmd);
 	}
 
 	/// ditto
@@ -1098,14 +1050,14 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.dropIndexes = m_name;
 		cmd.index = "*";
-		database.runCommandChecked(cmd);
+		database.runWriteCommandChecked(cmd);
 	}
 
 	/// Unofficial API extension, more efficient multi-index removal on
 	/// MongoDB 4.2+
 	void dropIndexes(string[] names, DropIndexOptions options = DropIndexOptions.init)
 	@safe {
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		if (conn.description.satisfiesVersion(WireVersion.v42)) {
 			static struct CMD {
 				string dropIndexes;
@@ -1115,7 +1067,7 @@ struct MongoCollection {
 			CMD cmd;
 			cmd.dropIndexes = m_name;
 			cmd.index = names;
-			database.runCommandChecked(cmd);
+			database.runWriteCommandChecked(cmd);
 		} else {
 			foreach (name; names)
 				dropIndex(name);
@@ -1198,7 +1150,7 @@ struct MongoCollection {
 	@safe {
 		string[] keys = new string[models.length];
 
-		MongoConnection conn = m_client.lockConnection();
+		MongoConnection conn = m_client.lockConnectionToPrimary();
 		if (conn.description.satisfiesVersion(WireVersion.v26)) {
 			Bson cmd = Bson.emptyObject;
 			cmd["createIndexes"] = m_name;
@@ -1214,7 +1166,7 @@ struct MongoCollection {
 				indexes ~= index;
 			}
 			cmd["indexes"] = Bson(indexes);
-			database.runCommandChecked(cmd);
+			database.runWriteCommandChecked(cmd);
 		} else {
 			foreach (model; models) {
 				// trusted to support old compilers which think opt_dup has
@@ -1276,7 +1228,7 @@ struct MongoCollection {
 
 		CMD cmd;
 		cmd.drop = m_name;
-		auto reply = database.runCommandUnchecked(cmd);
+		auto reply = database.runWriteCommandUnchecked(cmd);
 		if (reply["ok"].get!double != 1.0) {
 			auto code = reply["code"].opt!int(0);
 			if (code != 26) // NamespaceNotFound
@@ -1454,304 +1406,3 @@ struct CursorInitArguments {
 	@embedNullable Nullable!int batchSize;
 }
 
-/// UDA to unset a nullable field if the server wire version doesn't at least
-/// match the given version. (inclusive)
-///
-/// Use with $(LREF enforceWireVersionConstraints)
-struct MinWireVersion
-{
-	///
-	WireVersion v;
-}
-
-/// ditto
-MinWireVersion since(WireVersion v) @safe { return MinWireVersion(v); }
-
-/// UDA to warn when a nullable field is set and the server wire version matches
-/// the given version. (inclusive)
-///
-/// Use with $(LREF enforceWireVersionConstraints)
-struct DeprecatedSinceWireVersion
-{
-	///
-	WireVersion v;
-}
-
-/// ditto
-DeprecatedSinceWireVersion deprecatedSince(WireVersion v) @safe { return DeprecatedSinceWireVersion(v); }
-
-/// UDA to throw a MongoException when a nullable field is set and the server
-/// wire version doesn't match the version. (inclusive)
-///
-/// Use with $(LREF enforceWireVersionConstraints)
-struct ErrorBeforeWireVersion
-{
-	///
-	WireVersion v;
-}
-
-/// ditto
-ErrorBeforeWireVersion errorBefore(WireVersion v) @safe { return ErrorBeforeWireVersion(v); }
-
-/// UDA to unset a nullable field if the server wire version is newer than the
-/// given version. (inclusive)
-///
-/// Use with $(LREF enforceWireVersionConstraints)
-struct MaxWireVersion
-{
-	///
-	WireVersion v;
-}
-/// ditto
-MaxWireVersion until(WireVersion v) @safe { return MaxWireVersion(v); }
-
-/// Unsets nullable fields not matching the server version as defined per UDAs.
-void enforceWireVersionConstraints(T)(ref T field, int serverVersion,
-	string file = __FILE__, size_t line = __LINE__)
-@safe {
-	import std.traits : getUDAs;
-
-	string exception;
-
-	foreach (i, ref v; field.tupleof) {
-		enum minV = getUDAs!(field.tupleof[i], MinWireVersion);
-		enum maxV = getUDAs!(field.tupleof[i], MaxWireVersion);
-		enum deprecateV = getUDAs!(field.tupleof[i], DeprecatedSinceWireVersion);
-		enum errorV = getUDAs!(field.tupleof[i], ErrorBeforeWireVersion);
-
-		static foreach (depr; deprecateV)
-			if (serverVersion >= depr.v && !v.isNull)
-				logInfo("User-set field '%s' is deprecated since MongoDB %s (from %s:%s)",
-					T.tupleof[i].stringof, depr.v, file, line);
-
-		static foreach (err; errorV)
-			if (serverVersion < err.v && !v.isNull)
-				exception ~= format("User-set field '%s' is not supported before MongoDB %s\n",
-					T.tupleof[i].stringof, err.v);
-
-		static foreach (min; minV)
-			if (serverVersion < min.v)
-				v.nullify();
-
-		static foreach (max; maxV)
-			if (serverVersion > max.v)
-				v.nullify();
-	}
-
-	if (exception.length)
-		throw new MongoException(exception ~ "from " ~ file ~ ":" ~ line.to!string);
-}
-
-version (unittest)
-{
-	struct SinceUntilCmd
-	{
-		@embedNullable @since(WireVersion.v34)
-		Nullable!int a;
-
-		@embedNullable @until(WireVersion.v30)
-		Nullable!int b;
-	}
-
-	struct ErrorBeforeCmd
-	{
-		@embedNullable @errorBefore(WireVersion.v44)
-		Nullable!int field;
-	}
-
-	struct DeprecatedCmd
-	{
-		@embedNullable @deprecatedSince(WireVersion.v40)
-		Nullable!int oldField;
-	}
-
-	struct CombinedCmd
-	{
-		@embedNullable @errorBefore(WireVersion.v44)
-		Nullable!bool allowDiskUse;
-
-		@embedNullable @since(WireVersion.v32)
-		Nullable!long maxAwaitTimeMS;
-
-		@embedNullable @deprecatedSince(WireVersion.v40)
-		Nullable!long maxScan;
-	}
-
-	struct SinceDeprecatedCmd
-	{
-		@embedNullable @since(WireVersion.v32)
-		Nullable!long maxAwaitTimeMS;
-
-		@embedNullable @deprecatedSince(WireVersion.v40)
-		Nullable!long maxScan;
-	}
-}
-
-/// @since nullifies field when server version is below minimum
-@safe unittest
-{
-	SinceUntilCmd cmd;
-	cmd.a = 1;
-	cmd.b = 2;
-
-	auto test = cmd;
-	enforceWireVersionConstraints(test, WireVersion.v30);
-	assert(test.a.isNull);
-	assert(!test.b.isNull);
-}
-
-/// @until nullifies field when server version exceeds maximum
-@safe unittest
-{
-	SinceUntilCmd cmd;
-	cmd.a = 1;
-	cmd.b = 2;
-
-	auto test = cmd;
-	enforceWireVersionConstraints(test, WireVersion.v32);
-	assert(test.a.isNull);
-	assert(test.b.isNull);
-}
-
-/// @since preserves field when server version meets minimum
-@safe unittest
-{
-	SinceUntilCmd cmd;
-	cmd.a = 1;
-	cmd.b = 2;
-
-	auto test = cmd;
-	enforceWireVersionConstraints(test, WireVersion.v34);
-	assert(!test.a.isNull);
-	assert(test.b.isNull);
-}
-
-/// @errorBefore throws when field is set and server version is below threshold
-@safe unittest
-{
-	ErrorBeforeCmd cmd;
-	cmd.field = 42;
-	try {
-		enforceWireVersionConstraints(cmd, WireVersion.v40);
-		assert(false, "Should have thrown");
-	} catch (MongoException e) {
-		// expected
-	}
-}
-
-/// @errorBefore does not throw when field is set and server version is at threshold
-@safe unittest
-{
-	ErrorBeforeCmd cmd;
-	cmd.field = 42;
-	enforceWireVersionConstraints(cmd, WireVersion.v44);
-	assert(!cmd.field.isNull);
-}
-
-/// @errorBefore does not throw when field is set and server version is above threshold
-@safe unittest
-{
-	ErrorBeforeCmd cmd;
-	cmd.field = 42;
-	enforceWireVersionConstraints(cmd, WireVersion.v60);
-	assert(!cmd.field.isNull);
-}
-
-/// @errorBefore does not throw when field is not set
-@safe unittest
-{
-	ErrorBeforeCmd cmd;
-	enforceWireVersionConstraints(cmd, WireVersion.v30);
-	assert(cmd.field.isNull);
-}
-
-/// @deprecatedSince preserves field and only logs at deprecated version
-@safe unittest
-{
-	DeprecatedCmd cmd;
-	cmd.oldField = 10;
-	enforceWireVersionConstraints(cmd, WireVersion.v40);
-	assert(!cmd.oldField.isNull);
-	assert(cmd.oldField.get == 10);
-}
-
-/// @deprecatedSince preserves field above deprecated version
-@safe unittest
-{
-	DeprecatedCmd cmd;
-	cmd.oldField = 10;
-	enforceWireVersionConstraints(cmd, WireVersion.v60);
-	assert(!cmd.oldField.isNull);
-}
-
-/// @deprecatedSince preserves field below deprecated version without warning
-@safe unittest
-{
-	DeprecatedCmd cmd;
-	cmd.oldField = 10;
-	enforceWireVersionConstraints(cmd, WireVersion.v36);
-	assert(!cmd.oldField.isNull);
-}
-
-/// @deprecatedSince does nothing when field is not set
-@safe unittest
-{
-	DeprecatedCmd cmd;
-	enforceWireVersionConstraints(cmd, WireVersion.v60);
-	assert(cmd.oldField.isNull);
-}
-
-/// Combined UDAs: @errorBefore throws while @since and @deprecatedSince still apply
-@safe unittest
-{
-	CombinedCmd cmd;
-	cmd.allowDiskUse = true;
-	cmd.maxAwaitTimeMS = 5000;
-	cmd.maxScan = 100;
-
-	auto t1 = cmd;
-	try {
-		enforceWireVersionConstraints(t1, WireVersion.v30);
-		assert(false, "Should have thrown due to errorBefore(v44)");
-	} catch (MongoException e) {
-		// expected
-	}
-}
-
-/// Combined UDAs: all fields valid at v44, @deprecatedSince only logs
-@safe unittest
-{
-	CombinedCmd cmd;
-	cmd.allowDiskUse = true;
-	cmd.maxAwaitTimeMS = 5000;
-	cmd.maxScan = 100;
-
-	enforceWireVersionConstraints(cmd, WireVersion.v44);
-	assert(!cmd.allowDiskUse.isNull);
-	assert(!cmd.maxAwaitTimeMS.isNull);
-	assert(!cmd.maxScan.isNull);
-}
-
-/// Combined UDAs: @since nullifies field below minimum while others are independent
-@safe unittest
-{
-	SinceDeprecatedCmd cmd;
-	cmd.maxAwaitTimeMS = 5000;
-	cmd.maxScan = 100;
-
-	enforceWireVersionConstraints(cmd, WireVersion.v30);
-	assert(cmd.maxAwaitTimeMS.isNull);
-	assert(!cmd.maxScan.isNull);
-}
-
-/// Combined UDAs: @since preserves field at sufficient version
-@safe unittest
-{
-	SinceDeprecatedCmd cmd;
-	cmd.maxAwaitTimeMS = 5000;
-	cmd.maxScan = 100;
-
-	enforceWireVersionConstraints(cmd, WireVersion.v34);
-	assert(!cmd.maxAwaitTimeMS.isNull);
-	assert(!cmd.maxScan.isNull);
-}
