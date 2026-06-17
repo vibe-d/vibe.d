@@ -19,6 +19,7 @@ import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.db.mongo.monitor;
 import vibe.db.mongo.impl.crud;
+import vibe.db.mongo.impl.serversession : ServerSession, ServerSessionPool, MongoClientSession, endSessionsCommand;
 import vibe.db.mongo.impl.wireversion : WireVersion;
 import vibe.data.bson;
 
@@ -39,7 +40,7 @@ final class MongoClient {
 
 	// Concurrency contract (HARD): a MongoClient is single-thread / single-event-loop.
 	// It is safe to share across fibers of ONE thread, but it must NOT be shared across
-	// OS threads. The connection pools, m_topologyChanged
+	// OS threads. The connection pools, the session pool, m_topologyChanged
 	// (a LocalManualEvent), and the bool flags below are all thread-local and
 	// unsynchronised; only an event loop on the owning thread may touch them. The
 	// AtomicTopology wrapper exists solely to give a consistent intra-thread snapshot
@@ -55,6 +56,7 @@ final class MongoClient {
 		bool m_discoveryInProgress;
 
 		MonitorRegistry m_monitors;
+		ServerSessionPool m_sessionPool;
 	}
 
 	package this(string host, ushort port)
@@ -137,6 +139,62 @@ final class MongoClient {
 	@property string[string][] readPreferenceTags()
 	{
 		return m_settings.readPreferenceTags;
+	}
+
+	/** Starts an explicit logical session.
+
+		The returned handle carries a logical session id (`lsid`) drawn from the
+		client's session pool. Call `endSession()` on it when done to return the
+		underlying server session to the pool for reuse.
+	*/
+	MongoClientSession startSession()
+	{
+		return MongoClientSession(m_sessionPool.acquire(), &releaseServerSession, &runSessionCommand);
+	}
+
+	/// Runs a session control command (commitTransaction/abortTransaction) on the primary.
+	private Bson runSessionCommand(Bson command) @safe
+	{
+		return lockConnectionToPrimary().runCommand("admin", command);
+	}
+
+	/// Checks out a server session for an implicit session on a single operation.
+	package ServerSession acquireServerSession()
+	{
+		return m_sessionPool.acquire();
+	}
+
+	/// Returns a server session to the pool once its operation (or explicit session) ends.
+	package void releaseServerSession(ServerSession session)
+	{
+		m_sessionPool.release(session);
+	}
+
+	/// Whether retryable writes are enabled for this client.
+	@property bool retryWrites() const
+	{
+		return m_settings.retryWrites;
+	}
+
+	/// Whether the current deployment accepts retryable writes. Standalone
+	/// servers (topology type `single`) reject `lsid`/`txnNumber` with
+	/// "Transaction numbers are only allowed on a replica set member or mongos",
+	/// so retryable writes apply only to replica sets and sharded clusters.
+	package bool supportsRetryableWrites()
+	{
+		return vibe.db.mongo.topology.supportsRetryableWrites(m_topology.load().type);
+	}
+
+	/// Re-discovers the topology after a primary step-down so the next write
+	/// finds the newly elected primary. Best-effort: if no primary has been
+	/// elected yet, the following primary re-lock blocks until one appears, so
+	/// a failed re-discovery here must not abort the retry.
+	package void refreshTopology()
+	{
+		try
+			discoverTopology();
+		catch (Exception e)
+			logDiagnostic("Topology refresh after step-down found no primary yet: %s", e.msg);
 	}
 
 	/// Returns the read concern configured for this client.
@@ -446,11 +504,23 @@ final class MongoClient {
 		publishTopology(newTopology);
 	}
 
-	/// Publishes a new topology snapshot and notifies waiters.
+	/// Publishes a new topology snapshot and notifies waiters, then recomputes
+	/// the session timeout from the snapshot.
 	private void publishTopology(TopologyDescription topology)
 	{
 		m_topology.publish(topology);
 		m_topologyChanged.emit();
+		refreshSessionTimeout();
+	}
+
+	/// Recomputes the session pool's idle timeout from the topology-advertised
+	/// logical session timeout (the MIN across data-bearing servers).
+	private void refreshSessionTimeout()
+	{
+		import std.algorithm : map;
+		import std.array : array;
+		auto servers = m_topology.load().servers.map!(r => r.description).array;
+		m_sessionPool.updateTimeout(sessionPoolTimeout(logicalSessionTimeout(servers)));
 	}
 
 	private void probeAndUpdate(ref TopologyDescription topology, MongoHost host, ref Exception lastException)
@@ -515,19 +585,34 @@ final class MongoClient {
 	/// Stops all background server monitors. Call before discarding the client.
 	void stopMonitoring()
 	{
+		endPooledSessions();
 		m_monitors.stopAll();
 	}
 
-	/// Tears the client all the way down: stops the background monitors, disconnects
-	/// the idle pooled connections, and drops every connection pool. Call before
-	/// discarding a client to release its background tasks and sockets. cleanupConnections
-	/// needs a live pool, so it runs before the pools are dropped. Connections still
-	/// checked out by an in-flight operation are closed when that operation returns them.
+	/// Tears the client all the way down: ends pooled sessions, stops the background
+	/// monitors, disconnects the idle pooled connections, and drops every connection
+	/// pool. Call before discarding a client to release its background tasks and
+	/// sockets. endPooledSessions and cleanupConnections both need a live pool, so they
+	/// run before the pools are dropped. Connections still checked out by an in-flight
+	/// operation are closed when that operation returns them.
 	void close()
 	{
 		stopMonitoring();
 		cleanupConnections();
 		m_connectionPools = null;
+	}
+
+	/// Asks the server, on a best-effort basis, to free this client's pooled logical sessions.
+	private void endPooledSessions()
+	{
+		auto lsids = m_sessionPool.takeAllLsids();
+		if (!lsids.length)
+			return;
+
+		try
+			getDatabase("admin").runCommandUnchecked(endSessionsCommand(lsids));
+		catch (Exception e)
+			logDiagnostic("endSessions on shutdown failed: %s", e.msg);
 	}
 
 	/// Number of background server monitors currently running.
@@ -550,7 +635,7 @@ final class MongoClient {
 	scope is cleaned up deterministically: the destructor calls `MongoClient.close`,
 	which stops the background monitors (breaking the monitor-task -> client reference
 	cycle that would otherwise keep the client reachable for the lifetime of the
-	process) and drains the connection pools.
+	process), ends pooled sessions, and drains the connection pools.
 
 	The handle is move-only and forwards every `MongoClient` member through `alias this`:
 	---
@@ -569,7 +654,7 @@ struct MongoClientHandle {
 
 	@disable this(this);
 
-	/// Wraps `client`, closing it (stop monitors, drain pools) when the
+	/// Wraps `client`, closing it (stop monitors, end sessions, drain pools) when the
 	/// handle is destroyed.
 	package this(MongoClient client)
 	{
@@ -663,6 +748,287 @@ unittest
 		"a host still in the topology keeps its pool");
 	assert(poolKeysToPrune([], ["a:27017"]).length == 0,
 		"a newly-desired host with no pool yet produces nothing to prune");
+}
+
+/// Maps a topology-advertised logical session timeout to the session pool's idle window.
+///
+/// A null `advertised` means at least one data-bearing server does not advertise a
+/// logicalSessionTimeout (e.g. a pre-3.6 member) — the sessions spec treats sessions as
+/// unsupported in that case. Rather than silently keeping a previously-known (now stale)
+/// timeout, we collapse the window to zero so every pooled session expires immediately and
+/// no stale lsid is reused once session support is lost.
+Nullable!Duration sessionPoolTimeout(Nullable!Duration advertised) @safe pure nothrow
+{
+	import core.time : Duration;
+	return advertised.isNull ? Nullable!Duration(Duration.zero) : advertised;
+}
+
+/// sessionPoolTimeout passes a present timeout through and collapses a null one to zero
+unittest
+{
+	import core.time : minutes, Duration;
+
+	// a server-advertised timeout is used as-is for the idle window
+	auto present = sessionPoolTimeout(Nullable!Duration(30.minutes));
+	assert(!present.isNull && present.get == 30.minutes,
+		"an advertised session timeout is passed through unchanged");
+
+	// no advertised timeout (sessions unsupported) collapses the window so pooled sessions expire at once
+	auto absent = sessionPoolTimeout(Nullable!Duration.init);
+	assert(!absent.isNull && absent.get == Duration.zero,
+		"a null advertised timeout marks sessions unsupported by expiring pooled sessions immediately");
+}
+
+/// Whether a failed op may be retried: idempotent reads and/or session-supported writes.
+struct RetryPolicy
+{
+	bool idempotent;
+	bool sessionSupport;
+}
+
+/// Whether a failed op may be retried once: a raw network failure (on an
+/// idempotent read or a session-supported write), a step-down/stale-topology
+/// error, or a retryable-write error.
+bool isRetryableError(MongoDriverException e, RetryPolicy policy) @safe
+{
+	bool networkRetryable = (cast(MongoNetworkException) e !is null) && (policy.idempotent || policy.sessionSupport);
+	return networkRetryable
+		|| shouldRetryAfterStepDown(e.code, policy.idempotent, policy.sessionSupport)
+		|| shouldRetryWrite(e.code, policy.sessionSupport);
+}
+
+/// isRetryableError classifies network, step-down and retryable-write failures
+unittest
+{
+	auto network = new MongoNetworkException("connection reset");
+	assert(isRetryableError(network, RetryPolicy(true, false)), "a network failure on an idempotent read is retryable");
+	assert(isRetryableError(network, RetryPolicy(false, true)), "a network failure on a session-supported write is retryable");
+	assert(!isRetryableError(network, RetryPolicy(false, false)), "a network failure with neither idempotence nor session support is not retryable");
+
+	auto stepDown = new MongoStepDownException("stepped down", MongoServerErrorCode.notWritablePrimary);
+	assert(isRetryableError(stepDown, RetryPolicy(true, false)), "an idempotent step-down error is retryable");
+	assert(!isRetryableError(stepDown, RetryPolicy(false, false)), "a step-down error without idempotence or session support is not retryable");
+
+	auto writeError = new MongoDriverException("network timeout");
+	writeError.code = MongoServerErrorCode.networkTimeout;
+	assert(isRetryableError(writeError, RetryPolicy(false, true)), "a retryable-write code on a session-supported write is retryable");
+	assert(!isRetryableError(writeError, RetryPolicy(false, false)), "a retryable-write code without session support is not retryable");
+
+	auto duplicateKey = new MongoDriverException("duplicate key");
+	duplicateKey.code = MongoServerErrorCode.duplicateKey;
+	assert(!isRetryableError(duplicateKey, RetryPolicy(true, true)), "a non-retryable error code is never retried");
+}
+
+/// Surfaces a retryable writeConcernError as a throw so the write-retry path re-sends the
+/// (txnNumber-deduplicated) write. A no-op for a clean reply, a non-retryable code, or a
+/// write without session support (which cannot be retried anyway).
+void enforceWriteConcernRetry(Bson reply, bool sessionSupport) @safe
+{
+	auto code = writeConcernErrorCode(reply);
+	if (!shouldRetryWrite(code, sessionSupport))
+		return;
+	auto e = new MongoDriverException("retryable writeConcernError");
+	e.code = code;
+	throw e;
+}
+
+/// enforceWriteConcernRetry surfaces a retryable writeConcernError so the write is retried
+unittest
+{
+	import std.exception : assertThrown, assertNotThrown;
+
+	auto shutdownReply = Bson([
+		"ok": Bson(1.0),
+		"writeConcernError": Bson(["code": Bson(91), "errmsg": Bson("ShutdownInProgress")])
+	]);
+
+	assertThrown!MongoDriverException(enforceWriteConcernRetry(shutdownReply, true),
+		"a retryable writeConcernError on a session-supported write is surfaced for retry");
+	assertNotThrown(enforceWriteConcernRetry(shutdownReply, false),
+		"without session support the write cannot be retried, so it is not converted to a throw");
+	assertNotThrown(enforceWriteConcernRetry(Bson(["ok": Bson(1.0)]), true),
+		"a clean reply does not throw");
+	assertNotThrown(enforceWriteConcernRetry(Bson(["ok": Bson(1.0),
+		"writeConcernError": Bson(["code": Bson(11000)])]), true),
+		"a non-retryable writeConcernError code is not retried");
+}
+
+/// retries the op once, after refreshing topology, when the first call fails with a
+/// retryable error, meaning a raw network failure, a step-down/stale-topology error, or a
+/// retryable-write error.
+T retryOnceOnRetryableError(T)(scope T delegate() @safe op, RetryPolicy policy, scope void delegate() @safe refresh) @safe
+{
+	try
+		return op();
+	catch (MongoDriverException e)
+	{
+		if (!isRetryableError(e, policy))
+			throw e;
+		refresh();
+		return op();
+	}
+}
+
+/// retries once after refreshing topology when the first call hits a step-down (retryable) error
+unittest {
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		if (opCalls == 1)
+			throw new MongoStepDownException("primary stepped down", MongoServerErrorCode.notWritablePrimary);
+		return 42;
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	auto result = retryOnceOnRetryableError!int(op, RetryPolicy(true, false), refresh);
+
+	assert(result == 42, "expected the second op call's result 42");
+	assert(opCalls == 2, "expected op to be called twice");
+	assert(refreshCalls == 1, "expected refresh to be called once");
+}
+
+/// retries a retryable-write code that is not a stale-topology code when session support is on
+unittest {
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		if (opCalls == 1)
+			throw new MongoStepDownException("network timeout", MongoServerErrorCode.networkTimeout);
+		return 42;
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	auto result = retryOnceOnRetryableError!int(op, RetryPolicy(false, true), refresh);
+
+	assert(result == 42, "a retryable-write error is retried once and returns the second attempt");
+	assert(opCalls == 2, "the write op is retried exactly once");
+	assert(refreshCalls == 1, "the retry refreshes the topology");
+}
+
+/// retries a plain MongoDriverException carrying a retryable-write code when session support is on
+unittest {
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		if (opCalls == 1)
+		{
+			auto e = new MongoDriverException("network timeout");
+			e.code = MongoServerErrorCode.networkTimeout;
+			throw e;
+		}
+		return 7;
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	auto result = retryOnceOnRetryableError!int(op, RetryPolicy(false, true), refresh);
+
+	assert(result == 7, "a code-carrying retryable command error is retried once");
+	assert(opCalls == 2, "the op is retried exactly once");
+	assert(refreshCalls == 1, "the retry refreshes first");
+}
+
+/// rethrows without refresh or retry when the op is not retryable
+unittest {
+	import std.exception : assertThrown;
+
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		throw new MongoStepDownException("primary stepped down", MongoServerErrorCode.notWritablePrimary);
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	assertThrown!MongoStepDownException(retryOnceOnRetryableError!int(op, RetryPolicy(false, false), refresh));
+
+	assert(opCalls == 1, "expected op to be called once with no retry");
+	assert(refreshCalls == 0, "expected refresh to never be called");
+}
+
+/// retries at most once so a second step-down propagates instead of looping
+unittest {
+	import std.exception : assertThrown;
+
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		throw new MongoStepDownException("primary stepped down again", MongoServerErrorCode.notWritablePrimary);
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	assertThrown!MongoStepDownException(retryOnceOnRetryableError!int(op, RetryPolicy(true, false), refresh));
+
+	assert(opCalls == 2, "expected exactly one retry, not an infinite loop");
+	assert(refreshCalls == 1, "expected topology to be refreshed exactly once");
+}
+
+/// retries a codeless MongoNetworkException once when session support is on
+unittest {
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		if (opCalls == 1)
+			throw new MongoNetworkException("connection reset");
+		return 7;
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	auto result = retryOnceOnRetryableError!int(op, RetryPolicy(false, true), refresh);
+
+	assert(result == 7, "a network failure on a session-supported write is retried once");
+	assert(opCalls == 2, "the op is retried exactly once");
+	assert(refreshCalls == 1, "the retry refreshes first");
+}
+
+/// does not retry a network failure on a write with neither session support nor idempotence
+unittest {
+	import std.exception : assertThrown;
+
+	int opCalls = 0;
+	int refreshCalls = 0;
+
+	int delegate() @safe op = () @safe {
+		opCalls++;
+		throw new MongoNetworkException("connection reset");
+	};
+
+	void delegate() @safe refresh = () @safe {
+		refreshCalls++;
+	};
+
+	assertThrown!MongoNetworkException(retryOnceOnRetryableError!int(op, RetryPolicy(false, false), refresh));
+
+	assert(opCalls == 1, "a network failure without session support or idempotence is not retried");
+	assert(refreshCalls == 0, "no refresh when the error is not retried");
 }
 
 /// MongoClientHandle runs its stop action exactly once when it leaves scope.
