@@ -13,6 +13,7 @@ public import vibe.db.mongo.flags;
 
 public import vibe.db.mongo.impl.index;
 public import vibe.db.mongo.impl.crud;
+public import vibe.db.mongo.impl.bulkwrite;
 public import vibe.db.mongo.impl.wireversion;
 
 import vibe.core.log;

@@ -19,6 +19,7 @@ import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.db.mongo.monitor;
 import vibe.db.mongo.impl.crud;
+import vibe.db.mongo.impl.bulkwrite;
 import vibe.db.mongo.impl.serversession : ServerSession, ServerSessionPool, MongoClientSession, endSessionsCommand;
 import vibe.db.mongo.impl.wireversion : WireVersion;
 import vibe.db.mongo.impl.changestream;
@@ -264,6 +265,128 @@ final class MongoClient {
 	MongoDatabase getDatabase(string dbName)
 	{
 		return MongoDatabase(this, dbName);
+	}
+
+	/**
+		Performs a server-level bulk write (MongoDB 8.0+) across one or more
+		collections and databases in a single command.
+
+		Each `ClientBulkWriteModel` describes one insert/update/replace/delete
+		operation targeting a `db.collection` namespace; build them with the
+		`ClientBulkWriteModel.insertOne`/`updateOne`/... factories. The command runs
+		on the `admin` database against the primary, and its result cursor is fully
+		drained (via `getMore`) before parsing.
+
+		Params:
+			models = the write operations to perform (must be non-empty)
+			options = command-level options (ordered, verboseResults, writeConcern, ...)
+
+		Returns:
+			A `ClientBulkWriteResult` summarizing the writes. When
+			`options.verboseResults` is set, the per-operation result maps are
+			populated, keyed by operation index.
+
+		Throws:
+			$(D MongoException) if the server does not support the `bulkWrite`
+			command (MongoDB < 8.0). $(D MongoClientBulkWriteException) if individual
+			operations fail or a write-concern error occurs; its `partialResult`
+			carries the summary counts for the writes that did apply.
+	*/
+	ClientBulkWriteResult bulkWrite(ClientBulkWriteModel[] models,
+		ClientBulkWriteOptions options = ClientBulkWriteOptions.init)
+	{
+		import std.string : indexOf;
+
+		models = ensureInsertIds(models);
+		const verbose = !options.verboseResults.isNull && options.verboseResults.get;
+		// TODO(L16.1 — batch splitting): the spec requires splitting into multiple commands
+		// when the op count exceeds maxWriteBatchSize or the encoded command exceeds
+		// maxMessageSizeBytes. The pure partitioner (partitionBulkWriteOps in impl.bulkwrite,
+		// fully unit-tested) is landed and ready; wiring it in needs three connection-bound
+		// pieces that are deferred to keep the suite green: (1) capturing the server's real
+		// maxWriteBatchSize/maxMessageSizeBytes (ServerDescription does not yet deserialize them
+		// from the hello reply — partitionBulkWriteOps currently has defaultMax* fallbacks);
+		// (2) offsetting each batch response's per-op `idx`/error indices by the batch start so
+		// the merged verbose/error maps stay globally indexed; (3) honoring ordered=true by
+		// stopping after the first batch that reports a write error. Until then a single command
+		// is sent, which is correct for every write within the protocol default limits.
+		Bson cmd = buildClientBulkWriteCommand(models, options);
+
+		// The command runs on the primary (runWriteCommandChecked), so the 8.0 wire-version
+		// gate must be evaluated against the primary too — a read-preference-selected secondary
+		// may advertise a different version than the host the write actually reaches.
+		{
+			auto primary = lockConnectionToPrimary();
+			enforce(primary.description.maxWireVersion >= WireVersion.v80,
+				"bulkWrite requires a MongoDB 8.0+ server");
+		}
+
+		// TODO(L13.3 — bulkWrite getMore primary pinning): the result cursor is created on the
+		// primary by runWriteCommandChecked, but the getMore loop below re-resolves the primary
+		// through admin.runCommandChecked(toPrimary=true) on each call. After a step-down between
+		// batches, getMore targets the NEW primary and fails with CursorNotFound, whereas
+		// MongoFindCursor pins the cursor to its creating host (captured m_pinnedHost, reused via
+		// lockConnectionToHost). Fixing this requires runWriteCommandChecked to surface the
+		// LockedConnection/host it used so the same connection can be re-locked for getMore and
+		// the failure-path killCursors; that plumbing is connection-bound and deferred.
+		auto admin = getDatabase("admin");
+		Bson response = admin.runWriteCommandChecked(cmd);
+
+		// A w:0 (unacknowledged) bulkWrite returns ok:1 with no cursor; skip cursor
+		// draining and let parseClientBulkWriteResult report acknowledged=false.
+		if (!response.tryIndex("cursor").isNull)
+		{
+			Bson cursor = response["cursor"];
+			Bson[] entries = cursor["firstBatch"].get!(Bson[]);
+			long cursorId = cursor["id"].get!long;
+
+			if (cursorId != 0) {
+				string ns = cursor["ns"].get!string;
+				string collection = ns[ns.indexOf('.') + 1 .. $];
+
+				// A throw mid-drain (e.g. a getMore network error) must not orphan the open
+				// server-side cursor: kill it on the way out. Mirrors MongoCursor's destructor,
+				// which calls killCursors when an unconsumed cursor is dropped.
+				scope(failure)
+					killBulkWriteCursor(admin, collection, cursorId);
+
+				while (cursorId != 0) {
+					Bson getMoreCmd = Bson.emptyObject; // order matters: getMore must be the first field
+					getMoreCmd["getMore"] = Bson(cursorId);
+					getMoreCmd["collection"] = Bson(collection);
+					Bson more = admin.runCommandChecked(getMoreCmd, __FUNCTION__, __FILE__, __LINE__, true);
+					Bson moreCursor = more["cursor"];
+					entries ~= moreCursor["nextBatch"].get!(Bson[]);
+					cursorId = moreCursor["id"].get!long;
+				}
+
+				Bson[string] drainedCursor;
+				foreach (string key, value; cursor.byKeyValue)
+					drainedCursor[key] = value;
+				drainedCursor["firstBatch"] = Bson(entries);
+				response["cursor"] = Bson(drainedCursor);
+			}
+		}
+
+		return parseClientBulkWriteResult(response, models, verbose);
+	}
+
+	/// Best-effort kill of an open server-level bulkWrite result cursor on the admin db, used
+	/// when draining the cursor throws so the server is not left holding an orphaned cursor.
+	/// Swallows errors from the kill itself: the original drain failure is the one worth surfacing.
+	private void killBulkWriteCursor(MongoDatabase admin, string collection, long cursorId) @safe nothrow
+	{
+		if (cursorId == 0)
+			return;
+
+		try {
+			Bson kill = Bson.emptyObject; // order matters: killCursors must be the first field
+			kill["killCursors"] = Bson(collection);
+			kill["cursors"] = Bson([Bson(cursorId)]);
+			admin.runCommandUnchecked(kill, __FUNCTION__, __FILE__, __LINE__, true);
+		} catch (Exception e) {
+			logWarn("Failed to kill orphaned bulkWrite cursor %s: %s", cursorId, e.msg);
+		}
 	}
 
 	/** Opens a change stream over the entire deployment (all databases).
