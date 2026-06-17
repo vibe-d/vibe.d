@@ -1,0 +1,7 @@
+{
+    "name": "tests",
+    "description": "MongoDB loadBalanced-mode integration test for vibe.d",
+    "dependencies": {
+        "vibe-d:mongodb": {"path": "../../../"}
+    }
+}

@@ -35,6 +35,25 @@ import std.typecons : Nullable, nullable;
  * If the URL is not successfully parsed the information in the MongoClientSettings instance may be
  * incomplete and should not be used.
  */
+/// Validates load-balancer mode constraints: it is incompatible with a replica
+/// set and requires a single host. Logs and returns false on violation.
+package(vibe.db.mongo) bool isValidLoadBalancedConfig(in MongoClientSettings cfg) @safe
+{
+	if (!cfg.loadBalanced)
+		return true;
+	if (cfg.replicaSet.length)
+	{
+		logError("loadBalanced=true is incompatible with replicaSet");
+		return false;
+	}
+	if (cfg.hosts.length > 1)
+	{
+		logError("loadBalanced=true requires a single host");
+		return false;
+	}
+	return true;
+}
+
 /// Whether a `maxStalenessSeconds` value is valid for the configured heartbeat. `-1`
 /// (disabled) is always valid; otherwise the spec requires it to be at least
 /// `max(90, heartbeatFrequencyMS/1000 + 10)`.
@@ -240,6 +259,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "sockettimeoutms": setMsecs(cfg.socketTimeout); break;
 				case "tls":
 				case "ssl": setBool(cfg.ssl); break;
+				case "loadbalanced": setBool(cfg.loadBalanced); cfg.loadBalancedSpecified = true; break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
 				case "authmechanism": cfg.authMechanism = parseAuthMechanism(value); break;
 				case "authmechanismproperties": cfg.authMechanismProperties = value.split(","); warnNotImplemented(); break;
@@ -278,6 +298,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 		if (!buildServerApi(sawApiVersion, apiVersionValue, apiStrictValue, apiDeprecationValue, cfg.serverApi))
 			return false;
 	}
+
+	if (!isValidLoadBalancedConfig(cfg))
+		return false;
 
 	if (!isValidMaxStaleness(cfg.maxStalenessSeconds, cfg.heartbeatFrequencyMS))
 	{
@@ -638,7 +661,52 @@ unittest
 	assert(cfg.retryWrites == false, "retryWrites=false disables retryable writes");
 }
 
-/// parseMongoDBUrl accepts a multi-host URL
+/// parseMongoDBUrl parses the loadBalanced option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=true"));
+	assert(cfg.loadBalanced);
+}
+
+/// parseMongoDBUrl rejects loadBalanced combined with replicaSet
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=true&replicaSet=rs0"),
+		"loadBalanced=true is incompatible with replicaSet and must be rejected");
+}
+
+/// parseMongoDBUrl rejects loadBalanced with replicaSet regardless of option order
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0&loadBalanced=true"),
+		"loadBalanced=true is incompatible with replicaSet and must be rejected");
+}
+
+/// parseMongoDBUrl accepts loadBalanced=false alongside replicaSet
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=false&replicaSet=rs0"));
+	assert(cfg.replicaSet == "rs0");
+}
+
+/// parseMongoDBUrl rejects loadBalanced with more than one seed host
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://host1:27017,host2:27017/?loadBalanced=true"),
+		"loadBalanced=true requires a single host");
+}
+
+/// parseMongoDBUrl accepts a multi-host URL when loadBalanced is off
 unittest
 {
 	MongoClientSettings cfg;
@@ -1518,6 +1586,14 @@ class MongoClientSettings
 	 * Enables or disables TLS/SSL for the connection.
 	 */
 	bool ssl;
+
+	/// Enables load-balanced mode, where the driver connects through a MongoDB load
+	/// balancer and advertises `loadBalanced: true` in the connection handshake.
+	bool loadBalanced;
+
+	/// True when the connection string explicitly set `loadBalanced`, so a mongodb+srv
+	/// TXT record's `loadBalanced` option must not override it (the URI takes precedence).
+	bool loadBalancedSpecified;
 
 	/**
 	 * Can be set to false to disable TLS peer validation to allow self signed

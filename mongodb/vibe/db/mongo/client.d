@@ -100,24 +100,28 @@ final class MongoClient {
 		// only on the failure path where the process is throwing out of the ctor.
 		try
 		{
-			// discoverTopology() runs full SDAM discovery.
+			// In load-balancer mode discoverTopology() fixes the topology to the single
+			// configured host without probing; otherwise it runs full SDAM discovery.
 			discoverTopology();
 
 			// The monitor registry is always constructed so its call sites
 			// (handleStaleCommandError / stopMonitoring / activeMonitorCount, and
 			// resolveHost's requestAllChecks) operate on a real object, never a null. It
 			// is built BEFORE lockConnection() so server selection during that connect
-			// cannot dereference a null registry.
+			// cannot dereference a null registry. In load-balancer mode the LB owns server
+			// health, so the registry is left empty (no reconcile = no monitors started).
 			ServerProber prober = (MongoHost host) @safe => probeServer(m_settings, host);
 			m_monitors = new MonitorRegistry(prober, &onMonitorResult,
 				m_settings.heartbeatFrequencyMS.msecs, m_settings.minHeartbeatFrequencyMS.msecs);
 
-			// force a connection to cause an exception for wrong URLs
+			// force a connection to cause an exception for wrong URLs (and, in
+			// load-balancer mode, to run the serviceId-required handshake check)
 			lockConnection();
 
 			// Start the monitors only after the connection succeeds, so a ctor failure
 			// does not leak background monitor tasks.
-			m_monitors.reconcileWith(m_topology.load().allKnownHosts());
+			if (!m_settings.loadBalanced)
+				m_monitors.reconcileWith(m_topology.load().allKnownHosts());
 		}
 		catch (Exception e)
 		{
@@ -595,6 +599,15 @@ final class MongoClient {
 		m_discoveryInProgress = true;
 		scope (exit)
 			m_discoveryInProgress = false;
+
+		// Load-balancer mode runs no SDAM because the topology is fixed to the single
+		// configured host and the load balancer fronts the real backends, so there
+		// is nothing to probe or monitor. The serviceId check fires on first connect.
+		if (m_settings.loadBalanced)
+		{
+			publishTopology(loadBalancedTopology(m_settings.hosts[0]));
+			return;
+		}
 
 		TopologyDescription newTopology;
 		newTopology.type = initialTopologyType();
