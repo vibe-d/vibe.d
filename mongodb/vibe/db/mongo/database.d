@@ -12,10 +12,11 @@ module vibe.db.mongo.database;
 
 import vibe.db.mongo.client;
 import vibe.db.mongo.collection;
-import vibe.db.mongo.settings : ReadConcern;
+import vibe.db.mongo.settings : ReadConcern, ReadPreference, readPreferenceBson;
 import vibe.data.bson;
 
 import core.time;
+import std.typecons : Nullable;
 
 /** Represents a single database accessible through a given MongoClient.
 */
@@ -139,6 +140,14 @@ struct MongoDatabase
 		return runCommandUnchecked(command_and_options, errorInfo, errorFile, errorLine);
 	}
 
+	/// Runs a command with an explicit per-query read preference, overriding the client default.
+	Bson runCommand(T)(T command_and_options, ReadPreference readPreference,
+		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
+	{
+		return runCommandChecked!T(command_and_options, errorInfo, errorFile, errorLine,
+			false, Nullable!ReadPreference(readPreference));
+	}
+
 	/** Generic means to run commands on the database.
 
 		See $(LINK http://www.mongodb.org/display/DOCS/Commands) for a list
@@ -165,15 +174,27 @@ struct MongoDatabase
 		T command_and_options,
 		string errorInfo = __FUNCTION__,
 		string errorFile = __FILE__,
+		size_t errorLine = __LINE__,
+		bool toPrimary = false,
+		Nullable!ReadPreference readPreference = Nullable!ReadPreference.init
+	)
+	{
+		Bson cmd = toCommandBson(command_and_options);
+		auto conn = resolveCommandConnection(toPrimary, cmd, readPreference);
+		return conn.runCommand!ExceptionT(
+			m_name, cmd, errorInfo, errorFile, errorLine);
+	}
+
+	/// ditto, but always sends to the primary (for write operations).
+	Bson runWriteCommandChecked(T, ExceptionT = MongoDriverException)(
+		T command_and_options,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
 		size_t errorLine = __LINE__
 	)
 	{
-		Bson cmd;
-		static if (is(T : Bson))
-			cmd = command_and_options;
-		else
-			cmd = command_and_options.serializeToBson;
-		return m_client.lockConnection().runCommand!(Bson, ExceptionT)(
+		Bson cmd = toCommandBson(command_and_options);
+		return m_client.lockConnectionToPrimary().runCommand!ExceptionT(
 			m_name, cmd, errorInfo, errorFile, errorLine);
 	}
 
@@ -182,28 +203,65 @@ struct MongoDatabase
 		T command_and_options,
 		string errorInfo = __FUNCTION__,
 		string errorFile = __FILE__,
+		size_t errorLine = __LINE__,
+		bool toPrimary = false,
+		Nullable!ReadPreference readPreference = Nullable!ReadPreference.init
+	)
+	{
+		Bson cmd = toCommandBson(command_and_options);
+		auto conn = resolveCommandConnection(toPrimary, cmd, readPreference);
+		return conn.runCommandUnchecked!ExceptionT(
+			m_name, cmd, errorInfo, errorFile, errorLine);
+	}
+
+	/// ditto, but always sends to the primary (for write operations).
+	Bson runWriteCommandUnchecked(T, ExceptionT = MongoDriverException)(
+		T command_and_options,
+		string errorInfo = __FUNCTION__,
+		string errorFile = __FILE__,
 		size_t errorLine = __LINE__
 	)
 	{
-		Bson cmd;
-		static if (is(T : Bson))
-			cmd = command_and_options;
-		else
-			cmd = command_and_options.serializeToBson;
-		return m_client.lockConnection().runCommandUnchecked!(Bson, ExceptionT)(
+		Bson cmd = toCommandBson(command_and_options);
+		return m_client.lockConnectionToPrimary().runCommandUnchecked!ExceptionT(
 			m_name, cmd, errorInfo, errorFile, errorLine);
 	}
 
 	/// ditto
-	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
+	MongoCursor!R runListCommand(R = Bson, T)(T command_and_options, int batchSize = 0,
+		Duration getMoreMaxTime = Duration.max,
+		Nullable!ReadPreference readPreference = Nullable!ReadPreference.init)
 	{
-		Bson cmd;
-		static if (is(T : Bson))
-			cmd = command_and_options;
-		else
-			cmd = command_and_options.serializeToBson;
+		Bson cmd = toCommandBson(command_and_options);
 		cmd["$db"] = Bson(m_name);
 
-		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTime);
+		auto pref = readPreference.isNull ? m_client.readPreference : readPreference.get;
+		if (pref != ReadPreference.primary)
+			cmd["$readPreference"] = readPreferenceBson(pref, m_client.readPreferenceTags);
+
+		return MongoCursor!R(m_client, cmd, batchSize, getMoreMaxTime, Nullable!ReadPreference(pref));
+	}
+
+	/// Normalizes a command argument into its Bson wire form: Bson passes through,
+	/// anything else is serialized.
+	private static Bson toCommandBson(T)(T command_and_options)
+	{
+		static if (is(T : Bson))
+			return command_and_options;
+		else
+			return command_and_options.serializeToBson;
+	}
+
+	/// Writes lock the primary; reads lock by effective preference and inject `$readPreference`.
+	private auto resolveCommandConnection(bool toPrimary, ref Bson cmd, Nullable!ReadPreference readPreference)
+	{
+		if (toPrimary)
+			return m_client.lockConnectionToPrimary();
+
+		auto pref = readPreference.isNull ? m_client.readPreference : readPreference.get;
+		if (pref != ReadPreference.primary)
+			cmd["$readPreference"] = readPreferenceBson(pref, m_client.readPreferenceTags);
+
+		return m_client.lockConnection(pref);
 	}
 }
