@@ -1,0 +1,7 @@
+{
+	"name": "change-stream-test",
+	"description": "MongoDB change stream (watch) integration test",
+	"dependencies": {
+		"vibe-d:mongodb": {"path": "../../../"}
+	}
+}

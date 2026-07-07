@@ -14,12 +14,16 @@ import vibe.core.log;
 
 import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
+import vibe.db.mongo.impl.commands : buildFindCommand, collectionFromNamespace, reduceLimit;
+import vibe.db.mongo.settings : ReadPreference, MongoHost;
+import vibe.db.mongo.impl.serversession : MongoClientSession, inActiveTransaction;
 
 import core.time;
 import std.array : array;
 import std.algorithm : map, max, min, skipOver;
 import std.exception;
 import std.range : chain;
+import std.typecons : Nullable;
 
 
 /**
@@ -46,7 +50,7 @@ struct MongoCursor(DocType = Bson) {
 		m_data = new MongoGenericCursor!DocType(client, collection, cursor, existing_documents);
 	}
 
-	this(Q)(MongoClient client, string database, string collection, Q query, FindOptions options)
+	this(Q)(MongoClient client, string database, string collection, Q query, FindOptions options, MongoClientSession* session = null)
 	{
 		Bson command = Bson.emptyObject;
 		command["find"] = Bson(collection);
@@ -59,57 +63,17 @@ struct MongoCursor(DocType = Bson) {
 		MongoConnection conn = client.lockConnection();
 		enforceWireVersionConstraints(options, conn.description.maxWireVersion);
 
-		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst#mapping-op_query-behavior-to-the-find-command-limit-and-batchsize-fields
-		bool singleBatch;
-		if (!options.limit.isNull && options.limit.get < 0)
-		{
-			singleBatch = true;
-			options.limit = -options.limit.get;
-			options.batchSize = cast(int)options.limit.get;
-		}
-		if (!options.batchSize.isNull && options.batchSize.get < 0)
-		{
-			singleBatch = true;
-			options.batchSize = -options.batchSize.get;
-		}
-		if (singleBatch)
-			command["singleBatch"] = Bson(true);
+		auto pref = options.readPreference.isNull ? client.readPreference : options.readPreference.get;
+		auto result = buildFindCommand(command, options, pref, client.readPreferenceTags);
 
-		// https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst#semantics-of-maxtimems-for-a-driver
-		bool allowMaxTime = true;
-		if (options.cursorType == CursorType.tailable
-			|| options.cursorType == CursorType.tailableAwait)
-			command["tailable"] = Bson(true);
-		else
-		{
-			options.maxAwaitTimeMS.nullify();
-			allowMaxTime = false;
-		}
-
-		if (options.cursorType == CursorType.tailableAwait)
-			command["awaitData"] = Bson(true);
-		else
-		{
-			options.maxAwaitTimeMS.nullify();
-			allowMaxTime = false;
-		}
-
-		// see table: https://github.com/mongodb/specifications/blob/525dae0aa8791e782ad9dd93e507b60c55a737bb/source/find_getmore_killcursors_commands.rst#find
-		auto optionsBson = serializeToBson(options);
-		foreach (string key, value; optionsBson.byKeyValue)
-			command[key] = value;
-
-		this(client, command,
-			options.batchSize.isNull ? 0 : options.batchSize.get,
-			!options.maxAwaitTimeMS.isNull ? options.maxAwaitTimeMS.get.msecs
-				: allowMaxTime && !options.maxTimeMS.isNull ? options.maxTimeMS.get.msecs
-				: Duration.max);
+		this(client, result.command, result.batchSize, result.getMoreMaxTime, Nullable!ReadPreference(pref), session);
 	}
 
-	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
+	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max,
+		Nullable!ReadPreference pref = Nullable!ReadPreference.init, MongoClientSession* session = null)
 	{
 		// TODO: avoid memory allocation, if possible
-		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTime);
+		m_data = new MongoFindCursor!DocType(client, command, batchSize, getMoreMaxTime, pref, session);
 	}
 
 	this(this)
@@ -350,6 +314,10 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 		if( m_cursor == 0 )
 			return true;
 
+		// TODO(loadBalanced): in load-balancer mode the cursor must be PINNED to the
+		// connection (serviceId) that opened it. getMore and killCursors must reuse
+		// that exact connection, not a fresh lockConnection(). Capture the connection
+		// at find()/first-batch time and reuse it here and in killCursors().
 		auto conn = m_client.lockConnection();
 		conn.getMore!DocType(m_collection, m_nret, m_cursor, &handleReply, &handleDocument);
 		return m_currentDoc >= m_documents.length;
@@ -376,13 +344,9 @@ private deprecated abstract class LegacyMongoCursorData(DocType) : IMongoCursorD
 	final void limit(long count)
 	@safe {
 		// A limit() value of 0 (e.g. “.limit(0)”) is equivalent to setting no limit.
-		if (count > 0) {
-			if (m_nret == 0 || m_nret > count)
-				m_nret = cast(int)min(count, 1024);
-
-			if (m_limit == 0 || m_limit > count)
-				m_limit = count;
-		}
+		auto reduced = reduceLimit(m_nret, m_limit, count);
+		m_nret = reduced.nret;
+		m_limit = reduced.limit;
 	}
 
 	final void skip(long count)
@@ -449,15 +413,21 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		DocType[] m_documents;
 		bool m_iterationStarted = false;
 		long m_queryLimit;
+		ReadPreference m_readPreference;
+		MongoHost m_pinnedHost;
+		MongoClientSession* m_session;
 	}
 
-	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max)
+	this(MongoClient client, Bson command, int batchSize = 0, Duration getMoreMaxTime = Duration.max,
+		Nullable!ReadPreference pref = Nullable!ReadPreference.init, MongoClientSession* session = null)
 	{
 		m_client = client;
 		m_findQuery = command;
 		m_batchSize = batchSize;
 		m_maxTime = getMoreMaxTime;
 		m_database = command["$db"].opt!string;
+		m_readPreference = pref.isNull ? client.readPreference : pref.get;
+		m_session = session;
 	}
 
 	@property bool alive() @safe nothrow { return m_cursor != 0; }
@@ -474,9 +444,13 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		if( m_cursor == 0 )
 			return true;
 
-		auto conn = m_client.lockConnection();
+		Bson sessionContext = m_session is null
+			? Bson.emptyObject
+			: m_session.transactionContext();
+
+		auto conn = m_client.lockConnectionToHost(m_pinnedHost);
 		conn.getMore!DocType(m_cursor, m_database, m_collection, m_batchSize,
-			&handleReply, &handleDocument, m_maxTime);
+			&handleReply, &handleDocument, m_maxTime, Nullable!ReadPreference(m_readPreference), sessionContext);
 		return m_readDoc >= m_documents.length;
 	}
 
@@ -520,7 +494,16 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 
 	private void startIterating()
 	@safe {
-		auto conn = m_client.lockConnection();
+		// A cursor id is only valid on the server that created it, so pin one host
+		// and reuse it for getMore/killCursors. Transaction reads must hit the
+		// primary and carry the session so they see their own uncommitted writes.
+		const inTransaction = inActiveTransaction(m_session);
+		if (inTransaction)
+			m_findQuery = m_session.applyToCommand(m_findQuery);
+		m_pinnedHost = inTransaction
+			? m_client.resolveHostForRead(ReadPreference.primary)
+			: m_client.resolveHostForRead(m_readPreference);
+		auto conn = m_client.lockConnectionToHost(m_pinnedHost);
 		m_totalReceived = 0;
 		m_queryLimit = m_findQuery["limit"].opt!long(0);
 		conn.startFind!DocType(m_findQuery, &handleReply, &handleDocument);
@@ -530,8 +513,8 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 	final void killCursors()
 	@safe {
 		if (m_cursor == 0) return;
-		auto conn = m_client.lockConnection();
-		conn.killCursors(m_ns, () @trusted { return (&m_cursor)[0 .. 1]; } ());
+		auto conn = m_client.lockConnectionToHost(m_pinnedHost);
+		conn.killCursors(m_ns, () @trusted { return (&m_cursor)[0 .. 1]; } (), Nullable!ReadPreference(m_readPreference));
 		m_cursor = 0;
 	}
 
@@ -542,8 +525,7 @@ private class MongoFindCursor(DocType) : IMongoCursorData!DocType {
 		// The qualified collection name is reported here, but when requesting
 		// data, we need to send the database name and the collection name
 		// separately, so we have to remove the database prefix:
-		ns.skipOver(m_database.chain("."));
-		m_collection = ns;
+		m_collection = collectionFromNamespace(ns, m_database);
 		m_documents.length = count;
 		m_readDoc = 0;
 		m_insertDoc = 0;

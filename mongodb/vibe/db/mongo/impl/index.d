@@ -112,6 +112,28 @@ struct IndexModel
 	}
 }
 
+unittest {
+	auto single = IndexModel().add("age", 1);
+	assert(single.name == "age_1");
+
+	auto compound = IndexModel().add("a", 1).add("b", -1);
+	assert(compound.name == "a_1_b_-1");
+
+	auto typed = IndexModel().add("title", IndexType.text);
+	assert(typed.name == "title_text");
+
+	IndexOptions options;
+	options.name = "custom_name";
+	auto named = IndexModel().add("age", 1).withOptions(options);
+	assert(named.name == "custom_name");
+}
+
+unittest {
+	IndexOptions options;
+	options.expireAfter(120.seconds);
+	assert(options.expireAfterSeconds == 120);
+}
+
 /**
 	Specifies the different index types which are available for index creation.
 
