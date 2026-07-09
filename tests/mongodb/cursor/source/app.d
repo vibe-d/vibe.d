@@ -46,7 +46,7 @@ void testCursorEdgeCases(MongoClient client)
 	foreach (i; 0 .. 100)
 		coll.insertOne(["idx": i]);
 
-	// Empty result set: find with non-matching filter
+	// find with non-matching filter returns an empty result set
 	auto emptyCursor = coll.find(["idx": Bson(-999)]);
 	assert(emptyCursor.empty);
 
@@ -57,7 +57,7 @@ void testCursorEdgeCases(MongoClient client)
 	// sort + skip + limit combination
 	auto sorted = coll.find(Bson.emptyObject).sort(["idx": -1]).skip(10).limit(5).array;
 	assert(sorted.length == 5);
-	// Descending: 99, 98, 97, ... skip 10 -> 89, 88, 87, 86, 85
+	// Descending order 99, 98, 97, ... skip 10 -> 89, 88, 87, 86, 85
 	assert(sorted[0]["idx"].get!int == 89);
 	assert(sorted[4]["idx"].get!int == 85);
 
@@ -65,7 +65,7 @@ void testCursorEdgeCases(MongoClient client)
 	auto single = coll.find(Bson.emptyObject).limit(1).array;
 	assert(single.length == 1);
 
-	// Projection via FindOptions: only return specific fields
+	// Projection via FindOptions returns only specific fields
 	FindOptions projOpts;
 	projOpts.projection = Bson(["idx": Bson(1), "_id": Bson(0)]);
 	auto projected = coll.find(Bson.emptyObject, projOpts).limit(3).array;
@@ -75,7 +75,7 @@ void testCursorEdgeCases(MongoClient client)
 		assert(keys.sort!"a<b".array == ["idx"]);
 	}
 
-	// Large skip with limit: skip(95) + limit(10) -> only 5 docs remain
+	// Large skip with limit, skip(95) + limit(10) -> only 5 docs remain
 	auto tail = coll.find(Bson.emptyObject).sort(["idx": 1]).skip(95).limit(10).array;
 	assert(tail.length == 5);
 	assert(tail[0]["idx"].get!int == 95);
