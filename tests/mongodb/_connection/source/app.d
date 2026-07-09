@@ -1,5 +1,6 @@
 import vibe.db.mongo.mongo;
 import vibe.db.mongo.client;
+import vibe.data.bson;
 import vibe.core.core;
 import vibe.core.log;
 import core.time;
@@ -199,6 +200,14 @@ int main(string[] args)
 
 	assert(db.runListCommand(["listCollections": Bson(1.0)])
 		.empty);
+
+	// close() tears the whole client down: a connected standalone runs a monitor and
+	// holds at least one connection pool; after close() no monitors and no pools remain.
+	enforce(client.activeMonitorCount >= 1, "a connected standalone client runs at least one monitor");
+	enforce(client.connectionPoolCount >= 1, "an active client holds at least one connection pool");
+	client.close();
+	enforce(client.activeMonitorCount == 0, "close() stops all background monitors");
+	enforce(client.connectionPoolCount == 0, "close() releases all connection pools");
 
 	logInfo("All tests passed");
 	return 0;

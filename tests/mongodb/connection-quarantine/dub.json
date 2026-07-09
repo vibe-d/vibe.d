@@ -1,0 +1,7 @@
+{
+    "name": "connection-quarantine-test",
+    "description": "C2: runCommand must quarantine a connection after a wire desync (requires a mongo to proxy the handshake)",
+    "dependencies": {
+        "vibe-d:mongodb": {"path": "../../../"}
+    }
+}

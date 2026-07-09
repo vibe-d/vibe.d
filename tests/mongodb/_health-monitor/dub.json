@@ -1,0 +1,8 @@
+{
+	"name": "health-monitor-test",
+	"description": "MongoDB background health monitoring failover test",
+	"dependencies": {
+		"vibe-d:mongodb": {"path": "../../../"}
+	},
+	"debugVersions": ["VibeVerboseMongo"]
+}
