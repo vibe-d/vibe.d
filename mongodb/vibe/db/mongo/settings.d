@@ -10,6 +10,8 @@ module vibe.db.mongo.settings;
 import vibe.core.log;
 import vibe.data.bson;
 deprecated import vibe.db.mongo.flags : QueryFlags;
+import vibe.db.mongo.impl.serverapi : ServerApi, ServerApiVersion, buildServerApi;
+import vibe.db.mongo.impl.encryption : AutoEncryptionOptions;
 import vibe.inet.webform;
 
 import core.time;
@@ -33,6 +35,48 @@ import std.typecons : Nullable, nullable;
  * If the URL is not successfully parsed the information in the MongoClientSettings instance may be
  * incomplete and should not be used.
  */
+/// Validates load-balancer mode constraints: it is incompatible with a replica
+/// set and requires a single host. Logs and returns false on violation.
+package(vibe.db.mongo) bool isValidLoadBalancedConfig(in MongoClientSettings cfg) @safe
+{
+	if (!cfg.loadBalanced)
+		return true;
+	if (cfg.replicaSet.length)
+	{
+		logError("loadBalanced=true is incompatible with replicaSet");
+		return false;
+	}
+	if (cfg.hosts.length > 1)
+	{
+		logError("loadBalanced=true requires a single host");
+		return false;
+	}
+	return true;
+}
+
+/// Whether a `maxStalenessSeconds` value is valid for the configured heartbeat. `-1`
+/// (disabled) is always valid; otherwise the spec requires it to be at least
+/// `max(90, heartbeatFrequencyMS/1000 + 10)`.
+package(vibe.db.mongo) bool isValidMaxStaleness(long maxStalenessSeconds, long heartbeatFrequencyMS) @safe
+{
+	import std.algorithm : max;
+	if (maxStalenessSeconds < 0)
+		return true;
+	return maxStalenessSeconds >= max(90L, heartbeatFrequencyMS / 1000 + 10);
+}
+
+/// isValidMaxStaleness enforces the spec floor of max(90, heartbeat/1000 + 10)
+unittest
+{
+	assert(isValidMaxStaleness(-1, 10_000), "-1 disables the staleness check and is always valid");
+	assert(isValidMaxStaleness(90, 10_000), "90s meets the floor for the default 10s heartbeat");
+	assert(!isValidMaxStaleness(89, 10_000), "below 90s is rejected for the default heartbeat");
+	assert(!isValidMaxStaleness(50, 10_000), "well below the floor is rejected");
+	// with a large heartbeat the floor is heartbeat/1000 + 10, above 90
+	assert(!isValidMaxStaleness(100, 120_000), "a 120s heartbeat raises the floor to 130s, so 100 is rejected");
+	assert(isValidMaxStaleness(130, 120_000), "130s meets the floor for a 120s heartbeat");
+}
+
 bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 @safe {
 	import std.exception : enforce;
@@ -41,13 +85,20 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 	string tmpUrl = url[0..$]; // Slice of the URL (not a copy)
 
-	if( !startsWith(tmpUrl, "mongodb://") )
+	if (startsWith(tmpUrl, "mongodb+srv://"))
+	{
+		cfg.srv = true;
+		cfg.ssl = true; // +srv defaults TLS on; an explicit ssl=/tls= option below still overrides it.
+		tmpUrl = tmpUrl["mongodb+srv://".length .. $];
+	}
+	else if (startsWith(tmpUrl, "mongodb://"))
+	{
+		tmpUrl = tmpUrl["mongodb://".length .. $];
+	}
+	else
 	{
 		return false;
 	}
-
-	// Reslice to get rid of 'mongodb://'
-	tmpUrl = tmpUrl[10..$];
 
 	auto authIndex = tmpUrl.indexOf('@');
 	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
@@ -90,6 +141,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			auto hostPort = splitter(entry, ":");
 			string host = hostPort.front;
 			hostPort.popFront();
+			enforce(!cfg.srv || hostPort.empty, "mongodb+srv:// must not specify a port");
 			ushort port = MongoClientSettings.defaultPort;
 			if (!hostPort.empty) {
 				port = to!ushort(hostPort.front);
@@ -107,6 +159,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	{
 		return false;
 	}
+
+	if (cfg.srv && cfg.hosts.length != 1)
+		return false;
 
 	if(slashIndex == tmpUrl.length)
 	{
@@ -127,6 +182,10 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	{
 		FormFields options;
 		parseURLEncodedForm(tmpUrl[queryIndex+1 .. $], options);
+		bool sawApiVersion;
+		string apiVersionValue;
+		Nullable!bool apiStrictValue;
+		Nullable!bool apiDeprecationValue;
 		foreach (option, value; options.byKeyValue) {
 			bool setBool(ref bool dst)
 			{
@@ -161,6 +220,22 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				}
 			}
 
+			void setWriteConcern(ref Bson dst)
+			{
+				try {
+					dst = icmp(value, "majority") == 0 ? Bson("majority") : Bson(to!long(value));
+				} catch (Exception e) {
+					logError("Invalid w value: [%s] Should be an integer number or 'majority'", value);
+				}
+			}
+
+			void setNullableBool(ref Nullable!bool dst)
+			{
+				bool b;
+				if (setBool(b))
+					dst = b;
+			}
+
 			void warnNotImplemented()
 			{
 				logDiagnostic("MongoDB option %s not yet implemented.", option);
@@ -171,18 +246,30 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 				default: logWarn("Unknown MongoDB option %s", option); break;
 				case "appname": cfg.appName = value; break;
+			case "apiversion":
+				sawApiVersion = true;
+				apiVersionValue = value;
+				break;
+				case "apistrict": setNullableBool(apiStrictValue); break;
+				case "apideprecationerrors": setNullableBool(apiDeprecationValue); break;
 				case "replicaset": cfg.replicaSet = value; break;
 				case "readpreference": cfg.readPreference = parseReadPreference(value); break;
+				case "readpreferencetags": cfg.readPreferenceTags ~= parseTagSet(value); break;
 				case "localthresholdms": setLong(cfg.localThresholdMS); break;
 				case "maxstalenessseconds": setLong(cfg.maxStalenessSeconds); break;
+				case "heartbeatfrequencyms": setLong(cfg.heartbeatFrequencyMS); break;
+				case "minheartbeatfrequencyms": setLong(cfg.minHeartbeatFrequencyMS); break;
+				case "serverselectiontimeoutms": setLong(cfg.serverSelectionTimeoutMS); break;
 				case "readconcernlevel": cfg.readConcern = parseReadConcern(value); break;
 				case "safe": setBool(cfg.safe); break;
+				case "retrywrites": setBool(cfg.retryWrites); break;
 				case "fsync": setBool(cfg.fsync); break;
 				case "journal": setBool(cfg.journal); break;
 				case "connecttimeoutms": setMsecs(cfg.connectTimeout); break;
 				case "sockettimeoutms": setMsecs(cfg.socketTimeout); break;
-				case "tls": setBool(cfg.ssl); break;
+				case "tls":
 				case "ssl": setBool(cfg.ssl); break;
+				case "loadbalanced": setBool(cfg.loadBalanced); cfg.loadBalancedSpecified = true; break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
 				case "authmechanism": cfg.authMechanism = parseAuthMechanism(value); break;
 				case "authmechanismproperties": cfg.authMechanismProperties = value.split(","); warnNotImplemented(); break;
@@ -203,28 +290,33 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 						cfg.zlibCompressionLevel = cast(int) level;
 					}
 					break;
-				case "w":
-					try {
-						if(icmp(value, "majority") == 0){
-							cfg.w = Bson("majority");
-						} else {
-							cfg.w = Bson(to!long(value));
-						}
-					} catch (Exception e) {
-						logError("Invalid w value: [%s] Should be an integer number or 'majority'", value);
-					}
-				break;
+				case "w": setWriteConcern(cfg.w); break;
 			}
 		}
 
-		/* Some m_settings imply safe. If they are set, set safe to true regardless
-		 * of what it was set to in the URL string
-		 */
-		if( (cfg.w != Bson.init) || (cfg.wTimeoutMS != long.init) ||
-				cfg.journal 	 || cfg.fsync )
+		// Setting any of w / wTimeoutMS / journal / fsync turns on safe writes,
+		// regardless of the URL's explicit `safe` value.
+		bool writeOptionsImplySafe()
 		{
-			cfg.safe = true;
+			return cfg.w != Bson.init || cfg.wTimeoutMS != long.init
+				|| cfg.journal || cfg.fsync;
 		}
+
+		if (writeOptionsImplySafe())
+			cfg.safe = true;
+
+		if (!buildServerApi(sawApiVersion, apiVersionValue, apiStrictValue, apiDeprecationValue, cfg.serverApi))
+			return false;
+	}
+
+	if (!isValidLoadBalancedConfig(cfg))
+		return false;
+
+	if (!isValidMaxStaleness(cfg.maxStalenessSeconds, cfg.heartbeatFrequencyMS))
+	{
+		logError("maxStalenessSeconds=%s is below the spec floor of max(90, heartbeatFrequencyMS/1000 + 10)",
+			cfg.maxStalenessSeconds);
+		return false;
 	}
 
 	return true;
@@ -422,6 +514,119 @@ unittest
 	assert(cfg.appName == "myApp");
 }
 
+/// parseMongoDBUrl parses apiVersion option into the server API config
+unittest
+{
+	import vibe.db.mongo.impl.serverapi : ServerApiVersion;
+
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?apiVersion=1"));
+	assert(!cfg.serverApi.isNull, "apiVersion option populates the server API config");
+	assert(cfg.serverApi.get.apiVersion == ServerApiVersion.v1, "apiVersion=1 selects ServerApiVersion.v1");
+}
+
+/// parseMongoDBUrl rejects an unsupported apiVersion value
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?apiVersion=2"),
+		"an unsupported apiVersion value must be rejected");
+}
+
+/// parseMongoDBUrl parses apiStrict option into the server API config
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?apiVersion=1&apiStrict=true"));
+	assert(!cfg.serverApi.isNull, "apiVersion present so server API config exists");
+	assert(!cfg.serverApi.get.strict.isNull && cfg.serverApi.get.strict.get == true, "apiStrict=true sets the strict flag");
+}
+
+/// parseMongoDBUrl applies apiStrict when it precedes apiVersion in the URL
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?apiStrict=true&apiVersion=1"),
+		"apiStrict before apiVersion is a valid URL");
+	assert(!cfg.serverApi.isNull, "apiVersion present so the config exists");
+	assert(!cfg.serverApi.get.strict.isNull && cfg.serverApi.get.strict.get == true,
+		"apiStrict applies regardless of option order");
+}
+
+/// parseMongoDBUrl rejects apiStrict without apiVersion
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?apiStrict=true"),
+		"apiStrict without apiVersion must be rejected");
+}
+
+/// parseMongoDBUrl rejects apiDeprecationErrors without apiVersion
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?apiDeprecationErrors=true"),
+		"apiDeprecationErrors without apiVersion must be rejected");
+}
+
+/// parseMongoDBUrl parses apiDeprecationErrors option into the server API config
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?apiVersion=1&apiDeprecationErrors=true"));
+	assert(!cfg.serverApi.get.deprecationErrors.isNull && cfg.serverApi.get.deprecationErrors.get == true,
+		"apiDeprecationErrors=true sets the deprecationErrors flag");
+}
+
+/// parseMongoDBUrl accepts the mongodb+srv:// seedlist scheme and captures its host
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb+srv://test.mongodb.net/"),
+		"mongodb+srv:// is a valid scheme");
+	assert(cfg.srv, "the +srv scheme marks the settings as a seedlist URI");
+	assert(cfg.hosts.length == 1 && cfg.hosts[0].name == "test.mongodb.net",
+		"the +srv host is captured for SRV resolution");
+}
+
+/// parseMongoDBUrl defaults TLS on for the mongodb+srv:// scheme
+unittest
+{
+	MongoClientSettings srvCfg;
+	assert(parseMongoDBUrl(srvCfg, "mongodb+srv://test.mongodb.net/"));
+	assert(srvCfg.ssl, "mongodb+srv:// defaults TLS on");
+
+	MongoClientSettings plainCfg;
+	assert(parseMongoDBUrl(plainCfg, "mongodb://localhost/"));
+	assert(!plainCfg.ssl, "plain mongodb:// does not default TLS on");
+}
+
+/// parseMongoDBUrl rejects a mongodb+srv:// URI that specifies a port
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb+srv://test.mongodb.net:27017/"),
+		"mongodb+srv:// must not specify a port");
+}
+
+/// parseMongoDBUrl rejects a mongodb+srv:// URI with multiple hosts
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb+srv://a.mongodb.net,b.mongodb.net/"),
+		"mongodb+srv:// must contain exactly one host");
+}
+
 /// parseMongoDBUrl parses replicaSet option
 unittest
 {
@@ -459,6 +664,109 @@ unittest
 	assert(cfg.readPreference == ReadPreference.nearest);
 }
 
+/// parseMongoDBUrl parses a single readPreferenceTags set
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreferenceTags=dc:east"));
+	string[string][] expected = [["dc": "east"]];
+	assert(cfg.readPreferenceTags == expected, "readPreferenceTags=dc:east yields one tag set [\"dc\": \"east\"]");
+}
+
+/// parseMongoDBUrl parses a multi-pair readPreferenceTags set
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreferenceTags=dc:east,rack:r1"));
+	string[string][] expected = [["dc": "east", "rack": "r1"]];
+	assert(cfg.readPreferenceTags == expected, "comma-separated pairs form one tag set");
+}
+
+/// parseMongoDBUrl preserves the order of multiple readPreferenceTags occurrences
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreferenceTags=dc:east&readPreferenceTags=dc:west"));
+	string[string][] expected = [["dc": "east"], ["dc": "west"]];
+	assert(cfg.readPreferenceTags == expected, "repeated readPreferenceTags form an ordered list");
+}
+
+/// parseMongoDBUrl parses an empty readPreferenceTags as the catch-all tag set
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?readPreferenceTags="));
+	string[string][] expected = [string[string].init];
+	assert(cfg.readPreferenceTags == expected, "empty readPreferenceTags is the catch-all tag set {}");
+}
+
+/// parseMongoDBUrl parses retryWrites=false option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?retryWrites=false"));
+	assert(cfg.retryWrites == false, "retryWrites=false disables retryable writes");
+}
+
+/// parseMongoDBUrl parses the loadBalanced option
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=true"));
+	assert(cfg.loadBalanced);
+}
+
+/// parseMongoDBUrl rejects loadBalanced combined with replicaSet
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=true&replicaSet=rs0"),
+		"loadBalanced=true is incompatible with replicaSet and must be rejected");
+}
+
+/// parseMongoDBUrl rejects loadBalanced with replicaSet regardless of option order
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://localhost/?replicaSet=rs0&loadBalanced=true"),
+		"loadBalanced=true is incompatible with replicaSet and must be rejected");
+}
+
+/// parseMongoDBUrl accepts loadBalanced=false alongside replicaSet
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?loadBalanced=false&replicaSet=rs0"));
+	assert(cfg.replicaSet == "rs0");
+}
+
+/// parseMongoDBUrl rejects loadBalanced with more than one seed host
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(!parseMongoDBUrl(cfg, "mongodb://host1:27017,host2:27017/?loadBalanced=true"),
+		"loadBalanced=true requires a single host");
+}
+
+/// parseMongoDBUrl accepts a multi-host URL when loadBalanced is off
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://h1:27017,h2:27017/"));
+	assert(cfg.hosts.length == 2);
+}
+
 /// parseMongoDBUrl parses localThresholdMS option
 unittest
 {
@@ -493,6 +801,35 @@ unittest
 
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
 	assert(cfg.maxStalenessSeconds == -1);
+}
+
+/// parseMongoDBUrl parses the SDAM monitoring options
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/?heartbeatFrequencyMS=5000&minHeartbeatFrequencyMS=250&serverSelectionTimeoutMS=12000"));
+	assert(cfg.heartbeatFrequencyMS == 5000);
+	assert(cfg.minHeartbeatFrequencyMS == 250);
+	assert(cfg.serverSelectionTimeoutMS == 12000);
+}
+
+/// parseMongoDBUrl uses SDAM monitoring defaults (10000 / 500 / 30000)
+unittest
+{
+	MongoClientSettings cfg;
+
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost/"));
+	assert(cfg.heartbeatFrequencyMS == 10_000);
+	assert(cfg.minHeartbeatFrequencyMS == 500);
+	assert(cfg.serverSelectionTimeoutMS == 30_000);
+}
+
+/// MongoClientSettings enables retryWrites by default
+unittest
+{
+	auto cfg = new MongoClientSettings();
+	assert(cfg.retryWrites == true, "retryWrites should default to true");
 }
 
 /// parseMongoDBUrl parses readConcernLevel option
@@ -948,6 +1285,80 @@ enum ReadPreference
 	nearest,
 }
 
+/** Builds the `$readPreference` command field. Enum names match the wire mode
+	strings. `primary` must be omitted by drivers, so passing it is a programming error.
+*/
+Bson readPreferenceBson(ReadPreference pref, string[string][] tagSets = null)
+@safe {
+	assert(pref != ReadPreference.primary, "primary read preference must not be sent on the wire");
+	auto result = Bson(["mode": Bson(pref.to!string)]);
+	if (tagSets.length) {
+		Bson[] tags;
+		foreach (tagSet; tagSets)
+			tags ~= tagSetToBson(tagSet);
+		result["tags"] = Bson(tags);
+	}
+	return result;
+}
+
+/// Converts one read-preference tag set into a wire Bson document. An empty
+/// tag set becomes `{}`, which the server treats as the catch-all.
+private Bson tagSetToBson(string[string] tagSet)
+@safe {
+	Bson[string] doc;
+	foreach (key, value; tagSet)
+		doc[key] = Bson(value);
+	return Bson(doc);
+}
+
+unittest {
+	assert(readPreferenceBson(ReadPreference.secondary) == Bson(["mode": Bson("secondary")]));
+	assert(readPreferenceBson(ReadPreference.primaryPreferred) == Bson(["mode": Bson("primaryPreferred")]));
+	assert(readPreferenceBson(ReadPreference.secondaryPreferred) == Bson(["mode": Bson("secondaryPreferred")]));
+	assert(readPreferenceBson(ReadPreference.nearest) == Bson(["mode": Bson("nearest")]));
+}
+
+/// emits an ordered tags array alongside the mode for a tag-targeted read
+unittest {
+	assert(readPreferenceBson(ReadPreference.secondary, [["dc": "east"]])
+		== Bson(["mode": Bson("secondary"), "tags": Bson([Bson(["dc": Bson("east")])])]),
+		"secondary read preference with a tag set emits mode + tags array");
+}
+
+/// preserves the order of multiple tag sets in the wire tags array
+unittest {
+	assert(readPreferenceBson(ReadPreference.nearest, [["dc": "east"], ["dc": "west"]])
+		== Bson(["mode": Bson("nearest"),
+			"tags": Bson([Bson(["dc": Bson("east")]), Bson(["dc": Bson("west")])])]),
+		"the tags array keeps the tag-set order");
+}
+
+/// emits the catch-all empty tag set as an empty document in the tags array
+unittest {
+	assert(readPreferenceBson(ReadPreference.secondary, [string[string].init])
+		== Bson(["mode": Bson("secondary"), "tags": Bson([Bson.emptyObject])]),
+		"an empty tag set is still emitted as {} so the server treats it as catch-all");
+}
+
+/// stores an optional autoEncryption config that round-trips through the field
+unittest {
+	import vibe.db.mongo.impl.encryption : AutoEncryptionOptions;
+
+	auto settings = new MongoClientSettings();
+	AutoEncryptionOptions ae;
+	ae.keyVaultNamespace = "encryption.__keyVault";
+	settings.autoEncryption = ae;
+
+	assert(!settings.autoEncryption.isNull);
+	assert(settings.autoEncryption.get.keyVaultNamespace == "encryption.__keyVault");
+}
+
+/// a freshly-constructed MongoClientSettings has autoEncryption off by default
+unittest {
+	auto settings = new MongoClientSettings();
+	assert(settings.autoEncryption.isNull);
+}
+
 private ReadConcern parseReadConcern(string str)
 @safe {
 	import std.traits : EnumMembers;
@@ -970,6 +1381,25 @@ private ReadPreference parseReadPreference(string str)
 		case "nearest": return ReadPreference.nearest;
 		default: throw new Exception("Read preference \"" ~ str ~ "\" not supported");
 	}
+}
+
+/// Parses one comma-separated `key:value` read-preference tag set. An empty
+/// string yields the catch-all (empty) tag set.
+private string[string] parseTagSet(string value)
+@safe {
+	import std.algorithm : findSplit, splitter;
+
+	string[string] tagSet;
+	foreach (pair; value.splitter(",")) {
+		auto keyValue = pair.findSplit(":");
+		tagSet[keyValue[0]] = keyValue[2];
+	}
+	return tagSet;
+}
+
+/// parseTagSet splits comma-separated key:value pairs into one tag set
+@safe unittest {
+	assert(parseTagSet("dc:east,rack:r1") == ["dc": "east", "rack": "r1"]);
 }
 
 /**
@@ -1082,6 +1512,12 @@ class MongoClientSettings
 	ReadPreference readPreference;
 
 	/**
+	 * Ordered list of read-preference tag sets parsed from the `readPreferenceTags`
+	 * URI options. Each occurrence appends one tag set, preserving order.
+	 */
+	string[string][] readPreferenceTags;
+
+	/**
 	 * Upper bound on the acceptable latency window for nearest server selection.
 	 * Servers within (fastest RTT + localThresholdMS) are eligible.
 	 * Default: 15ms per MongoDB spec.
@@ -1097,6 +1533,15 @@ class MongoClientSettings
 	 * See_Also: $(LINK https://www.mongodb.com/docs/manual/reference/connection-string/#urioption.maxStalenessSeconds)
 	 */
 	long maxStalenessSeconds = -1;
+
+	/// How often (ms) each monitor sends `hello` to refresh the topology.
+	long heartbeatFrequencyMS = 10_000;
+
+	/// Minimum interval (ms) between consecutive checks of a single server.
+	long minHeartbeatFrequencyMS = 500;
+
+	/// How long (ms) server selection waits for a suitable server before failing.
+	long serverSelectionTimeoutMS = 30_000;
 
 	/**
 	 * Specifies the default read concern level for read operations.
@@ -1115,6 +1560,14 @@ class MongoClientSettings
 	 * * journal is true
 	 */
 	bool safe;
+
+	/**
+	 * Enables retryable writes, retrying eligible write operations once on
+	 * transient network errors. Enabled by default for parity with the Node.js
+	 * driver; the server deduplicates the retried write using the session's
+	 * txnNumber so it is applied at most once.
+	 */
+	bool retryWrites = true;
 
 	/**
 	 * Requests acknowledgment that write operations have propagated to a
@@ -1186,6 +1639,17 @@ class MongoClientSettings
 	 */
 	bool ssl;
 
+	/// True when the connection string used the mongodb+srv:// (DNS seedlist) scheme.
+	bool srv;
+
+	/// Enables load-balanced mode, where the driver connects through a MongoDB load
+	/// balancer and advertises `loadBalanced: true` in the connection handshake.
+	bool loadBalanced;
+
+	/// True when the connection string explicitly set `loadBalanced`, so a mongodb+srv
+	/// TXT record's `loadBalanced` option must not override it (the URI takes precedence).
+	bool loadBalancedSpecified;
+
 	/**
 	 * Can be set to false to disable TLS peer validation to allow self signed
 	 * certificates.
@@ -1245,6 +1709,12 @@ class MongoClientSettings
 	 * collections.
 	 */
 	string appName;
+
+	/// Stable API (Versioned API) configuration, when an apiVersion is requested.
+	Nullable!ServerApi serverApi;
+
+	/// Optional client-side field level encryption (auto-encryption) configuration.
+	Nullable!AutoEncryptionOptions autoEncryption;
 
 	/**
 	 * Ordered list of compression algorithms the client is willing to use.
@@ -1333,6 +1803,13 @@ struct MongoHost
 	{
 		return name == other.name && port == other.port;
 	}
+}
+
+/// Stable map key for a host, "name:port".
+string hostKey(MongoHost host) @safe
+{
+	import std.conv : to;
+	return host.name ~ ":" ~ host.port.to!string;
 }
 
 /**

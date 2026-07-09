@@ -11,9 +11,11 @@ import core.time;
 
 import vibe.db.mongo.connection : MongoException;
 import vibe.db.mongo.collection;
+import vibe.db.mongo.settings : ReadPreference;
 import vibe.data.bson;
 
 import std.typecons;
+import std.exception : enforce;
 
 @safe:
 
@@ -263,6 +265,19 @@ struct FindOptions
 		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
 	*/
 	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
+}
+
+unittest {
+	FindOptions findOpts;
+	findOpts.readPreference = ReadPreference.secondary;
+	assert(serializeToBson(findOpts)["readPreference"].isNull);
+
+	AggregateOptions aggOpts;
+	aggOpts.readPreference = ReadPreference.secondary;
+	assert(serializeToBson(aggOpts)["readPreference"].isNull);
 }
 
 ///
@@ -334,6 +349,9 @@ struct DistinctOptions
 	*/
 	@embedNullable
 	Nullable!string comment;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
 }
 
 /**
@@ -397,6 +415,9 @@ struct CountOptions
 		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
 	*/
 	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
 }
 
 /**
@@ -427,6 +448,9 @@ struct EstimatedDocumentCountOptions
 		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
 	*/
 	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
 }
 
 /**
@@ -547,6 +571,21 @@ struct AggregateOptions
 		Standards: $(LINK https://github.com/mongodb/specifications/blob/7745234f93039a83ae42589a6c0cdbefcffa32fa/source/read-write-concern/read-write-concern.rst)
 	*/
 	@embedNullable Nullable!ReadConcern readConcern;
+
+	/// Per-operation read-preference override; injected as `$readPreference`, not serialized (`@ignore`).
+	@ignore Nullable!ReadPreference readPreference;
+}
+
+/// Mixes in the standard optional `writeConcern` field shared by the write-option structs.
+mixin template WriteConcernOption()
+{
+	/**
+		A document that expresses the
+		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
+		of the insert command. Omit to use the default write concern.
+	*/
+	@embedNullable
+	Nullable!WriteConcern writeConcern;
 }
 
 /**
@@ -576,13 +615,7 @@ struct BulkWriteOptions {
 	@embedNullable
 	Nullable!bool bypassDocumentValidation;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -607,13 +640,7 @@ struct InsertOneOptions {
 	@embedNullable
 	Nullable!bool bypassDocumentValidation;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -648,13 +675,7 @@ struct InsertManyOptions {
 	@embedNullable
 	Nullable!bool ordered;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -709,13 +730,7 @@ struct UpdateOptions {
 	@embedNullable
 	Nullable!bool upsert;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -763,13 +778,7 @@ struct ReplaceOptions {
 	@embedNullable
 	Nullable!bool upsert;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -802,13 +811,7 @@ struct DeleteOptions {
 	@embedNullable
 	Nullable!Bson hint;
 
-	/**
-		A document that expresses the
-		$(LINK2 https://www.mongodb.com/docs/manual/reference/write-concern/,write concern)
-		of the insert command. Omit to use the default write concern.
-	*/
-	@embedNullable
-	Nullable!WriteConcern writeConcern;
+	mixin WriteConcernOption;
 
 	/**
 		Users can specify an arbitrary string to help trace the operation
@@ -831,9 +834,11 @@ struct DeleteOptions {
 
 struct InsertOneResult {
 	/**
-		The identifier that was automatically generated, if not set.
+		The identifier of the inserted document. Generated when the document had no
+		`_id`; otherwise the client-supplied id verbatim, which may be any BSON type
+		(int, string, UUID, …), not only an ObjectID.
 	*/
-	BsonObjectID insertedId;
+	Bson insertedId;
 }
 
 struct InsertManyResult {
@@ -866,11 +871,11 @@ struct UpdateResult {
 	long modifiedCount;
 
 	/**
-		The identifier of the inserted document if an upsert took place. Can be
-		none if no upserts took place, can be multiple if using the updateImpl
-		helper.
+		The identifiers of the documents inserted by an upsert. Empty when no upsert
+		took place; can be multiple via the updateImpl helper. Each id may be any BSON
+		type (int, string, UUID, …), not only an ObjectID.
 	*/
-	BsonObjectID[] upsertedIds;
+	Bson[] upsertedIds;
 }
 
 /**
@@ -948,4 +953,57 @@ package(vibe.db.mongo) void handleWriteResult(string countField = null, T)(
 				throw new MongoBulkWriteException(errors, file, line);
 		}
 	}
+}
+
+unittest {
+	FindOptions find;
+	find.maxTime(2.seconds);
+	find.maxAwaitTime(1500.msecs);
+	assert(find.maxTimeMS == 2000);
+	assert(find.maxAwaitTimeMS == 1500);
+
+	DistinctOptions distinct;
+	distinct.maxTime(3.seconds);
+	assert(distinct.maxTimeMS == 3000);
+
+	CountOptions count;
+	count.maxTime(4.seconds);
+	assert(count.maxTimeMS == 4000);
+
+	EstimatedDocumentCountOptions estimated;
+	estimated.maxTime(5.seconds);
+	assert(estimated.maxTimeMS == 5000);
+
+	AggregateOptions aggregate;
+	aggregate.maxTime(6.seconds);
+	aggregate.maxAwaitTime(700.msecs);
+	aggregate.batchSize = 50;
+	assert(aggregate.maxTimeMS == 6000);
+	assert(aggregate.maxAwaitTimeMS == 700);
+	assert(aggregate.batchSize == 50);
+}
+
+unittest {
+	DeleteResult deleted;
+	handleWriteResult!"deletedCount"(Bson(["n": Bson(7)]), deleted);
+	assert(deleted.deletedCount == 7);
+
+	DeleteResult missingCount;
+	handleWriteResult!"deletedCount"(Bson(["ok": Bson(1.0)]), missingCount);
+	assert(missingCount.deletedCount == 0);
+
+	UpdateResult noErrors;
+	handleWriteResult(Bson(["writeErrors": Bson(cast(Bson[])[])]), noErrors);
+
+	auto writeErrors = Bson([Bson(["code": Bson(11000), "errmsg": Bson("duplicate key")])]);
+	UpdateResult failed;
+	bool threw;
+	try {
+		handleWriteResult(Bson(["writeErrors": writeErrors]), failed);
+	} catch (MongoBulkWriteException e) {
+		threw = true;
+		assert(e.errors.length == 1);
+		assert(e.errors[0].code == 11000);
+	}
+	assert(threw);
 }
