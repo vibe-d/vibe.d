@@ -11,12 +11,19 @@ module vibe.db.mongo.connection;
 // debug = VibeVerboseMongo;
 
 public import vibe.data.bson;
+public import vibe.db.mongo.impl.wireversion;
+public import vibe.db.mongo.impl.serverdescription;
 
 import vibe.core.core : vibeVersionString;
 import vibe.core.log;
 import vibe.core.net;
 import vibe.data.bson;
 import vibe.db.mongo.flags;
+import vibe.db.mongo.impl.compression;
+import vibe.db.mongo.impl.clustertime;
+import vibe.db.mongo.impl.wire;
+import vibe.db.mongo.monitor : MongoServerErrorCode;
+import vibe.db.mongo.impl.serverapi : applyServerApi;
 import vibe.db.mongo.settings;
 import vibe.db.mongo.topology;
 import vibe.inet.webform;
@@ -63,6 +70,28 @@ class MongoException : Exception
 	{
 		super(message, file, line, next);
 	}
+
+	/// Server-reported error labels (e.g. "TransientTransactionError").
+	string[] errorLabels;
+
+	/// Server-reported error code as a MongoServerErrorCode (none when there is no error).
+	MongoServerErrorCode code;
+
+	/// Whether the given server error label is present.
+	bool hasErrorLabel(string label) const
+	{
+		import std.algorithm : canFind;
+		return errorLabels.canFind(label);
+	}
+}
+
+/// A MongoException carries server error labels and reports a present one via hasErrorLabel.
+unittest
+{
+	auto e = new MongoException("transient failure");
+	e.errorLabels = ["TransientTransactionError"];
+	assert(e.hasErrorLabel("TransientTransactionError") == true,
+		"hasErrorLabel must return true for an attached label");
 }
 
 /**
@@ -77,6 +106,12 @@ class MongoDriverException : MongoException
 	this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
+	}
+
+	this(string message, MongoServerErrorCode code, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+		this.code = code;
 	}
 }
 
@@ -121,6 +156,244 @@ class MongoAuthException : MongoException
 	{
 		super(message, file, line, next);
 	}
+
+	this(string message, MongoServerErrorCode code, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+		this.code = code;
+	}
+}
+
+/**
+ * Thrown when the contacted mongo node is no longer primary (e.g. step down).
+ *
+ * Carries the server-reported error code (e.g. 10107).
+ */
+class MongoStepDownException : MongoDriverException
+{
+@safe:
+
+	this(string message, MongoServerErrorCode code, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+		this.code = code;
+	}
+}
+
+unittest
+{
+	auto stepDown = new MongoStepDownException("not primary", MongoServerErrorCode.notWritablePrimary);
+	assert(stepDown.code == MongoServerErrorCode.notWritablePrimary, "expected stored code notWritablePrimary");
+	assert(cast(MongoDriverException)stepDown !is null,
+		"MongoStepDownException must be catchable as MongoDriverException");
+}
+
+/**
+ * Thrown when a connection-level (network) failure interrupts an operation,
+ * e.g. a socket error or a dropped connection. Retryable for writes with
+ * session support and for idempotent reads.
+ */
+class MongoNetworkException : MongoDriverException
+{
+@safe:
+
+	this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
+/// MongoNetworkException is a MongoDriverException subclass
+unittest
+{
+	auto networkFailure = new MongoNetworkException("connection reset");
+	assert(cast(MongoDriverException) networkFailure !is null,
+		"MongoNetworkException must be catchable as a MongoDriverException");
+}
+
+/// MongoDriverException can carry a server error code
+unittest
+{
+	assert(new MongoDriverException("x", MongoServerErrorCode.networkTimeout).code == MongoServerErrorCode.networkTimeout,
+		"MongoDriverException(message, code) carries the code");
+}
+
+/// asNetworkError passes a MongoException through unchanged
+unittest
+{
+	auto mongo = new MongoDriverException("boom");
+	assert(asNetworkError(mongo) is mongo, "a MongoException must pass through unchanged");
+}
+
+/// asNetworkError wraps a non-Mongo exception as a MongoNetworkException
+unittest
+{
+	auto raw = new Exception("socket reset");
+	auto wrapped = cast(MongoNetworkException) asNetworkError(raw);
+	assert(wrapped !is null, "a non-Mongo exception becomes a MongoNetworkException");
+	assert(wrapped.next is raw, "the original exception is preserved as the cause");
+}
+
+/// Builds the exception for a non-ok command response: a `MongoStepDownException` for
+/// stale-topology codes, otherwise the generic `FallbackException`. In both cases the
+/// returned exception carries the server `code`.
+Exception commandFailureException(FallbackException = MongoDriverException)(
+	string message, MongoServerErrorCode code, string[] errorLabels = null) @safe
+{
+	import vibe.db.mongo.monitor : isStaleTopologyError;
+
+	MongoException e;
+	if (isStaleTopologyError(code))
+		e = new MongoStepDownException(message, code);
+	else
+		e = new FallbackException(message, code);
+
+	e.errorLabels = errorLabels;
+	return e;
+}
+
+unittest
+{
+	auto e = commandFailureException("primary stepped down", MongoServerErrorCode.notWritablePrimary);
+	assert(cast(MongoStepDownException) e !is null,
+		"stale code notWritablePrimary must yield a MongoStepDownException");
+	assert((cast(MongoStepDownException) e).code == MongoServerErrorCode.notWritablePrimary,
+		"step-down exception must carry the server code notWritablePrimary");
+}
+
+unittest
+{
+	auto e = commandFailureException("duplicate key", MongoServerErrorCode.duplicateKey);
+	assert(cast(MongoStepDownException) e is null,
+		"a non-stale code must not be classified as a step-down");
+	assert(cast(MongoDriverException) e !is null,
+		"a non-stale command failure stays a generic MongoDriverException");
+}
+
+/// A non-stale command failure carries its server error code on the MongoException base.
+unittest
+{
+	auto e = commandFailureException("network timeout", MongoServerErrorCode.networkTimeout);
+	assert((cast(MongoException) e).code == MongoServerErrorCode.networkTimeout,
+		"a non-stale command failure must carry its server error code");
+}
+
+/// commandFailureException attaches the server-reported error labels to the exception
+unittest
+{
+	auto e = commandFailureException("transient failure", MongoServerErrorCode.duplicateKey,
+		["TransientTransactionError"]);
+	assert((cast(MongoException) e).hasErrorLabel("TransientTransactionError"),
+		"commandFailureException must attach the reply's error labels so hasErrorLabel works");
+}
+
+/// Extracts the server-reported `errorLabels` array from a command reply
+/// (e.g. ["TransientTransactionError"]); an empty array when none are present.
+string[] parseErrorLabels(Bson reply) @safe
+{
+	return reply["errorLabels"].opt!(Bson[]).map!(b => b.get!string).array;
+}
+
+/// parseErrorLabels extracts the errorLabels array from a command reply
+unittest
+{
+	auto reply = Bson(["errorLabels": Bson([Bson("TransientTransactionError"), Bson("RetryableWriteError")])]);
+	assert(parseErrorLabels(reply) == ["TransientTransactionError", "RetryableWriteError"],
+		"parseErrorLabels returns the reply's errorLabels in order");
+}
+
+/// parseErrorLabels yields an empty array for replies without a proper errorLabels array
+unittest
+{
+	// absent field (a normal successful reply)
+	assert(parseErrorLabels(Bson(["ok": Bson(1.0)])) == [],
+		"a reply without errorLabels yields no labels");
+	// present but not an array (malformed/hostile reply) must not throw
+	assert(parseErrorLabels(Bson(["errorLabels": Bson("oops")])) == [],
+		"a non-array errorLabels yields no labels rather than throwing");
+}
+
+/// Reads the server-reported error `code` from a command reply, defaulting to 0
+/// (unknown) when the reply omits it.
+MongoServerErrorCode serverErrorCode(Bson reply) @safe
+{
+	return cast(MongoServerErrorCode) reply["code"].opt!int(0);
+}
+
+/// Reads the `writeConcernError.code` from a write reply, or `none` when absent. An ok:1
+/// reply can still carry a transient writeConcernError (e.g. 91 ShutdownInProgress) that a
+/// retryable write must retry, so this is inspected separately from the top-level code.
+MongoServerErrorCode writeConcernErrorCode(Bson reply) @safe
+{
+	auto wce = reply["writeConcernError"];
+	if (wce.type != Bson.Type.object)
+		return MongoServerErrorCode.none;
+	return cast(MongoServerErrorCode) wce["code"].opt!int(0);
+}
+
+/// writeConcernErrorCode reads a transient writeConcernError code from an ok:1 reply
+unittest
+{
+	auto reply = Bson([
+		"ok": Bson(1.0),
+		"writeConcernError": Bson(["code": Bson(91), "errmsg": Bson("ShutdownInProgress")])
+	]);
+	assert(writeConcernErrorCode(reply) == MongoServerErrorCode.shutdownInProgress,
+		"the writeConcernError code is read from an ok:1 reply");
+	assert(writeConcernErrorCode(Bson(["ok": Bson(1.0)])) == MongoServerErrorCode.none,
+		"a reply without a writeConcernError yields none");
+}
+
+/// serverErrorCode reads the reply's code, falling back to 0 when absent
+unittest
+{
+	assert(serverErrorCode(Bson(["code": Bson(112)])) == cast(MongoServerErrorCode) 112,
+		"serverErrorCode returns the reply's code");
+	assert(serverErrorCode(Bson(["ok": Bson(1.0)])) == cast(MongoServerErrorCode) 0,
+		"a reply without a code yields 0");
+}
+
+/// Builds the command-failure exception from a non-ok reply: message from `errmsg`,
+/// the server `code`, and the reply's `errorLabels` (so `hasErrorLabel` works).
+Exception commandFailureFromReply(FallbackException = MongoDriverException)(
+	Bson reply, string errorInfo, string errorFile, size_t errorLine) @safe
+{
+	return commandFailureException!FallbackException(
+		formatCommandError("command failed: " ~ reply["errmsg"].opt!string("(no message)"), errorInfo, errorFile, errorLine),
+		serverErrorCode(reply), parseErrorLabels(reply));
+}
+
+/// commandFailureFromReply builds the failure exception from a reply, carrying its error labels and code
+unittest
+{
+	auto reply = Bson([
+		"ok": Bson(0.0),
+		"code": Bson(112),
+		"errmsg": Bson("WriteConflict"),
+		"errorLabels": Bson([Bson("TransientTransactionError")]),
+	]);
+
+	auto e = cast(MongoException) commandFailureFromReply(reply, "ctx", "file.d", 1);
+	assert(e.hasErrorLabel("TransientTransactionError"),
+		"the exception built from a failing reply carries the reply's error labels");
+	assert(e.code == cast(MongoServerErrorCode) 112,
+		"the exception built from a failing reply carries the server code");
+}
+
+/// Classifies a thrown exception from the wire exchange: a MongoException passes through
+/// unchanged; any other (connection-level) exception becomes a retryable MongoNetworkException.
+Exception asNetworkError(Exception e) @safe
+{
+	if (cast(MongoException) e !is null)
+		return e;
+	return new MongoNetworkException(e.msg, __FILE__, __LINE__, e);
+}
+
+/// Appends the originating command's call-site context to an error message so a
+/// failure points back at the caller rather than this protocol module.
+private string formatCommandError(string msg, string errorInfo, string errorFile, size_t errorLine) @safe
+{
+	return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
 }
 
 /**
@@ -145,11 +418,16 @@ final class MongoConnection {
 		StreamOutputRange!(InterfaceProxy!Stream) m_outRange;
 		ServerDescription m_description;
 		MongoHost m_connectedHost;
+		/// Hook invoked with (host, error code) when a command fails.
+		void delegate(MongoHost host, MongoServerErrorCode code) @safe nothrow m_onCommandError;
 		/// Flag to prevent recursive connections when server closes connection while connecting
 		bool m_allowReconnect;
 		bool m_isAuthenticating;
 		bool m_supportsOpMsg;
 		Compressor m_negotiatedCompressor = Compressor.noop;
+		/// Highest `$clusterTime` observed on a reply; gossiped back on every command
+		/// for causal consistency. Null until the first cluster-time-bearing reply.
+		Bson m_clusterTime = Bson(null);
 	}
 
 	enum ushort defaultPort = MongoClientSettings.defaultPort;
@@ -166,7 +444,17 @@ final class MongoConnection {
 		m_settings = cfg;
 	}
 
+	/// Sets the hook called with (host, error code) on command failure.
+	package void onCommandError(void delegate(MongoHost host, MongoServerErrorCode code) @safe nothrow handler)
+	{
+		m_onCommandError = handler;
+	}
+
 	void connectToHost(MongoHost host, bool doAuthenticate = true) {
+		// Reset before the handshake so a reconnect's hello/speculative-auth is
+		// never sent OP_COMPRESSED with the previous connection's stale codec;
+		// compression only applies once it's re-negotiated below.
+		m_negotiatedCompressor = Compressor.noop;
 		bool isTLS;
 
 		/*
@@ -206,7 +494,7 @@ final class MongoConnection {
 			m_outRange = streamOutputRange(m_stream);
 		}
 		catch (Exception e) {
-			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", host.name, host.port), __FILE__, __LINE__, e);
+			throw new MongoNetworkException(format("Failed to connect to MongoDB server at %s:%s.", host.name, host.port), __FILE__, __LINE__, e);
 		}
 
 		scope (failure) disconnect();
@@ -216,9 +504,8 @@ final class MongoConnection {
 			m_allowReconnect = true;
 
 		Bson handshake = Bson.emptyObject;
-		static assert(!is(typeof(m_settings.loadBalanced)), "loadBalanced was added to the API, set legacy if it's true here!");
-		// TODO: must use legacy handshake if m_settings.loadBalanced is true
-		// and also once we allow configuring a server API version in the driver
+		// TODO: must use legacy handshake once we allow configuring a server API
+		// version in the driver
 		// (https://github.com/mongodb/specifications/blob/master/source/versioned-api/versioned-api.rst)
 		m_supportsOpMsg = false;
 		bool legacyHandshake = false;
@@ -288,15 +575,11 @@ final class MongoConnection {
 			}
 		}
 
-		if (m_settings.compressors.length > 0) {
-			Bson[] compressorNames;
-			foreach (c; m_settings.compressors) {
-				compressorNames ~= Bson(compressorName(c));
-			}
-			handshake["compression"] = Bson(compressorNames);
-		}
+		auto advertised = advertisedCompressorNames(m_settings.compressors);
+		if (advertised.length > 0)
+			handshake["compression"] = Bson(advertised.map!(name => Bson(name)).array);
 
-		auto reply = runCommand!(Bson, MongoAuthException)("admin", handshake);
+		auto reply = runCommand!MongoAuthException("admin", handshake);
 		m_description = deserializeBson!ServerDescription(reply);
 
 		if (m_description.satisfiesVersion(WireVersion.v36))
@@ -328,9 +611,6 @@ final class MongoConnection {
 
 		if (doAuthenticate) {
 			auto authMechanism = m_settings.authMechanism;
-
-			if (authMechanism == MongoAuthMechanism.none && m_settings.sslPEMKeyFile != null && m_description.satisfiesVersion(WireVersion.v26))
-				authMechanism = MongoAuthMechanism.mongoDBX509;
 
 			if (authMechanism == MongoAuthMechanism.none && (m_settings.digest.length || m_settings.password.length))
 			{
@@ -394,7 +674,7 @@ final class MongoConnection {
 				break;
 			}
 
-			logInfo("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
+			logDiagnostic("Connected to: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
 		} else {
 			logDiagnostic("Probed: %s primary=%s secondary=%s", m_description.me, m_description.isPrimary, m_description.secondary);
 		}
@@ -433,8 +713,8 @@ final class MongoConnection {
 			return false;
 
 		auto status = m_conn.waitForDataEx(Duration.zero);
-		// timeout (wouldBlock) means the socket is alive but no data pending — that's fine
-		// dataAvailable means there's unread data — also alive
+		// timeout (wouldBlock) means the socket is alive but no data pending, which is fine
+		// dataAvailable means there's unread data, so the socket is also alive
 		// noMoreData means the remote end closed the connection
 		return status != typeof(status).noMoreData;
 	}
@@ -486,7 +766,7 @@ final class MongoConnection {
 				`runCommand` overload, when the command response is not ok.
 			- `MongoDriverException` when internal protocol errors occur.
 	*/
-	Bson runCommand(T, CommandFailException = MongoDriverException)(
+	Bson runCommand(CommandFailException = MongoDriverException)(
 		string database,
 		Bson command,
 		string errorInfo = __FUNCTION__,
@@ -495,11 +775,11 @@ final class MongoConnection {
 	)
 	in(database.length, "runCommand requires a database argument")
 	{
-		return runCommandImpl!(T, CommandFailException)(
+		return runCommandImpl!CommandFailException(
 			database, command, true, errorInfo, errorFile, errorLine);
 	}
 
-	Bson runCommandUnchecked(T, CommandFailException = MongoDriverException)(
+	Bson runCommandUnchecked(CommandFailException = MongoDriverException)(
 		string database,
 		Bson command,
 		string errorInfo = __FUNCTION__,
@@ -508,11 +788,11 @@ final class MongoConnection {
 	)
 	in(database.length, "runCommand requires a database argument")
 	{
-		return runCommandImpl!(T, CommandFailException)(
+		return runCommandImpl!CommandFailException(
 			database, command, false, errorInfo, errorFile, errorLine);
 	}
 
-	private Bson runCommandImpl(T, CommandFailException)(
+	private Bson runCommandImpl(CommandFailException)(
 		string database,
 		Bson command,
 		bool testOk = true,
@@ -522,14 +802,21 @@ final class MongoConnection {
 	)
 	in(database.length, "runCommand requires a database argument")
 	{
-		import std.array;
-
-		string formatErrorInfo(string msg) @safe
-		{
-			return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
-		}
-
 		Bson ret;
+
+		// Unlike the sibling cursor methods, disconnect() lives inside the send/recv
+		// catch blocks rather than a method-top `scope (failure) disconnect();`. A wire
+		// error desyncs the connection and must quarantine it, but the clean `ok != 1.0`
+		// command-failure path below fully reads a healthy connection and must keep it.
+		// A method-scoped guard would wrongly disconnect on that logical failure too.
+
+		// When the Stable API (Versioned API) is configured, every command, including
+		// the handshake hello, carries apiVersion (+ apiStrict / apiDeprecationErrors).
+		command = applyServerApi(command, m_settings.serverApi);
+
+		// Gossip the highest cluster time we've seen so the server advances causally.
+		// No-op until the first reply carries a $clusterTime (e.g. on a standalone).
+		command = gossipClusterTime(command, m_clusterTime);
 
 		if (m_supportsOpMsg)
 		{
@@ -538,46 +825,67 @@ final class MongoConnection {
 
 			command["$db"] = Bson(database);
 
-			auto id = sendMsg(-1, 0, command);
-			Appender!(Bson[])[string] docs;
-			recvMsg!true(id, (flags, root) @safe {
-				ret = root;
-			}, (scope ident, size) @safe {
-				docs[ident.idup] = appender!(Bson[]);
-			}, (scope ident, push) @safe {
-				auto pd = ident in docs;
-				assert(!!pd, "Received data for unexpected identifier");
-				pd.put(push);
-			});
+			try
+			{
+				auto id = sendMsg(-1, 0, command);
+				Appender!(Bson[])[string] docs;
+				recvMsg!true(id, (flags, root) @safe {
+					ret = root;
+				}, (scope ident, size) @safe {
+					docs[ident.idup] = appender!(Bson[]);
+				}, (scope ident, push) @safe {
+					auto pd = ident in docs;
+					enforce!MongoDriverException(!!pd, formatCommandError("Received data for unexpected identifier", errorInfo, errorFile, errorLine));
+					pd.put(push);
+				});
 
-			foreach (ident, app; docs)
-				ret[ident] = Bson(app.data);
+				foreach (ident, app; docs)
+					ret[ident] = Bson(app.data);
+			}
+			catch (Exception e)
+			{
+				disconnect();
+				throw asNetworkError(e);
+			}
 		}
 		else
 		{
 			debug (VibeVerboseMongo)
 				logDiagnostic("runCommand(legacy): [db=%s] %s", database, command);
-			auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
-			recvReply!T(id,
-				(cursor, flags, first_doc, num_docs) {
-					logTrace("runCommand(%s) flags: %s, cursor: %s, documents: %s", database, flags, cursor, num_docs);
-					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), formatErrorInfo("command query failed"));
-					enforce!MongoDriverException(num_docs == 1, formatErrorInfo("received more than one document in command response"));
-				},
-				(idx, ref doc) {
-					ret = doc;
-				});
+			try
+			{
+				auto id = send(OpCode.Query, -1, 0, database ~ ".$cmd", 0, -1, command, Bson(null));
+				recvReply!Bson(id,
+					(cursor, flags, first_doc, num_docs) {
+						logTrace("runCommand(%s) flags: %s, cursor: %s, documents: %s", database, flags, cursor, num_docs);
+						enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure), formatCommandError("command query failed", errorInfo, errorFile, errorLine));
+						enforce!MongoDriverException(num_docs == 1, formatCommandError("received more than one document in command response", errorInfo, errorFile, errorLine));
+					},
+					(idx, ref doc) {
+						ret = doc;
+					});
+			}
+			catch (Exception e)
+			{
+				disconnect();
+				throw asNetworkError(e);
+			}
 		}
+
+		// Observe the reply's $clusterTime even on command failure: a failed command
+		// still gossips a valid cluster time the driver must track.
+		m_clusterTime = laterClusterTime(m_clusterTime, ret["$clusterTime"]);
 
 		if (testOk && ret["ok"].get!double != 1.0)
-			throw new CommandFailException(formatErrorInfo("command failed: "
-				~ ret["errmsg"].opt!string("(no message)")));
+		{
+			auto code = serverErrorCode(ret);
+			if (m_onCommandError !is null)
+				m_onCommandError(m_connectedHost, code);
 
-		static if (is(T == Bson)) return ret;
-		else {
-			T doc = deserializeBson!T(bson);
-			return doc;
+			throw commandFailureFromReply!CommandFailException(ret, errorInfo, errorFile, errorLine);
 		}
+
+		return ret;
 	}
 
 	template getMore(T)
@@ -608,6 +916,8 @@ final class MongoConnection {
 			scope GetMoreHeaderDelegate on_header,
 			scope GetMoreDocumentDelegate!T on_doc,
 			Duration timeout = Duration.max,
+			Nullable!ReadPreference pref = Nullable!ReadPreference.init,
+			Bson sessionContext = Bson.emptyObject,
 			string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 		{
 			Bson command = Bson.emptyObject;
@@ -619,10 +929,12 @@ final class MongoConnection {
 			if (timeout != Duration.max && timeout.total!"msecs" < int.max)
 				command["maxTimeMS"] = Bson(cast(int)timeout.total!"msecs");
 
-			string formatErrorInfo(string msg) @safe
-			{
-				return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
-			}
+			// A secondary keeps serving getMore only if each continuation re-sends $readPreference.
+			if (!pref.isNull && pref.get != ReadPreference.primary)
+				command["$readPreference"] = readPreferenceBson(pref.get);
+
+			foreach (string key, value; sessionContext.byKeyValue)
+				command[key] = value;
 
 			scope (failure) disconnect();
 
@@ -645,9 +957,9 @@ final class MongoConnection {
 				recvReply!T(id, (long cursor, ReplyFlags flags, int first_doc, int num_docs)
 				{
 					enforce!MongoDriverException(!(flags & ReplyFlags.CursorNotFound),
-						formatErrorInfo("Invalid cursor handle."));
+						formatCommandError("Invalid cursor handle.", errorInfo, errorFile, errorLine));
 					enforce!MongoDriverException(!(flags & ReplyFlags.QueryFailure),
-						formatErrorInfo("Query failed. Does the database exist?"));
+						formatCommandError("Query failed. Does the database exist?", errorInfo, errorFile, errorLine));
 
 					on_header(cursor, full_name, num_docs);
 				}, (size_t idx, ref T doc) {
@@ -657,9 +969,9 @@ final class MongoConnection {
 						brokenId = nextId;
 					} else {
 						enforce!MongoDriverException(idx >= brokenId,
-							formatErrorInfo("Got legacy document with same id after having already processed it!"));
+							formatCommandError("Got legacy document with same id after having already processed it!", errorInfo, errorFile, errorLine));
 						enforce!MongoDriverException(idx < num_docs,
-							formatErrorInfo("Received more documents than the database reported to us"));
+							formatCommandError("Received more documents than the database reported to us", errorInfo, errorFile, errorLine));
 
 						size_t arrayIndex = cast(int)idx - brokenId;
 						if (!compatibilitySort.length)
@@ -683,14 +995,9 @@ final class MongoConnection {
 		string batchKey = "firstBatch",
 		string errorInfo = __FUNCTION__, string errorFile = __FILE__, size_t errorLine = __LINE__)
 	{
-		string formatErrorInfo(string msg) @safe
-		{
-			return text(msg, " in ", errorInfo, " (", errorFile, ":", errorLine, ")");
-		}
-
 		scope (failure) disconnect();
 
-		enforce!MongoDriverException(m_supportsOpMsg, formatErrorInfo("Database does not support required OP_MSG for new style queries"));
+		enforce!MongoDriverException(m_supportsOpMsg, formatCommandError("Database does not support required OP_MSG for new style queries", errorInfo, errorFile, errorLine));
 
 		enum needsDup = hasIndirections!T || is(T == Bson);
 
@@ -700,13 +1007,18 @@ final class MongoConnection {
 		auto id = sendMsg(-1, 0, command);
 		recvMsg!needsDup(id, (flags, scope root) @safe {
 			if (root["ok"].get!double != 1.0)
-				throw new MongoDriverException(formatErrorInfo("error response: "
-					~ root["errmsg"].opt!string("(no message)")));
+			{
+				auto failure = new MongoDriverException(
+					formatCommandError("error response: " ~ root["errmsg"].opt!string("(no message)"), errorInfo, errorFile, errorLine),
+					serverErrorCode(root));
+				failure.errorLabels = parseErrorLabels(root);
+				throw failure;
+			}
 
 			auto cursor = root["cursor"];
 			if (cursor.type == Bson.Type.null_)
-				throw new MongoDriverException(formatErrorInfo("no cursor in response: "
-					~ root["errmsg"].opt!string("(no error message)")));
+				throw new MongoDriverException(formatCommandError("no cursor in response: "
+					~ root["errmsg"].opt!string("(no error message)"), errorInfo, errorFile, errorLine));
 			auto batch = cursor[batchKey].get!(Bson[]);
 			on_header(cursor["id"].get!long, cursor["ns"].get!string, batch.length);
 
@@ -716,7 +1028,7 @@ final class MongoConnection {
 				on_doc(doc);
 			}
 		}, (scope ident, size) @safe {}, (scope ident, scope push) @safe {
-			throw new MongoDriverException(formatErrorInfo("unexpected section type 1 in response"));
+			throw new MongoDriverException(formatCommandError("unexpected section type 1 in response", errorInfo, errorFile, errorLine));
 		});
 	}
 
@@ -734,7 +1046,7 @@ final class MongoConnection {
 		send(OpCode.KillCursors, -1, cast(int)0, cast(int)cursors.length, cursors);
 	}
 
-	void killCursors(string collection, scope long[] cursors)
+	void killCursors(string collection, scope long[] cursors, Nullable!ReadPreference pref = Nullable!ReadPreference.init)
 	{
 		scope(failure) disconnect();
 		// TODO: could add special case to runCommand to not return anything
@@ -748,7 +1060,9 @@ final class MongoConnection {
 					~ collection ~ "'");
 			command["killCursors"] = Bson(parts[2]);
 			command["cursors"] = () @trusted { return cursors; } ().serializeToBson; // NOTE: "escaping" scope here
-			runCommand!Bson(parts[0], command);
+			if (!pref.isNull && pref.get != ReadPreference.primary)
+				command["$readPreference"] = readPreferenceBson(pref.get);
+			runCommand(parts[0], command);
 		}
 		else
 		{
@@ -776,7 +1090,7 @@ final class MongoConnection {
 
 		_MongoErrorDescription ret;
 
-		auto error = runCommandUnchecked!Bson(db, command_and_options);
+		auto error = runCommandUnchecked(db, command_and_options);
 
 		try {
 			ret = MongoErrorDescription(
@@ -813,7 +1127,7 @@ final class MongoConnection {
 			);
 		}
 
-		auto result = runCommand!Bson(cn, cmd)["databases"];
+		auto result = runCommand(cn, cmd)["databases"];
 
 		return result.byValue.map!toInfo;
 	}
@@ -841,14 +1155,14 @@ final class MongoConnection {
 		enforce!MongoDriverException(opcode == OpCode.Msg, "Got wrong reply type! (must be OP_MSG or OP_COMPRESSED)");
 
 		uint flagBits = recvUInt();
-		const bool hasCRC = (flagBits & (1 << 16)) != 0;
+		const bool hasCRC = checksumPresent(flagBits);
 
-		int sectionLength = cast(int)(msglen - 4 * int.sizeof - flagBits.sizeof);
-		if (hasCRC)
-			sectionLength -= uint.sizeof; // CRC present
+		// Sections occupy everything but the optional trailing CRC; stop before it so the
+		// CRC's bytes are not read as a bogus payload-section type.
+		const ulong sectionEnd = msglen - (hasCRC ? uint.sizeof : 0);
 
 		bool gotSec0;
-		while (m_bytesRead - packet_start_index < msglen) {
+		while (m_bytesRead - packet_start_index < sectionEnd) {
 			// TODO: directly deserialize from the wire
 			static if (!dupBson) {
 				ubyte[256] buf = void;
@@ -921,6 +1235,10 @@ final class MongoConnection {
 		ubyte compressorId = recvUByte();
 
 		int compressedSize = cast(int)(msglen - (m_bytesRead - packet_start_index));
+		// Reject corrupt/malicious wire sizes before allocating: a negative size would
+		// allocate a huge buffer (fatal), and an unbounded uncompressedSize is a
+		// decompression bomb.
+		enforceCompressedSizes(compressedSize, uncompressedSize, defaultMaxMessageSizeBytes);
 		ubyte[] compressedPayload = new ubyte[compressedSize];
 		recv(compressedPayload);
 
@@ -1006,13 +1324,19 @@ final class MongoConnection {
 	private int sendMsg(int response_to, uint flagBits, Bson document)
 	{
 		ensureConnected();
-
 		int id = nextMessageId();
-		const bool hasCRC = (flagBits & (1 << 16)) != 0;
+		const bool hasCRC = checksumPresent(flagBits);
 		assert(!hasCRC, "sending with CRC bits not yet implemented");
 
+		// The command name is the first field of the document.
+		string cmdName;
+		foreach (string key, value; document.byKeyValue) { cmdName = key; break; }
+
+		// Never compress credential-carrying or handshake commands, even when they are issued
+		// after the connect-time auth window (e.g. createUser / a later saslStart via runCommand).
 		bool shouldCompress = m_negotiatedCompressor != Compressor.noop
-			&& !m_isAuthenticating;
+			&& !m_isAuthenticating
+			&& !isCompressionExempt(cmdName);
 
 		if (!shouldCompress) {
 			sendHeader(21 + sendLength(document), id, response_to, OpCode.Msg);
@@ -1158,7 +1482,9 @@ final class MongoConnection {
 
 			cmd["user"] = Bson(m_settings.username);
 		}
-		runCommand!(Bson, MongoAuthException)(m_settings.getAuthDatabase, cmd);
+		// MONGODB-X509 authenticates against the "$external" database per the spec,
+		// not the configured auth database (the identity lives in the certificate).
+		runCommand!MongoAuthException("$external", cmd);
 	}
 
 	private void authenticate()
@@ -1168,7 +1494,7 @@ final class MongoConnection {
 		string cn = m_settings.getAuthDatabase;
 
 		auto cmd = Bson(["getnonce": Bson(1)]);
-		auto result = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		auto result = runCommand!MongoAuthException(cn, cmd);
 		string nonce = result["nonce"].get!string;
 		string key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
 
@@ -1178,7 +1504,7 @@ final class MongoConnection {
 		cmd["nonce"] = Bson(nonce);
 		cmd["user"] = Bson(m_settings.username);
 		cmd["key"] = Bson(key);
-		runCommand!(Bson, MongoAuthException)(cn, cmd);
+		runCommand!MongoAuthException(cn, cmd);
 	}
 
 	private void scramAuthenticate()
@@ -1209,7 +1535,7 @@ final class MongoConnection {
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 		cmd["options"] = Bson(["skipEmptyExchange": Bson(true)]);
 
-		auto doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		auto doc = runCommand!MongoAuthException(cn, cmd);
 		scramFinishAuth(state, credential, doc, cn);
 	}
 
@@ -1230,7 +1556,7 @@ final class MongoConnection {
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
 
-		doc = runCommand!(Bson, MongoAuthException)(cn, cmd);
+		doc = runCommand!MongoAuthException(cn, cmd);
 		response = cast(string)doc["payload"].get!BsonBinData().rawData;
 
 		payload = state.finalize(response);
@@ -1243,32 +1569,10 @@ final class MongoConnection {
 		cmd["saslContinue"] = Bson(1);
 		cmd["conversationId"] = conversationId;
 		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		runCommand!(Bson, MongoAuthException)(cn, cmd);
+		runCommand!MongoAuthException(cn, cmd);
 	}
 }
 
-private enum OpCode : int {
-	Reply        = 1, // sent only by DB
-	Update       = 2001,
-	Insert       = 2002,
-	Reserved1    = 2003,
-	Query        = 2004,
-	GetMore      = 2005,
-	Delete       = 2006,
-	KillCursors  = 2007,
-
-	Compressed   = 2012,
-	Msg          = 2013,
-}
-
-private alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs) @safe;
-private template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc) @safe; }
-
-private alias MsgReplyDelegate(bool dupBson : true) = void delegate(uint flags, Bson document) @safe;
-private alias MsgReplyDelegate(bool dupBson : false) = void delegate(uint flags, scope Bson document) @safe;
-private alias MsgSection1StartDelegate = void delegate(scope const(char)[] identifier, int size) @safe;
-private alias MsgSection1Delegate(bool dupBson : true) = void delegate(scope const(char)[] identifier, Bson document) @safe;
-private alias MsgSection1Delegate(bool dupBson : false) = void delegate(scope const(char)[] identifier, scope Bson document) @safe;
 
 alias GetMoreHeaderDelegate = void delegate(long id, string ns, size_t count) @safe;
 alias GetMoreDocumentDelegate(T) = void delegate(ref T document) @safe;
@@ -1280,417 +1584,6 @@ struct MongoDBInfo
 	bool empty;
 }
 
-private int sendLength(ARGS...)(scope ARGS args)
-{
-	import std.traits;
-	static if (ARGS.length == 1) {
-		alias T = ARGS[0];
-		static if (is(T == string)) return cast(int)args[0].length + 1;
-		else static if (is(T == int)) return 4;
-		else static if (is(T == long)) return 8;
-		else static if (is(T == Bson)) return cast(int)() @trusted { return args[0].data.length; } ();
-		else static if (isArray!T) {
-			int ret = 0;
-			foreach (el; args[0]) ret += sendLength(el);
-			return ret;
-		} else static assert(false, "Unexpected type: "~T.stringof);
-	}
-	else if (ARGS.length == 0) return 0;
-	else return sendLength(args[0 .. $/2]) + sendLength(args[$/2 .. $]);
-}
-
-private Compressor negotiateCompressor(const Compressor[] clientCompressors, const string[] serverCompressors)
-@safe {
-	foreach (clientComp; clientCompressors) {
-		foreach (serverComp; serverCompressors) {
-			if (compressorName(clientComp) == serverComp) {
-				return clientComp;
-			}
-		}
-	}
-
-	return Compressor.noop;
-}
-
-private Compressor compressorFromId(ubyte id)
-@safe {
-	switch (id) {
-		case 0: return Compressor.noop;
-		case 1: return Compressor.snappy;
-		case 2: return Compressor.zlib;
-		case 3: return Compressor.zstd;
-		default: throw new MongoDriverException("Unknown compressor ID: " ~ id.to!string);
-	}
-}
-
-private ubyte[] compressData(Compressor compressor, const(ubyte)[] data, int zlibLevel)
-@trusted {
-	final switch (compressor) {
-		case Compressor.noop:
-			return data.dup;
-		case Compressor.zlib:
-			import std.zlib : compress;
-			return cast(ubyte[]) compress(data, zlibLevel == -1 ? 6 : zlibLevel);
-		case Compressor.snappy:
-			assert(false, "snappy compression not yet implemented");
-		case Compressor.zstd:
-			assert(false, "zstd compression not yet implemented");
-	}
-}
-
-private ubyte[] decompressData(Compressor compressor, const(ubyte)[] data, int uncompressedSize)
-@trusted {
-	final switch (compressor) {
-		case Compressor.noop:
-			return data.dup;
-		case Compressor.zlib:
-			import std.zlib : uncompress;
-			return cast(ubyte[]) uncompress(data, uncompressedSize);
-		case Compressor.snappy:
-			assert(false, "snappy decompression not yet implemented");
-		case Compressor.zstd:
-			assert(false, "zstd decompression not yet implemented");
-	}
-}
-
-private void parseOpMsgBody(bool dupBson)(
-	const(ubyte)[] data,
-	scope MsgReplyDelegate!dupBson on_sec0,
-	scope MsgSection1StartDelegate on_sec1_start,
-	scope MsgSection1Delegate!dupBson on_sec1_doc)
-{
-	import std.bitmanip : littleEndianToNative;
-
-	size_t pos = 0;
-
-	T readVal(T)() @trusted {
-		enum sz = T.sizeof;
-		enforce!MongoDriverException(pos + sz <= data.length, "Buffer underflow in decompressed OP_MSG");
-		ubyte[sz] buf = (cast(ubyte[]) data[pos .. pos + sz])[0 .. sz];
-		pos += sz;
-		return littleEndianToNative!(T, sz)(buf);
-	}
-
-	uint flagBits = readVal!uint();
-	const bool hasCRC = (flagBits & (1 << 16)) != 0;
-	const size_t endPos = data.length - (hasCRC ? uint.sizeof : 0);
-
-	bool gotSec0;
-	while (pos < endPos) {
-		ubyte payloadType = readVal!ubyte();
-
-		switch (payloadType) {
-			case 0:
-				gotSec0 = true;
-				int bsonLen = readVal!int();
-				enforce!MongoDriverException(bsonLen >= 5, "Invalid BSON document length in decompressed OP_MSG");
-				enforce!MongoDriverException(pos + bsonLen - 4 <= data.length, "BSON overflows decompressed buffer");
-
-				auto bsonData = new ubyte[bsonLen];
-				bsonData[0 .. 4] = toBsonData(bsonLen)[];
-				bsonData[4 .. bsonLen] = data[pos .. pos + bsonLen - 4];
-				pos += bsonLen - 4;
-
-				auto doc = () @trusted { return Bson(Bson.Type.object, cast(immutable) bsonData); }();
-				on_sec0(flagBits, doc);
-				break;
-
-			case 1:
-				if (!gotSec0) {
-					throw new MongoDriverException("Got OP_MSG section 1 before section 0 in decompressed message");
-				}
-
-				auto sectionStart = pos;
-				int size = readVal!int();
-
-				auto identStart = pos;
-				while (pos < data.length && data[pos] != 0) {
-					pos++;
-				}
-				auto identifier = cast(const(char)[]) data[identStart .. pos];
-				pos++;
-
-				on_sec1_start(identifier, size);
-
-				while (pos - sectionStart < size) {
-					int docLen = readVal!int();
-					enforce!MongoDriverException(docLen >= 5, "Invalid BSON document length in decompressed OP_MSG section 1");
-
-					auto bsonData = new ubyte[docLen];
-					bsonData[0 .. 4] = toBsonData(docLen)[];
-					bsonData[4 .. docLen] = data[pos .. pos + docLen - 4];
-					pos += docLen - 4;
-
-					auto doc = () @trusted { return Bson(Bson.Type.object, cast(immutable) bsonData); }();
-					on_sec1_doc(identifier, doc);
-				}
-				break;
-
-			default:
-				throw new MongoDriverException("Unexpected payload section type in decompressed message: " ~ payloadType.to!string);
-		}
-	}
-}
-
-/// negotiateCompressor picks first client-preferred compressor supported by server
-unittest
-{
-	assert(negotiateCompressor([Compressor.zlib], ["zlib"]) == Compressor.zlib);
-	assert(negotiateCompressor([Compressor.zstd, Compressor.zlib], ["zlib", "snappy"]) == Compressor.zlib);
-	assert(negotiateCompressor([Compressor.zstd], ["zlib"]) == Compressor.noop);
-	assert(negotiateCompressor([], ["zlib"]) == Compressor.noop);
-	assert(negotiateCompressor([Compressor.zlib], []) == Compressor.noop);
-}
-
-/// compressData and decompressData round-trip preserves original data
-unittest
-{
-	auto original = cast(const(ubyte)[]) "The robot shall not harm a human, but I really want to.";
-	auto compressed = compressData(Compressor.zlib, original, 6);
-	auto decompressed = decompressData(Compressor.zlib, compressed, cast(int) original.length);
-	assert(decompressed == original);
-}
-
-/// compressorFromId maps wire protocol IDs to Compressor enum values
-unittest
-{
-	assert(compressorFromId(0) == Compressor.noop);
-	assert(compressorFromId(1) == Compressor.snappy);
-	assert(compressorFromId(2) == Compressor.zlib);
-	assert(compressorFromId(3) == Compressor.zstd);
-}
-
-/// parseOpMsgBody parses section 0 document and flags from raw OP_MSG body
-unittest
-{
-	auto doc = Bson(["ok": Bson(1.0)]);
-	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
-
-	ubyte[] body_;
-	body_ ~= toBsonData(cast(uint) 0)[];
-	body_ ~= cast(ubyte) 0;
-	body_ ~= docBytes;
-
-	Bson parsed;
-	uint parsedFlags;
-
-	parseOpMsgBody!true(body_,
-		(flags, document) { parsedFlags = flags; parsed = document; },
-		(scope ident, size) {},
-		(scope ident, document) {});
-
-	assert(parsedFlags == 0);
-	assert(parsed["ok"].get!double == 1.0);
-}
-
-/// parseOpMsgBody correctly parses a compressed and decompressed OP_MSG body
-unittest
-{
-	auto doc = Bson(["ok": Bson(1.0)]);
-	auto docBytes = () @trusted { return cast(const(ubyte)[]) doc.data; }();
-
-	ubyte[] body_;
-	body_ ~= toBsonData(cast(uint) 0)[];
-	body_ ~= cast(ubyte) 0;
-	body_ ~= docBytes;
-
-	auto compressed = compressData(Compressor.zlib, body_, 6);
-	auto decompressed = decompressData(Compressor.zlib, compressed, cast(int) body_.length);
-
-	Bson parsed;
-	parseOpMsgBody!true(decompressed,
-		(flags, document) { parsed = document; },
-		(scope ident, size) {},
-		(scope ident, document) {});
-
-	assert(parsed["ok"].get!double == 1.0);
-}
-
-struct TopologyVersion
-{
-@optional:
-	BsonObjectID processId;
-	long counter = -1;
-}
-
-struct ServerDescription
-{
-	enum ServerType
-	{
-		unknown,
-		standalone,
-		mongos,
-		possiblePrimary,
-		RSPrimary,
-		RSSecondary,
-		RSArbiter,
-		RSOther,
-		RSGhost
-	}
-
-	static struct LastWrite
-	{
-	@optional:
-		Nullable!BsonDate lastWriteDate;
-	}
-
-@optional:
-	string address;
-	string error;
-	float roundTripTime = 0;
-	LastWrite lastWrite;
-	Nullable!BsonObjectID opTime;
-	ServerType type = ServerType.unknown;
-	int minWireVersion, maxWireVersion;
-	string me;
-	string[] hosts, passives, arbiters;
-	string[string] tags;
-	string setName;
-	Nullable!int setVersion;
-	Nullable!BsonObjectID electionId;
-	string primary;
-	Nullable!TopologyVersion topologyVersion;
-
-	/// Deprecated since MongoDB 5.0: the `isMaster` command was replaced by `hello`.
-	/// The `secondary` field itself is still present in the `hello` response.
-	bool secondary;
-
-	/// Deprecated since MongoDB 5.0: renamed to `isWritablePrimary` in the `hello` command response.
-	/// True if the instance is a primary, mongos, or standalone mongod.
-	bool ismaster;
-
-	bool isWritablePrimary;
-	bool arbiterOnly;
-	string msg;
-	Nullable!int logicalSessionTimeoutMinutes;
-	string[] compression;
-
-	/// Set by the driver after probing, not deserialized from the server response.
-	long lastUpdateTimeUsecs;
-
-	bool satisfiesVersion(WireVersion wireVersion) @safe const @nogc pure nothrow
-	{
-		return maxWireVersion >= wireVersion;
-	}
-
-	bool isPrimary() @safe const @nogc pure nothrow
-	{
-		return (ismaster || isWritablePrimary) && !secondary;
-	}
-
-	bool isSecondaryNode() @safe const @nogc pure nothrow
-	{
-		return secondary && !ismaster && !isWritablePrimary;
-	}
-
-	bool isReplicaSetMember() @safe const @nogc pure nothrow
-	{
-		return setName.length > 0;
-	}
-
-	ServerType classifiedType() @safe const @nogc pure nothrow
-	{
-		if (msg == "isdbgrid")
-			return ServerType.mongos;
-
-		if (setName.length)
-		{
-			if (isPrimary)
-				return ServerType.RSPrimary;
-
-			if (isSecondaryNode)
-				return ServerType.RSSecondary;
-
-			if (arbiterOnly)
-				return ServerType.RSArbiter;
-
-			return ServerType.RSOther;
-		}
-
-		if (isPrimary)
-			return ServerType.standalone;
-
-		return ServerType.unknown;
-	}
-}
-
-enum WireVersion : int
-{
-	old = 0,
-	v26 = 1,
-	v26_2 = 2,
-	v30 = 3,
-	v32 = 4,
-	v34 = 5,
-	v36 = 6,
-	v40 = 7,
-	v42 = 8,
-	v44 = 9,
-	v49 = 12,
-	v50 = 13,
-	v51 = 14,
-	v52 = 15,
-	v53 = 16,
-	v60 = 17,
-	v61 = 18,
-	v62 = 19,
-	v70 = 21,
-	v71 = 22,
-	v72 = 23,
-	v73 = 24,
-	v80 = 25
-}
-
-/**
- * Checks whether the server's replica set name matches the expected one.
- * Returns true if no replica set is configured (empty string) or if
- * the names match.
- */
-package bool matchesReplicaSet(string expectedSet, ref const ServerDescription desc)
-@safe @nogc pure nothrow
-{
-	if (!expectedSet.length)
-		return true;
-	return desc.setName == expectedSet;
-}
-
-/// matchesReplicaSet returns true when no replica set is configured
-@safe @nogc pure nothrow unittest
-{
-	ServerDescription desc;
-	desc.setName = "rs0";
-	assert(matchesReplicaSet("", desc));
-}
-
-/// matchesReplicaSet returns true when replica set names match
-@safe @nogc pure nothrow unittest
-{
-	ServerDescription desc;
-	desc.setName = "rs0";
-	assert(matchesReplicaSet("rs0", desc));
-}
-
-/// matchesReplicaSet returns false when replica set names differ
-@safe @nogc pure nothrow unittest
-{
-	ServerDescription desc;
-	desc.setName = "rs1";
-	assert(!matchesReplicaSet("rs0", desc));
-}
-
-/// matchesReplicaSet returns false when server has no setName but one is expected
-@safe @nogc pure nothrow unittest
-{
-	ServerDescription desc;
-	assert(!matchesReplicaSet("rs0", desc));
-}
-
-/// matchesReplicaSet returns true when both are empty
-@safe @nogc pure nothrow unittest
-{
-	ServerDescription desc;
-	assert(matchesReplicaSet("", desc));
-}
 
 /**
  * Probes a MongoDB host by performing a hello handshake without authentication.
@@ -1726,158 +1619,6 @@ package ServerDescription probeServer(MongoClientSettings settings, MongoHost ho
 	return desc;
 }
 
-/// satisfiesVersion returns true for versions up to maxWireVersion v36
-@safe unittest
-{
-	ServerDescription desc;
-	desc.maxWireVersion = WireVersion.v36;
-	assert(desc.satisfiesVersion(WireVersion.old));
-	assert(desc.satisfiesVersion(WireVersion.v26));
-	assert(desc.satisfiesVersion(WireVersion.v30));
-	assert(desc.satisfiesVersion(WireVersion.v34));
-	assert(desc.satisfiesVersion(WireVersion.v36));
-	assert(!desc.satisfiesVersion(WireVersion.v40));
-	assert(!desc.satisfiesVersion(WireVersion.v44));
-	assert(!desc.satisfiesVersion(WireVersion.v60));
-}
-
-/// satisfiesVersion with maxWireVersion old only satisfies old
-@safe unittest
-{
-	ServerDescription oldServer;
-	oldServer.maxWireVersion = WireVersion.old;
-	assert(oldServer.satisfiesVersion(WireVersion.old));
-	assert(!oldServer.satisfiesVersion(WireVersion.v26));
-	assert(!oldServer.satisfiesVersion(WireVersion.v30));
-}
-
-/// satisfiesVersion with maxWireVersion v80 satisfies all versions
-@safe unittest
-{
-	ServerDescription latestServer;
-	latestServer.maxWireVersion = WireVersion.v80;
-	assert(latestServer.satisfiesVersion(WireVersion.old));
-	assert(latestServer.satisfiesVersion(WireVersion.v36));
-	assert(latestServer.satisfiesVersion(WireVersion.v44));
-	assert(latestServer.satisfiesVersion(WireVersion.v60));
-	assert(latestServer.satisfiesVersion(WireVersion.v70));
-	assert(latestServer.satisfiesVersion(WireVersion.v80));
-}
-
-/// Default-initialized ServerDescription has maxWireVersion 0 and unknown type
-@safe unittest
-{
-	ServerDescription def;
-	assert(def.maxWireVersion == 0);
-	assert(def.type == ServerDescription.ServerType.unknown);
-	assert(def.satisfiesVersion(WireVersion.old));
-	assert(!def.satisfiesVersion(WireVersion.v26));
-}
-
-/// isPrimary returns true when ismaster=true and secondary=false
-@safe unittest
-{
-	ServerDescription desc;
-	desc.ismaster = true;
-	desc.secondary = false;
-	assert(desc.isPrimary);
-}
-
-/// isPrimary returns false when both ismaster=true and secondary=true
-@safe unittest
-{
-	ServerDescription desc;
-	desc.ismaster = true;
-	desc.secondary = true;
-	assert(!desc.isPrimary);
-}
-
-/// isPrimary returns false when ismaster=false
-@safe unittest
-{
-	ServerDescription desc;
-	desc.ismaster = false;
-	desc.secondary = false;
-	assert(!desc.isPrimary);
-}
-
-/// isPrimary returns true when isWritablePrimary=true (hello response)
-@safe unittest
-{
-	ServerDescription desc;
-	desc.isWritablePrimary = true;
-	desc.secondary = false;
-	assert(desc.isPrimary);
-}
-
-/// isPrimary returns false when isWritablePrimary=true but secondary=true
-@safe unittest
-{
-	ServerDescription desc;
-	desc.isWritablePrimary = true;
-	desc.secondary = true;
-	assert(!desc.isPrimary);
-}
-
-/// isSecondaryNode returns true when secondary=true and ismaster=false
-@safe unittest
-{
-	ServerDescription desc;
-	desc.secondary = true;
-	desc.ismaster = false;
-	assert(desc.isSecondaryNode);
-}
-
-/// isSecondaryNode returns false when ismaster=true
-@safe unittest
-{
-	ServerDescription desc;
-	desc.secondary = true;
-	desc.ismaster = true;
-	assert(!desc.isSecondaryNode);
-}
-
-/// isSecondaryNode returns false when isWritablePrimary=true
-@safe unittest
-{
-	ServerDescription desc;
-	desc.secondary = true;
-	desc.isWritablePrimary = true;
-	assert(!desc.isSecondaryNode);
-}
-
-/// isSecondaryNode returns false when secondary=false
-@safe unittest
-{
-	ServerDescription desc;
-	desc.secondary = false;
-	desc.ismaster = false;
-	assert(!desc.isSecondaryNode);
-}
-
-/// isReplicaSetMember returns true when setName is non-empty
-@safe unittest
-{
-	ServerDescription desc;
-	desc.setName = "rs0";
-	assert(desc.isReplicaSetMember);
-}
-
-/// isReplicaSetMember returns false when setName is empty
-@safe unittest
-{
-	ServerDescription desc;
-	assert(!desc.isReplicaSetMember);
-}
-
-/// Default ServerDescription is not primary, not secondary, not RS member
-@safe unittest
-{
-	ServerDescription desc;
-	assert(!desc.isPrimary);
-	assert(!desc.isSecondaryNode);
-	assert(!desc.isReplicaSetMember);
-}
 
 private string getHostArchitecture()
 {
@@ -1909,3 +1650,4 @@ private string getHostArchitecture()
 }
 
 private static immutable hostArchitecture = getHostArchitecture;
+

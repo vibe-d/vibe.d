@@ -97,3 +97,46 @@ MongoClient connectMongoDB(MongoClientSettings settings)
 {
 	return new MongoClient(settings);
 }
+
+/**
+	Connects to a MongoDB instance and returns an owning, scope-bound handle.
+
+	This is the deterministic-cleanup counterpart to `connectMongoDB`: the returned
+	`MongoClientHandle` forwards every `MongoClient` member through `alias this`, and
+	stops the client's background server monitors when the handle leaves scope. Use it
+	for clients with a bounded lifetime so their monitor tasks do not keep the client
+	(and themselves) reachable for the lifetime of the process.
+
+	Examples:
+		---
+		// the client and its monitors are cleaned up when `client` leaves scope
+		auto client = scopedMongoDB("127.0.0.1");
+		auto users = client.getCollection("myapp.users");
+		---
+
+	To keep a raw, manually-managed `MongoClient` alive beyond the handle's scope, call
+	`release()` on the handle.
+
+	Params:
+		host = Specifies the host name or IP address of the MongoDB server.
+		port = Can be used to specify the port of the MongoDB server if different from the default one.
+		host_or_url = Can either be a host name, in which case the default port will be used, or a URL with the mongodb:// scheme.
+		settings = An object containing the full set of possible configuration options.
+
+	Returns:
+		A `MongoClientHandle` owning a new MongoClient.
+*/
+MongoClientHandle scopedMongoDB(string host, ushort port)
+{
+	return MongoClientHandle(connectMongoDB(host, port));
+}
+/// ditto
+MongoClientHandle scopedMongoDB(string host_or_url)
+{
+	return MongoClientHandle(connectMongoDB(host_or_url));
+}
+/// ditto
+MongoClientHandle scopedMongoDB(MongoClientSettings settings)
+{
+	return MongoClientHandle(connectMongoDB(settings));
+}

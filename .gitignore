@@ -53,3 +53,12 @@ tests/mongodb/_replica-set/replica-set-test
 tests/mongodb/_replica-set/log*
 tests/mongodb/readconcern/readconcern-test
 tests/mongodb/dead-connections/dead-connections-test
+tests/mongodb/_health-monitor/health-monitor-test
+tests/mongodb/change-stream/change-stream-test
+tests/mongodb/loadbalanced/lb-cluster
+tests/mongodb/stable-api/stable-api-test
+tests/mongodb/session-timeout/session-timeout-test
+tests/mongodb/dead-connections/ready
+tests/mongodb/transactions/transactions-test
+tests/mongodb/connection-quarantine/connection-quarantine-test
+tests/mongodb/compression-reconnect/compression-reconnect-test

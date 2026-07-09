@@ -122,9 +122,9 @@ for attempt in $(seq 1 5); do
 		rs.initiate({
 			_id: 'rs0',
 			members: [
-				{_id: 0, host: '127.0.0.1:$PORT1'},
-				{_id: 1, host: '127.0.0.1:$PORT2'},
-				{_id: 2, host: '127.0.0.1:$PORT3'}
+				{_id: 0, host: '127.0.0.1:$PORT1', tags: {dc: 'east'}},
+				{_id: 1, host: '127.0.0.1:$PORT2', tags: {dc: 'east'}},
+				{_id: 2, host: '127.0.0.1:$PORT3', tags: {dc: 'west'}}
 			]
 		})
 	" 2>/dev/null; then
@@ -173,6 +173,12 @@ run_test 9 "readPreference=secondaryPreferred connects to secondary" \
 run_test 10 "readPreference=primary connects to primary (CRUD)" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --readPreference primary
 
+run_test 11 "writes routed to primary despite readPreference=secondary" \
+	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --readPreference secondary --expectWriteToPrimary
+
+run_test 12 "per-query readPreference=secondary serves reads from a secondary" \
+	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --expectReadFromSecondary
+
 echo ""
 echo "========================================================"
 echo "  Phase 3: Dead secondary tests"
@@ -193,13 +199,13 @@ for idx in 0 1 2; do
 	fi
 done
 
-run_test 11 "Dead secondary in host list, primary still reachable" \
+run_test 13 "Dead secondary in host list, primary still reachable" \
 	"${SECONDARY_PORTS[0]},$PRIMARY_PORT"
 
-run_test 12 "All hosts listed, one secondary dead" \
+run_test 14 "All hosts listed, one secondary dead" \
 	"$PORT1,$PORT2,$PORT3"
 
-run_test 13 "readPreference=secondary with one dead secondary" \
+run_test 15 "readPreference=secondary with one dead secondary" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --readPreference secondary --expectSecondary
 
 echo ""
@@ -232,10 +238,10 @@ LIVE_PORT=${SECONDARY_PORTS[0]}
 wait_for_primary $LIVE_PORT
 detect_roles
 
-run_test 14 "New primary after old primary killed" \
+run_test 16 "New primary after old primary killed" \
 	"$PORT1,$PORT2,$PORT3"
 
-run_test 15 "readPreference=secondary after primary failover" \
+run_test 17 "readPreference=secondary after primary failover" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --readPreference secondary --expectSecondary
 
 echo ""
@@ -248,7 +254,7 @@ for idx in 0 1 2; do
 	kill_mongod $idx
 done
 
-run_test 16 "All hosts dead (expect fail)" \
+run_test 18 "All hosts dead (expect fail)" \
 	"$PORT1,$PORT2,$PORT3" --expectFail
 
 echo ""
@@ -265,10 +271,26 @@ sleep 2
 wait_for_primary $PORT1
 detect_roles
 
-run_test 17 "Connect after full cluster restart" \
+run_test 19 "Connect after full cluster restart" \
 	"$PORT1,$PORT2,$PORT3" --replicaSet rs0
 
 echo ""
+echo "========================================================"
+echo "  Phase 7: Primary step-down retry"
+echo "========================================================"
+
+run_test 20 "write retries onto new primary after primary step-down" \
+	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --expectStepDownRetry
+
+echo ""
+echo "========================================================"
+echo "  Phase 8: Read preference tag targeting"
+echo "========================================================"
+
+run_test 21 "readPreferenceTags=dc:east routes a secondary read to a dc:east member" \
+	"$PORT1,$PORT2,$PORT3" --replicaSet rs0 --expectTagTargeting
+
+echo ""
 echo "============================================"
-echo "All $((17)) replica set tests passed!"
+echo "All $((21)) replica set tests passed!"
 echo "============================================"

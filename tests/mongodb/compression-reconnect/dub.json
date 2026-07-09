@@ -1,0 +1,7 @@
+{
+    "name": "compression-reconnect-test",
+    "description": "H7: the reconnect handshake must not be compressed even when compression was negotiated (requires a mongo to proxy)",
+    "dependencies": {
+        "vibe-d:mongodb": {"path": "../../../"}
+    }
+}
