@@ -1,0 +1,7 @@
+{
+    "name": "transactions-test",
+    "description": "MongoDB multi-document transaction end-to-end integration test (requires a replica set)",
+    "dependencies": {
+        "vibe-d:mongodb": {"path": "../../../"}
+    }
+}

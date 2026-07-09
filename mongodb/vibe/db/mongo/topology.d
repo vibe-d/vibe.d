@@ -6,8 +6,9 @@
 
 	See_Also: $(LINK https://github.com/mongodb/specifications/blob/master/source/server-selection/server-selection.md)
 
-	Copyright: © 2026 GISCollective
+	Copyright: © 2026 Szabo Bogdan
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Szabo Bogdan
 */
 module vibe.db.mongo.topology;
 
@@ -19,6 +20,7 @@ import vibe.core.log;
 import std.random : uniform;
 import std.range : chain;
 import std.typecons : Nullable;
+import core.time : Duration;
 
 @safe:
 
@@ -34,7 +36,13 @@ enum TopologyType
 	single,
 	replicaSetWithPrimary,
 	replicaSetNoPrimary,
-	sharded
+	sharded,
+	loadBalanced
+}
+
+bool supportsRetryableWrites(TopologyType type)
+{
+	return type != TopologyType.single;
 }
 
 struct TopologyDescription
@@ -45,6 +53,9 @@ struct TopologyDescription
 	string setName;
 	TopologyType type = TopologyType.unknown;
 	uint seedCount;
+	/// Configured heartbeat interval, fed into the maxStaleness formula. Defaults to the
+	/// spec default (10s) so an unseeded topology matches the historical hardcoded value.
+	long heartbeatFrequencyMS = 10_000;
 	Nullable!BsonObjectID maxElectionId;
 	Nullable!int maxSetVersion;
 
@@ -67,6 +78,27 @@ struct TopologyDescription
 		if (!found)
 			servers ~= ServerRecord(host, desc);
 
+		auto serverType = desc.classifiedType();
+
+		// SDAM: in a Sharded topology a server reporting as anything other than a mongos
+		// is simply removed — it must not adopt its setName, prune the mongos list via the
+		// primary path, or flip the topology type to replicaSetWithPrimary.
+		if (type == TopologyType.sharded
+			&& serverType != ServerDescription.ServerType.mongos
+			&& serverType != ServerDescription.ServerType.unknown)
+		{
+			removeHost(host);
+			return;
+		}
+
+		// SDAM: a server reporting a different replica-set name belongs to another set;
+		// remove it before it can demote the real primary or contribute foreign members.
+		if (setName.length && desc.setName.length && desc.setName != setName)
+		{
+			removeHost(host);
+			return;
+		}
+
 		if (!setName.length && desc.setName.length)
 			setName = desc.setName;
 
@@ -78,9 +110,17 @@ struct TopologyDescription
 				return;
 		}
 
-		auto serverType = desc.classifiedType();
-		removeIncompatible(serverType);
+		removeIncompatible();
 		transitionType(serverType);
+	}
+
+	private void removeHost(MongoHost host)
+	{
+		ServerRecord[] kept;
+		foreach (ref s; servers)
+			if (s.host != host)
+				kept ~= s;
+		servers = kept;
 	}
 
 	/**
@@ -92,36 +132,18 @@ struct TopologyDescription
 	 */
 	private bool handleNewPrimary(MongoHost host, ref const ServerDescription desc)
 	{
-		if (!desc.electionId.isNull && !maxElectionId.isNull)
+		if (isStalePrimary(desc.electionId, desc.setVersion, maxElectionId, maxSetVersion))
 		{
-			bool newIsStale = false;
-
-			if (!desc.setVersion.isNull && !maxSetVersion.isNull)
+			foreach (ref s; servers)
 			{
-				if (desc.setVersion.get < maxSetVersion.get)
-					newIsStale = true;
-				else if (desc.setVersion.get == maxSetVersion.get
-					&& desc.electionId.get < maxElectionId.get)
-					newIsStale = true;
-			}
-			else if (desc.electionId.get < maxElectionId.get)
-			{
-				newIsStale = true;
-			}
-
-			if (newIsStale)
-			{
-				foreach (ref s; servers)
+				if (s.host == host)
 				{
-					if (s.host == host)
-					{
-						s.description = ServerDescription.init;
-						break;
-					}
+					s.description = ServerDescription.init;
+					break;
 				}
-				transitionType(ServerDescription.ServerType.unknown);
-				return false;
 			}
+			transitionType(ServerDescription.ServerType.unknown);
+			return false;
 		}
 
 		// Demote old primary if different from the new one
@@ -175,7 +197,11 @@ struct TopologyDescription
 		return result;
 	}
 
-	private void removeIncompatible(ServerDescription.ServerType serverType)
+	// Removes servers whose type is incompatible with the current topology type
+	// (e.g. a mongos or standalone showing up in a replica set). Decided entirely from
+	// the topology `type` and each server's own classifiedType(); the just-probed
+	// server's type is irrelevant here, which is why this takes no parameter.
+	private void removeIncompatible()
 	{
 		if (type == TopologyType.single)
 			return;
@@ -217,7 +243,8 @@ struct TopologyDescription
 
 	private void transitionType(ServerDescription.ServerType serverType)
 	{
-		if (type == TopologyType.single)
+		// single and loadBalanced are fixed by configuration; they bypass SDAM transitions.
+		if (type == TopologyType.single || type == TopologyType.loadBalanced)
 			return;
 
 		final switch (serverType) with (ServerDescription.ServerType)
@@ -277,14 +304,17 @@ struct TopologyDescription
 
 		MongoHost[] result;
 
+		void addHost(MongoHost h)
+		{
+			if (h != MongoHost.init && !result.canFind(h))
+				result ~= h;
+		}
+
 		foreach (ref s; servers)
 		{
-			foreach (hostStr; chain(s.description.hosts, s.description.passives))
-			{
-				auto h = parseHostPort(hostStr);
-				if (h != MongoHost.init && !result.canFind(h))
-					result ~= h;
-			}
+			addHost(s.host);
+			foreach (hostStr; chain(s.description.hosts, s.description.passives, s.description.arbiters))
+				addHost(parseHostPort(hostStr));
 		}
 
 		return result;
@@ -332,19 +362,22 @@ struct TopologyDescription
 		return Nullable!MongoHost.init;
 	}
 
-	Nullable!MongoHost randomSecondaryHost(long maxStalenessSeconds = -1) const
+	Nullable!MongoHost randomSecondaryHost(long maxStalenessSeconds = -1, string[string][] tagSets = null) const
 	{
-		auto hosts = secondaryHosts(maxStalenessSeconds);
+		auto hosts = secondaryHosts(maxStalenessSeconds, tagSets);
 		if (!hosts.length)
 			return Nullable!MongoHost.init;
 
 		return Nullable!MongoHost(hosts[uniform(0, hosts.length)]);
 	}
 
-	MongoHost[] secondaryHosts(long maxStalenessSeconds = -1) const
+	MongoHost[] secondaryHosts(long maxStalenessSeconds = -1, string[string][] tagSets = null) const
 	{
-		MongoHost[] result;
-		foreach (ref s; servers)
+		import std.algorithm : map;
+		import std.array : array;
+
+		size_t[] eligible;
+		foreach (i, ref s; servers)
 		{
 			if (!s.description.isSecondaryNode)
 				continue;
@@ -352,15 +385,37 @@ struct TopologyDescription
 			if (maxStalenessSeconds >= 0 && isStaleSecondary(s.description, maxStalenessSeconds))
 				continue;
 
-			result ~= s.host;
+			eligible ~= i;
 		}
-		return result;
+
+		return selectIndicesByTagSets(eligible, tagSets).map!(i => servers[i].host).array.dup;
 	}
 
-	Nullable!MongoHost randomHostWithinLatencyWindow(long localThresholdMS, long maxStalenessSeconds = -1) const
+	private size_t[] selectIndicesByTagSets(size_t[] indices, string[string][] tagSets) const
 	{
-		double minRTT = double.max;
-		foreach (ref s; servers)
+		import std.algorithm : filter;
+		import std.array : array;
+
+		if (!tagSets.length)
+			return indices;
+
+		foreach (tagSet; tagSets)
+		{
+			auto matched = indices
+				.filter!(i => serverMatchesTagSet(servers[i].description.tags, tagSet))
+				.array;
+			if (matched.length)
+				return matched;
+		}
+
+		return null;
+	}
+
+	Nullable!MongoHost randomHostWithinLatencyWindow(long localThresholdMS,
+		long maxStalenessSeconds = -1, string[string][] tagSets = null) const
+	{
+		size_t[] eligible;
+		foreach (i, ref s; servers)
 		{
 			if (!s.description.isPrimary && !s.description.isSecondaryNode)
 				continue;
@@ -369,33 +424,26 @@ struct TopologyDescription
 				&& isStaleSecondary(s.description, maxStalenessSeconds))
 				continue;
 
-			if (s.description.roundTripTime < minRTT)
-				minRTT = s.description.roundTripTime;
+			eligible ~= i;
 		}
 
-		if (minRTT == double.max)
-			return Nullable!MongoHost.init;
-
-		double threshold = minRTT + localThresholdMS / 1_000.0;
-		MongoHost[] eligible;
-		foreach (ref s; servers)
-		{
-			if (!s.description.isPrimary && !s.description.isSecondaryNode)
-				continue;
-
-			if (s.description.isSecondaryNode && maxStalenessSeconds >= 0
-				&& isStaleSecondary(s.description, maxStalenessSeconds))
-				continue;
-
-			if (s.description.roundTripTime <= threshold)
-				eligible ~= s.host;
-		}
-
+		eligible = selectIndicesByTagSets(eligible, tagSets);
 		if (!eligible.length)
 			return Nullable!MongoHost.init;
 
+		double minRTT = double.max;
+		foreach (i; eligible)
+			if (servers[i].description.roundTripTime < minRTT)
+				minRTT = servers[i].description.roundTripTime;
+
+		double threshold = minRTT + localThresholdMS / 1_000.0;
+		MongoHost[] withinWindow;
+		foreach (i; eligible)
+			if (servers[i].description.roundTripTime <= threshold)
+				withinWindow ~= servers[i].host;
+
 		import std.random : uniform;
-		return Nullable!MongoHost(eligible[uniform(0, eligible.length)]);
+		return Nullable!MongoHost(withinWindow[uniform(0, withinWindow.length)]);
 	}
 
 	private bool isStaleSecondary(ref const ServerDescription desc, long maxStalenessSeconds) const
@@ -422,7 +470,7 @@ struct TopologyDescription
 		auto sLag = sec.lastUpdateTimeUsecs - sec.lastWrite.lastWriteDate.get.value * 1000;
 		auto pLag = pri.lastUpdateTimeUsecs - pri.lastWrite.lastWriteDate.get.value * 1000;
 
-		return sLag - pLag + HEARTBEAT_FREQUENCY_USECS;
+		return sLag - pLag + heartbeatFrequencyMS * 1000;
 	}
 
 	private long stalenessWithoutPrimary(ref const ServerDescription desc) const
@@ -442,7 +490,7 @@ struct TopologyDescription
 			return -1;
 
 		auto sWriteDate = desc.lastWrite.lastWriteDate.get.value * 1000;
-		return maxWriteDate - sWriteDate + HEARTBEAT_FREQUENCY_USECS;
+		return maxWriteDate - sWriteDate + heartbeatFrequencyMS * 1000;
 	}
 
 	private long findPrimaryIdx() const
@@ -462,8 +510,176 @@ struct ServerRecord
 	ServerDescription description;
 }
 
-/// Default heartbeat frequency (10 seconds) used for staleness calculation.
-private enum long HEARTBEAT_FREQUENCY_USECS = 10_000_000;
+/// SDAM stale-primary test: a reported primary is stale when its (electionId, setVersion)
+/// tuple is strictly less than the topology's max watermark, comparing electionId FIRST
+/// (it advances on every election; setVersion can regress across terms). A null component
+/// sorts below any present one, so a primary omitting electionId loses to one that has it.
+/// With no watermark yet (both max values null) nothing is stale.
+bool isStalePrimary(Nullable!BsonObjectID electionId, Nullable!int setVersion,
+	Nullable!BsonObjectID maxElectionId, Nullable!int maxSetVersion) @safe
+{
+	if (maxElectionId.isNull && maxSetVersion.isNull)
+		return false;
+
+	auto byElection = compareNullable(electionId, maxElectionId);
+	if (byElection != 0)
+		return byElection < 0;
+
+	return compareNullable(setVersion, maxSetVersion) < 0;
+}
+
+/// Three-way compare of two Nullables, treating null as smaller than any present value.
+private int compareNullable(T)(Nullable!T a, Nullable!T b) @safe
+{
+	if (a.isNull)
+		return b.isNull ? 0 : -1;
+	if (b.isNull)
+		return 1;
+	if (a.get < b.get)
+		return -1;
+	if (b.get < a.get)
+		return 1;
+	return 0;
+}
+
+/// isStalePrimary compares electionId first, then setVersion, with null sorting lowest
+unittest
+{
+	import vibe.data.bson : BsonObjectID;
+
+	auto eidLow  = Nullable!BsonObjectID(BsonObjectID.fromHexString("aabbccddeeff00112233aa01"));
+	auto eidHigh = Nullable!BsonObjectID(BsonObjectID.fromHexString("aabbccddeeff00112233aa02"));
+	auto noEid = Nullable!BsonObjectID.init;
+	auto v1 = Nullable!int(1);
+	auto v2 = Nullable!int(2);
+	auto noV = Nullable!int.init;
+
+	assert(!isStalePrimary(eidLow, v1, noEid, noV), "the first primary (no watermark yet) is accepted");
+
+	// electionId decides before setVersion: a higher setVersion does not rescue a lower electionId.
+	assert(isStalePrimary(eidLow, v2, eidHigh, v1), "a lower electionId is stale even with a higher setVersion");
+	assert(!isStalePrimary(eidHigh, v1, eidLow, v2), "a higher electionId wins even with a lower setVersion");
+
+	// Equal electionId: setVersion breaks the tie.
+	assert(isStalePrimary(eidHigh, v1, eidHigh, v2), "equal electionId, lower setVersion is stale");
+	assert(!isStalePrimary(eidHigh, v2, eidHigh, v1), "equal electionId, higher setVersion wins");
+
+	// A primary omitting electionId loses to an established electionId watermark.
+	assert(isStalePrimary(noEid, v2, eidHigh, v1), "a missing electionId sorts below a present one");
+}
+
+/// Builds the fixed topology for load-balancer mode: a single load-balancer host,
+/// no discovery or monitoring (the load balancer fronts the real backends).
+TopologyDescription loadBalancedTopology(MongoHost host)
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.loadBalanced;
+	topo.servers = [ServerRecord(host, ServerDescription.init)];
+	topo.seedCount = 1;
+	return topo;
+}
+
+/// Returns a new topology with `desc` applied for `host`, leaving `current` unchanged.
+TopologyDescription applyDescription(TopologyDescription current, MongoHost host, ServerDescription desc)
+{
+	current.servers = current.servers.dup;
+	current.update(host, desc);
+	return current;
+}
+
+/// Returns a new topology with `host` marked failed, leaving `current` unchanged.
+TopologyDescription applyFailed(TopologyDescription current, MongoHost host)
+{
+	current.servers = current.servers.dup;
+	current.markFailed(host);
+	return current;
+}
+
+/// Holds the current topology behind an atomically-swapped pointer for lock-free reads.
+struct AtomicTopology
+{
+	private shared(TopologyDescription)* m_current;
+
+	/// Atomically replace the current snapshot with a heap copy of `topology`.
+	void publish(TopologyDescription topology) @trusted
+	{
+		import core.atomic : atomicStore;
+
+		auto snapshot = new TopologyDescription;
+		*snapshot = topology;
+		atomicStore(m_current, cast(shared(TopologyDescription)*) snapshot);
+	}
+
+	/// Return a value copy of the current snapshot, or the default if none.
+	TopologyDescription load() @trusted const
+	{
+		import core.atomic : atomicLoad;
+
+		auto p = atomicLoad(m_current);
+		if (p is null)
+			return TopologyDescription.init;
+		return *(cast(TopologyDescription*) p);
+	}
+}
+
+/// applyDescription returns a new topology and leaves the input snapshot unchanged
+unittest
+{
+	TopologyDescription before;
+	auto host = MongoHost("primary", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+
+	auto after = applyDescription(before, host, primaryDesc);
+
+	assert(!after.primaryHost.isNull && after.primaryHost.get == host,
+		"the result reflects the applied primary");
+	assert(before.servers.length == 0 && before.primaryHost.isNull,
+		"the input snapshot is not mutated");
+}
+
+/// applyFailed clears the failed host in the result without mutating the input
+unittest
+{
+	auto host = MongoHost("primary", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+
+	TopologyDescription before = applyDescription(TopologyDescription.init, host, primaryDesc);
+
+	auto after = applyFailed(before, host);
+
+	assert(after.primaryHost.isNull, "the result no longer has the failed primary");
+	assert(!before.primaryHost.isNull && before.primaryHost.get == host,
+		"the input snapshot still has the primary");
+}
+
+/// AtomicTopology.load returns the default topology before anything is published
+unittest
+{
+	AtomicTopology holder;
+	assert(holder.load().servers.length == 0);
+}
+
+/// AtomicTopology round-trips the most recently published snapshot
+unittest
+{
+	AtomicTopology holder;
+	auto host = MongoHost("primary", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+
+	holder.publish(applyDescription(TopologyDescription.init, host, primaryDesc));
+
+	auto loaded = holder.load();
+	assert(!loaded.primaryHost.isNull && loaded.primaryHost.get == host);
+}
 
 /**
  * Selects a server from the topology based on the given read preference.
@@ -472,17 +688,19 @@ private enum long HEARTBEAT_FREQUENCY_USECS = 10_000_000;
  * suitable server is available.
  */
 Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPreference pref,
-	long localThresholdMS = 15, long maxStalenessSeconds = -1)
+	long localThresholdMS = 15, long maxStalenessSeconds = -1, string[string][] tagSets = null)
 {
-	// Single topology: return the one server regardless of read preference
-	if (topology.type == TopologyType.single && topology.servers.length > 0)
+	// Single and load-balanced topologies are fixed to one host, returned regardless of
+	// read preference (the load balancer fronts the backends; pinning is per cursor via serviceId).
+	if ((topology.type == TopologyType.single || topology.type == TopologyType.loadBalanced)
+		&& topology.servers.length > 0)
 		return Nullable!MongoHost(topology.servers[0].host);
 
-	// Sharded: return random mongos (read preference forwarded to mongos)
+	// For sharded topologies return a random mongos (read preference forwarded to mongos)
 	if (topology.type == TopologyType.sharded)
 		return topology.randomMongosHost(localThresholdMS);
 
-	// Replica set or unknown: apply read preference logic
+	// For replica set or unknown topologies apply read preference logic
 	final switch (pref)
 	{
 	case ReadPreference.primary:
@@ -492,28 +710,156 @@ Nullable!MongoHost selectServer(ref const TopologyDescription topology, ReadPref
 		auto primary = topology.primaryHost;
 		if (!primary.isNull)
 			return primary;
-		return topology.randomSecondaryHost(maxStalenessSeconds);
+		return topology.randomSecondaryHost(maxStalenessSeconds, tagSets);
 
 	case ReadPreference.secondary:
-		return topology.randomSecondaryHost(maxStalenessSeconds);
+		return topology.randomSecondaryHost(maxStalenessSeconds, tagSets);
 
 	case ReadPreference.secondaryPreferred:
-		auto secondary = topology.randomSecondaryHost(maxStalenessSeconds);
+		auto secondary = topology.randomSecondaryHost(maxStalenessSeconds, tagSets);
 		if (!secondary.isNull)
 			return secondary;
 		return topology.primaryHost;
 
 	case ReadPreference.nearest:
-		return topology.randomHostWithinLatencyWindow(localThresholdMS, maxStalenessSeconds);
+		return topology.randomHostWithinLatencyWindow(localThresholdMS, maxStalenessSeconds, tagSets);
 	}
+}
+
+/**
+ * Returns the server that writes must be sent to, regardless of the configured
+ * read preference. Resolves the primary for a replica set, the single server for
+ * a standalone deployment, and a mongos for a sharded cluster. Null if no write
+ * target is currently available (e.g. a replica set with no elected primary).
+ */
+Nullable!MongoHost writeTarget(ref const TopologyDescription topology, long localThresholdMS = 15)
+{
+	return selectServer(topology, ReadPreference.primary, localThresholdMS);
+}
+
+/// Picks the primary when `toPrimary`, else the read-preference target; null if none.
+Nullable!MongoHost selectTarget(ref const TopologyDescription topology, bool toPrimary,
+	ReadPreference pref, long localThresholdMS = 15, long maxStalenessSeconds = -1,
+	string[string][] tagSets = null)
+{
+	return toPrimary
+		? writeTarget(topology, localThresholdMS)
+		: selectServer(topology, pref, localThresholdMS, maxStalenessSeconds, tagSets);
+}
+
+/// writeTarget returns the primary even when a secondary is available
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetWithPrimary;
+
+	auto primary = MongoHost("primary", 27017);
+	ServerDescription pdesc;
+	pdesc.isWritablePrimary = true;
+	pdesc.setName = "rs0";
+	topo.update(primary, pdesc);
+
+	auto secondary = MongoHost("secondary", 27017);
+	ServerDescription sdesc;
+	sdesc.secondary = true;
+	sdesc.setName = "rs0";
+	topo.update(secondary, sdesc);
+
+	auto target = writeTarget(topo);
+	assert(!target.isNull);
+	assert(target.get == primary);
+}
+
+/// writeTarget returns the only server for a standalone topology
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("standalone", 27017);
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	topo.update(host, desc);
+	topo.type = TopologyType.single;
+
+	auto target = writeTarget(topo);
+	assert(!target.isNull);
+	assert(target.get == host);
+}
+
+/// selectServer returns the load-balancer host regardless of read preference
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("loadbalancer", 27017);
+	ServerDescription desc;
+	topo.update(host, desc);
+	topo.type = TopologyType.loadBalanced;
+
+	auto target = selectServer(topo, ReadPreference.secondary);
+	assert(!target.isNull);
+	assert(target.get == host);
+}
+
+/// loadBalancedTopology builds a loadBalanced topology with the configured host selectable
+unittest
+{
+	auto host = MongoHost("loadbalancer", 27017);
+	auto topo = loadBalancedTopology(host);
+
+	assert(topo.type == TopologyType.loadBalanced);
+
+	auto target = selectServer(topo, ReadPreference.primary);
+	assert(!target.isNull);
+	assert(target.get == host);
+}
+
+/// writeTarget returns null when the replica set has no primary
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+
+	auto secondary = MongoHost("secondary", 27017);
+	ServerDescription desc;
+	desc.secondary = true;
+	desc.setName = "rs0";
+	topo.update(secondary, desc);
+
+	auto target = writeTarget(topo);
+	assert(target.isNull);
+}
+
+/// selectTarget routes writes to the primary and reads by read preference
+unittest
+{
+	TopologyDescription topo;
+	auto primary = MongoHost("primary", 27017);
+	auto secondary = MongoHost("secondary", 27017);
+
+	ServerDescription pdesc;
+	pdesc.isWritablePrimary = true;
+	pdesc.setName = "rs0";
+	topo.update(primary, pdesc);
+
+	ServerDescription sdesc;
+	sdesc.secondary = true;
+	sdesc.setName = "rs0";
+	topo.update(secondary, sdesc);
+
+	auto write = selectTarget(topo, true, ReadPreference.secondary);
+	assert(!write.isNull && write.get == primary, "writes go to the primary, ignoring read preference");
+
+	auto read = selectTarget(topo, false, ReadPreference.secondary);
+	assert(!read.isNull && read.get == secondary, "reads honor the read preference");
 }
 
 /**
  * Returns true if `incoming` is stale relative to `existing`.
  *
- * Per the SDAM spec, a server description with the same processId but
- * a lower or equal counter is stale. A different processId means the
- * server restarted, so the update is always fresh.
+ * Monitor checks are sequential per host, so only a STRICTLY-LOWER counter
+ * (an out-of-order delivery) is stale and dropped. An equal counter is a
+ * steady-state heartbeat that must refresh the description's volatile
+ * metadata (roundTripTime/lastWrite/lastUpdateTimeUsecs), so it is NOT stale.
+ * A different processId means the server restarted, so the update is fresh.
  */
 private bool isStaleUpdate(ref const ServerDescription existing, ref const ServerDescription incoming)
 	pure nothrow @nogc
@@ -527,7 +873,7 @@ private bool isStaleUpdate(ref const ServerDescription existing, ref const Serve
 	if (oldTV.processId != newTV.processId)
 		return false;
 
-	return newTV.counter <= oldTV.counter;
+	return newTV.counter < oldTV.counter;
 }
 
 /// selectServer returns primary for ReadPreference.primary
@@ -642,6 +988,37 @@ unittest
 	auto result = selectServer(topo, ReadPreference.primaryPreferred);
 	assert(!result.isNull);
 	assert(result.get == sec);
+}
+
+/// selectServer primaryPreferred honors tagSets when falling back to a secondary
+unittest
+{
+	TopologyDescription topo;
+	auto east = MongoHost("east-sec", 27017);
+	auto west = MongoHost("west-sec", 27017);
+
+	ServerDescription eastDesc;
+	eastDesc.secondary = true;
+	eastDesc.setName = "rs0";
+	eastDesc.tags = ["dc": "east"];
+
+	ServerDescription westDesc;
+	westDesc.secondary = true;
+	westDesc.setName = "rs0";
+	westDesc.tags = ["dc": "west"];
+
+	topo.update(east, eastDesc);
+	topo.update(west, westDesc);
+
+	string[string][] tagSets = [["dc": "east"]];
+
+	// With no primary, primaryPreferred must still respect the tag set and never pick west.
+	foreach (_; 0 .. 100)
+	{
+		auto result = selectServer(topo, ReadPreference.primaryPreferred, 15, -1, tagSets);
+		assert(!result.isNull, "a tag-matching secondary is selected");
+		assert(result.get == east, "primaryPreferred must not select a tag-excluded secondary");
+	}
 }
 
 /// selectServer primaryPreferred prefers primary when available
@@ -933,6 +1310,60 @@ unittest
 	assert(known.length == 3);
 }
 
+/// allKnownHosts includes arbiters so they are monitored as replica-set members
+unittest
+{
+	import std.algorithm : canFind;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto primary = MongoHost("primary", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.setName = "rs0";
+	desc.hosts = ["primary:27017", "sec:27017"];
+	desc.arbiters = ["arb:27017"];
+
+	topo.update(primary, desc);
+
+	assert(topo.allKnownHosts().canFind(MongoHost("arb", 27017)),
+		"an arbiter advertised in the member list must be monitored");
+}
+
+/// allKnownHosts includes a server's own host even when its description carries no member list (standalone/sharded)
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("standalone", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+
+	topo.update(host, desc);
+
+	assert(topo.allKnownHosts() == [host],
+		"allKnownHosts must include the server's own host even without a description hosts array");
+}
+
+/// a markFailed-cleared server's host stays in allKnownHosts so monitoring can recover after a full outage
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+
+	ServerDescription desc;
+	desc.isWritablePrimary = true;
+	desc.setName = "rs0";
+	desc.hosts = ["host1:27017"];
+	topo.update(host, desc);
+
+	topo.markFailed(host); // simulate an outage: the server's description is cleared
+
+	assert(topo.allKnownHosts() == [host],
+		"a failed server's host stays known so reconcileWith does not stop its monitor (monitoring can recover)");
+}
+
 /// update with higher topology version counter overwrites
 unittest
 {
@@ -981,7 +1412,7 @@ unittest
 	assert(topo.servers[0].description.isPrimary);
 }
 
-/// update with equal topology version counter is rejected
+/// update with equal topology version counter is accepted (heartbeats refresh the description)
 unittest
 {
 	TopologyDescription topo;
@@ -1001,7 +1432,32 @@ unittest
 	desc2.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
 
 	topo.update(host, desc2);
-	assert(topo.servers[0].description.isPrimary);
+	assert(topo.servers[0].description.isSecondaryNode);
+}
+
+/// update with an equal topology version counter still refreshes volatile metadata (roundTripTime)
+unittest
+{
+	TopologyDescription topo;
+	auto host = MongoHost("host1", 27017);
+	auto pid = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
+
+	ServerDescription first;
+	first.isWritablePrimary = true;
+	first.setName = "rs0";
+	first.roundTripTime = 10;
+	first.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
+	topo.update(host, first);
+
+	ServerDescription heartbeat;
+	heartbeat.isWritablePrimary = true;
+	heartbeat.setName = "rs0";
+	heartbeat.roundTripTime = 25;
+	heartbeat.topologyVersion = Nullable!TopologyVersion(TopologyVersion(pid, 5));
+	topo.update(host, heartbeat);
+
+	assert(topo.servers[0].description.roundTripTime == 25,
+		"an equal-counter heartbeat must refresh roundTripTime, not freeze it at the first-probe value");
 }
 
 /// update with different processId always overwrites (server restarted)
@@ -1273,6 +1729,52 @@ unittest
 	assert(topo.type == TopologyType.replicaSetNoPrimary);
 }
 
+/// loadBalanced topology stays loadBalanced when an RSPrimary description arrives
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.loadBalanced;
+	auto host = MongoHost("lb-backend", 27017);
+
+	ServerDescription primaryDesc;
+	primaryDesc.isWritablePrimary = true;
+	primaryDesc.setName = "rs0";
+	assert(primaryDesc.classifiedType() == ServerDescription.ServerType.RSPrimary);
+
+	topo.update(host, primaryDesc);
+	assert(topo.type == TopologyType.loadBalanced,
+		"a load-balanced topology must not transition based on SDAM");
+}
+
+/// loadBalanced topology stays loadBalanced for mongos, standalone and RSSecondary descriptions
+unittest
+{
+	auto host = MongoHost("lb-backend", 27017);
+
+	ServerDescription mongosDesc;
+	mongosDesc.msg = "isdbgrid";
+	assert(mongosDesc.classifiedType() == ServerDescription.ServerType.mongos);
+
+	ServerDescription standaloneDesc;
+	standaloneDesc.isWritablePrimary = true;
+	assert(standaloneDesc.classifiedType() == ServerDescription.ServerType.standalone);
+
+	ServerDescription secondaryDesc;
+	secondaryDesc.secondary = true;
+	secondaryDesc.setName = "rs0";
+	assert(secondaryDesc.classifiedType() == ServerDescription.ServerType.RSSecondary);
+
+	foreach (desc; [mongosDesc, standaloneDesc, secondaryDesc])
+	{
+		TopologyDescription topo;
+		topo.type = TopologyType.loadBalanced;
+
+		topo.update(host, desc);
+		assert(topo.type == TopologyType.loadBalanced,
+			"a load-balanced topology must not transition based on SDAM");
+	}
+}
+
 /// sharded topology only keeps mongos servers
 unittest
 {
@@ -1294,6 +1796,58 @@ unittest
 	// RS server should be removed as incompatible with sharded topology
 	assert(topo.servers.length == 1);
 	assert(topo.servers[0].host == mongos);
+}
+
+/// a rogue RSPrimary in a sharded topology is removed without wiping the mongos list or flipping the type
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.sharded;
+	auto mongos = MongoHost("mongos", 27017);
+	auto rogue = MongoHost("rogue", 27017);
+
+	ServerDescription mongosDesc;
+	mongosDesc.msg = "isdbgrid";
+	topo.update(mongos, mongosDesc);
+
+	// A host thought to be a mongos now reports as an RS primary advertising its own
+	// replica-set members (which do NOT include the mongos). The primary-handling block
+	// would prune the mongos to those members, then flip the topology type.
+	ServerDescription rogueDesc;
+	rogueDesc.isWritablePrimary = true;
+	rogueDesc.setName = "rs0";
+	rogueDesc.hosts = ["rogue:27017", "other:27017"];
+	topo.update(rogue, rogueDesc);
+
+	assert(topo.type == TopologyType.sharded, "a non-mongos must not flip a sharded topology's type");
+	assert(topo.servers.length == 1, "the rogue RS server is removed and the mongos retained");
+	assert(topo.servers[0].host == mongos, "the mongos survives the rogue primary");
+}
+
+/// an RS server whose setName differs from the topology's is rejected, not allowed to demote the primary
+unittest
+{
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetWithPrimary;
+	topo.setName = "rs0";
+	auto good = MongoHost("good", 27017);
+	auto wrong = MongoHost("wrong", 27017);
+
+	ServerDescription goodPrimary;
+	goodPrimary.isWritablePrimary = true;
+	goodPrimary.setName = "rs0";
+	topo.update(good, goodPrimary);
+
+	// A host re-provisioned into a DIFFERENT replica set now reports setName "other".
+	ServerDescription wrongPrimary;
+	wrongPrimary.isWritablePrimary = true;
+	wrongPrimary.setName = "other";
+	topo.update(wrong, wrongPrimary);
+
+	assert(topo.servers.length == 1, "the wrong-set server is rejected");
+	assert(topo.servers[0].host == good, "only the matching-set host remains");
+	assert(topo.findPrimaryIdx() != -1 && topo.servers[topo.findPrimaryIdx()].host == good,
+		"the wrong-set primary did not take over the topology");
 }
 
 /// server type classification from hello response fields
@@ -1507,7 +2061,7 @@ unittest
 	assert(result.get == primary);
 }
 
-/// isStaleUpdate: incoming has topologyVersion but existing does not — accepts update
+/// isStaleUpdate accepts the update when incoming has topologyVersion but existing does not
 unittest
 {
 	auto pid = BsonObjectID.fromHexString("aabbccddeeff00112233aabb");
@@ -1743,6 +2297,45 @@ unittest
 	assert(!host2Primary);
 }
 
+/// a primary with a higher setVersion but lower electionId is stale (electionId is compared first)
+unittest
+{
+	import vibe.data.bson : BsonObjectID;
+
+	TopologyDescription topo;
+	topo.type = TopologyType.replicaSetNoPrimary;
+	auto host1 = MongoHost("host1", 27017);
+	auto host2 = MongoHost("host2", 27017);
+
+	auto eidHigh = BsonObjectID.fromHexString("aabbccddeeff00112233aa02");
+	auto eidLow  = BsonObjectID.fromHexString("aabbccddeeff00112233aa01");
+
+	// Real current primary: highest electionId, a modest setVersion.
+	ServerDescription current;
+	current.isWritablePrimary = true;
+	current.setName = "rs0";
+	current.setVersion = Nullable!int(1);
+	current.electionId = Nullable!BsonObjectID(eidHigh);
+	topo.update(host1, current);
+
+	// Stale primary from a previous term: it bumped its setVersion but has a LOWER electionId.
+	ServerDescription stale;
+	stale.isWritablePrimary = true;
+	stale.setName = "rs0";
+	stale.setVersion = Nullable!int(2);
+	stale.electionId = Nullable!BsonObjectID(eidLow);
+	topo.update(host2, stale);
+
+	bool host1Primary, host2Primary;
+	foreach (ref s; topo.servers)
+	{
+		if (s.host == host1 && s.description.isPrimary) host1Primary = true;
+		if (s.host == host2 && s.description.isPrimary) host2Primary = true;
+	}
+	assert(host1Primary, "the real primary (higher electionId) keeps the role");
+	assert(!host2Primary, "the stale primary (higher setVersion, lower electionId) is rejected");
+}
+
 /// sharded selectServer applies latency window to mongos selection
 unittest
 {
@@ -1799,4 +2392,263 @@ unittest
 	}
 	assert(sawFast);
 	assert(sawSlow);
+}
+
+/// returns true when every required tag is present in the server's tags
+bool serverMatchesTagSet(const(string[string]) serverTags, string[string] required) @safe
+{
+	foreach (key, value; required)
+		if (serverTags.get(key, null) != value)
+			return false;
+	return true;
+}
+
+/// serverMatchesTagSet returns true when the server carries every required tag pair
+unittest
+{
+	string[string] serverTags = ["dc": "east"];
+	string[string] required = ["dc": "east"];
+
+	assert(serverMatchesTagSet(serverTags, required) == true,
+		"server tagged dc:east must satisfy required tag set dc:east");
+}
+
+/// serverMatchesTagSet returns false when a required tag value differs
+unittest
+{
+	assert(serverMatchesTagSet(["dc": "west"], ["dc": "east"]) == false,
+		"server in dc:west must not satisfy required tag set dc:east");
+}
+
+/// serverMatchesTagSet returns true for the empty (catch-all) tag set
+unittest
+{
+	assert(serverMatchesTagSet(["dc": "east"], null) == true,
+		"an empty required tag set matches any server");
+}
+
+version (unittest)
+{
+	/// Builds a replica set with a primary plus dc:east and dc:west secondaries,
+	/// returning the topology and the two tagged secondary host handles.
+	private struct TaggedSecondaries
+	{
+		TopologyDescription topo;
+		MongoHost secEast;
+		MongoHost secWest;
+	}
+
+	private TaggedSecondaries buildTaggedSecondaries()
+	{
+		TopologyDescription topo;
+		topo.type = TopologyType.replicaSetWithPrimary;
+
+		auto primary = MongoHost("primary", 27017);
+		ServerDescription primaryDesc;
+		primaryDesc.isWritablePrimary = true;
+		primaryDesc.setName = "rs0";
+		topo.update(primary, primaryDesc);
+
+		auto secEast = MongoHost("sec-east", 27017);
+		ServerDescription eastDesc;
+		eastDesc.secondary = true;
+		eastDesc.setName = "rs0";
+		eastDesc.tags = ["dc": "east"];
+		topo.update(secEast, eastDesc);
+
+		auto secWest = MongoHost("sec-west", 27017);
+		ServerDescription westDesc;
+		westDesc.secondary = true;
+		westDesc.setName = "rs0";
+		westDesc.tags = ["dc": "west"];
+		topo.update(secWest, westDesc);
+
+		return TaggedSecondaries(topo, secEast, secWest);
+	}
+}
+
+/// secondaryHosts with a single tag set returns only the matching secondary
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto hosts = rs.topo.secondaryHosts(-1, [["dc": "east"]]);
+	assert(hosts == [rs.secEast], "tag set dc:east must select only the matching secondary");
+}
+
+/// secondaryHosts falls through to the second tag set when the first matches nothing
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto hosts = rs.topo.secondaryHosts(-1, [["dc": "nowhere"], ["dc": "east"]]);
+	assert(hosts == [rs.secEast], "must fall through to the second tag set when the first matches nothing");
+}
+
+/// secondaryHosts stops at the first matching tag set and ignores later ones
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto hosts = rs.topo.secondaryHosts(-1, [["dc": "east"], ["dc": "west"]]);
+	assert(hosts == [rs.secEast],
+		"first matching tag set wins; later sets must not add hosts");
+
+	auto none = rs.topo.secondaryHosts(-1, [["dc": "nowhere"]]);
+	assert(none.length == 0, "no tag set matching any secondary yields no hosts");
+}
+
+/// selectServer secondary with tag set dc:east returns only the matching secondary
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto chosen = selectServer(rs.topo, ReadPreference.secondary, 15, -1, [["dc": "east"]]);
+	assert(!chosen.isNull, "tag set dc:east must select a secondary");
+	assert(chosen.get == rs.secEast, "tag set dc:east must select only the matching secondary");
+}
+
+/// selectServer secondaryPreferred with a non-matching tag set falls back to the primary
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto chosen = selectServer(rs.topo, ReadPreference.secondaryPreferred, 15, -1, [["dc": "nowhere"]]);
+	assert(!chosen.isNull, "secondaryPreferred must fall back to a server when no secondary matches");
+	assert(chosen.get == rs.topo.primaryHost.get, "secondaryPreferred with non-matching tags must fall back to the primary");
+}
+
+/// selectServer nearest with a tag set matching no member returns null
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto chosen = selectServer(rs.topo, ReadPreference.nearest, 15, -1, [["dc": "nowhere"]]);
+	assert(chosen.isNull, "nearest with a tag set matching no member must select no server");
+}
+
+/// selectTarget forwards a secondary read tag set dc:east to selectServer and returns the matching secondary
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+
+	auto chosen = selectTarget(rs.topo, false, ReadPreference.secondary, 15, -1, [["dc": "east"]]);
+	assert(!chosen.isNull, "selectTarget with tag set dc:east must select a secondary");
+	assert(chosen.get == rs.secEast, "selectTarget must forward the tag set so only sec-east is chosen");
+}
+
+/// tag sets never exclude the primary: primary reads and writes ignore them
+unittest
+{
+	auto rs = buildTaggedSecondaries();
+	auto primary = rs.topo.primaryHost.get;
+
+	auto read = selectServer(rs.topo, ReadPreference.primary, 15, -1, [["dc": "nowhere"]]);
+	assert(!read.isNull && read.get == primary,
+		"primary read preference must ignore tag sets and still pick the primary");
+
+	auto write = selectTarget(rs.topo, true, ReadPreference.primary, 15, -1, [["dc": "nowhere"]]);
+	assert(!write.isNull && write.get == primary,
+		"writes must ignore tag sets and still target the primary");
+}
+
+/// supportsRetryableWrites returns false for a standalone (single) topology
+unittest
+{
+	assert(supportsRetryableWrites(TopologyType.single) == false,
+		"standalone mongod rejects lsid/txnNumber, so retryable writes are unsupported on TopologyType.single");
+}
+
+/// supportsRetryableWrites returns true for a load-balanced topology
+unittest
+{
+	assert(supportsRetryableWrites(TopologyType.loadBalanced),
+		"a load-balanced deployment fronts a mongos, which supports retryable writes");
+}
+
+/// The topology-wide logical session timeout: the MIN advertised logicalSessionTimeoutMinutes
+/// across data-bearing servers, or null when it cannot be determined.
+Nullable!Duration logicalSessionTimeout(const ServerDescription[] servers) @safe
+{
+	import core.time : minutes;
+	Nullable!int min;
+	foreach (s; servers)
+	{
+		if (!s.isDataBearing)
+			continue;
+		if (s.logicalSessionTimeoutMinutes.isNull)
+			return Nullable!Duration.init;
+		if (min.isNull || s.logicalSessionTimeoutMinutes.get < min.get)
+			min = s.logicalSessionTimeoutMinutes.get;
+	}
+	return min.isNull ? Nullable!Duration.init : Nullable!Duration(min.get.minutes);
+}
+
+/// logicalSessionTimeout returns 30.minutes for a single server advertising 30
+unittest
+{
+	import core.time : minutes;
+
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.logicalSessionTimeoutMinutes = 30;
+
+	auto timeout = logicalSessionTimeout([primary]);
+
+	assert(!timeout.isNull && timeout.get == 30.minutes,
+		"single server advertises a 30 minute session timeout");
+}
+
+/// logicalSessionTimeout returns the minimum advertised timeout across servers
+unittest
+{
+	import core.time : minutes;
+
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.logicalSessionTimeoutMinutes = 30;
+
+	ServerDescription secondary;
+	secondary.secondary = true;
+	secondary.logicalSessionTimeoutMinutes = 10;
+
+	auto timeout = logicalSessionTimeout([primary, secondary]);
+
+	assert(!timeout.isNull && timeout.get == 10.minutes,
+		"the topology timeout is the minimum advertised across servers");
+}
+
+/// logicalSessionTimeout returns null when a data-bearing server advertises no timeout
+unittest
+{
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.logicalSessionTimeoutMinutes = 30;
+
+	ServerDescription secondary;
+	secondary.secondary = true;
+
+	auto timeout = logicalSessionTimeout([primary, secondary]);
+
+	assert(timeout.isNull,
+		"a data-bearing server that does not advertise a session timeout disables sessions topology-wide");
+}
+
+/// logicalSessionTimeout excludes arbiters from the minimum computation
+unittest
+{
+	import core.time : minutes;
+
+	ServerDescription primary;
+	primary.isWritablePrimary = true;
+	primary.logicalSessionTimeoutMinutes = 30;
+
+	ServerDescription arbiter;
+	arbiter.arbiterOnly = true;
+	arbiter.logicalSessionTimeoutMinutes = 10;
+
+	auto timeout = logicalSessionTimeout([primary, arbiter]);
+
+	assert(!timeout.isNull && timeout.get == 30.minutes,
+		"arbiters are excluded from the session timeout computation");
 }
