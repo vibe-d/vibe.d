@@ -33,6 +33,7 @@ import std.utf;
 */
 RedisClient connectRedis(string host, ushort port = RedisClient.defaultPort)
 {
+	enforce(!host.startsWith("redis://", "Host must be a valid IP or domain, but not an URI."));
 	return new RedisClient(host, port);
 }
 
@@ -108,6 +109,17 @@ RedisDatabase connectRedisDB(URL url)
 		databaseIndex = url.pathString[1 .. $].to!long;
 
 	return cli.getDatabase(databaseIndex);
+}
+
+/// ditto
+RedisDatabase connectRedisDB(string host_or_url)
+{
+	/* If this looks like a URL try to parse it that way. */
+	if(host_or_url.startsWith("redis://")){
+		return connectRedisDB(URL(host_or_url));
+	} else {
+		return connectRedis(host_or_url).getDatabase(0);
+	}
 }
 
 /**
