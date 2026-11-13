@@ -567,11 +567,13 @@ private final class WebSocketHandler(I) {
 	void releaseRef()
 	{
 		if (!--m_refCount) {
-			try m_socket.close();
-			catch (Exception e) {
-				logException(e, "Failed to close WebSocket");
+			if (m_socket) {
+				try m_socket.close();
+				catch (Exception e) {
+					logException(e, "Failed to close WebSocket");
+				}
+				m_socket = null;
 			}
-			m_socket = null;
 			m_responseEvent.emit();
 		}
 	}
