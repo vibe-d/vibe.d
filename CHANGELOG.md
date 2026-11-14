@@ -1,6 +1,56 @@
 Changelog
 =========
 
+v0.10.4 - 2026-11-14
+--------------------
+
+- MongoDB rework (by Bogdan Szabo aka gedaiu)
+	- A largely improved MongoDB driver is now available as a separate `vibe-mongodb` package and it is recommended
+	to migrate existing code to it
+	- The `vibe-d:mongodb` package remains available, with some of the improvements, but is scheduled for deprecation
+		- Fixed a packet size mismatch error that occurred for `MongoCollection.drop()` - [pull #2813][issue2813]
+		- Added replica set support with read concern, nearest preference,  - [pull #2690][issue2690], [pull #2865][issue2865], [pull #2844][issue2844], [pull #2873][issue2873]
+		- Added wire protocol version support up to version 60 - [pull #2867][issue2867]
+		- Added SCRAM-SHA-256 authentication support - [pull #2868][issue2868]
+		- Added compressed message support - [pull #2869][issue2869]
+		- Made `estimatedDocumentCount` return zero for non-existent collections instead of throwing - [pull #2873][issue2873]
+- The legacy `@queryParam`, `@bodyParam` and `@headerParam` UDAs have been deprecated (by Mathias Lang aka Geod24) - [pull #2833][issue2833]
+- Fixed a protocol error for `@method(HTTPMethod.HEAD)` REST methods (by Adam Ruppe) - [pull #2879][issue2879]
+- Improved the behavior of `void` REST interface methods by replying with 204 (no content) (by Mathias Lang aka Geod24) - [pull #2872][issue2872]
+- `sendMail` now allows to set an explicit envelop sender (by Alexibu) - [pull #2875][issue2875]
+- Fixed a performance issue caused by logging REST exception stack traces with "debug" level
+- Fixed a possible null pointer access for remotely closed WebRPC connections - [pull #2895][issue2895]
+- Added `WebRPCPeer.connected` property and a `HTTPClientSettings` parameter to `connectWebRPC` - [pull #2895][issue2895]
+
+[issue2690]: https://github.com/vibe-d/vibe.d/issues/2690
+[issue2813]: https://github.com/vibe-d/vibe.d/issues/2813
+[issue2833]: https://github.com/vibe-d/vibe.d/issues/2833
+[issue2844]: https://github.com/vibe-d/vibe.d/issues/2844
+[issue2865]: https://github.com/vibe-d/vibe.d/issues/2865
+[issue2867]: https://github.com/vibe-d/vibe.d/issues/2867
+[issue2868]: https://github.com/vibe-d/vibe.d/issues/2868
+[issue2869]: https://github.com/vibe-d/vibe.d/issues/2869
+[issue2872]: https://github.com/vibe-d/vibe.d/issues/2872
+[issue2873]: https://github.com/vibe-d/vibe.d/issues/2873
+[issue2873]: https://github.com/vibe-d/vibe.d/issues/2873
+[issue2875]: https://github.com/vibe-d/vibe.d/issues/2875
+[issue2879]: https://github.com/vibe-d/vibe.d/issues/2879
+[issue2895]: https://github.com/vibe-d/vibe.d/issues/2895
+[issue2895]: https://github.com/vibe-d/vibe.d/issues/2895
+
+
+v0.10.3 - 2025-08-05
+--------------------
+
+- Added a `timeout` parameter to `sendMail` (by Mathias Lang aka Geod24) - [pull #2818][issue2818], [pull #2819][issue2819]
+- Fixed a crash on DMD 2.111.0 in `MongoClient.getDatabases` - [pull #2822][issue2822]
+- Fixed a compile error when using a non-`Bson` return type with `MongoCollection.find` - [pull #2822][issue2822]
+
+[issue2818]: https://github.com/vibe-d/vibe.d/issues/2818
+[issue2819]: https://github.com/vibe-d/vibe.d/issues/2819
+[issue2822]: https://github.com/vibe-d/vibe.d/issues/2822
+
+
 v0.10.2 - 2025-02-14
 --------------------
 
