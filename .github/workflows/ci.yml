@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
+          - ubuntu-24.04
         dc:
           - dmd-latest
           - dmd-2.108.1
@@ -28,7 +28,7 @@ jobs:
           - ''
         include:
           # Custom part for coverage
-          - { os: ubuntu-latest, dc: dmd-latest, parts: 'unittests,tests', extra_dflags: "-cov -version=VibedSetCoverageMerge" }
+          - { os: ubuntu-24.04, dc: dmd-latest, parts: 'unittests,tests', extra_dflags: "-cov -version=VibedSetCoverageMerge" }
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60

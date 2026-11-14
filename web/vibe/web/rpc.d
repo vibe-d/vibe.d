@@ -91,6 +91,7 @@ import vibe.core.path : InetPath;
 import vibe.core.stream : isInputStream;
 import vibe.data.bson;
 import vibe.inet.url : URL;
+import vibe.http.client;
 import vibe.http.router;
 import vibe.http.server;
 import vibe.http.websockets;
@@ -144,14 +145,14 @@ void registerWebRPC(I)(URLRouter router, string path, I implementation,
 		A `WebRPCPeer` instance is returned, which exposes the API interface `I`
 		for making outgoing method calls.
 */
-WebRPCPeer!I connectWebRPC(I)(URL url, I implementation)
+WebRPCPeer!I connectWebRPC(I)(URL url, I implementation, const(HTTPClientSettings) settings = defaultSettings)
 	if (is(I == interface))
 {
 	WebRPCPeerInfo info;
 	auto ws = connectWebSocketEx(url, (scope req) {
 		info.address = req.remoteAddress;
 		info.certificate = req.peerCertificate;
-	});
+	}, settings);
 	auto h = new WebSocketHandler!I(ws, implementation, info);
 	runTask(&h.runReadLoop);
 
@@ -202,6 +203,8 @@ struct WebRPCPeer(I) {
 		if (m_impl && m_impl.m_handler)
 			m_impl.m_handler.releaseRef();
 	}
+
+	@property bool connected() => m_impl && m_impl.m_handler.connected;
 
 	/** Provides information about the remote peer.
 	*/
@@ -559,6 +562,8 @@ private final class WebSocketHandler(I) {
 		m_responseEvent = createManualEvent();
 	}
 
+	@property bool connected() => m_socket && m_socket.connected;
+
 	void addRef()
 	{
 		m_refCount++;
@@ -567,11 +572,13 @@ private final class WebSocketHandler(I) {
 	void releaseRef()
 	{
 		if (!--m_refCount) {
-			try m_socket.close();
-			catch (Exception e) {
-				logException(e, "Failed to close WebSocket");
+			if (m_socket) {
+				try m_socket.close();
+				catch (Exception e) {
+					logException(e, "Failed to close WebSocket");
+				}
+				m_socket = null;
 			}
-			m_socket = null;
 			m_responseEvent.emit();
 		}
 	}
@@ -654,7 +661,6 @@ private final class WebSocketHandler(I) {
 	nothrow {
 		try {
 			while (m_socket && m_socket.waitForData) {
-				if (!m_socket) break;
 				auto msg = m_socket.receiveBinary();
 				auto brep = Bson(Bson.Type.object, msg[1 .. $].idup);
 				switch (msg[0]) {
@@ -841,4 +847,10 @@ private template recursiveInterfaceFunctions(I, string method_prefix)
 		staticMap!(MethodEntry, Info.RouteFunctions),
 		staticMap!(SubInterfaceEntry, Info.SubInterfaceFunctions)
 	);
+}
+
+private @property const(HTTPClientSettings) defaultSettings()
+@trusted nothrow {
+	__gshared HTTPClientSettings ret = new HTTPClientSettings;
+	return ret;
 }
