@@ -140,6 +140,7 @@ void registerWebRPC(I)(URLRouter router, string path, I implementation,
 		url = URL of the endpoint to connect to
 		implementation = The API implementation to invoke for incoming method
 			calls
+		settings = HTTP client settings to use
 
 	Returns:
 		A `WebRPCPeer` instance is returned, which exposes the API interface `I`
