@@ -662,6 +662,9 @@ private final class WebSocketHandler(I) {
 	nothrow {
 		try {
 			while (m_socket && m_socket.waitForData) {
+				// m_socket could have been set to null after the waitForData call
+				if (!m_socket) break;
+
 				auto msg = m_socket.receiveBinary();
 				auto brep = Bson(Bson.Type.object, msg[1 .. $].idup);
 				switch (msg[0]) {
