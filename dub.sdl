@@ -22,7 +22,7 @@ x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
 	"--ex" "vibe.container.internal." "--ex" "vibe.data.internal."\
 	"--ex" "vibe.internal." "--ex" "vibe.web.internal." "--ex" "diet.internal"\
 	"--ex" "stdx." "--ex" "eventcore.internal." "--ex" "eventcore.drivers."\
-	"--ex" "mir." "--ex" "openssl_version"
+	"--ex" "mir." "--ex" "openssl_version" "--ex" "during"
 
 subPackage "utils"
 subPackage "data"
