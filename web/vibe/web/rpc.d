@@ -204,6 +204,8 @@ struct WebRPCPeer(I) {
 			m_impl.m_handler.releaseRef();
 	}
 
+	@property bool connected() => m_impl && m_impl.m_handler.connected;
+
 	/** Provides information about the remote peer.
 	*/
 	@property ref const(WebRPCPeerInfo) peerInformation() const { return m_impl.m_handler.m_peerInfo; }
@@ -559,6 +561,8 @@ private final class WebSocketHandler(I) {
 		m_sendMutex = new TaskMutex;
 		m_responseEvent = createManualEvent();
 	}
+
+	@property bool connected() => m_socket && m_socket.connected;
 
 	void addRef()
 	{
