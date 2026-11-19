@@ -477,7 +477,7 @@ version (unittest) {
 		void except() { throw new Exception("Error!"); }
 		InputStream str1() => new TestStream;
 		InputStreamProxy str2() => InputStreamProxy(new TestStream);
-		InputStream strErr() => new TestStream(error: true);
+		InputStream strErr() => new TestStream(/*error:*/ true);
 	}
 
 	private final class TestStream : InputStream {
