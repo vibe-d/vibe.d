@@ -476,7 +476,7 @@ version (unittest) {
 		void except() { throw new Exception("Error!"); }
 		InputStream str1() => new TestStream;
 		InputStreamProxy str2() => InputStreamProxy(new TestStream);
-		InputStream strErr() => new TestStream(error: true);
+		InputStream strErr() => new TestStream(/*error:*/ true);
 	}
 
 	private final class TestStream : InputStream {
@@ -907,7 +907,7 @@ private final class WebSocketHandler(I) {
 										try if (retstream.empty) break;
 										catch (Exception e) {
 											logDebug("Stream returned from WebRPC method has thrown: %s", e.msg);
-											handler.sendStreamEnd(sequence, error: true);
+											handler.sendStreamEnd(sequence, /*error:*/ true);
 											return;
 										}
 										if (!handler.isOutgoingStreamOpen(sequence))
@@ -916,12 +916,12 @@ private final class WebSocketHandler(I) {
 										try retstream.read(buf[0 .. sz]);
 										catch (Exception e) {
 											logDebug("Stream returned from WebRPC method has thrown: %s", e.msg);
-											handler.sendStreamEnd(sequence, error: true);
+											handler.sendStreamEnd(sequence, /*error:*/ true);
 											return;
 										}
 										handler.sendStreamChunk(sequence,buf[0 .. sz]);
 									}
-									handler.sendStreamEnd(sequence, error: false);
+									handler.sendStreamEnd(sequence, /*error:*/ false);
 								} catch (Exception e) {
 									logException(e, "Failed to send stream response");
 									handler.terminateConnection();
@@ -935,7 +935,7 @@ private final class WebSocketHandler(I) {
 						break;
 					case WebRPCMessageType.streamEnd:
 						if (auto str = getIncomingStream(sequence)) {
-							str.end(error: payload[0] != 0);
+							str.end(/*error:*/ payload[0] != 0);
 							unregisterIncomingStream(sequence);
 						}
 						break;
