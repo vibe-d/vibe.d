@@ -698,7 +698,7 @@ unittest {
 	assert(test.routes[0].fullPathParts == [PathPart(false, "/foo/bar/")]);
 }
 
-unittest { // #1285
+deprecated unittest { // #1285
 	interface I {
 		@headerParam("b", "foo") @headerParam("c", "bar")
 		void a(int a, out int b, ref int c);
@@ -773,7 +773,7 @@ unittest { // #1648
 	alias RI = RestInterface!I;
 }
 
-unittest {
+deprecated unittest {
 	interface I1 { @bodyParam("foo") void a(int foo); }
 	alias RI = RestInterface!I1;
 	interface I2 { @bodyParam("foo") void a(int foo, int bar); }
