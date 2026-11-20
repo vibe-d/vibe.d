@@ -263,8 +263,7 @@ final class WebRPCPeerImpl(I, RootI, string method_prefix) : I
 		auto ret = m_handler.waitForResponse(seq);
 
 		static if (isInputStream!(ReturnType!method)) {
-			auto str = m_handler.getIncomingStream(seq);
-			assert(str !is null);
+			auto str = m_handler.waitForStream(seq);
 		}
 
 		static if (outparams.length > 0) {
@@ -846,6 +845,18 @@ private final class WebSocketHandler(I) {
 				m_availableResponses.remove(sequence);
 				return ret.result;
 			}
+			ec = m_responseEvent.wait(ec);
+		}
+	}
+
+	WebRPCInputStream!I waitForStream(ulong sequence)
+	{
+		auto ec = m_responseEvent.emitCount;
+		while (true) {
+			if (!m_socket || !m_socket.connected)
+				throw new Exception("Connection closed while waiting for WebRPC response");
+			if (auto str = getIncomingStream(sequence))
+				return str;
 			ec = m_responseEvent.wait(ec);
 		}
 	}
