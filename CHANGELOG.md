@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v0.10.6 - 2026-11-20
+--------------------
+
+- Implements support for returning `InputStream`/`InputStreamProxy` from WebRPC methods - [pull #2897][issue2897]
+
+[issue2897]: https://github.com/vibe-d/vibe.d/issues/2897
+
+
 v0.10.5 - 2026-11-14
 --------------------
 
