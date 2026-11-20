@@ -88,7 +88,7 @@ module vibe.web.rpc;
 import vibe.core.log;
 import vibe.core.core : Task, runTask, yield;
 import vibe.core.path : InetPath;
-import vibe.core.stream : isInputStream;
+import vibe.core.stream : InputStream, InputStreamProxy, IOMode, isInputStream;
 import vibe.data.bson;
 import vibe.inet.url : URL;
 import vibe.http.client;
@@ -101,6 +101,7 @@ import vibe.web.auth;
 import vibe.web.common;
 import vibe.web.rest : Collection;
 
+import std.algorithm.comparison;
 import std.meta;
 import std.traits;
 
@@ -257,17 +258,135 @@ final class WebRPCPeerImpl(I, RootI, string method_prefix) : I
 			static if (!is(ParameterTypeTuple!method[i] == AuthInfo!I) && !(ParameterStorageClassTuple!method[i] & ParameterStorageClass.out_))
 				args[pname] = serializeToBson(params[i]);
 		auto seq = m_handler.sendCall(method_prefix ~ __traits(identifier, method), args);
+
+
 		auto ret = m_handler.waitForResponse(seq);
+
+		static if (isInputStream!(ReturnType!method)) {
+			auto str = m_handler.getIncomingStream(seq);
+			assert(str !is null);
+		}
+
 		static if (outparams.length > 0) {
 			foreach (pi; outparams)
 				params[pi] = ret[paramnames[pi]].deserializeBson!(PARAMS[pi]);
 			static if (!is(ReturnType!method == void))
-				return ret["return"].deserializeBson!(ReturnType!method);
-		} else static if (isInputStream!(ReturnType!method)) {
-			throw new Exception("Stream type results are not yet supported");
+				ret = ret["return"];
+		}
+
+		static if (isInputStream!(ReturnType!method)) {
+			ReturnType!method strret = str;
+			return strret;
 		} else static if (!is(ReturnType!method == void)) {
 			return ret.deserializeBson!(ReturnType!method);
 		}
+	}
+}
+
+
+final class WebRPCInputStream(RootI) : InputStream {
+	import core.time : Duration;
+	import vibe.container.ringbuffer : RingBuffer;
+	import vibe.core.sync : LocalManualEvent, createManualEvent;
+
+	private {
+		WebSocketHandler!RootI m_handler;
+		LocalManualEvent m_readEvent;
+		ulong m_seq;
+		bool m_errorAtEOF = false;
+		bool m_active = true;
+		RingBuffer!(ubyte, 64*1024) m_buffer;
+	}
+
+@safe:
+
+	this(WebSocketHandler!RootI handler, ulong seq)
+	{
+		m_handler = handler;
+		m_seq = seq;
+		m_readEvent = createManualEvent();
+	}
+
+	~this()
+	{
+		if (m_active)
+			m_handler.sendStreamClose(m_seq);
+		m_handler.unregisterIncomingStream(m_seq);
+	}
+
+	private void addChunk(const(ubyte)[] chunk)
+	{
+		assert (chunk.length <= m_buffer.capacity, "Oversized stream chunk received");
+
+		while (chunk.length) {
+			int ec = m_readEvent.emitCount;
+			while (m_buffer.full)
+				ec = m_readEvent.wait(ec);
+			size_t n = min(chunk.length, m_buffer.freeSpace);
+			bool was_empty = m_buffer.empty;
+			m_buffer.insertBack(chunk[0 .. n]);
+			chunk = chunk[n .. $];
+			if (was_empty) m_readEvent.emit();
+		}
+	}
+
+	private void end(bool error)
+	{
+		assert(m_active);
+		m_errorAtEOF = error;
+		m_active = false;
+		if (m_buffer.empty) m_readEvent.emit();
+	}
+
+	override @property bool empty() => leastSize == 0;
+	override @property ulong leastSize()
+	{
+		if (!waitForData())
+			return 0;
+		return m_buffer.length;
+	}
+	override @property bool dataAvailableForRead() => m_buffer.length > 0;
+	override const(ubyte)[] peek() => m_buffer.peek();
+	override size_t read(scope ubyte[] dst, IOMode mode)
+	{
+		size_t res = 0;
+
+		while (dst.length) {
+			while (m_buffer.empty) {
+				if (mode == IOMode.immediate)
+					return res;
+				if (!waitForData())
+					throw new Exception("Reading past end of stream");
+			}
+
+			bool was_full = m_buffer.full;
+
+			auto n = min(dst.length, m_buffer.length);
+			m_buffer.read(dst[0 .. n]);
+			dst = dst[n .. $];
+			res += n;
+
+			if (was_full) m_readEvent.emit();
+
+			if (mode == IOMode.once) return res;
+		}
+
+		return res;
+	}
+
+	alias InputStream.read read;
+
+	bool waitForData(Duration timeout = Duration.max)
+	{
+		int ec = m_readEvent.emitCount;
+		while (!dataAvailableForRead) {
+			if (m_errorAtEOF) throw new Exception("Error reading from source stream");
+			if (!m_active) {
+				return false;
+			}
+			ec = m_readEvent.wait(timeout, ec);
+		}
+		return true;
 	}
 }
 
@@ -312,6 +431,9 @@ version (unittest) {
 		void add2(int a, int b, out int c);
 		int addmul(ref int a, int b, int c);
 		void except();
+		InputStream str1();
+		InputStreamProxy str2();
+		InputStream strErr();
 	}
 
 	private class TestSubC : TestSubI {
@@ -353,6 +475,34 @@ version (unittest) {
 		void add2(int a, int b, out int c) { c = a + b; }
 		int addmul(ref int a, int b, int c) { a += b; return a * c; }
 		void except() { throw new Exception("Error!"); }
+		InputStream str1() => new TestStream;
+		InputStreamProxy str2() => InputStreamProxy(new TestStream);
+		InputStream strErr() => new TestStream(/*error:*/ true);
+	}
+
+	private final class TestStream : InputStream {
+		private {
+			enum size = 633537;
+			size_t m_idx = 0;
+			bool m_error;
+		}
+		@safe:
+		this(bool error = false) { m_error = error; }
+		override @property bool empty() => leastSize == 0;
+		override @property ulong leastSize() => min(size - m_idx, 1374);
+		override @property bool dataAvailableForRead() => m_idx < size;
+		override const(ubyte)[] peek() => null;
+		override size_t read(scope ubyte[] dst, IOMode mode)
+		{
+			size_t n = min(dst.length, size - m_idx);
+			foreach (i; 0 .. n) {
+				if (m_error && m_idx == size/2)
+					throw new Exception("Error reading test stream");
+				dst[i] = (m_idx++ * 123471u) % 256;
+			}
+			return n;
+		}
+		alias InputStream.read read;
 	}
 }
 
@@ -360,6 +510,7 @@ unittest {
 	import core.time : seconds;
 	import std.exception : assertThrown;
 	import vibe.core.core : setTimer;
+	import vibe.stream.operations : readAll;
 
 	auto tm = setTimer(1.seconds, { assert(false, "Test timeout"); });
 	scope (exit) tm.stop();
@@ -413,6 +564,11 @@ unittest {
 	assertThrown(cli.auth.testAuthenticated());
 	cli.auth.login();
 	assert(cli.auth.testAuthenticated() == 2);
+
+	// stream tests
+	assert(cli.str1().readAll() == (new TestStream).readAll());
+	assert(cli.str2().readAll() == (new TestStream).readAll());
+	cli.strErr().readAll().assertThrown();
 
 	// make sure the reverse direction got established and tested
 	while (!got_client) yield();
@@ -545,6 +701,8 @@ private final class WebSocketHandler(I) {
 		TaskMutex m_sendMutex;
 		ulong m_sequence;
 		Res[ulong] m_availableResponses;
+		WebRPCInputStream!I[ulong] m_incomingStreams;
+		void[0][ulong] m_outgoingStreams;
 		LocalManualEvent m_responseEvent;
 	}
 
@@ -585,51 +743,95 @@ private final class WebSocketHandler(I) {
 
 	ulong sendCall(string method, Bson arguments)
 	{
-		m_sendMutex.lock();
-		scope (exit) m_sendMutex.unlock();
-
-		if (!m_socket || !m_socket.connected)
-			throw new Exception("Connection closed before sending WebRPC call");
+		auto seq = m_sequence++;
 
 		WebRPCCallPacket pack;
-		pack.sequence = m_sequence++;
 		pack.method = method;
 		pack.arguments = arguments;
 		auto bpack = serializeToBson(pack);
-		m_socket.send(WebRPCMessageType.call ~ bpack.data);
-		return pack.sequence;
+		sendRawPacket(WebRPCMessageType.call, seq, bpack.data);
+
+		return seq;
 	}
 
 	void sendResponse(ulong sequence, Bson result)
 	{
-		m_sendMutex.lock();
-		scope (exit) m_sendMutex.unlock();
-
-		if (!m_socket || !m_socket.connected)
-			throw new Exception("Connection closed before sending WebRPC response");
-
 		WebRPCResponsePacket res;
-		res.sequence = sequence;
 		res.result = result;
 		auto bpack = serializeToBson(res);
-		m_socket.send(WebRPCMessageType.response ~ bpack.data);
+		sendRawPacket(WebRPCMessageType.response, sequence, bpack.data);
 	}
 
 	void sendErrorResponse(ulong sequence, string error_message)
 	{
+		WebRPCErrorResponsePacket res;
+		res.message = error_message;
+		auto bpack = serializeToBson(res);
+		sendRawPacket(WebRPCMessageType.errorResponse, sequence, bpack.data);
+	}
+
+	void sendStreamStart(ulong sequence)
+	{
+		sendRawPacket(WebRPCMessageType.streamStart, sequence, null);
+	}
+
+	void sendStreamChunk(ulong sequence, const(ubyte)[] chunk)
+	{
+		sendRawPacket(WebRPCMessageType.streamChunk, sequence, chunk);
+	}
+
+	void sendStreamEnd(ulong sequence, bool error)
+	{
+		ubyte[1] data;
+		data[0] = error;
+		sendRawPacket(WebRPCMessageType.streamEnd, sequence, data[]);
+
+		closeOutgoingStream(sequence);
+	}
+
+	void sendStreamClose(ulong sequence)
+	{
+		sendRawPacket(WebRPCMessageType.streamClose, sequence, null);
+	}
+
+	void sendRawPacket(WebRPCMessageType type, ulong sequence, const(ubyte)[] data)
+	{
+		import std.conv : to;
+		import std.bitmanip : nativeToBigEndian;
+
 		m_sendMutex.lock();
 		scope (exit) m_sendMutex.unlock();
 
 		if (!m_socket || !m_socket.connected)
-			throw new Exception("Connection closed before sending WebRPC error response");
+			throw new Exception("Connection closed before sending WebRPC "~type.to!string);
 
-		WebRPCErrorResponsePacket res;
-		res.sequence = sequence;
-		res.message = error_message;
-		auto bpack = serializeToBson(res);
-		m_socket.send(WebRPCMessageType.errorResponse ~ bpack.data);
+		auto payload = new ubyte[](1 + ulong.sizeof + data.length);
+		payload[0] = type;
+		payload[1 .. 9] = nativeToBigEndian(sequence);
+		payload[9 .. $] = data;
+		m_socket.send(payload);
 	}
 
+	void openOutgoingStream(ulong sequence) { assert(sequence !in m_outgoingStreams); m_outgoingStreams[sequence] = (void[0]).init; }
+	void closeOutgoingStream(ulong sequence) { m_outgoingStreams.remove(sequence); }
+	bool isOutgoingStreamOpen(ulong sequence) => !!(sequence in m_outgoingStreams);
+
+	void registerIncomingStream(ulong sequence, WebRPCInputStream!I stream)
+	{
+		m_incomingStreams[sequence] = stream;
+	}
+
+	void unregisterIncomingStream(ulong sequence)
+	{
+		m_incomingStreams.remove(sequence);
+	}
+
+	WebRPCInputStream!I getIncomingStream(ulong sequence)
+	{
+		if (auto pstr = sequence in m_incomingStreams)
+			return *pstr;
+		return null;
+	}
 
 	Bson waitForResponse(ulong sequence)
 	{
@@ -659,21 +861,27 @@ private final class WebSocketHandler(I) {
 
 	void runReadLoop()
 	nothrow {
+		import std.bitmanip : bigEndianToNative;
+
 		try {
 			while (m_socket && m_socket.waitForData) {
 				// m_socket could have been set to null after the waitForData call
 				if (!m_socket) break;
 
 				auto msg = m_socket.receiveBinary();
-				auto brep = Bson(Bson.Type.object, msg[1 .. $].idup);
+				auto sequence = bigEndianToNative!ulong(msg[1 .. 9]);
+				auto payload = msg[9 .. $].idup;
+				logDebug("Got RPC message %s %s", cast(WebRPCMessageType)msg[0], sequence);
+
 				switch (msg[0]) {
 					default:
-						logWarn("Unknown message type received (%s) - terminating WebRPC connection", brep["type"].opt!int(-1));
+						logWarn("Unknown message type received (%s) - terminating WebRPC connection", msg[0]);
 						m_socket.close();
 						return;
 					case WebRPCMessageType.call:
 						addRef();
-						runTask((WebSocketHandler handler, Bson brep) nothrow {
+						auto brep = Bson(Bson.Type.object, payload);
+						runTask(function(WebSocketHandler handler, ulong sequence, Bson brep) nothrow {
 							scope (exit) handler.releaseRef();
 							WebRPCCallPacket cmsg;
 							try cmsg = deserializeBson!WebRPCCallPacket(brep);
@@ -682,32 +890,86 @@ private final class WebSocketHandler(I) {
 								handler.terminateConnection();
 								return;
 							}
+							InputStreamProxy retstream;
 							Bson res;
-							try res = handler.invokeMethod(cmsg.method, cmsg.arguments);
+							try res = handler.invokeMethod(cmsg.method, cmsg.arguments, retstream);
 							catch (Exception e) {
 								logDiagnostic("WebRPC method %s has thrown: %s", cmsg.method, e.msg);
-								try handler.sendErrorResponse(cmsg.sequence, e.msg);
+								try handler.sendErrorResponse(sequence, e.msg);
 								catch (Exception e) {
 									logException(e, "Failed to send error response");
 									handler.terminateConnection();
 								}
 								return;
 							}
-							try handler.sendResponse(cmsg.sequence, res);
+							try handler.sendResponse(sequence, res);
 							catch (Exception e) {
 								logException(e, "Failed to send response");
 								handler.terminateConnection();
 							}
-						}, this, brep);
+							if (retstream !is InputStreamProxy.init) {
+								handler.openOutgoingStream(sequence);
+								try handler.sendStreamStart(sequence);
+								catch (Exception e) {
+									logException(e, "Failed to send stream start");
+									handler.terminateConnection();
+									return;
+								}
+								ubyte[64*1024] buf;
+								try {
+									while (true) {
+										try if (retstream.empty) break;
+										catch (Exception e) {
+											logDebug("Stream returned from WebRPC method has thrown: %s", e.msg);
+											handler.sendStreamEnd(sequence, /*error:*/ true);
+											return;
+										}
+										if (!handler.isOutgoingStreamOpen(sequence))
+											break;
+										size_t sz = min(buf.length, retstream.leastSize);
+										try retstream.read(buf[0 .. sz]);
+										catch (Exception e) {
+											logDebug("Stream returned from WebRPC method has thrown: %s", e.msg);
+											handler.sendStreamEnd(sequence, /*error:*/ true);
+											return;
+										}
+										handler.sendStreamChunk(sequence, buf[0 .. sz]);
+									}
+									handler.sendStreamEnd(sequence, /*error:*/ false);
+								} catch (Exception e) {
+									logException(e, "Failed to send stream response");
+									handler.terminateConnection();
+								}
+							}
+						}, this, sequence, brep);
+						break;
+					case WebRPCMessageType.streamStart:
+						auto str = new WebRPCInputStream!I(this, sequence);
+						registerIncomingStream(sequence, str);
+						break;
+					case WebRPCMessageType.streamChunk:
+						if (auto str = getIncomingStream(sequence))
+							str.addChunk(payload);
+						break;
+					case WebRPCMessageType.streamEnd:
+						if (auto str = getIncomingStream(sequence)) {
+							str.end(/*error:*/ payload[0] != 0);
+							unregisterIncomingStream(sequence);
+						}
+						break;
+					case WebRPCMessageType.streamClose:
+						closeOutgoingStream(sequence);
 						break;
 					case WebRPCMessageType.response:
+						auto brep = Bson(Bson.Type.object, payload);
 						auto rmsg = deserializeBson!WebRPCResponsePacket(brep);
-						m_availableResponses[rmsg.sequence] = Res(rmsg.result, null);
+						m_availableResponses[sequence] = Res(rmsg.result, null);
 						m_responseEvent.emit();
 						break;
 					case WebRPCMessageType.errorResponse:
+						auto brep = Bson(Bson.Type.object, payload);
 						auto rmsg = deserializeBson!WebRPCErrorResponsePacket(brep);
-						m_availableResponses[rmsg.sequence] = Res(Bson.init, rmsg.message);
+						m_availableResponses[sequence] = Res(Bson.init, rmsg.message);
 						m_responseEvent.emit();
 						break;
 				}
@@ -718,17 +980,17 @@ private final class WebSocketHandler(I) {
 		}
 	}
 
-	private Bson invokeMethod(string name, Bson arguments)
+	private Bson invokeMethod(string name, Bson arguments, ref InputStreamProxy retstream)
 	{
 		switch (name) {
 			default: throw new Exception("Unknown method called: " ~ name);
 			static foreach (FI; recursiveInterfaceFunctions!(I, "")) {
-				case FI.expand[2]: return invokeMethodF!(FI.expand)(arguments);
+				case FI.expand[2]: return invokeMethodF!(FI.expand)(arguments, retstream);
 			}
 		}
 	}
 
-	private Bson invokeMethodF(SI, alias method, string qualified_name)(Bson arguments)
+	private Bson invokeMethodF(SI, alias method, string qualified_name)(Bson arguments, ref InputStreamProxy retstream)
 	{
 		alias outparams = refOutParameterIndices!method;
 		alias paramnames = ParameterIdentifierTuple!method;
@@ -751,8 +1013,13 @@ private final class WebSocketHandler(I) {
 				bret[paramnames[pi]] = serializeToBson(args[pi]);
 			static if (is(typeof(ret)) && !isInputStream!(typeof(ret)))
 				bret["return"] = serializeToBson(ret);
-		} else static if (is(typeof(ret)) && !isInputStream!(typeof(ret))) {
-			bret = serializeToBson(ret);
+		} else static if (is(typeof(ret))) {
+			static if (isInputStream!(typeof(ret))) {
+				retstream = ret;
+				bret = Bson.emptyObject;
+			} else {
+				bret = serializeToBson(ret);
+			}
 		}
 		return bret;
 	}
@@ -803,22 +1070,23 @@ private final class WebSocketHandler(I) {
 private enum WebRPCMessageType : ubyte {
 	call = 1,
 	response = 2,
-	errorResponse = 3
+	errorResponse = 3,
+	streamStart = 4,
+	streamChunk = 5,
+	streamEnd = 6,
+	streamClose = 7,
 }
 
 private struct WebRPCCallPacket {
-	ulong sequence;
 	string method;
 	Bson arguments;
 }
 
 private struct WebRPCResponsePacket {
-	ulong sequence;
 	Bson result;
 }
 
 private struct WebRPCErrorResponsePacket {
-	ulong sequence;
 	string message;
 }
 

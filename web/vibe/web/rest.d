@@ -2536,7 +2536,7 @@ do {
 }
 
 // Test detection of user typos (e.g., if the attribute is on a parameter that doesn't exist).
-unittest {
+deprecated unittest {
 	enum msg = "No parameter 'ath' (referenced by attribute @headerParam)";
 
 	interface ITypo {
@@ -2549,7 +2549,7 @@ unittest {
 }
 
 // Multiple origin for a parameter
-unittest {
+deprecated unittest {
 	enum msg = "Parameter 'arg1' has multiple @*Param attributes on it.";
 
 	interface IMultipleOrigin {
@@ -2616,7 +2616,7 @@ unittest {
 }
 
 // Accept @headerParam ref / out parameters
-unittest {
+deprecated unittest {
 	interface HeaderRef {
 		@headerParam("auth", "auth")
 		string getData(ref string auth);
@@ -2628,6 +2628,18 @@ unittest {
 	interface HeaderOut {
 		@headerParam("auth", "auth")
 		void getData(out string auth);
+	}
+	static assert(getInterfaceValidationError!HeaderOut is null,
+		      stripTestIdent(getInterfaceValidationError!HeaderOut));
+}
+unittest {
+	interface HeaderRef {
+		string getData(@viaHeader("auth") ref string auth);
+	}
+	static assert(getInterfaceValidationError!HeaderRef is null,
+		      stripTestIdent(getInterfaceValidationError!HeaderRef));
+
+	interface HeaderOut {
 		void getData(@viaHeader("auth") out string auth);
 	}
 	static assert(getInterfaceValidationError!HeaderOut is null,
@@ -2738,7 +2750,7 @@ private template GenOrphan(int id) {
 
 // Workaround for issue #1045 / DMD bug 14375
 // Also, an example of policy-based design using this module.
-@safe unittest {
+deprecated @safe unittest {
 	import std.traits, std.typetuple;
 	import vibe.internal.meta.codegen;
 	import vibe.internal.meta.typetuple;
