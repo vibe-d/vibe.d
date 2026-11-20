@@ -259,12 +259,13 @@ final class WebRPCPeerImpl(I, RootI, string method_prefix) : I
 				args[pname] = serializeToBson(params[i]);
 		auto seq = m_handler.sendCall(method_prefix ~ __traits(identifier, method), args);
 
-		static if (isInputStream!(ReturnType!method)) {
-			auto str = new WebRPCInputStream!RootI(m_handler, seq);
-			m_handler.registerIncomingStream(seq, str);
-		}
 
 		auto ret = m_handler.waitForResponse(seq);
+
+		static if (isInputStream!(ReturnType!method)) {
+			auto str = m_handler.getIncomingStream(seq);
+			assert(str !is null);
+		}
 
 		static if (outparams.length > 0) {
 			foreach (pi; outparams)
@@ -769,6 +770,11 @@ private final class WebSocketHandler(I) {
 		sendRawPacket(WebRPCMessageType.errorResponse, sequence, bpack.data);
 	}
 
+	void sendStreamStart(ulong sequence)
+	{
+		sendRawPacket(WebRPCMessageType.streamStart, sequence, null);
+	}
+
 	void sendStreamChunk(ulong sequence, const(ubyte)[] chunk)
 	{
 		sendRawPacket(WebRPCMessageType.streamChunk, sequence, chunk);
@@ -865,6 +871,8 @@ private final class WebSocketHandler(I) {
 				auto msg = m_socket.receiveBinary();
 				auto sequence = bigEndianToNative!ulong(msg[1 .. 9]);
 				auto payload = msg[9 .. $].idup;
+				logDebug("Got RPC message %s %s", cast(WebRPCMessageType)msg[0], sequence);
+
 				switch (msg[0]) {
 					default:
 						logWarn("Unknown message type received (%s) - terminating WebRPC connection", msg[0]);
@@ -873,7 +881,7 @@ private final class WebSocketHandler(I) {
 					case WebRPCMessageType.call:
 						addRef();
 						auto brep = Bson(Bson.Type.object, payload);
-						runTask((WebSocketHandler handler, Bson brep) nothrow {
+						runTask(function(WebSocketHandler handler, ulong sequence, Bson brep) nothrow {
 							scope (exit) handler.releaseRef();
 							WebRPCCallPacket cmsg;
 							try cmsg = deserializeBson!WebRPCCallPacket(brep);
@@ -901,6 +909,12 @@ private final class WebSocketHandler(I) {
 							}
 							if (retstream !is InputStreamProxy.init) {
 								handler.openOutgoingStream(sequence);
+								try handler.sendStreamStart(sequence);
+								catch (Exception e) {
+									logException(e, "Failed to send stream start");
+									handler.terminateConnection();
+									return;
+								}
 								ubyte[64*1024] buf;
 								try {
 									while (true) {
@@ -919,7 +933,7 @@ private final class WebSocketHandler(I) {
 											handler.sendStreamEnd(sequence, /*error:*/ true);
 											return;
 										}
-										handler.sendStreamChunk(sequence,buf[0 .. sz]);
+										handler.sendStreamChunk(sequence, buf[0 .. sz]);
 									}
 									handler.sendStreamEnd(sequence, /*error:*/ false);
 								} catch (Exception e) {
@@ -927,7 +941,11 @@ private final class WebSocketHandler(I) {
 									handler.terminateConnection();
 								}
 							}
-						}, this, brep);
+						}, this, sequence, brep);
+						break;
+					case WebRPCMessageType.streamStart:
+						auto str = new WebRPCInputStream!I(this, sequence);
+						registerIncomingStream(sequence, str);
 						break;
 					case WebRPCMessageType.streamChunk:
 						if (auto str = getIncomingStream(sequence))
@@ -1053,9 +1071,10 @@ private enum WebRPCMessageType : ubyte {
 	call = 1,
 	response = 2,
 	errorResponse = 3,
-	streamChunk = 4,
-	streamEnd = 5,
-	streamClose = 6,
+	streamStart = 4,
+	streamChunk = 5,
+	streamEnd = 6,
+	streamClose = 7,
 }
 
 private struct WebRPCCallPacket {
