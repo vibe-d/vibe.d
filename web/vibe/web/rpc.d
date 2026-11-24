@@ -697,7 +697,6 @@ private final class WebSocketHandler(I) {
 		const WebRPCPeerInfo m_peerInfo;
 		int m_refCount = 1;
 		WebSocket m_socket;
-		TaskMutex m_sendMutex;
 		ulong m_sequence;
 		Res[ulong] m_availableResponses;
 		WebRPCInputStream!I[ulong] m_incomingStreams;
@@ -715,7 +714,6 @@ private final class WebSocketHandler(I) {
 		static if (__VERSION__ < 2106)
 			() @trusted { m_socket = ws; } ();
 		else m_socket = ws;
-		m_sendMutex = new TaskMutex;
 		m_responseEvent = createManualEvent();
 	}
 
@@ -797,9 +795,6 @@ private final class WebSocketHandler(I) {
 	{
 		import std.conv : to;
 		import std.bitmanip : nativeToBigEndian;
-
-		m_sendMutex.lock();
-		scope (exit) m_sendMutex.unlock();
 
 		if (!m_socket || !m_socket.connected)
 			throw new Exception("Connection closed before sending WebRPC "~type.to!string);
