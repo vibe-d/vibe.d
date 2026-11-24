@@ -895,6 +895,7 @@ private final class WebSocketHandler(I) {
 					case WebRPCMessageType.streamStart:
 						auto str = new WebRPCInputStream!I(this, sequence);
 						registerIncomingStream(sequence, str);
+						m_responseEvent.emit();
 						break;
 					case WebRPCMessageType.streamChunk:
 						if (auto str = getIncomingStream(sequence))
