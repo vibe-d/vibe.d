@@ -263,8 +263,7 @@ final class WebRPCPeerImpl(I, RootI, string method_prefix) : I
 		auto ret = m_handler.waitForResponse(seq);
 
 		static if (isInputStream!(ReturnType!method)) {
-			auto str = m_handler.getIncomingStream(seq);
-			assert(str !is null);
+			auto str = m_handler.waitForStream(seq);
 		}
 
 		static if (outparams.length > 0) {
@@ -698,7 +697,6 @@ private final class WebSocketHandler(I) {
 		const WebRPCPeerInfo m_peerInfo;
 		int m_refCount = 1;
 		WebSocket m_socket;
-		TaskMutex m_sendMutex;
 		ulong m_sequence;
 		Res[ulong] m_availableResponses;
 		WebRPCInputStream!I[ulong] m_incomingStreams;
@@ -716,7 +714,6 @@ private final class WebSocketHandler(I) {
 		static if (__VERSION__ < 2106)
 			() @trusted { m_socket = ws; } ();
 		else m_socket = ws;
-		m_sendMutex = new TaskMutex;
 		m_responseEvent = createManualEvent();
 	}
 
@@ -799,9 +796,6 @@ private final class WebSocketHandler(I) {
 		import std.conv : to;
 		import std.bitmanip : nativeToBigEndian;
 
-		m_sendMutex.lock();
-		scope (exit) m_sendMutex.unlock();
-
 		if (!m_socket || !m_socket.connected)
 			throw new Exception("Connection closed before sending WebRPC "~type.to!string);
 
@@ -850,6 +844,18 @@ private final class WebSocketHandler(I) {
 		}
 	}
 
+	WebRPCInputStream!I waitForStream(ulong sequence)
+	{
+		auto ec = m_responseEvent.emitCount;
+		while (true) {
+			if (!m_socket || !m_socket.connected)
+				throw new Exception("Connection closed while waiting for WebRPC response");
+			if (auto str = getIncomingStream(sequence))
+				return str;
+			ec = m_responseEvent.wait(ec);
+		}
+	}
+
 	private void terminateConnection()
 	nothrow {
 		if (!m_socket) return;
@@ -879,73 +885,17 @@ private final class WebSocketHandler(I) {
 						m_socket.close();
 						return;
 					case WebRPCMessageType.call:
-						addRef();
 						auto brep = Bson(Bson.Type.object, payload);
-						runTask(function(WebSocketHandler handler, ulong sequence, Bson brep) nothrow {
-							scope (exit) handler.releaseRef();
-							WebRPCCallPacket cmsg;
-							try cmsg = deserializeBson!WebRPCCallPacket(brep);
-							catch (Exception e) {
-								logException(e, "Invalid call packet");
-								handler.terminateConnection();
-								return;
-							}
-							InputStreamProxy retstream;
-							Bson res;
-							try res = handler.invokeMethod(cmsg.method, cmsg.arguments, retstream);
-							catch (Exception e) {
-								logDiagnostic("WebRPC method %s has thrown: %s", cmsg.method, e.msg);
-								try handler.sendErrorResponse(sequence, e.msg);
-								catch (Exception e) {
-									logException(e, "Failed to send error response");
-									handler.terminateConnection();
-								}
-								return;
-							}
-							try handler.sendResponse(sequence, res);
-							catch (Exception e) {
-								logException(e, "Failed to send response");
-								handler.terminateConnection();
-							}
-							if (retstream !is InputStreamProxy.init) {
-								handler.openOutgoingStream(sequence);
-								try handler.sendStreamStart(sequence);
-								catch (Exception e) {
-									logException(e, "Failed to send stream start");
-									handler.terminateConnection();
-									return;
-								}
-								ubyte[64*1024] buf;
-								try {
-									while (true) {
-										try if (retstream.empty) break;
-										catch (Exception e) {
-											logDebug("Stream returned from WebRPC method has thrown: %s", e.msg);
-											handler.sendStreamEnd(sequence, /*error:*/ true);
-											return;
-										}
-										if (!handler.isOutgoingStreamOpen(sequence))
-											break;
-										size_t sz = min(buf.length, retstream.leastSize);
-										try retstream.read(buf[0 .. sz]);
-										catch (Exception e) {
-											logDebug("Stream returned from WebRPC method has thrown: %s", e.msg);
-											handler.sendStreamEnd(sequence, /*error:*/ true);
-											return;
-										}
-										handler.sendStreamChunk(sequence, buf[0 .. sz]);
-									}
-									handler.sendStreamEnd(sequence, /*error:*/ false);
-								} catch (Exception e) {
-									logException(e, "Failed to send stream response");
-									handler.terminateConnection();
-								}
-							}
-						}, this, sequence, brep);
+						{
+							import vibe.core.core : yieldLock;
+							auto l = yieldLock();
+							runTask(&handleCall, sequence, brep);
+						}
 						break;
 					case WebRPCMessageType.streamStart:
 						auto str = new WebRPCInputStream!I(this, sequence);
 						registerIncomingStream(sequence, str);
+						m_responseEvent.emit();
 						break;
 					case WebRPCMessageType.streamChunk:
 						if (auto str = getIncomingStream(sequence))
@@ -977,6 +927,73 @@ private final class WebSocketHandler(I) {
 		} catch (Exception e) {
 			logException(e, "WebRPC read failed");
 			terminateConnection();
+		}
+	}
+
+	private void handleCall(ulong sequence, Bson brep)
+	nothrow {
+		addRef();
+		scope (exit) releaseRef();
+
+		WebRPCCallPacket cmsg;
+		try cmsg = deserializeBson!WebRPCCallPacket(brep);
+		catch (Exception e) {
+			logException(e, "Invalid call packet");
+			terminateConnection();
+			return;
+		}
+		InputStreamProxy retstream;
+		Bson res;
+		try res = invokeMethod(cmsg.method, cmsg.arguments, retstream);
+		catch (Exception e) {
+			logDiagnostic("WebRPC method %s has thrown: %s", cmsg.method, e.msg);
+			try sendErrorResponse(sequence, e.msg);
+			catch (Exception e) {
+				logException(e, "Failed to send error response");
+				terminateConnection();
+			}
+			return;
+		}
+		try sendResponse(sequence, res);
+		catch (Exception e) {
+			logException(e, "Failed to send response");
+			terminateConnection();
+		}
+		if (retstream !is InputStreamProxy.init) {
+			openOutgoingStream(sequence);
+			try sendStreamStart(sequence);
+			catch (Exception e) {
+				logException(e, "Failed to send stream start");
+				terminateConnection();
+				return;
+			}
+			m_responseEvent.emit();
+
+			ubyte[64*1024] buf;
+			try {
+				while (true) {
+					try if (retstream.empty) break;
+					catch (Exception e) {
+						logDebug("Stream returned from WebRPC method has thrown: %s", e.msg);
+						sendStreamEnd(sequence, /*error:*/ true);
+						return;
+					}
+					if (!isOutgoingStreamOpen(sequence))
+						break;
+					size_t sz = min(buf.length, retstream.leastSize);
+					try retstream.read(buf[0 .. sz]);
+					catch (Exception e) {
+						logDebug("Stream returned from WebRPC method has thrown: %s", e.msg);
+						sendStreamEnd(sequence, /*error:*/ true);
+						return;
+					}
+					sendStreamChunk(sequence, buf[0 .. sz]);
+				}
+				sendStreamEnd(sequence, /*error:*/ false);
+			} catch (Exception e) {
+				logException(e, "Failed to send stream response");
+				terminateConnection();
+			}
 		}
 	}
 
