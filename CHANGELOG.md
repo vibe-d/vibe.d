@@ -1,6 +1,14 @@
 Changelog
 =========
 
+v0.10.7 - 2026-11-27
+--------------------
+
+- Fixes a possible WebRPC hang for short `InputStream`s - [pull #2899][issue2899]
+
+[issue2899]: https://github.com/vibe-d/vibe.d/issues/2899
+
+
 v0.10.6 - 2026-11-24
 --------------------
 
