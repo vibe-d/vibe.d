@@ -904,7 +904,6 @@ private final class WebSocketHandler(I) {
 					case WebRPCMessageType.streamEnd:
 						if (auto str = getIncomingStream(sequence)) {
 							str.end(/*error:*/ payload[0] != 0);
-							unregisterIncomingStream(sequence);
 						}
 						break;
 					case WebRPCMessageType.streamClose:
